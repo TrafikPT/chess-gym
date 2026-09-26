@@ -8,28 +8,52 @@ function useOpening(d) {
   lessonSets = L.map(l => new Set(l.nodes));
   ME = d.side; OPPC = ME === "b" ? "w" : "b"; MEN = ME === "b" ? "Black" : "White"; OPP = ME === "b" ? "White" : "Black"; orient = ME;
   for (const k in subCache) delete subCache[k];
+  lastPath = null; lastReviewed = null; forced = null;      // nothing carries over from the other opening
+  resetArmed = false; $("bReset").textContent = "Reset my progress in this opening";
 }
 const FILES = "abcdefgh";
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 // move labels: the learner's move at a node, and an opponent move with its number
-function lmNo(no, san) { return ME === "b" ? `${lmNo(no, san)}` : `${no}.${esc(san)}`; }
-function oppLbl(no, san) { return ME === "b" ? `${no}.${esc(san)}` : `${lmNo(no, san)}`; }
+function moveLbl(no, san, side) { return `${no}${side === "b" ? "…" : "."}${esc(san)}`; }
+function lmNo(no, san) { return moveLbl(no, san, ME); }
+function oppLbl(no, san) { return moveLbl(no, san, OPPC); }
 function isMine(p) { return (p === p.toUpperCase()) === (ME === "w"); }
+
+/* ---------- problems: never fail silently (a banner for the parent, details in the console) ---------- */
+function reportProblem(msg, err) {
+  if (err) console.error(err);
+  const el = $("problem"); if (!el) return;
+  el.hidden = false; el.textContent = msg + (err && err.message ? ` (${err.message})` : "");
+}
+window.addEventListener("error", e => reportProblem("Something went wrong on this page. Reload it if anything looks stuck.", e.error || { message: e.message }));
+window.addEventListener("unhandledrejection", e => reportProblem("Something went wrong on this page. Reload it if anything looks stuck.", e.reason));
 
 /* ---------- memory: browser storage always, plus the viewer's private store when available ---------- */
 const STORE = "modern-drill-v2";
+const HIST_MAX = 200;         // puzzle history kept per player
 let S = { n: {}, les: {}, lines: 0, best: 0, req: [] };
-try { const raw = localStorage.getItem(STORE); if (raw) S = Object.assign(S, JSON.parse(raw)); } catch (e) {}
+try {
+  const raw = localStorage.getItem(STORE);
+  if (raw) {
+    try { S = Object.assign(S, JSON.parse(raw)); }
+    catch (e) {   // keep the unreadable copy instead of overwriting it on the next save
+      try { localStorage.setItem(STORE + ":corrupt:" + Date.now(), raw); } catch (e2) {}
+      reportProblem("Saved progress in this browser couldn't be read; a copy was kept.", e);
+    }
+  }
+} catch (e) {}
 let remote = null, writing = false, dirty = false, timer = null, sharedDb = null;
 // requested lines also live in a shared "requests" collection so Claude can read them without a copy-paste
 function reqId(line) { let h = 2166136261; for (const c of line) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; } return "r" + h.toString(16); }
 async function pushReq(r) {
   if (!sharedDb) return;
-  try { await sharedDb.doc("requests/" + reqId(r.line)).set({ line: r.line, t: r.t }); r.synced = true; save(); } catch (e) {}
+  try { await sharedDb.doc("requests/" + reqId(r.line)).set({ line: r.line, t: r.t }); r.synced = true; save(); } catch (e) { console.error(e); }
 }
 function save() {
-  try { localStorage.setItem(STORE, JSON.stringify(S)); } catch (e) {}
+  const pl = S.players && S.players[S.player];
+  if (pl) pl.u = Date.now();           // last change to the active player: settles settings when two devices merge
+  try { localStorage.setItem(STORE, JSON.stringify(S)); } catch (e) { console.error(e); }
   if (!remote) return;
   dirty = true; clearTimeout(timer); timer = setTimeout(flush, 1200);
 }
@@ -37,27 +61,63 @@ async function flush() {
   if (!remote || writing || !dirty) return;
   writing = true; dirty = false;
   try { await remote.set(JSON.parse(JSON.stringify(S))); setSync(true); }
-  catch (e) { if (e && (e.code === "invalid_argument" || e.code === "revoked" || e.code === "not_granted")) { remote = null; setSync(false); } else dirty = true; }
+  catch (e) {
+    if (e && (e.code === "invalid_argument" || e.code === "revoked" || e.code === "not_granted")) {
+      remote = null; setSync(false);
+      reportProblem("Progress is no longer being saved to your Claude account (it is still saved in this browser).", e);
+    } else { dirty = true; console.error(e); }
+  }
   writing = false;
   if (dirty) timer = setTimeout(flush, 2000);
 }
+// leaving the page: write now instead of waiting for the timer
+addEventListener("pagehide", () => { clearTimeout(timer); flush(); });
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") { clearTimeout(timer); flush(); } });
 function setSync(ok) {
   $("sync").textContent = ok ? "Saved to your Claude account, so it follows you across devices and Claude can read it to plan your next session." : "Saved in this browser only.";
+}
+// one player's profile from two devices: keep all progress from both, settings from the copy changed last
+function blankPlayer(p) {
+  return !(p.hist || []).length && !p.stars && !Object.keys(p.stages || {}).length && !Object.keys(p.school || {}).length && !Object.keys(p.bots || {}).length;
+}
+function maxMap(a = {}, b = {}) { const o = { ...a }; for (const [k, v] of Object.entries(b)) o[k] = Math.max(o[k] || 0, v || 0); return o; }
+function mergePlayer(a, b) {
+  if (!a) return b; if (!b) return a;
+  // a fresh default profile (e.g. "Son" on a new device) never wins over a real one
+  const newer = blankPlayer(a) !== blankPlayer(b) ? (blankPlayer(a) ? b : a) : (b.u || 0) > (a.u || 0) ? b : a;
+  const out = Object.assign({}, newer === a ? b : a, newer);
+  const lastT = p => { const h = p.hist || []; return h.length ? h[h.length - 1].t || 0 : 0; };
+  const rated = lastT(a) === lastT(b) ? newer : lastT(a) > lastT(b) ? a : b;    // rating from the latest puzzle
+  out.rating = rated.rating; out.n = rated.n;
+  const seen = new Set();
+  out.hist = [...(a.hist || []), ...(b.hist || [])].sort((x, y) => (x.t || 0) - (y.t || 0))
+    .filter(x => { const k = x.id + "@" + x.t; if (seen.has(k)) return false; seen.add(k); return true; }).slice(-HIST_MAX);
+  out.done = maxMap(a.done, b.done);
+  out.stages = maxMap(a.stages, b.stages);
+  for (const k of ["stars", "trophies"]) out[k] = Math.max(a[k] || 0, b[k] || 0);
+  out.school = {};
+  for (const pc of new Set([...Object.keys(a.school || {}), ...Object.keys(b.school || {})])) {
+    const x = (a.school || {})[pc] || [], y = (b.school || {})[pc] || [];
+    out.school[pc] = Array.from({ length: Math.max(x.length, y.length) }, (_, i) => Math.max(x[i] || 0, y[i] || 0));
+  }
+  out.bots = {};
+  for (const id of new Set([...Object.keys(a.bots || {}), ...Object.keys(b.bots || {})])) out.bots[id] = maxMap((a.bots || {})[id], (b.bots || {})[id]);
+  out.stagesRecounted = !!(a.stagesRecounted || b.stagesRecounted);
+  out.u = Math.max(a.u || 0, b.u || 0);
+  return out;
 }
 function merge(o) {
   if (!o || typeof o !== "object") return;
   for (const [k, r] of Object.entries(o.n || {})) if (!S.n[k] || (r.t || 0) > (S.n[k].t || 0)) S.n[k] = r;
   for (const [k, r] of Object.entries(o.les || {})) S.les[k] = Object.assign({}, S.les[k] || {}, r, { done: !!(r.done || S.les[k]?.done), walk: !!(r.walk || S.les[k]?.walk) });
   S.lines = Math.max(S.lines || 0, o.lines || 0); S.best = Math.max(S.best || 0, o.best || 0);
-  if (o.players) {           // puzzle profiles: keep whichever copy has more history
+  if (o.players) {
     S.players = S.players || {};
-    for (const [id, p] of Object.entries(o.players)) {
-      const mine = S.players[id];
-      if (!mine || (p.hist || []).length > (mine.hist || []).length) S.players[id] = p;
-    }
-    for (const k of ["player", "sonSeeded"]) if (S[k] === undefined && o[k] !== undefined) S[k] = o[k];
+    for (const [id, p] of Object.entries(o.players)) S.players[id] = mergePlayer(S.players[id], p);
+    for (const k of ["player", "sonSeeded"]) if (o[k] !== undefined && (S[k] === undefined || S.fresh)) S[k] = o[k];
     S.pzv = Math.max(S.pzv || 0, o.pzv || 0);
   }
+  delete S.fresh;
   const seenReq = new Set((S.req || []).map(r => r.line)); S.req = S.req || [];
   (o.req || []).forEach(r => { if (!seenReq.has(r.line)) S.req.push(r); });
 }
@@ -79,11 +139,12 @@ function merge(o) {
       const pending = (S.req || []).filter(x => !x.synced && !have.has(x.line));
       S.req = [...shared, ...pending];
       pending.forEach(pushReq);
-    } catch (e) {}
+    } catch (e) { console.error(e); }
     remote = ref; dirty = true; await flush();
-    if (DATA) { refreshPanels(); if (mode === "lessons" && !lesson) showLessonList(); }
-    if (window.onGymStore) window.onGymStore();
-  } catch (e) { /* stay on browser storage */ }
+  } catch (e) { reportProblem("Couldn't reach your Claude account; progress is saved in this browser only.", e); return; }
+  // redraw with the merged progress (errors here are page bugs, not sync failures)
+  if (DATA) { refreshPanels(); if (mode === "lessons" && !lesson) showLessonList(); }
+  if (window.onGymStore) window.onGymStore();
 })();
 function rec(i) { const k = N[i].k; return S.n[k] || (S.n[k] = { ok: 0, bad: 0, streak: 0, last: null, t: 0, wrong: {} }); }
 function recOf(i) { return S.n[N[i].k]; }
@@ -158,7 +219,6 @@ function renderBoard(pos, { hl = [], sel = null, tgts = [], arrows = [], el = nu
 }
 // Lichess (chessground) arrow style: thick round-capped line with a triangular head; a square is 1 unit
 const BRUSH = { green: "#15781B", red: "#882020", blue: "#003088", cover: "#d4552f", escape: "#1f9d55" };
-const ARROW_DEFS = "";
 // head drawn per arrow (a shared <marker> breaks when the first board defining it is hidden)
 function arrowPath(uci, brush, o = orient) {
   const [x1, y1] = sqXY(uci.slice(0, 2), o), [x2, y2] = sqXY(uci.slice(2, 4), o);
@@ -208,7 +268,7 @@ function setState(t, cls = "") { $("state").textContent = t; $("state").classNam
 function setCard(cls, html) { $("card").className = "card " + cls; $("card").innerHTML = html; }
 function pchip(p) { return P[p] ? `<span class="pchip" title="${esc(P[p][1])}">${esc(P[p][0])}</span>` : ""; }
 function moveNo(i) { return +N[i].fen.split(" ")[5]; }
-function histFromPre(pre, cls = "") { return pre.map((san, i) => ({ san, side: i % 2 ? "b" : "w", no: Math.floor(i / 2) + 1 })); }
+function histFromPre(pre) { return pre.map((san, i) => ({ san, side: i % 2 ? "b" : "w", no: Math.floor(i / 2) + 1 })); }
 
 /* ---------- choosing White's moves ---------- */
 const subCache = {};
@@ -251,8 +311,9 @@ function resetLine() {
 }
 function startFromRoot(replay = false) {           // free play
   if (ME === "w") {
-    forced = null; if (path.length) lastPath = [...path];
+    const again = replay && path.length ? [...path] : null;
     startAt(DATA.start, `<span class="who">Free play</span><span>You're White. Play your repertoire from move one.</span>`);
+    forced = again;                                  // startAt clears it; set it after so Replay repeats Black's replies
     return;
   }
   forced = replay && path.length ? [...path] : null;
@@ -530,10 +591,22 @@ function openLesson(li) {
     <p class="text"><b>Your plan.</b> ${esc(l.plan)}</p>
     <div class="head">${top}</div>
     <p class="sub">First a walkthrough of the main line with the reasons, then a test across all ${l.nodes.length} positions in this lesson. A miss ends the line and goes to your notebook.</p>
-    <div class="controls"><button class="btn primary" id="goWalk">Start the walkthrough</button><button class="btn" id="goTest">Skip to the test</button></div>`);
+    <div class="controls"><button class="btn primary" id="goWalk">Start the walkthrough</button><button class="btn" id="goTest">Skip to the test</button></div>
+    ${modelsHtml(l)}`);
   $("goWalk").onclick = () => { lesson.phase = "walk"; lessonLine(); };
   $("goTest").onclick = () => { lesson.phase = "test"; lessonLine(); };
   syncControls(); renderMoves(); draw(); refreshBar();
+}
+// master games that reached this lesson's line (model_games.py): the plan shown in real games, not just asserted
+function modelsHtml(l) {
+  const m = l.models; if (!m || !m.games.length) return "";
+  const n = N[m.node], where = `${esc(n.line)} ${lmNo(moveNo(m.node), n.s)}`;
+  const then = m.freq.length ? `<p class="sub">From there, the ${MEN} player went on with ${m.freq.map(([s, c]) =>
+    `<b>${ME === "b" ? "…" : ""}${esc(s)}</b> (${c} of ${m.games.length})`).join(", ")}.</p>` : "";
+  const games = m.games.map(g => `<li><a href="https://lichess.org/${encodeURIComponent(g.id)}" target="_blank" rel="noopener">${esc(g.white)} – ${esc(g.black)}</a>
+    <span class="tiny">${g.year || ""} · ${esc(g.result)}</span></li>`).join("");
+  return `<div class="models"><span class="lbl">Model games</span>
+    <p class="sub">Master games that reached ${where} (${m.total.toLocaleString()} in the database).</p>${then}<ul>${games}</ul></div>`;
 }
 function lessonLine() {
   const l = L[lesson.li];
@@ -620,7 +693,7 @@ function setMode(m) {
   mode = m; markTabs();
   $("filters").hidden = m !== "free" || ME !== "b";
   $("ideasView").hidden = m !== "ideas";
-  document.querySelector(".trainer").hidden = m === "ideas";
+  $("oTrainer").hidden = m === "ideas";
   if (m === "ideas") { lesson = null; scope = null; review = null; resetLine(); phase = "idle"; syncControls(); return; }
   lesson = null; scope = null; review = null;
   if (m === "lessons") showLessonList();
@@ -805,11 +878,13 @@ document.addEventListener("keydown", ev => {
 });
 
 /* ---------- input ---------- */
-function sqAt(ev) {
-  const r = $("board").getBoundingClientRect();
+// the square under a pointer event on a board element (null outside the board); shared by every board
+function squareAt(ev, el, o) {
+  const r = el.getBoundingClientRect();
   const col = Math.floor((ev.clientX - r.left) / r.width * 8), row = Math.floor((ev.clientY - r.top) / r.height * 8);
-  return col < 0 || col > 7 || row < 0 || row > 7 ? null : sqOf(col, row);
+  return col < 0 || col > 7 || row < 0 || row > 7 ? null : sqOf(col, row, o);
 }
+function sqAt(ev) { return squareAt(ev, $("board"), orient); }
 function tryMove(from, to) {
   if (!from || !to || from === to) return false;
   const cand = legalList().filter(u => u.slice(0, 4) === from + to);
@@ -882,7 +957,7 @@ function renderReqs() {
   });
   const cb = $("bCopyReq");
   if (cb) cb.onclick = () => {
-    const txt = "Please analyse these lines for my Modern Defence trainer and add them to the repertoire (trainer/rep/USER.py):\n" + rq.map(r => "- " + r.line).join("\n");
+    const txt = "Please analyse these lines for my chess gym and add them to the repertoire (each line is tagged with its opening):\n" + rq.map(r => "- " + r.line).join("\n");
     navigator.clipboard.writeText(txt).then(() => { $("copyMsg").textContent = "Copied."; })
       .catch(() => { $("copyMsg").textContent = "Couldn't copy automatically; select the lines above instead."; });
   };
@@ -903,7 +978,7 @@ function miniBoard(fen, uci) {
     const sq = sqOf(col, row), f = FILES.indexOf(sq[0]), r = +sq[1], p = pos[sq];
     html += `<div class="sq ${(f + r) % 2 === 1 ? "l" : "d"}">${p ? `<span class="pc ${p === p.toUpperCase() ? "w" : "b"}${p.toUpperCase()}"></span>` : ""}</div>`;
   }
-  return `<div class="board mini" role="img" aria-label="Example position"><div class="squares">${html}</div><svg class="arrows" viewBox="0 0 8 8" preserveAspectRatio="none">${ARROW_DEFS}${arrowPath(uci, "green")}</svg></div>`;
+  return `<div class="board mini" role="img" aria-label="Example position"><div class="squares">${html}</div><svg class="arrows" viewBox="0 0 8 8" preserveAspectRatio="none">${arrowPath(uci, "green")}</svg></div>`;
 }
 function renderIdeas() {
   const groups = [...new Set(DATA.ideas.map(x => x.group))];
@@ -928,17 +1003,19 @@ function renderIdeas() {
 }
 function practiceNode(i) {
   mode = "review"; markTabs();
-  $("filters").hidden = true; $("ideasView").hidden = true; document.querySelector(".trainer").hidden = false;
+  $("filters").hidden = true; $("ideasView").hidden = true; $("oTrainer").hidden = false;
   startReview(i);
   $("board").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" });
 }
 function markTabs() { ["lessons", "review", "free", "ideas"].forEach(x => $("t" + x[0].toUpperCase() + x.slice(1)).setAttribute("aria-selected", x === mode)); }
 function refreshPanels() { renderNotebook(); renderReqs(); renderPrinciples(); tally(); }
 let resetArmed = false;
+// erases only this opening's positions and lessons: puzzle players, the kids' progress and the other opening stay
 $("bReset").onclick = () => {
-  if (!resetArmed) { resetArmed = true; $("bReset").textContent = "Click again to erase all progress"; return; }
-  S = { n: {}, les: {}, lines: 0, best: 0 }; save(); resetArmed = false; streak = 0;
-  $("bReset").textContent = "Progress erased"; refreshPanels(); setMode(mode);
+  if (!resetArmed) { resetArmed = true; $("bReset").textContent = `Click again to erase your ${DATA.name} progress`; return; }
+  N.forEach(n => { delete S.n[n.k]; }); L.forEach(l => { delete S.les[l.id]; });
+  save(); resetArmed = false; streak = 0;
+  $("bReset").textContent = `${DATA.name} progress erased`; refreshPanels(); setMode(mode);
 };
 new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 
@@ -1036,11 +1113,18 @@ function whyMate() {
   return { marks, arrows, lines };
 }
 
+const START_RATING = { me: 2147, son: 200 };      // by player id; other players start where they chose
+// Elo step after one puzzle (score 1 = solved): a big K for the first puzzles so the rating finds its level fast
+function eloStep(r, n, pr, score) {
+  const K = n < 20 ? 40 : n < 60 ? 24 : 16, exp = 1 / (1 + Math.pow(10, (pr - r) / 400));
+  return Math.max(100, r + Math.round(K * (score - exp)));
+}
 function pzPlayers() {
   S.players = S.players || {};
   if (!Object.keys(S.players).length) {
     S.players.me = { name: "You", rating: 2147, n: 0, done: {}, mode: "adaptive", level: 8, goal: false, hist: [] };
     S.player = "me"; S.pzv = 4;
+    S.fresh = true;          // defaults on a new device: the account's copy decides who's playing (see merge)
   }
   if ((S.pzv || 0) < 2) {    // v2 added the 200-400 band in front: shift stored levels, start the Son profile at 200
     for (const p of Object.values(S.players)) if (typeof p.level === "number") p.level += 1;
@@ -1053,16 +1137,13 @@ function pzPlayers() {
     S.pzv = 3;
   }
   if ((S.pzv || 0) < 4) {  // v4: repair the v2/v3 loop that kept resetting ratings; rebuild each rating from its history
-    const start = { me: 2147, son: 200 };
+    const start = START_RATING;
     for (const [id, p] of Object.entries(S.players)) {
       p.level = Math.min(Math.max(0, p.level | 0), PZ_BANDS.length - 1);
       if (id === "me" && p.level < 7) p.level = 8;
       if (!(id in start)) continue;
       let r = start[id], n = 0;
-      for (const x of p.hist || []) {
-        const K = n < 20 ? 40 : n < 60 ? 24 : 16, exp = 1 / (1 + Math.pow(10, (x.pr - r) / 400));
-        r = Math.max(100, r + Math.round(K * (x.r - exp))); n++;
-      }
+      for (const x of p.hist || []) { r = eloStep(r, n, x.pr, x.r); n++; }
       p.rating = r; p.n = n;
     }
     S.pzv = 4;
@@ -1199,12 +1280,14 @@ function pzScore(win) {
   const pl = pzPlayers(), pr = pzCur[3];
   pl.done = pl.done || {}; pl.done[pzCur[0]] = win ? 1 : 0;
   kidReward(pl, win);
-  pl.hist = (pl.hist || []).slice(-199); pl.hist.push({ id: pzCur[0], pr, r: win ? 1 : 0, t: Date.now() });
-  if (pzHinted) { $("pzDelta").textContent = "hint used: no rating change"; $("pzDelta").className = "delta"; save(); pzRenderBar(); return; }
-  const n = pl.n || 0, K = n < 20 ? 40 : n < 60 ? 24 : 16;
-  const exp = 1 / (1 + Math.pow(10, (pr - pl.rating) / 400));
-  const d = Math.round(K * ((win ? 1 : 0) - exp));
-  pl.rating = Math.max(100, pl.rating + d); pl.n = n + 1;
+  pl.hist = (pl.hist || []).slice(-(HIST_MAX - 1)); pl.hist.push({ id: pzCur[0], pr, r: win ? 1 : 0, t: Date.now() });
+  if (pzHinted) {
+    pl.hist[pl.hist.length - 1].h = 1;      // hinted: no rating change (the parent chart skips it)
+    $("pzDelta").textContent = "hint used: no rating change"; $("pzDelta").className = "delta"; save(); pzRenderBar(); return;
+  }
+  const n = pl.n || 0, was = pl.rating;
+  pl.rating = eloStep(was, n, pr, win ? 1 : 0); pl.n = n + 1;
+  const d = pl.rating - was;
   pl.hist[pl.hist.length - 1].ra = pl.rating;
   $("pzDelta").textContent = (d >= 0 ? "+" : "") + d; $("pzDelta").className = "delta " + (d >= 0 ? "up" : "down");
   save(); pzRenderBar();
@@ -1323,11 +1406,7 @@ function pzHint() {
   $("pzCard").innerHTML = `<p class="text">Move the highlighted piece. ${esc(pzGoalText(pzCur))}</p><p class="sub">With a hint this puzzle won't change your rating.</p>`;
   pzDraw();
 }
-function pzSqAt(ev) {
-  const r = $("pboard").getBoundingClientRect();
-  const col = Math.floor((ev.clientX - r.left) / r.width * 8), row = Math.floor((ev.clientY - r.top) / r.height * 8);
-  return col < 0 || col > 7 || row < 0 || row > 7 ? null : sqOf(col, row, pzOrient);
-}
+function pzSqAt(ev) { return squareAt(ev, $("pboard"), pzOrient); }
 function pzWire() {
   const bd = $("pboard");
   bd.addEventListener("pointerdown", ev => {
@@ -1448,13 +1527,22 @@ function kidAfterPuzzle() {
   kidEvents = [];
   if (kidSession >= 10) { kidSession = 0; setTimeout(() => sessionDone(pl), delay); }
 }
+// celebrations queue up (one at a time, each ~2 s or until tapped), so a medal never hides a trophy
+const celebrations = [];
 function celebrate(icon, kind, extra = "") {
-  const el = $("kidOverlay");
+  celebrations.push([icon, kind, extra]);
+  if ($("kidOverlay").hidden) showCelebration();
+}
+function showCelebration() {
+  const el = $("kidOverlay"), item = celebrations.shift();
+  clearTimeout(celebrate.t);
+  if (!item) { el.hidden = true; return; }
+  const [icon, kind, extra] = item;
   el.innerHTML = `<div class="session"><div class="burst">${icon}</div>${extra}</div>`;
   el.hidden = false; el.classList.remove("show"); void el.offsetWidth; el.classList.add("show");
   sfx(kind === "sticker" ? "sticker" : kind === "quiet" ? "star" : "trophy");
-  el.onclick = () => { el.hidden = true; };
-  clearTimeout(celebrate.t); celebrate.t = setTimeout(() => { el.hidden = true; }, 2200);
+  el.onclick = showCelebration;
+  celebrate.t = setTimeout(showCelebration, 2200);
 }
 function sessionDone(pl) { celebrate("🎉", "trophy", `<div class="big">⭐ ${pl.stars || 0}</div>`); }
 // finished the current stage? the next puzzle comes from the next unfinished stage
@@ -1497,7 +1585,7 @@ function stagePick(pl) {
 // a clean solve counts for the stage the puzzle belongs to, wherever it was played (path or Puzzles tab)
 function stageOf(p) { return STAGES.find(st => st.f(p)); }
 function stageStar() {
-  const st = stageOf(pzCur); if (!st) return;
+  const st = pzStage && pzStage.f(pzCur) ? pzStage : stageOf(pzCur); if (!st) return;
   const pl = pzPlayers(); pl.stages = pl.stages || {};
   const had = stageStars(pl, st.id);
   pl.stages[st.id] = had + 1; save(); renderStageBar();
@@ -1686,10 +1774,10 @@ function renderParents() {
   pzIndex = pzIndex || Object.fromEntries(GYM.puzzles.map(p => [p[0], p[4]]));
   const solved = h.filter(x => x.r).length;
   // rating after each puzzle (older entries without a stored value are replayed from the start rating)
-  const series = []; let r = pl.start || (pl.name === "You" ? 2147 : 200), n = 0;
+  const series = []; let r = pl.start || START_RATING[S.player] || 200, n = 0;
   for (const x of h) {
     if (x.ra) r = x.ra;
-    else { const K = n < 20 ? 40 : n < 60 ? 24 : 16, e = 1 / (1 + Math.pow(10, (x.pr - r) / 400)); r = Math.max(100, r + Math.round(K * (x.r - e))); }
+    else if (!x.h) r = eloStep(r, n, x.pr, x.r);
     n++; series.push({ r, t: x.t, ok: x.r, pr: x.pr });
   }
   const groups = THEME_GROUPS.map(([name]) => ({ name, n: 0, ok: 0 }));
@@ -1725,6 +1813,11 @@ function renderParents() {
         aria-label="Open stage ${i + 1}"><span class="stageicon">${st.icon}</span><small>${i + 1}</small></button>`).join("")}</div>
       <label class="tiny"><input type="checkbox" id="uSchool" ${pl.schoolAll ? "checked" : ""}> Open every piece-school level</label>
     </figure>
+    ${window.GYM_KIDS_ONLY ? `<figure class="chart wide"><figcaption>Back up progress</figcaption>
+      <p class="tiny">Progress on this site is saved only in this browser. Add the page to the Home Screen so Safari keeps it, and save a backup file now and then (it goes to Files). Restoring merges: nothing already earned here is lost.</p>
+      <div class="controls"><button class="btn" type="button" id="uBackup">Save a backup file</button>
+        <label class="btn">Restore from a file<input type="file" id="uRestore" accept="application/json,.json" hidden></label></div>
+      <p class="tiny" id="uMsg"></p></figure>` : ""}
     </div>
     <p class="tiny">Stars, trophies and stickers are earned in pictures-only mode. Ratings update after every puzzle (not after hinted ones).</p>`;
   wireTips($("kParents"));
@@ -1736,6 +1829,27 @@ function renderParents() {
     save(); renderParents();
   });
   $("uSchool").onchange = ev => { pl.schoolAll = ev.target.checked; save(); };
+  if (window.GYM_KIDS_ONLY) wireBackup();
+}
+// standalone site only: the whole saved state as a file, and back (restore = merge, so nothing earned is lost)
+function wireBackup() {
+  $("uBackup").onclick = () => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(S)], { type: "application/json" }));
+    a.download = `chess-gym-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    $("uMsg").textContent = "Backup saved.";
+  };
+  $("uRestore").onchange = async ev => {
+    const f = ev.target.files[0]; if (!f) return;
+    try {
+      const o = JSON.parse(await f.text());
+      if (!o || typeof o !== "object" || !o.players) throw new Error("not a Chess Gym backup");
+      merge(o); save(); renderParents();
+      $("uMsg").textContent = "Restored.";
+    } catch (e) { $("uMsg").textContent = "Couldn't restore that file: " + e.message; }
+  };
 }
 function lineChart(s) {
   if (s.length < 2) return `<p class="empty">A rating line appears after a couple of puzzles.</p>`;
@@ -1767,13 +1881,21 @@ function themeChart(g) {
   return `<div class="hbars">${g.map(x => `<div class="hb" data-tip="${esc(x.name)}: ${x.ok} of ${x.n} solved">
     <span class="nm">${esc(x.name)}</span><span class="track"><i style="width:${100 * x.ok / x.n}%"></i></span><span class="v">${Math.round(100 * x.ok / x.n)}% <small>(${x.n})</small></span></div>`).join("")}</div>`;
 }
+// chart tooltips: follow the mouse; on touch, a tap shows the tip (it stays until the next tap elsewhere)
 function wireTips(root) {
   const tip = $("kTip");
+  const show = (el, ev) => {
+    tip.textContent = el.dataset.tip; tip.hidden = false;
+    const x = Math.min(ev.clientX + 12, innerWidth - tip.offsetWidth - 8);
+    tip.style.left = Math.max(8, x) + "px"; tip.style.top = (ev.clientY + 12) + "px";
+  };
   root.querySelectorAll("[data-tip]").forEach(el => {
-    el.addEventListener("pointerenter", () => { tip.textContent = el.dataset.tip; tip.hidden = false; });
-    el.addEventListener("pointermove", ev => { tip.style.left = (ev.clientX + 12) + "px"; tip.style.top = (ev.clientY + 12) + "px"; });
-    el.addEventListener("pointerleave", () => { tip.hidden = true; });
+    el.addEventListener("pointerenter", ev => { if (ev.pointerType === "mouse") show(el, ev); });
+    el.addEventListener("pointermove", ev => { if (ev.pointerType === "mouse") show(el, ev); });
+    el.addEventListener("pointerleave", ev => { if (ev.pointerType === "mouse") tip.hidden = true; });
+    el.addEventListener("pointerdown", ev => { if (ev.pointerType !== "mouse") { ev.stopPropagation(); show(el, ev); } });
   });
+  if (!wireTips.done) { wireTips.done = true; document.addEventListener("pointerdown", () => { tip.hidden = true; }); }
 }
 
 /* ---- the kids' corner screen ---- */
@@ -1805,9 +1927,8 @@ function openKids(sub) {
     kidsWired = true;
     document.querySelectorAll("[data-kt]").forEach(b => b.onclick = () => { kidTab = b.dataset.kt; openKids(); });
     $("sboard").addEventListener("pointerdown", ev => {
-      const r = $("sboard").getBoundingClientRect();
-      const col = Math.floor((ev.clientX - r.left) / r.width * 8), row = Math.floor((ev.clientY - r.top) / r.height * 8);
-      if (col >= 0 && col < 8 && row >= 0 && row < 8) schoolMove(sqOf(col, row, "w"));
+      const sq = squareAt(ev, $("sboard"), "w");
+      if (sq) schoolMove(sq);
     });
     $("kSound").onclick = () => { const p = pzPlayers(); p.sound = !soundOn(); save(); openKids(); if (p.sound) sfx("right"); };
   }
@@ -1993,15 +2114,18 @@ function botAfterMove() {
   bg.over = res;
   pl.bots = pl.bots || {}; const r = pl.bots[bg.bot.id] = pl.bots[bg.bot.id] || { w: 0, l: 0, d: 0 };
   r[res === "win" ? "w" : res === "loss" ? "l" : "d"]++;
-  if (res === "win") { pl.stars = (pl.stars || 0) + 3; sfx("trophy"); } else if (res === "loss") sfx("wrong"); else sfx("right");
+  if (res === "win") {
+    const had = pl.stars || 0; pl.stars = had + 3; sfx("trophy");
+    if (Math.floor(pl.stars / 10) > Math.floor(had / 10)) celebrate(STICKERS[(Math.floor(pl.stars / 10) - 1) % STICKERS.length], "sticker");
+  } else if (res === "loss") sfx("wrong"); else sfx("right");
   save();
   $("bOver").innerHTML = `<div class="burst">${res === "win" ? "🏆" : res === "loss" ? bg.bot.face : "🤝"}</div>
     ${res === "win" ? `<div class="big">⭐ +3</div>` : ""}
     <div class="row"><button class="btn primary big" type="button" id="bAgain" aria-label="Play again">↻</button>
-    <button class="btn big" type="button" id="bBack" aria-label="Choose a bot">🤖</button></div>`;
+    <button class="btn big" type="button" id="bPickAgain" aria-label="Choose a bot">🤖</button></div>`;
   $("bOver").hidden = false;
   $("bAgain").onclick = () => botStart(bg.bot.id);
-  $("bBack").onclick = () => { bg = null; renderBots(); };
+  $("bPickAgain").onclick = () => { bg = null; renderBots(); };
   botDraw();
   return true;
 }
@@ -2053,10 +2177,8 @@ function openBots() {
     const bd = $("gboard");
     bd.addEventListener("pointerdown", ev => {
       if (!bg || bg.over || botTurn() !== bg.me) return;
-      const r = bd.getBoundingClientRect();
-      const col = Math.floor((ev.clientX - r.left) / r.width * 8), row = Math.floor((ev.clientY - r.top) / r.height * 8);
-      if (col < 0 || col > 7 || row < 0 || row > 7) return;
-      const sq = sqOf(col, row, bg.me), p = botPos()[sq];
+      const sq = squareAt(ev, bd, bg.me); if (!sq) return;
+      const p = botPos()[sq];
       if (bg.sel && bg.sel !== sq && botUserMove(bg.sel, sq)) return;
       bg.sel = p && colorOf(p) === bg.me ? sq : null; botDraw();
     });
@@ -2072,25 +2194,32 @@ window.SECTION = null;
 const loaded = {};
 function loadScript(src) {
   return loaded[src] || (loaded[src] = new Promise((ok, fail) => {
-    const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = fail; document.head.appendChild(s);
+    const s = document.createElement("script"); s.src = src; s.onload = ok;
+    s.onerror = () => { delete loaded[src]; s.remove(); fail(new Error("couldn't load " + src)); };   // retry next time
+    document.head.appendChild(s);
   }));
 }
+let navSeq = 0;
 async function go(sec, sub) {
+  const my = ++navSeq, stale = () => my !== navSeq;    // a later click wins over a slow load
   document.querySelectorAll("[data-sec]").forEach(b => b.setAttribute("aria-current", b.dataset.sec === sec ? "page" : "false"));
   $("puzzleView").hidden = sec !== "puzzles";
   $("kidsView").hidden = sec !== "kids";
   $("openingView").hidden = sec === "puzzles" || sec === "kids";
-  $("loading").hidden = false;
+  $("loading").hidden = false; $("loadErr").hidden = true;
   try {
     if (sec === "puzzles") {
       await loadScript("data/puzzles.js");
+      if (stale()) return;
       if (typeof Chess === "undefined") throw new Error("chess.js missing");
       window.SECTION = "puzzles"; openPuzzles(sub && sub.stage);
     } else if (sec === "kids") {
       await loadScript("data/puzzles.js");
+      if (stale()) return;
       window.SECTION = "kids"; openKids(sub);
     } else {
       await loadScript(`data/${sec}.js`);
+      if (stale()) return;
       window.SECTION = "opening";
       const d = GYM[sec];
       $("openingLede").textContent = d.side === "b"
@@ -2101,15 +2230,18 @@ async function go(sec, sub) {
     }
     try { localStorage.setItem("gym:sec", sec); } catch (e) {}
   } catch (e) {
-    $("loadErr").hidden = false; $("loadErr").textContent = "This section didn't load. Reload the page to try again.";
+    console.error(e);
+    if (stale()) return;
+    $("loadErr").hidden = false;
+    $("loadErr").textContent = "This section didn't load. Reload the page to try again." + (e && e.message ? ` (${e.message})` : "");
   }
   $("loading").hidden = true;
 }
 document.querySelectorAll("[data-sec]").forEach(b => b.onclick = () => go(b.dataset.sec));
-window.onGymStoreKids = () => { if (window.SECTION === "kids") openKids(); };
 window.onGymStore = () => { if (window.SECTION === "puzzles") pzRenderBar(); if (window.SECTION === "kids") openKids(); };
 (function boot() {
   if (window.GYM_KIDS_ONLY) {     // the standalone kids' site: no section menu, no openings
+    document.documentElement.classList.add("kidsonly");
     try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch (e) {}
     return go("kids");
   }

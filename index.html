@@ -4,8 +4,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Chess Gym">
-<script>window.GYM_KIDS_ONLY = true;</script>
-<style>.topnav, header .eyebrow, header .lede, #kPlayers { display: none !important; }</style>
+<script>window.GYM_KIDS_ONLY = true; document.documentElement.classList.add("kidsonly");</script>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -111,7 +110,6 @@ p { margin: 0; }
 .pc.wP { background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0NSIgaGVpZ2h0PSI0NSIgdmlld0JveD0iMCAwIDQ1IDQ1Ij48cGF0aCBmaWxsPSIjZmZmIiBzdHJva2U9IiMwMDAiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLXdpZHRoPSIxLjUiIGQ9Ik0yMi41IDljLTIuMjEgMC00IDEuNzktNCA0IDAgLjg5LjI5IDEuNzEuNzggMi4zOEMxNy4zMyAxNi41IDE2IDE4LjU5IDE2IDIxYzAgMi4wMy45NCAzLjg0IDIuNDEgNS4wMy0zIDEuMDYtNy40MSA1LjU1LTcuNDEgMTMuNDdoMjNjMC03LjkyLTQuNDEtMTIuNDEtNy40MS0xMy40NyAxLjQ3LTEuMTkgMi40MS0zIDIuNDEtNS4wMyAwLTIuNDEtMS4zMy00LjUtMy4yOC01LjYyLjQ5LS42Ny43OC0xLjQ5Ljc4LTIuMzggMC0yLjIxLTEuNzktNC00LTR6Ii8+PC9zdmc+"); }
 .pc.wQ { background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0NSIgaGVpZ2h0PSI0NSIgdmlld0JveD0iMCAwIDQ1IDQ1Ij48ZyBmaWxsPSIjZmZmIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiIHN0cm9rZT0iIzAwMCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2Utd2lkdGg9IjEuNSI+PHBhdGggZD0iTTggMTJhMiAyIDAgMSAxLTQgMCAyIDIgMCAxIDEgNCAwbTE2LjUtNC41YTIgMiAwIDEgMS00IDAgMiAyIDAgMSAxIDQgME00MSAxMmEyIDIgMCAxIDEtNCAwIDIgMiAwIDEgMSA0IDBNMTYgOC41YTIgMiAwIDEgMS00IDAgMiAyIDAgMSAxIDQgME0zMyA5YTIgMiAwIDEgMS00IDAgMiAyIDAgMSAxIDQgMCIvPjxwYXRoIHN0cm9rZS1saW5lY2FwPSJidXR0IiBkPSJNOSAyNmM4LjUtMS41IDIxLTEuNSAyNyAwbDItMTItNyAxMVYxMWwtNS41IDEzLjUtMy0xNS0zIDE1LTUuNS0xNFYyNUw3IDE0eiIvPjxwYXRoIHN0cm9rZS1saW5lY2FwPSJidXR0IiBkPSJNOSAyNmMwIDIgMS41IDIgMi41IDQgMSAxLjUgMSAxIC41IDMuNS0xLjUgMS0xLjUgMi41LTEuNSAyLjUtMS41IDEuNS41IDIuNS41IDIuNSA2LjUgMSAxNi41IDEgMjMgMCAwIDAgMS41LTEgMC0yLjUgMCAwIC41LTEuNS0xLTIuNS0uNS0yLjUtLjUtMiAuNS0zLjUgMS0yIDIuNS0yIDIuNS00LTguNS0xLjUtMTguNS0xLjUtMjcgMHoiLz48cGF0aCBmaWxsPSJub25lIiBkPSJNMTEuNSAzMGMzLjUtMSAxOC41LTEgMjIgME0xMiAzMy41YzYtMSAxNS0xIDIxIDAiLz48L2c+PC9zdmc+"); }
 .pc.wR { background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0NSIgaGVpZ2h0PSI0NSIgdmlld0JveD0iMCAwIDQ1IDQ1Ij48ZyBmaWxsPSIjZmZmIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiIHN0cm9rZT0iIzAwMCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2Utd2lkdGg9IjEuNSI+PHBhdGggc3Ryb2tlLWxpbmVjYXA9ImJ1dHQiIGQ9Ik05IDM5aDI3di0zSDl6bTMtM3YtNGgyMXY0em0tMS0yMlY5aDR2Mmg1VjloNXYyaDVWOWg0djUiLz48cGF0aCBkPSJtMzQgMTQtMyAzSDE0bC0zLTMiLz48cGF0aCBzdHJva2UtbGluZWNhcD0iYnV0dCIgc3Ryb2tlLWxpbmVqb2luPSJtaXRlciIgZD0iTTMxIDE3djEyLjVIMTRWMTciLz48cGF0aCBkPSJtMzEgMjkuNSAxLjUgMi41aC0yMGwxLjUtMi41Ii8+PHBhdGggZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVqb2luPSJtaXRlciIgZD0iTTExIDE0aDIzIi8+PC9nPjwvc3ZnPg=="); }
-.mine .sq:has(.pc.blk) { cursor: grab; }
 .pc.lift { opacity: .3; }
 .ghost { position: absolute; width: 12.5%; height: 12.5%; transform: translate(-50%, -50%); z-index: 3; }
 .coord { position: absolute; font-family: var(--mono); font-size: 2.1cqw; font-weight: 600; line-height: 1; pointer-events: none; }
@@ -164,6 +162,10 @@ kbd { font-family: var(--mono); font-size: 11.5px; border: 1px solid var(--line)
 :root[data-theme="dark"] .tag { color: #101512; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .tag { color: #101512; } }
 .plan { border-top: 1px dashed var(--line); padding-top: 10px; display: grid; gap: 4px; }
+.models { border-top: 1px dashed var(--line); padding-top: 10px; display: grid; gap: 6px; }
+.models .lbl { font-family: var(--display); font-weight: 700; font-size: 12.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.models ul { margin: 0; padding-left: 18px; display: grid; gap: 2px; font-size: 14.5px; }
+.models a { color: var(--accent); }
 .plan .lbl { font-family: var(--display); font-weight: 700; font-size: 12.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
 
 .moves { font-family: var(--mono); font-size: 14px; line-height: 1.9; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; min-height: 48px; }
@@ -401,6 +403,45 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
 #puzzleView.kid .keys, #puzzleView.kid .rating .lbl, #puzzleView.kid #pzState, #puzzleView.kid #pzTally, #puzzleView.kid #pzHint { display: none; }
 @media (max-width: 900px) { #puzzleView.kid .trainer { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) { .kidoverlay.show .burst, .stage.cur, .kstars.bump { animation: none; } }
+/* ---- kids-only site (html.kidsonly, the iPad): no page header, every screen fits without scrolling ----
+   Only rules under .kidsonly live here, so the claude.ai page is unaffected. Sizes use dvh (the visible height). */
+.kidsonly body { padding-block: 10px 16px; }
+.kidsonly header, .kidsonly .topnav, .kidsonly #kPlayers { display: none !important; }   /* the child's profile only */
+.kidsonly .wrap { gap: 10px; }
+.kidsonly #puzzleView.kid .pzbar > :not(#pzSound):not(#pzStars) { display: none; }   /* no player/level settings for the child */
+.kidsonly #puzzleView.kid .rating { display: none; }
+.kidsonly #puzzleView.kid { position: relative; }
+.kidsonly #puzzleView.kid .pzbar { position: absolute; top: 0; right: 0; }                 /* sound + stars beside the stage bar */
+.kidsonly #puzzleView.kid .boardcol { max-width: min(100%, calc(100dvh - 240px)); }
+.kidsonly .sboardwrap { max-width: min(100%, calc(100dvh - var(--above, 220px))); }
+.kidsonly #kSchool { --above: 420px; }
+.kidsonly #kPlay { --above: 230px; }
+/* learning path: a snake of 2 columns (portrait) or 5 (landscape) instead of one tall column */
+.kidsonly .path { max-width: none; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+.kidsonly .path::before { display: none; }
+.kidsonly .stop.left, .kidsonly .stop.right { padding: 0; justify-content: center; }
+.kidsonly .stop:nth-child(1) { grid-area: 1 / 1; } .kidsonly .stop:nth-child(2) { grid-area: 1 / 2; }
+.kidsonly .stop:nth-child(3) { grid-area: 2 / 2; } .kidsonly .stop:nth-child(4) { grid-area: 2 / 1; }
+.kidsonly .stop:nth-child(5) { grid-area: 3 / 1; } .kidsonly .stop:nth-child(6) { grid-area: 3 / 2; }
+.kidsonly .stop:nth-child(7) { grid-area: 4 / 2; } .kidsonly .stop:nth-child(8) { grid-area: 4 / 1; }
+.kidsonly .stop:nth-child(9) { grid-area: 5 / 1; } .kidsonly .stop:nth-child(10) { grid-area: 5 / 2; }
+@media (orientation: landscape) {
+  .kidsonly .path { grid-template-columns: repeat(5, 1fr); }
+  .kidsonly #puzzleView.kid .boardcol { max-width: min(100%, calc(100dvh - 230px)); }
+  .kidsonly .stop:nth-child(1) { grid-area: 1 / 1; } .kidsonly .stop:nth-child(2) { grid-area: 1 / 2; }
+  .kidsonly .stop:nth-child(3) { grid-area: 1 / 3; } .kidsonly .stop:nth-child(4) { grid-area: 1 / 4; }
+  .kidsonly .stop:nth-child(5) { grid-area: 1 / 5; } .kidsonly .stop:nth-child(6) { grid-area: 2 / 5; }
+  .kidsonly .stop:nth-child(7) { grid-area: 2 / 4; } .kidsonly .stop:nth-child(8) { grid-area: 2 / 3; }
+  .kidsonly .stop:nth-child(9) { grid-area: 2 / 2; } .kidsonly .stop:nth-child(10) { grid-area: 2 / 1; }
+  /* piece school and bot games: board on the left at full height, everything else beside it */
+  .kidsonly #kSchool { display: grid; grid-template-columns: min(calc(100dvh - 150px), 62%) minmax(0, 1fr);
+    grid-template-areas: "board pieces" "board levels" "board goal" "board moves"; grid-template-rows: auto auto auto 1fr; gap: 14px 28px; align-items: start; }
+  .kidsonly #kSchool .spieces { grid-area: pieces; } .kidsonly #kSchool .slevels { grid-area: levels; }
+  .kidsonly #kSchool .sgoal { grid-area: goal; } .kidsonly #kSchool .smoves { grid-area: moves; }
+  .kidsonly #kSchool .sboardwrap, .kidsonly #bGame .sboardwrap { grid-area: board; max-width: none; margin: 0; }
+  .kidsonly #bGame { display: grid; grid-template-columns: min(calc(100dvh - 150px), 70%) minmax(0, 1fr); grid-template-areas: "board head"; gap: 28px; align-items: start; }
+  .kidsonly #bGame .bothead { grid-area: head; flex-direction: column; }
+}
 /* bots */
 .botopts { display: flex; gap: 10px; justify-content: center; margin-bottom: 12px; }
 .botopts .opt { appearance: none; cursor: pointer; font-size: 30px; line-height: 1; display: inline-flex; align-items: center; gap: 2px; padding: 8px 14px; border-radius: 12px; border: 2px solid var(--line); background: var(--surface); color: var(--ink); }
@@ -492,6 +533,8 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
   </nav>
   <p class="tiny" id="loading">Loading…</p>
   <p class="note" id="loadErr" hidden></p>
+  <p class="note" id="problem" role="alert" hidden></p>
+  <div class="kidoverlay" id="kidOverlay" hidden></div>
 
   <div id="kidsView" class="section" hidden>
     <div class="kidbar">
@@ -535,7 +578,6 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
   </div>
 
   <div id="puzzleView" class="section" hidden>
-    <div class="kidoverlay" id="kidOverlay" hidden></div>
     <div class="stagebar" id="pzStageBar" hidden></div>
     <div class="pzbar">
       <span class="who-lbl">Who's playing?</span>
@@ -593,7 +635,7 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
   </div>
   <div class="filters" id="filters" role="group" aria-label="White's first move" hidden></div>
 
-  <section class="trainer" aria-label="Trainer">
+  <section class="trainer" id="oTrainer" aria-label="Trainer">
     <div class="boardcol">
       <div class="board" id="board" aria-label="Chess board">
         <div class="squares" id="squares"></div>
@@ -654,7 +696,7 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
     <h2>The principles you're drilling</h2>
     <p class="lede">Each move to learn is tagged with the principle behind it. Your record shows right / wrong answers per principle.</p>
     <div class="plist" id="plist"></div>
-    <button class="btn reset" id="bReset">Reset my progress</button>
+    <button class="btn reset" id="bReset">Reset my progress in this opening</button>
   </section>
   </div>
   <p class="tiny">Puzzles from the Lichess puzzle database (CC0). Pieces: Lichess “cburnett” set by Colin M.L. Burnett (CC BY-SA 3.0).</p>
