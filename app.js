@@ -9,6 +9,7 @@ function useOpening(d) {
   ME = d.side; OPPC = ME === "b" ? "w" : "b"; MEN = ME === "b" ? "Black" : "White"; OPP = ME === "b" ? "White" : "Black"; orient = ME;
   for (const k in subCache) delete subCache[k];
   lastPath = null; lastReviewed = null; forced = null;      // nothing carries over from the other opening
+  useMyGames();
   resetArmed = false; $("bReset").textContent = "Reset my progress in this opening";
 }
 const FILES = "abcdefgh";
@@ -102,6 +103,11 @@ function mergePlayer(a, b) {
   }
   out.bots = {};
   for (const id of new Set([...Object.keys(a.bots || {}), ...Object.keys(b.bots || {})])) out.bots[id] = maxMap((a.bots || {})[id], (b.bots || {})[id]);
+  out.again = {};      // missed puzzles to redo: per puzzle the later-scheduled copy (each miss or re-solve moves `due` on)
+  for (const [id, x] of [...Object.entries(a.again || {}), ...Object.entries(b.again || {})]) {
+    const y = out.again[id];
+    if (!y || x.due > y.due || (x.due === y.due && x.n > y.n)) out.again[id] = x;
+  }
   out.stagesRecounted = !!(a.stagesRecounted || b.stagesRecounted);
   out.u = Math.max(a.u || 0, b.u || 0);
   return out;
@@ -246,11 +252,11 @@ try { filter = localStorage.getItem(STORE + ":filter") || "all"; } catch (e) {}
 const FIRST = { e2e4: "1.e4", d2d4: "1.d4", c2c4: "1.c4", g1f3: "1.Nf3" };
 
 function getWM() { return wiPar === "root" ? DATA.roots.map(e => [e[0], e[1], e[4]]) : (wiPar === null ? [] : N[wiPar].wm); }
-function legalList() { return phase === "black" ? N[cur].mv.map(m => m[0]) : phase === "whatif" ? getWM().map(w => w[0]) : []; }
+function legalList() { return phase === "play" ? poLegal() : phase === "black" ? N[cur].mv.map(m => m[0]) : phase === "whatif" ? getWM().map(w => w[0]) : []; }
 function draw() {
   const tg = sel ? legalList().filter(u => u.startsWith(sel)).map(u => u.slice(2, 4)) : [];
   renderBoard(pos, { hl: lastMove, sel, tgts: tg, arrows: arrowsNow });
-  $("board").classList.toggle("mine", phase === "black" || phase === "whatif");
+  $("board").classList.toggle("mine", phase === "black" || phase === "whatif" || phase === "play");
 }
 function renderMoves() {
   if (!hist.length) { $("moves").innerHTML = `<span class="fam">The line appears here.</span>`; return; }
@@ -305,7 +311,7 @@ function inScope(edges) { return scope ? edges.filter(e => scope.has(e[4])) : ed
 
 /* ---------- starting lines ---------- */
 function resetLine() {
-  frames = []; fi = 0; wiPar = null; clearTimeout(whiteTimer); shownSt = null; $("struct").hidden = true;
+  frames = []; fi = 0; wiPar = null; clearTimeout(whiteTimer); shownSt = null; $("struct").hidden = true; timedStop(); poStop();
   hist = []; path = []; hintShown = false; arrowsNow = []; sel = null; lastMove = [];
   document.querySelector(".ghost")?.remove(); drag = null;
 }
@@ -366,11 +372,12 @@ function snapFrame() {   // refresh the live frame's stored card after it change
 function wireCard() {
   wireTwins();
   const b = $("bBack"); if (b) b.onclick = back;
+  const po = $("bPlayOut"); if (po) po.onclick = () => startPlayout(+po.dataset.node);
   $("card").querySelectorAll("[data-wi]").forEach(x => x.onclick = () => whatIfMove(x.dataset.wi));
 }
 function goFrame(k) {
   if (k < 0 || k >= frames.length) return;
-  clearTimeout(whiteTimer); drag = null; sel = null; document.querySelector(".ghost")?.remove();
+  clearTimeout(whiteTimer); drag = null; sel = null; document.querySelector(".ghost")?.remove(); timedStop();
   fi = k;
   const f = frames[k], live = k === frames.length - 1;
   pos = f.pos; lastMove = f.lastMove; cur = f.cur; arrowsNow = live ? f.arrows : [];
@@ -416,6 +423,7 @@ function beginBlack() {
   }
   pushFrame("black");
   renderMoves(); draw(); refreshBar();
+  timedStart();
 }
 
 /* ---------- judging ---------- */
@@ -432,6 +440,7 @@ function playerMove(uci) {
   if (phase !== "black") return;
   const v = judge(uci);
   if (!v) return;
+  timedStop();
   if (frames.length && fi < frames.length - 1) { hist = hist.slice(0, frames[fi].h); frames = frames.slice(0, fi + 1); }
   const n = N[cur], id = cur, no = moveNo(id);
   sel = null;
@@ -440,25 +449,7 @@ function playerMove(uci) {
     draw(); return;
   }
   const r = rec(id);
-  if (v.kind === "fail") {
-    r.bad++; r.streak = 0; r.last = "bad"; r.t = Date.now(); r.wrong = r.wrong || {}; r.wrong[v.san] = (r.wrong[v.san] || 0) + 1;
-    save();
-    phase = "fail"; streak = 0;
-    if (lesson) lesson.misses.push(id);
-    hist.push({ san: v.san, side: ME, no, cls: "me x" });
-    arrowsNow = [[uci, "red"], [n.m, "green"]]; lastMove = [];
-    setState("Not this one", "fail");
-    setCard("fail", `<div class="head"><span class="tag fail">Wrong</span><span class="mvname">${lmNo(no, v.san)}</span></div>
-      <p class="text">${esc(v.text)}</p>
-      <div class="plan"><span class="lbl">The move to learn: <span class="mvname" style="font-size:14px;color:var(--pass)">${lmNo(no, n.s)}</span></span>
-      <div class="head">${pchip(n.p)}</div><p class="text">${esc(n.why)}</p></div>
-      <p class="sub">Saved to your notebook. ${review ? "It stays in Review until you get it right." : "Review will bring it back."}</p>
-      <div class="controls"><button class="btn" id="bBack">← Take back and retry</button></div>${contrastHtml(id)}`);
-    wireCard();
-    $("bNext").textContent = review ? "Next position" : "Next line";
-    pushFrame("view", { phase: "fail" });
-    renderMoves(); draw(); tally(); refreshPanels(); return;
-  }
+  if (v.kind === "fail") return showFail(id, v, uci);
   if (!(lesson && lesson.phase === "walk")) {
     if (!hintShown) { r.ok++; r.streak++; r.last = "ok"; r.t = Date.now(); }
     streak++; S.best = Math.max(S.best, streak);
@@ -500,6 +491,29 @@ function playerMove(uci) {
   tally(); renderMoves(); draw(); refreshBar();
   continueFrom(from, via);
 }
+// a wrong answer (or, with timed answers, no answer in time: v.san and uci are null)
+function showFail(id, v, uci) {
+  const n = N[id], no = moveNo(id), r = rec(id);
+  timedStop();
+  r.bad++; r.streak = 0; r.last = "bad"; r.t = Date.now(); r.wrong = r.wrong || {};
+  if (v.san) r.wrong[v.san] = (r.wrong[v.san] || 0) + 1;
+  save();
+  phase = "fail"; streak = 0;
+  if (lesson) lesson.misses.push(id);
+  if (v.san) hist.push({ san: v.san, side: ME, no, cls: "me x" });
+  arrowsNow = uci ? [[uci, "red"], [n.m, "green"]] : [[n.m, "green"]]; lastMove = [];
+  setState(v.san ? "Not this one" : "Too slow", "fail");
+  setCard("fail", `<div class="head"><span class="tag fail">${v.san ? "Wrong" : "Time"}</span>${v.san ? `<span class="mvname">${lmNo(no, v.san)}</span>` : ""}</div>
+      <p class="text">${esc(v.text)}</p>
+      <div class="plan"><span class="lbl">The move to learn: <span class="mvname" style="font-size:14px;color:var(--pass)">${lmNo(no, n.s)}</span></span>
+      <div class="head">${pchip(n.p)}</div><p class="text">${esc(n.why)}</p></div>
+      <p class="sub">Saved to your notebook. ${review ? "It stays in Review until you get it right." : "Review will bring it back."}</p>
+      <div class="controls"><button class="btn" id="bBack">← Take back and retry</button></div>${contrastHtml(id)}`);
+  wireCard();
+  $("bNext").textContent = review ? "Next position" : "Next line";
+  pushFrame("view", { phase: "fail" });
+  renderMoves(); draw(); tally(); refreshPanels();
+}
 function continueFrom(from, via) {
   if (from === "root") {
     let edges = DATA.roots.filter(e => filter === "all" || (filter === "other" ? !FIRST[e[0]] : e[0] === filter));
@@ -518,7 +532,8 @@ function finishLine(i, exits) {
   if (exits) {
     const names = [...new Set(exits.map(e => nodeLesson[e[4]]).filter(x => x !== undefined && (!lesson || x !== lesson.li)))].map(x => `<b>${esc(L[x].title)}</b>`);
     extra = `<div class="plan"><span class="lbl">From here</span><p class="text">${OPP} now picks a system${names.length ? ": " + names.join(", ") : ""}. ${names.length ? "Each has its own lesson." : ""}</p></div>`;
-  } else extra = `<div class="plan"><span class="lbl">Your plan from here</span><p class="text">${esc(n.plan || "")}</p></div>`;
+  } else extra = `<div class="plan"><span class="lbl">Your plan from here</span><p class="text">${esc(n.plan || "")}</p>
+    ${n.plan && !(lesson && lesson.phase === "walk") ? `<div class="controls"><button class="btn" id="bPlayOut" data-node="${i}">▶ Play it out against the engine</button></div>` : ""}</div>`;
   const cls = $("card").className.includes("alt") ? "alt" : "done";
   $("card").className = "card " + cls;
   $("card").innerHTML = $("card").innerHTML.replace('class="tag pass">Right', 'class="tag done">Line complete') + extra;
@@ -648,8 +663,9 @@ function refreshBar() {
 
 /* ---------- review ---------- */
 function reviewQueue() {
-  return N.map((n, i) => i).filter(i => recOf(i)?.last === "bad")
-    .sort((a, b) => (recOf(b).bad - recOf(a).bad) || (recOf(b).t - recOf(a).t));
+  const bad = i => (recOf(i)?.bad || 0) + (MYG[i] ? MYG[i].n : 0), t = i => recOf(i)?.t || 0;
+  return N.map((n, i) => i).filter(i => recOf(i)?.last === "bad" || myGamesDue(i))
+    .sort((a, b) => (bad(b) - bad(a)) || (t(b) - t(a)));
 }
 function startReview(single) {
   lesson = null; scope = null;
@@ -663,14 +679,14 @@ let lastReviewed = null;
 function pickReview(q) {
   if (q.length < 2) return q;
   const lastL = lastReviewed === null ? -1 : nodeLesson[lastReviewed];
-  const ws = q.map(i => i === lastReviewed ? 0 : (1 + recOf(i).bad) * (nodeLesson[i] === lastL ? 0.1 : 1));
+  const ws = q.map(i => i === lastReviewed ? 0 : (1 + (recOf(i)?.bad || 0) + Math.min(5, MYG[i]?.n || 0)) * (nodeLesson[i] === lastL ? 0.1 : 1));
   let x = Math.random() * ws.reduce((a, b) => a + b, 0);
   for (let k = 0; k < q.length; k++) { x -= ws[k]; if (x <= 0) return [q[k], ...q.filter((_, j) => j !== k)]; }
   return q;
 }
 function nextReview() {
   let q = review.single ? review.queue : pickReview(reviewQueue());
-  if (!q.length || (review.single && review.done && recOf(q[0])?.last !== "bad")) {
+  if (!q.length || (review.single && review.done && recOf(q[0])?.last !== "bad" && !myGamesDue(q[0]))) {
     phase = "idle"; resetLine(); renderMoves(); draw();
     setState(review.single ? "Done" : "Nothing to review", "pass");
     setCard("done", `<p class="text">${review.single ? "That position is done." : "No missed positions right now. Lessons or free play will find new ones."}</p>
@@ -682,7 +698,8 @@ function nextReview() {
   const i = q[0], r = recOf(i);
   lastReviewed = i;
   const wrong = r && r.wrong ? Object.keys(r.wrong) : [];
-  startAt(i, `<span class="who">From your notebook</span><span>You missed this ${r?.bad || 1}×${wrong.length ? ` (you played ${wrong.map(w => (ME === "b" ? "…" : "") + esc(w)).join(", ")})` : ""}. What's the move here?</span>`);
+  startAt(i, r?.bad ? `<span class="who">From your notebook</span><span>You missed this ${r.bad}×${wrong.length ? ` (you played ${wrong.map(w => (ME === "b" ? "…" : "") + esc(w)).join(", ")})` : ""}. ${myGamesNote(i)} What's the move here?</span>`
+    : `<span class="who">From your games</span><span>${myGamesNote(i)} What's the move to learn?</span>`);
   setCard("", `<p class="sub">${q.length} position${q.length === 1 ? "" : "s"} to fix. Get this one right and the line continues from there.</p>`);
   snapFrame();
   $("bNext").textContent = "Next position"; syncControls();
@@ -693,8 +710,9 @@ function setMode(m) {
   mode = m; markTabs();
   $("filters").hidden = m !== "free" || ME !== "b";
   $("ideasView").hidden = m !== "ideas";
-  $("oTrainer").hidden = m === "ideas";
-  if (m === "ideas") { lesson = null; scope = null; review = null; resetLine(); phase = "idle"; syncControls(); return; }
+  $("mineView").hidden = m !== "mine";
+  $("oTrainer").hidden = m === "ideas" || m === "mine";
+  if (m === "ideas" || m === "mine") { lesson = null; scope = null; review = null; resetLine(); phase = "idle"; if (m === "mine") renderMine(); syncControls(); return; }
   lesson = null; scope = null; review = null;
   if (m === "lessons") showLessonList();
   else if (m === "review") startReview();
@@ -856,6 +874,7 @@ Explain, in at most 170 words of plain English, the plan for ${MEN} in this posi
 }
 function hint() {
   if (phase !== "black" || (lesson && lesson.phase === "walk")) return;
+  timedStop();
   hintShown = true;
   const n = N[cur];
   setCard("", `<div class="head"><span class="tag" style="background:var(--hint)">Hint</span>${pchip(n.p)}</div><p class="sub">${esc(P[n.p] ? P[n.p][1] : "")}</p><p class="sub">A hinted answer doesn't count as solid.</p>`);
@@ -869,7 +888,7 @@ document.querySelectorAll(".tab").forEach(t => t.onclick = () => setMode(t.datas
 document.addEventListener("keydown", ev => {
   if (ev.target.closest("input, textarea")) return;
   const k = ev.key.toLowerCase();
-  if (window.SECTION !== "opening" || mode === "ideas") return;
+  if (window.SECTION !== "opening" || mode === "ideas" || mode === "mine") return;
   if (ev.key === "ArrowRight") { ev.preventDefault(); forward(); }
   else if (ev.key === "ArrowLeft") { ev.preventDefault(); back(); }
   else if ((ev.key === "ArrowDown" || k === "n") && !$("bNext").hidden) { ev.preventDefault(); next(); }
@@ -891,13 +910,13 @@ function tryMove(from, to) {
   if (!cand.length) return false;
   const u = cand.find(x => x.length === 4 || x[4] === "q") || cand[0];
   sel = null;
-  if (phase === "whatif") whatIfMove(u); else playerMove(u);
+  if (phase === "whatif") whatIfMove(u); else if (phase === "play") poMove(u); else playerMove(u);
   return true;
 }
 $("board").addEventListener("pointerdown", ev => {
-  if (phase !== "black" && phase !== "whatif") return;
+  if (phase !== "black" && phase !== "whatif" && phase !== "play") return;
   const sq = sqAt(ev); if (!sq) return;
-  const p = pos[sq], mine = x => phase === "black" ? isMine(x) : !isMine(x);
+  const p = pos[sq], mine = x => phase === "whatif" ? !isMine(x) : isMine(x);
   if (sel && sel !== sq && legalList().some(u => u.startsWith(sel + sq))) { tryMove(sel, sq); return; }
   if (p && mine(p)) { sel = sq; drag = { from: sq, moved: false, x: ev.clientX, y: ev.clientY }; $("board").setPointerCapture(ev.pointerId); draw(); }
   else { sel = null; draw(); }
@@ -939,7 +958,8 @@ function renderNotebook() {
     : `<div class="empty">Nothing yet. The principles behind the moves you miss will collect here.</div>`;
   $("misses").innerHTML = q.length ? q.slice(0, 40).map(i => {
     const n = N[i], r = recOf(i), no = moveNo(i);
-    const w = Object.entries(r.wrong || {}).sort((a, b) => b[1] - a[1]).map(([s, c]) => `${ME === "b" ? "…" : ""}${esc(s)}${c > 1 ? ` (${c}×)` : ""}`).join(", ");
+    const tried = Object.assign({}, ...(MYG[i] ? MYG[i].played.map(m => ({ [m.played]: m.n })) : []), (r && r.wrong) || {});   // here and in your games
+    const w = Object.entries(tried).sort((a, b) => b[1] - a[1]).map(([s, c]) => `${ME === "b" ? "…" : ""}${esc(s)}${c > 1 ? ` (${c}×)` : ""}`).join(", ");
     return `<div class="miss"><span class="ln">${esc(n.line)}</span>
       <span class="what">${w ? `<span>You played <span class="bad">${w}</span></span>` : ""}<span>Learn <span class="good">${lmNo(no, n.s)}</span></span>${pchip(n.p)}</span>
       <button class="btn" data-i="${i}">Practice</button></div>`;
@@ -1007,7 +1027,7 @@ function practiceNode(i) {
   startReview(i);
   $("board").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" });
 }
-function markTabs() { ["lessons", "review", "free", "ideas"].forEach(x => $("t" + x[0].toUpperCase() + x.slice(1)).setAttribute("aria-selected", x === mode)); }
+function markTabs() { ["lessons", "review", "free", "ideas", "mine"].forEach(x => $("t" + x[0].toUpperCase() + x.slice(1)).setAttribute("aria-selected", x === mode)); }
 function refreshPanels() { renderNotebook(); renderReqs(); renderPrinciples(); tally(); }
 let resetArmed = false;
 // erases only this opening's positions and lessons: puzzle players, the kids' progress and the other opening stay
@@ -1047,6 +1067,9 @@ const THEME = {
 };
 let pzCur = null, pzGame = null, pzIdx = 0, pzOrient = "w", pzSel = null, pzLast = [], pzArrows = [], pzState = "idle";
 let pzStage = null;
+// the kids' corner 🧩 tab: rating-matched puzzles, pictures only, for the young player (asked once per opening of the view)
+let pzKidNext = false, pzKidRated = false;
+function pzKid() { return !!pzPlayers().kid || pzKidRated; }
 let pzHinted = false, pzFailed = false, pzScored = false, pzDrag = null, pzTimer = null, pzMarks = {};
 
 /* ---- "why is it mate?": which pieces take away each square around the mated king ---- */
@@ -1161,16 +1184,18 @@ function pzRenderBar() {
   $("pzPlayer").innerHTML = Object.entries(S.players).map(([id, p]) =>
     `<button type="button" data-pl="${id}" aria-pressed="${id === S.player}">${esc(p.name)} <small>${Math.round(p.rating)}</small></button>`).join("");
   $("pzPlayer").querySelectorAll("[data-pl]").forEach(b => b.onclick = () => { S.player = b.dataset.pl; save(); pzRenderBar(); pzNext(); });
-  document.querySelectorAll("[data-pm]").forEach(b => b.setAttribute("aria-pressed", b.dataset.pm === pl.mode));
-  $("pzLevel").hidden = pl.mode !== "fixed";
+  const mode = pzKidRated ? "adaptive" : pl.mode;      // the 🧩 tab always matches the rating
+  document.querySelectorAll("[data-pm]").forEach(b => b.setAttribute("aria-pressed", b.dataset.pm === mode));
+  $("pzLevel").hidden = mode !== "fixed";
+  $("pzMine").hidden = !myPuzzles().length || !!pl.kid;
   $("pzLevel").innerHTML = PZ_BANDS.map(([lo, hi], i) => `<option value="${i}"${i === pl.level ? " selected" : ""}>${lo}–${hi}</option>`).join("");
   $("pzGoal").checked = !!pl.goal;
   $("pzKid").checked = !!pl.kid;
-  $("puzzleView").classList.toggle("kid", !!pl.kid);
+  $("puzzleView").classList.toggle("kid", pzKid());
   $("pzSound").textContent = soundOn() ? "🔊" : "🔇";
-  $("pzStars").hidden = !pl.kid; $("pzStars").innerHTML = `⭐ <b>${pl.stars || 0}</b>`;
+  $("pzStars").hidden = !pzKid(); $("pzStars").innerHTML = `⭐ <b>${pl.stars || 0}</b>`;
   renderStageBar();
-  $("pzName").textContent = pl.name + (pl.mode === "fixed" ? ` · fixed level ${PZ_BANDS[pl.level][0]}–${PZ_BANDS[pl.level][1]}, not matched to the rating` : " · puzzles matched to this rating");
+  $("pzName").textContent = pl.name + (mode === "mine" ? ` · ${myPuzzles().length} puzzles from your own games (no rating change)` : mode === "fixed" ? ` · fixed level ${PZ_BANDS[pl.level][0]}–${PZ_BANDS[pl.level][1]}, not matched to the rating` : " · puzzles matched to this rating");
   $("pzRating").textContent = Math.round(pl.rating);
   const h = (pl.hist || []).slice(-30);
   $("pzHist").innerHTML = h.length ? `<span class="lbl">Last ${h.length}</span>` + h.map(x => `<i class="${x.r ? "ok" : "bad"}" title="${x.pr}${x.r ? " solved" : " missed"}"></i>`).join("")
@@ -1178,15 +1203,48 @@ function pzRenderBar() {
   const solved = Object.values(pl.done || {}).filter(v => v === 1).length, tried = Object.keys(pl.done || {}).length;
   $("pzTally").innerHTML = `<span>solved <b>${solved}</b></span><span>tried <b>${tried}</b></span>`;
 }
+/* ---- mistakes come back: a missed puzzle is due a day later, until it's solved cleanly in two later sessions ---- */
+// pl.again = {puzzleId: {due (ms), n (clean re-solves)}}; n = 2 is kept as "done" so a merge with an older copy can't revive it
+const AGAIN_WAIT = [864e5, 3 * 864e5], AGAIN_KEEP = 90 * 864e5;   // wait after a miss / after the first clean re-solve
+let againRows = null;
+function againNote(pl, id, clean, now = Date.now()) {
+  const a = pl.again = pl.again || {}, x = a[id];
+  for (const [k, y] of Object.entries(a)) if (y.n >= 2 && y.due < now - AGAIN_KEEP) delete a[k];
+  if (!clean) a[id] = { due: now + AGAIN_WAIT[0], n: 0 };
+  else if (x && x.n < 2 && x.due <= now) a[id] = x.n ? { due: now, n: 2 } : { due: now + AGAIN_WAIT[1], n: 1 };   // not due: same session, doesn't count
+}
+function againDue(pl, f, now = Date.now()) {
+  againRows = againRows || Object.fromEntries([...GYM.puzzles, ...myPuzzles()].map(p => [p[0], p]));
+  return Object.entries(pl.again || {}).filter(([id, x]) => x.n < 2 && x.due <= now && againRows[id] && (!f || f(againRows[id]))).map(([id]) => againRows[id]);
+}
+// about 1 pick in 3 is a due puzzle while there are any
+function againPick(pl, f, r = Math.random()) {
+  const d = againDue(pl, f);
+  return d.length && r < 1 / 3 ? d[Math.floor(Math.random() * d.length)] : null;
+}
+/* ---- puzzles from your own games (data/mygames.js, made by mygames.py): their own mode, no rating change ---- */
+function myPuzzles() { return (window.GYM && GYM.mygames && GYM.mygames.puzzles) || []; }
+function isMyPuzzle(p) { return p[0].startsWith("my-"); }
+function myPuzzleSrc(p) { return (GYM.mygames.puzzle_src || {})[p[0]] || {}; }
+function myPick(pl) {
+  const pool = myPuzzles(), done = pl.done || {};
+  const again = againPick(pl, isMyPuzzle); if (again) return again;
+  const fresh = pool.filter(p => !(p[0] in done)), missed = pool.filter(p => done[p[0]] === 0);
+  const from = fresh.length ? fresh : missed.length ? missed : pool;
+  return from[Math.floor(Math.random() * Math.min(from.length, fresh.length ? 40 : from.length))];   // newest games first
+}
 function pzPick() {
   if (pzStage) return stagePick(pzPlayers());
   const pl = pzPlayers(), P0 = GYM.puzzles, done = pl.done || {};
+  if (pl.mode === "mine" && !pzKidRated && myPuzzles().length) return myPick(pl);
+  const again = againPick(pl, p => !isMyPuzzle(p)); if (again) return again;   // your games' puzzles come back in their own mode
   let lo, hi;
-  if (pl.mode === "fixed") [lo, hi] = PZ_BANDS[pl.level];
+  if (pl.mode === "fixed" && !pzKidRated) [lo, hi] = PZ_BANDS[pl.level];
   else { lo = pl.rating - 60; hi = pl.rating + 60; }
+  // widen the window until a few unseen puzzles are in it (a small set, e.g. the iPad site's, runs out near the rating)
   for (let widen = 0; widen < 12; widen++) {
     const c = P0.filter(p => p[3] >= lo - widen * 50 && p[3] < hi + widen * 50 && !(p[0] in done));
-    if (c.length) return c[Math.floor(Math.random() * c.length)];
+    if (c.length >= 5 || (c.length && widen === 11)) return c[Math.floor(Math.random() * c.length)];
   }
   const c = P0.filter(p => p[3] >= lo && p[3] < hi);   // everything seen: allow repeats
   return c.length ? c[Math.floor(Math.random() * c.length)] : P0[Math.floor(Math.random() * P0.length)];
@@ -1198,6 +1256,12 @@ function pzDraw() {
 }
 function pzGoalText(p) {
   const t = p[4].split(" "), n = t.find(x => /^mateIn\d$/.test(x));
+  if (isMyPuzzle(p)) {
+    const s = myPuzzleSrc(p), when = s.date ? ` (${s.speed || "game"}, ${s.date}${s.opp ? `, vs ${s.opp}` : ""})` : "";
+    const task = n ? `Find mate in ${n.slice(-1)}.` : "Find the best move.";
+    return t.includes("blunder") ? `In your game${when} you played ${s.played || "something else"} here. ${task}`
+      : `Your opponent had just blundered in your game${when}, and you played ${s.played || "something else"}. ${task}`;
+  }
   if (n) return `Find mate in ${n.slice(-1)}.`;
   if (t.includes("hangingPiece") && p[5]) return "Take the piece you can win for free.";
   if (t.includes("giveCheck")) return "Give check: attack the king with a piece that stays safe.";
@@ -1207,7 +1271,8 @@ function pzGoalText(p) {
   if (t.includes("equality")) return "Find the move that saves the game.";
   return "Find the best move: it wins material or more.";
 }
-// the goal as a picture: mate (king in a target), take a piece (+), promote (pawn → queen), or win something (⚔)
+// the goal as a picture, from the solver's side (targets in the opponent's colour, own pieces in the solver's):
+// mate (king in a target), check, save (shield), promote (pawn → queen), fork (🍴), take a piece (+), or win something (⚔)
 function pzGoalHtml() {
   const t = pzCur[4].split(" "), me = pzGame.turn(), them = me === "w" ? "b" : "w";
   const want = pzCur[2].split(" ")[pzIdx] || "", victim = want ? pzGame.get(want.slice(2, 4)) : null;
@@ -1218,6 +1283,7 @@ function pzGoalHtml() {
   }
   if (t.some(x => /^mate/.test(x))) return { kind: "mate", html: `<span class="goal mate" title="Checkmate"><span class="pc ${them}K"></span></span>` };
   if (t.includes("promotion") && want[4]) return { kind: "promo", html: `<span class="goal promo" title="Make a queen"><span class="pc ${me}P"></span><b>→</b><span class="pc ${me}Q"></span></span>` };
+  if (t.includes("fork")) return { kind: "fork", html: `<span class="goal win" title="Fork">🍴</span>` };
   if (victim) return { kind: "take", html: `<span class="goal take" title="Win this piece"><span class="pc ${victim.color}${victim.type.toUpperCase()}"></span></span>` };
   return { kind: "win", html: `<span class="goal win" title="Win something">⚔</span>` };
 }
@@ -1243,15 +1309,15 @@ function pzShowGoal() {
   const pl = pzPlayers(), el = $("pzGoalBadge");
   if (!pl.goal) { el.hidden = true; return; }
   const g = pzGoalHtml();
-  el.innerHTML = g.html; el.hidden = false;
+  el.innerHTML = g.html; el.hidden = pzKid();          // pictures only: the goal is in the big panel instead
   const t = pzCur[4].split(" ");
   if (t.includes("mateIn1") && (pzCur[5] || pzCur[3] <= 1000)) { const pc = preCover(); pzMarks = pc.marks; pzArrows = pc.arrows; }
-  if (pl.kid) $("pzCard").innerHTML = `<div class="kidgoal">${g.html}</div>`;
+  if (pzKid()) { $("pzKGoal").innerHTML = g.html; $("pzCard").innerHTML = ""; }
   else $("pzCard").insertAdjacentHTML("afterbegin", `<div class="kidgoal small">${g.html}</div>`);
 }
 function pzNext() {
   clearTimeout(pzTimer);
-  advanceStage();
+  if (advanceStage()) return;
   $("pzGoalBadge").hidden = true;
   pzCur = pzPick(); pzIdx = 0; pzHinted = pzFailed = pzScored = false; pzSel = null; pzArrows = []; pzLast = []; pzMarks = {};
   pzGame = new Chess(pzCur[1]);
@@ -1262,8 +1328,12 @@ function pzNext() {
   $("pzState").textContent = `${pzOrient === "w" ? "White" : "Black"} to play`; $("pzState").className = "state";
   $("pzDelta").textContent = "";
   $("pzCard").className = "card";
-  $("pzCard").innerHTML = `<p class="text">${pzOrient === "w" ? "White" : "Black"} to move. ${pl.goal ? esc(pzGoalText(pzCur)) : "Find the best continuation."}</p>
+  $("pzCard").innerHTML = `<p class="text">${pzOrient === "w" ? "White" : "Black"} to move. ${pl.goal || isMyPuzzle(pzCur) ? esc(pzGoalText(pzCur)) : "Find the best continuation."}</p>
     <p class="sub">Puzzle rating is shown when you finish.</p>`;
+  // pictures only: a big panel beside the board with "you play" (your king in a ring) and the goal (after the first move)
+  $("pzKidPanel").hidden = !pzKid();
+  if (pzKid()) { $("pzYou").innerHTML = `<span class="pc ${pzOrient}K"></span>`; $("pzKGoal").innerHTML = ""; $("pzCard").innerHTML = ""; }
+  renderStageBar();
   pzDraw();
   if (direct) { pzIdx = 0; pzState = "solve"; pzShowGoal(); pzDraw(); return; }
   pzTimer = setTimeout(() => { pzPlay(pzCur[2].split(" ")[0]); pzIdx = 1; pzState = "solve"; pzShowGoal(); pzDraw(); }, 650);
@@ -1279,6 +1349,10 @@ function pzScore(win) {
   pzScored = true;
   const pl = pzPlayers(), pr = pzCur[3];
   pl.done = pl.done || {}; pl.done[pzCur[0]] = win ? 1 : 0;
+  againNote(pl, pzCur[0], win && !pzHinted);
+  if (isMyPuzzle(pzCur)) {           // your own positions: estimated ratings, so they don't move yours
+    $("pzDelta").textContent = "from your game: no rating change"; $("pzDelta").className = "delta"; save(); pzRenderBar(); return;
+  }
   kidReward(pl, win);
   pl.hist = (pl.hist || []).slice(-(HIST_MAX - 1)); pl.hist.push({ id: pzCur[0], pr, r: win ? 1 : 0, t: Date.now() });
   if (pzHinted) {
@@ -1303,9 +1377,11 @@ function pzBig(ok) {
 }
 function pzFinish(win) {
   pzState = "done"; pzSel = null;
-  const kid = !!pzPlayers().kid;
+  const kid = pzKid();
   pzScore(win && !pzFailed);
-  const link = pzCur[5] ? "" : `, or <a href="https://lichess.org/training/${esc(pzCur[0])}" target="_blank" rel="noopener">see it on Lichess</a>`;
+  const src = isMyPuzzle(pzCur) ? myPuzzleSrc(pzCur) : null;
+  const link = src && src.game ? `, or <a href="https://lichess.org/${encodeURIComponent(src.game)}#${src.ply || 0}" target="_blank" rel="noopener">see your game</a>`
+    : pzCur[5] ? "" : `, or <a href="https://lichess.org/training/${esc(pzCur[0])}" target="_blank" rel="noopener">see it on Lichess</a>`;
   let why = "";
   if (pzGame.in_checkmate()) {
     const w = whyMate(); pzMarks = w.marks; pzArrows = w.arrows;
@@ -1366,7 +1442,7 @@ function pzUserMove(from, to) {
   $("pzCard").className = "card fail";
   $("pzCard").innerHTML = `${ex ? `<p class="text">${esc(ex.text)}</p>` : ""}<p class="text">That isn't it. Press <b>Try again</b> (or ←) to take it back, or <b>Show solution</b>.</p>`;
   pzDraw();
-  if (pzPlayers().kid) {   // pictures only: let the escape squares play out before taking the move back
+  if (pzKid()) {   // pictures only: let the escape squares play out before taking the move back
     pzBig(false);
     $("pzCard").innerHTML = `<div class="kidcard bad">✗</div>
       <button class="btn primary big" id="pzKidRetry" aria-label="Try again">↻</button>`;
@@ -1440,7 +1516,7 @@ function pzWire() {
     const name = $("pzRenameName").value.trim(); if (!name) return;
     pzPlayers().name = name; save(); $("pzRenameForm").hidden = true; pzRenderBar();
   });
-  document.querySelectorAll("[data-pm]").forEach(b => b.onclick = () => { pzPlayers().mode = b.dataset.pm; save(); pzRenderBar(); pzNext(); });
+  document.querySelectorAll("[data-pm]").forEach(b => b.onclick = () => { pzPlayers().mode = b.dataset.pm; pzKidRated = false; save(); pzRenderBar(); pzNext(); });
   $("pzLevel").onchange = () => { pzPlayers().level = +$("pzLevel").value; save(); pzNext(); };
   $("pzGoal").onchange = () => { pzPlayers().goal = $("pzGoal").checked; save(); };
   $("pzKid").onchange = () => { pzPlayers().kid = $("pzKid").checked; save(); pzRenderBar(); };
@@ -1466,9 +1542,11 @@ function pzWire() {
 }
 let pzReady = false;
 function openPuzzles(stage) {
-  const was = pzStage;
+  if (stage && stage.eg) return stageGo(stage);      // endgame stages are games in the kids' corner
+  const was = pzStage, wasRated = pzKidRated;
   pzStage = stage || null;
-  if (was !== pzStage) pzCur = null;
+  pzKidRated = !pzStage && pzKidNext; pzKidNext = false;
+  if (was !== pzStage || wasRated !== pzKidRated) pzCur = null;
   if (!pzReady) { pzWire(); pzReady = true; }
   pzRenderBar();
   if (!pzCur) pzNext(); else pzDraw();
@@ -1545,19 +1623,21 @@ function showCelebration() {
   celebrate.t = setTimeout(showCelebration, 2200);
 }
 function sessionDone(pl) { celebrate("🎉", "trophy", `<div class="big">⭐ ${pl.stars || 0}</div>`); }
-// finished the current stage? the next puzzle comes from the next unfinished stage
+// finished the current stage? the next puzzle comes from the next unfinished stage (true: went to an endgame stage)
 function advanceStage() {
   if (!pzStage) return;
   const pl = pzPlayers();
   if (stageStars(pl, pzStage.id) < needOf(pzStage)) return;
-  const i = STAGES.findIndex((st, k) => stageOpen(pl, k) && stageStars(pl, st.id) < needOf(st));
+  const i = stageCur(pl);
   if (i < 0 || STAGES[i] === pzStage) return;
+  celebrate(`<span class="stageicon">${STAGES[i].icon}</span>`, "quiet");
+  if (STAGES[i].eg) { stageGo(STAGES[i]); return true; }     // next up is an endgame: pzNext stops here
   pzStage = STAGES[i];
-  celebrate(`<span class="stageicon">${pzStage.icon}</span>`, "quiet");
 }
 
 /* ---- learning path: stages unlock one after another; 8 stars finish a stage ---- */
 const STAGE_NEED = 8;
+function egIcon(pcs) { return `<span class="goal mate"><span class="pc bK"></span></span><span class="egm">${[...pcs].map(c => `<span class="pc w${c} mini"></span>`).join("")}</span>`; }
 const STAGES = [
   { id: "take", icon: `<span class="goal take"><span class="pc bQ"></span></span>`, f: p => p[5] && /hangingPiece/.test(p[4]) },
   { id: "saveq", icon: `<span class="goal save"><span class="pc wQ"></span></span>`, f: p => /saveQueen/.test(p[4]) },
@@ -1567,16 +1647,26 @@ const STAGES = [
   { id: "back", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc bP mini"></span>`, f: p => p[5] && /backRankMate/.test(p[4]) },
   { id: "mateq", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc wQ mini"></span>`, f: p => p[5] && /mateIn1/.test(p[4]) && !/backRank/.test(p[4]) && /[Qq]/.test(p[1].split(" ")[0]) },
   { id: "mater", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc wR mini"></span>`, f: p => p[5] && /mateIn1/.test(p[4]) && !/backRank/.test(p[4]) && !/[Qq]/.test(p[1].split(" ")[0]) },
-  { id: "fork", icon: `<span class="goal win">⚔</span>`, f: p => !p[5] && /fork/.test(p[4]) && p[3] < 850 },
+  // endgames (played in the kids' corner, not puzzles): mate the lone king; the picture shows the pieces you mate with
+  { id: "egqr", need: 3, eg: "QR", icon: egIcon("QR"), f: () => false },
+  { id: "egrr", need: 3, eg: "RR", icon: egIcon("RR"), f: () => false },
+  { id: "egq", need: 3, eg: "KQ", icon: egIcon("KQ"), f: () => false },
+  { id: "egr", need: 3, eg: "KR", icon: egIcon("KR"), f: () => false },
+  { id: "fork", icon: `<span class="goal win">🍴</span>`, f: p => !p[5] && /fork/.test(p[4]) && p[3] < 850 },
   { id: "mix", icon: `<span class="goal win">🧩</span>`, f: p => !p[5] && p[3] >= 400 && p[3] < 650 },
 ];
 const stagePools = {};
 function stagePool(st) { return stagePools[st.id] || (stagePools[st.id] = GYM.puzzles.filter(st.f)); }
 function stageStars(pl, id) { return (pl.stages || {})[id] || 0; }
 function needOf(st) { return st.need || STAGE_NEED; }
-// a stage opens only when every earlier stage is finished (stars from solves elsewhere can't skip ahead)
-function stageOpen(pl, i) { return STAGES.slice(0, i).every(st => stageStars(pl, st.id) >= needOf(st)); }
+// a stage opens when every earlier stage is finished, and stays open once it (or any later stage) has stars:
+// stages added later in the list (the endgames) never lock a stage the child had already reached
+function stageOpen(pl, i) {
+  return STAGES.slice(i).some(st => stageStars(pl, st.id) > 0) || STAGES.slice(0, i).every(st => stageStars(pl, st.id) >= needOf(st));
+}
+function stageCur(pl) { return STAGES.findIndex((st, k) => stageOpen(pl, k) && stageStars(pl, st.id) < needOf(st)); }
 function stagePick(pl) {
+  const again = againPick(pl, pzStage.f); if (again) return again;     // a missed puzzle of this stage comes back
   const pool = stagePool(pzStage), done = pl.done || {};
   const fresh = pool.filter(p => !(p[0] in done));
   const from = fresh.length ? fresh : pool;
@@ -1601,29 +1691,43 @@ function recountStages(pl) {
   for (const [id, c] of Object.entries(n)) pl.stages[id] = Math.max(pl.stages[id] || 0, c);
   pl.stagesRecounted = true; save();
 }
+// open a stage: puzzle stages in the puzzle view, endgame stages as a game in the kids' corner
+function stageGo(st) {
+  if (!st.eg) return go("puzzles", { stage: st });
+  eg = null; egSt = st;
+  if (window.SECTION === "kids") { kidTab = "end"; openKids(); } else go("kids", "end");
+}
+// a stage picture drawn from the solver's side: the path icons show White's view, so swap the colours for Black
+function stageIconFor(st, side) { return side === "b" ? st.icon.replace(/pc ([wb])/g, (m, c) => "pc " + (c === "w" ? "b" : "w")) : st.icon; }
 function renderStageBar() {
   const bar = $("pzStageBar");
+  if (!pzStage && pzKidRated) {        // the 🧩 tab: the way back to the kids' corner
+    bar.hidden = false;
+    bar.innerHTML = `<button class="btn big" type="button" id="pzMap" aria-label="Back to the kids' corner">🗺</button><span class="stageicon">🧩</span>`;
+    $("pzMap").onclick = () => go("kids", "path");
+    return;
+  }
   if (!pzStage) { bar.hidden = true; return; }
   const n = Math.min(stageStars(pzPlayers(), pzStage.id), needOf(pzStage));
   bar.hidden = false;
   bar.innerHTML = `<button class="btn big" type="button" id="pzMap" aria-label="Back to the map">🗺</button>
-    <span class="stageicon">${pzStage.icon}</span>
+    <span class="stageicon">${pzCur && pzGame ? stageIconFor(pzStage, pzOrient) : pzStage.icon}</span>
     <span class="dots">${Array.from({ length: needOf(pzStage) }, (_, i) => `<i class="${i < n ? "on" : ""}">★</i>`).join("")}</span>`;
   $("pzMap").onclick = () => go("kids", "path");
 }
 function renderPath() {
   const pl = pzPlayers();
   recountStages(pl);
+  const curI = stageCur(pl);
   $("kPath").innerHTML = `<div class="path">${STAGES.map((st, i) => {
-    const need = needOf(st), open = stageOpen(pl, i), n = Math.min(stageStars(pl, st.id), need), done = n >= need;
-    const cur = open && !done && (i === 0 || stageOpen(pl, i)) && !(i + 1 < STAGES.length && stageOpen(pl, i + 1));
+    const need = needOf(st), open = stageOpen(pl, i), n = Math.min(stageStars(pl, st.id), need), done = n >= need, cur = i === curI;
     return `<div class="stop ${i % 2 ? "right" : "left"}">
       <button class="stage${open ? "" : " locked"}${done ? " done" : ""}${cur ? " cur" : ""}" type="button" data-st="${i}" ${open ? "" : "disabled"} aria-label="Stage ${i + 1}${open ? "" : ", locked"}">
         <span class="ic">${open ? st.icon : "🔒"}</span>
         <span class="dots">${Array.from({ length: need }, (_, k) => `<i class="${k < n ? "on" : ""}">★</i>`).join("")}</span>
       </button></div>`;
   }).join("")}</div>`;
-  $("kPath").querySelectorAll("[data-st]").forEach(b => b.onclick = () => go("puzzles", { stage: STAGES[+b.dataset.st] }));
+  $("kPath").querySelectorAll("[data-st]").forEach(b => b.onclick = () => stageGo(STAGES[+b.dataset.st]));
 }
 
 /* ---- piece school: move one piece to collect every star (pawn levels: capture the black pawns too) ---- */
@@ -1754,6 +1858,250 @@ function schoolMove(to) {
   schoolDraw();
 }
 
+/* ---- helpers for the mini-games: stars (a sticker every 10, as everywhere else), squares, a FEN from a position ---- */
+function kidAddStars(n) {
+  const pl = pzPlayers(), had = pl.stars || 0; pl.stars = had + n; save();
+  if (Math.floor(pl.stars / 10) > Math.floor(had / 10)) celebrate(STICKERS[(Math.floor(pl.stars / 10) - 1) % STICKERS.length], "sticker");
+  const el = $("kStarsTop"); el.innerHTML = `⭐ <b>${pl.stars}</b>`; el.classList.remove("bump"); void el.offsetWidth; el.classList.add("bump");
+}
+const KID_SQS = [...FILES].flatMap(f => [1, 2, 3, 4, 5, 6, 7, 8].map(r => f + r));
+function kidSq(lo = 1, hi = 8, files = FILES) { return files[Math.floor(Math.random() * files.length)] + (lo + Math.floor(Math.random() * (hi - lo + 1))); }
+function kidFen(pos, turn) {
+  const rows = [];
+  for (let r = 8; r >= 1; r--) {
+    let s = "", e = 0;
+    for (const f of FILES) { const p = pos[f + r]; if (p) { if (e) { s += e; e = 0; } s += p; } else e++; }
+    rows.push(s + (e || ""));
+  }
+  return `${rows.join("/")} ${turn} - - 0 1`;
+}
+
+/* ---- board vision (👀): rounds of 5 quick questions, a ⭐ for each one answered right ---- */
+const VIS_GAMES = [
+  { id: "go", label: "Where can it go?", icon: `<span class="pc wN"></span><i class="vdot"></i><i class="vdot"></i>` },
+  { id: "check", label: "Check or not?", icon: `<span class="goal check"><span class="pc bK"></span></span><b>?</b>` },
+  { id: "danger", label: "Which piece is in danger?", icon: `<span class="vdg"><span class="pc wB"></span></span><b>?</b>` },
+];
+const VIS_ROUND = 5;
+let vis = null;   // {game, k (question 0–4), res: [true/false per answered question], q: the question, busy}
+function visStart(game) { vis = { game, k: 0, res: [], q: null }; $("vDone").hidden = true; visAsk(); }
+function visAsk() {
+  vis.q = vis.game === "go" ? visGoQ(vis.k) : vis.game === "check" ? visCheckQ(vis.k) : visDangerQ(vis.k);
+  Object.assign(vis.q, { miss: 0, marks: {}, arrows: [] }); vis.busy = false;
+  $("vYes").className = $("vNo").className = "vbtn";
+  visDraw();
+}
+// where can it go: one white piece; from the 3rd question a white pawn in its way and a black pawn it may take
+function visGoQ(k) {
+  for (;;) {
+    const pc = "RBNKQ"[Math.floor(Math.random() * 5)], at = kidSq(), pos = { [at]: pc };
+    if (k >= 2) {
+      const on = shuffle(KID_SQS.filter(q => attacksSq(pos, at, q) && +q[1] > 1 && +q[1] < 8));   // on its path, so they matter
+      if (on[0]) pos[on[0]] = "P";
+      if (on[1] && pc !== "K") pos[on[1]] = "p";         // no black pawn next to a king (it would guard squares too)
+    }
+    const ans = KID_SQS.filter(q => attacksSq(pos, at, q) && !(pos[q] && colorOf(pos[q]) === "w"));
+    if (ans.length >= 2 && ans.length <= 14) return { pos, at, ans, found: [] };
+  }
+}
+// check or not: the black king and 1–3 white pieces (sometimes a black pawn in the way); half the time it's check,
+// and a "no" always has a white piece close by or on the king's line, so it isn't obvious
+function visCheckQ(k) {
+  const want = Math.random() < .5;
+  for (;;) {
+    const kq = kidSq(), pos = { [kq]: "k" }, n = 1 + Math.floor(Math.random() * (k >= 2 ? 3 : 2));
+    for (let i = 0; i < n; i++) { const t = "QRBNP"[Math.floor(Math.random() * 5)], q = t === "P" ? kidSq(2, 7) : kidSq(); if (!pos[q]) pos[q] = t; }
+    if (Math.random() < .3) { const q = kidSq(2, 7); if (!pos[q]) pos[q] = "p"; }
+    const checkers = attackersOf(pos, kq, "w");
+    if (!!checkers.length !== want) continue;
+    const near = Object.keys(pos).some(q => colorOf(pos[q]) === "w" && (attacksSq({ [q]: pos[q], [kq]: "k" }, q, kq) ||
+      Math.max(Math.abs(FILES.indexOf(q[0]) - FILES.indexOf(kq[0])), Math.abs(q[1] - kq[1])) <= 2));
+    if (want || near) return { pos, kq, checkers };
+  }
+}
+// which piece is in danger: 2–3 white pieces, 1–2 black ones, exactly one white piece can be taken for free
+// (the bots' 👁 rule: attacked and not guarded, or attacked by something cheaper); later questions add a guarded one
+function visInDanger(pos, sq) {
+  const att = attackersOf(pos, sq, "b");
+  return !!att.length && (!attackersOf(pos, sq, "w").length || att.some(a => VALUE[pos[a]] < VALUE[pos[sq].toLowerCase()]));
+}
+function visDangerQ(k) {
+  for (let tries = 0; ; tries++) {
+    const pos = {}, put = t => { const q = "Pp".includes(t) ? kidSq(2, 7) : kidSq(); if (!pos[q]) pos[q] = t; };
+    for (let i = 0; i < 2 + (k >= 2); i++) put("QRBNP"[Math.floor(Math.random() * 5)]);
+    for (let i = 0; i < 1 + (Math.random() < .5); i++) put("rbnp"[Math.floor(Math.random() * 4)]);
+    const mine = Object.keys(pos).filter(q => colorOf(pos[q]) === "w"), danger = mine.filter(q => visInDanger(pos, q));
+    const guarded = mine.some(q => !danger.includes(q) && attackersOf(pos, q, "b").length);
+    if (danger.length === 1 && (k < 3 || guarded || tries > 3000)) return { pos, ans: danger[0] };
+  }
+}
+function visDraw() {
+  const q = vis.q, marks = { ...q.marks };
+  let tgts = [];
+  if (vis.game === "go") {
+    q.found.forEach(s => { marks[s] = marks[s] || "vok"; });
+    if (q.miss >= 3 && !vis.busy) tgts = q.ans.filter(s => !q.found.includes(s));   // stuck: show the rest as dots
+  }
+  renderBoard(q.pos, { el: $("vboard"), o: "w", sel: vis.game === "go" ? q.at : null, tgts, marks, arrows: q.arrows });
+  $("vGames").innerHTML = VIS_GAMES.map(v => `<button type="button" data-vg="${v.id}" aria-pressed="${v.id === vis.game}" aria-label="${v.label}">${v.icon}</button>`).join("");
+  $("vGames").querySelectorAll("[data-vg]").forEach(b => b.onclick = () => visStart(b.dataset.vg));
+  $("vProg").innerHTML = `<span class="dots">${Array.from({ length: VIS_ROUND }, (_, i) =>
+    `<i class="${vis.res[i] ? "on" : vis.res[i] === false ? "x" : i === vis.k ? "now" : ""}">★</i>`).join("")}</span>`;
+  $("vAns").hidden = vis.game !== "check";
+}
+function visTap(sq) {
+  if (!vis || vis.busy || !sq) return;
+  const q = vis.q;
+  if (vis.game === "go") {
+    if (sq === q.at || q.found.includes(sq)) return;
+    if (!q.ans.includes(sq)) { q.miss++; return visShake(sq); }
+    q.found.push(sq); sfx("star");
+    return q.found.length === q.ans.length ? visDone(q.miss <= 1) : visDraw();
+  }
+  if (vis.game !== "danger" || !q.pos[sq] || colorOf(q.pos[sq]) !== "w") return;
+  if (sq !== q.ans) {
+    q.miss++;
+    q.arrows = attackersOf(q.pos, sq, "w").map(d => [d + sq, "green"]);   // a guarded piece: green arrows from its guards
+    if (q.miss < 2) return visShake(sq);
+  }
+  q.marks = { [q.ans]: "dg" }; q.arrows = attackersOf(q.pos, q.ans, "b").map(a => [a + q.ans, "red"]);   // the answer, and who takes it
+  visDone(!q.miss);
+}
+function visAnswer(yes) {   // check or not: then the king glows red with arrows from the checking pieces, or green when safe
+  if (!vis || vis.busy || vis.game !== "check") return;
+  const q = vis.q, check = q.checkers.length > 0, ok = yes === check;
+  q.marks = { [q.kq]: check ? "mk" : "esc" }; q.arrows = q.checkers.map(c => [c + q.kq, "red"]);
+  $(yes ? "vYes" : "vNo").className = "vbtn " + (ok ? "picked" : "shake");
+  visDone(ok, ok ? "right" : "wrong");
+}
+function visShake(sq) {   // a wrong tap: the square shakes a little, nothing else
+  const q = vis.q; q.marks[sq] = "vx"; visDraw();
+  setTimeout(() => { if (vis && vis.q === q && q.marks[sq] === "vx") { delete q.marks[sq]; visDraw(); } }, 600);
+}
+function visDone(ok, sound = ok ? "right" : "move") {
+  vis.busy = true; vis.res[vis.k] = ok; sfx(sound);
+  if (ok) kidAddStars(1);
+  visDraw();
+  const my = vis;
+  setTimeout(() => { if (vis !== my) return; vis.k++; if (vis.k < VIS_ROUND) visAsk(); else visEnd(); }, ok ? 1300 : 2400);
+}
+function visEnd() {
+  const n = vis.res.filter(Boolean).length;
+  $("vDone").innerHTML = `<div class="big">${n ? "⭐".repeat(n) : "🙂"}</div>
+    <div class="row"><button class="btn primary big" type="button" id="vAgain" aria-label="Play again">↻</button></div>`;
+  $("vDone").hidden = false;
+  if (n === VIS_ROUND) sfx("trophy");
+  $("vAgain").onclick = () => visStart(vis.game);
+  visDraw();
+}
+
+/* ---- first endgames on the path: mate the lone king with king + queen or king + rook; the black king runs away ---- */
+const EG_PAR = { QR: [7, 12], RR: [9, 15], KQ: [12, 20], KR: [20, 32] };   // your moves for ⭐⭐⭐ / ⭐⭐ (slower: ⭐)
+let eg = null, egSt = null;   // eg = {st, g (chess.js), sel, last, moves, over, hist: [fen]}; egSt = the endgame stage to open
+// a start with the black king in the middle, not in check, none of your pieces next to it; White (you) to move.
+// pcs = your pieces besides the king ("QR", "RR", "KQ" = the queen, "KR" = the rook)
+function egStartFen(pcs) {
+  for (;;) {
+    const bk = kidSq(3, 6, "cdef"), pos = { [bk]: "k" }, mine = ["K", ...pcs.replace("K", "")];
+    for (const p of mine) { const q = kidSq(); if (!pos[q]) pos[q] = p; }
+    const sqs = Object.keys(pos).filter(q => q !== bk);
+    if (sqs.length < mine.length || sqs.some(q => attacksSq(pos, q, bk) || attacksSq(pos, bk, q))) continue;
+    return kidFen(pos, "w");
+  }
+}
+function egRoom(pos, k) {   // squares the black king on k could step to next
+  const noK = { ...pos }; delete noK[k];
+  const x = FILES.indexOf(k[0]), y = +k[1];
+  let n = 0;
+  for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
+    if ((!dx && !dy) || x + dx < 0 || x + dx > 7 || y + dy < 1 || y + dy > 8) continue;
+    if (!attackersOf(noK, FILES[x + dx] + (y + dy), "w").length) n++;
+  }
+  return n;
+}
+// the bot king takes a piece left unguarded, else goes where it has the most room, nearest the middle
+function egBotMove(g) {
+  const ms = g.moves({ verbose: true }), take = ms.find(m => m.captured);
+  if (take) return take;
+  let best = null, bs = -1e9;
+  for (const m of ms) {
+    g.move(m); const room = egRoom(parseFen(g.fen()), m.to); g.undo();
+    const s = room * 10 - Math.abs(FILES.indexOf(m.to[0]) - 3.5) - Math.abs(+m.to[1] - 4.5) + Math.random() * .5;
+    if (s > bs) { bs = s; best = m; }
+  }
+  return best;
+}
+function egStart(st) {
+  egSt = st || egSt || STAGES.find(s => s.eg);
+  eg = { st: egSt, g: new Chess(egStartFen(egSt.eg)), sel: null, last: [], moves: 0, over: null, hist: [] };
+  $("eDone").hidden = true; egDraw();
+}
+function egDraw() {
+  const g = eg.g, pos = parseFen(g.fen()), mine = !eg.over && g.turn() === "w", marks = {};
+  if (g.in_check()) marks[Object.keys(pos).find(q => pos[q] === "k")] = "mk";
+  if (mine) for (const q of Object.keys(pos)) {      // your queen/rook next to the king with no guard
+    if ("QR".includes(pos[q]) && attackersOf(pos, q, "b").length && !attackersOf(pos, q, "w").length) marks[q] = "dg";
+  }
+  const tgts = eg.sel && mine ? g.moves({ square: eg.sel, verbose: true }).map(m => m.to) : [];
+  renderBoard(pos, { el: $("eboard"), o: "w", hl: eg.last, sel: eg.sel, tgts, marks });
+  $("eboard").classList.toggle("mine", mine);
+  const need = needOf(eg.st), n = Math.min(stageStars(pzPlayers(), eg.st.id), need);
+  $("eBar").innerHTML = `<button class="btn big" type="button" id="eMap" aria-label="Back to the map">🗺</button>
+    <span class="stageicon">${eg.st.icon}</span>
+    <span class="dots">${Array.from({ length: need }, (_, i) => `<i class="${i < n ? "on" : ""}">★</i>`).join("")}</span>`;
+  $("eMap").onclick = () => { kidTab = "path"; openKids(); };
+  $("eMoves").innerHTML = `👣 <b>${eg.moves}</b>`;
+  $("eUndo").disabled = !eg.hist.length || !mine;
+}
+function egUserMove(from, to) {
+  const g = eg.g;
+  if (eg.over || g.turn() !== "w" || !g.moves({ square: from, verbose: true }).some(m => m.to === to)) return false;
+  eg.hist.push(g.fen());
+  g.move({ from, to, promotion: "q" }); eg.sel = null; eg.last = [from, to]; eg.moves++; sfx("move");
+  if (!egEnd()) { egDraw(); const my = eg; setTimeout(() => { if (eg === my) egReply(); }, 450); }
+  return true;
+}
+function egReply() {
+  if (eg.over || eg.g.turn() !== "b") return;
+  const m = egBotMove(eg.g); eg.g.move(m); eg.last = [m.from, m.to]; sfx("move");
+  if (!egEnd()) egDraw();
+}
+function egUndo() {   // takes back your last move and the king's reply
+  if (!eg || !eg.hist.length || eg.over || eg.g.turn() !== "w") return;
+  eg.g.load(eg.hist.pop()); eg.moves--; eg.last = []; eg.sel = null; egDraw();
+}
+// mate: ⭐ by speed and one win for the stage; stalemate or a lost piece: 🤝, then a new position by itself
+function egEnd() {
+  const g = eg.g;
+  if (g.in_checkmate()) {
+    eg.over = "win";
+    const [p3, p2] = EG_PAR[eg.st.eg], stars = eg.moves <= p3 ? 3 : eg.moves <= p2 ? 2 : 1, pl = pzPlayers();
+    pl.stages = pl.stages || {};
+    const had = stageStars(pl, eg.st.id); pl.stages[eg.st.id] = had + 1;
+    kidAddStars(stars); sfx("right");
+    if (had + 1 === needOf(eg.st)) setTimeout(() => celebrate("🏅", "trophy"), 1200);
+    $("eDone").innerHTML = `<div class="big">${"⭐".repeat(stars)}</div>
+      <div class="row"><button class="btn big" type="button" id="eAgain" aria-label="Play again">↻</button>
+      <button class="btn primary big" type="button" id="eNext" aria-label="Next">▶</button></div>`;
+    $("eDone").hidden = false;
+    $("eAgain").onclick = () => egStart(eg.st);
+    $("eNext").onclick = egNext;
+  } else if (g.in_stalemate() || g.insufficient_material()) {
+    eg.over = "draw";
+    const my = eg;
+    setTimeout(() => { if (eg !== my) return; $("eDone").innerHTML = `<div class="burst">🤝</div>`; $("eDone").hidden = false; }, 700);
+    setTimeout(() => { if (eg === my) egStart(my.st); }, 2800);
+  } else return false;
+  egDraw();
+  return true;
+}
+function egNext() {   // after a win: the same stage again, or the next unfinished stage once this one is done
+  const pl = pzPlayers(), i = stageCur(pl);
+  if (stageStars(pl, eg.st.id) < needOf(eg.st) || i < 0) return egStart(eg.st);
+  if (STAGES[i].eg) return egStart(STAGES[i]);
+  stageGo(STAGES[i]);
+}
+
 /* ---- stickers ---- */
 function renderStickers() {
   const pl = pzPlayers(), have = Math.floor((pl.stars || 0) / 10);
@@ -1797,6 +2145,7 @@ function renderParents() {
       <div class="tile"><span class="lbl">Solved</span><b>${h.length ? Math.round(100 * solved / h.length) : 0}%</b></div>
       <div class="tile"><span class="lbl">Learning path</span><b>${stageDone}/${STAGES.length}</b></div>
       <div class="tile"><span class="lbl">Piece school stars</span><b>${school}</b></div>
+      <div class="tile" title="Missed puzzles come back a day later, until solved cleanly in two later sessions"><span class="lbl">Missed puzzles to redo</span><b>${Object.values(pl.again || {}).filter(x => x.n < 2).length}</b></div>
       <div class="tile"><span class="lbl">Bots beaten</span><b>${BOTS.filter(b => ((pl.bots || {})[b.id] || {}).w).length}/${BOTS.length}</b></div>
     </div>
     <div class="charts">
@@ -1912,7 +2261,10 @@ document.addEventListener("keydown", ev => {
   if (window.SECTION !== "kids" || ev.target.closest("input, textarea, select")) return;
   if (ev.key === "ArrowRight") {
     if (kidTab === "school" && sc && sc.done) { ev.preventDefault(); schoolNext(); }
+    else if (kidTab === "play" && bg && bg.rp) { ev.preventDefault(); rpStep(); }
     else if (kidTab === "play" && bg && bg.over) { ev.preventDefault(); botStart(bg.bot.id); }
+    else if (kidTab === "vision" && vis && !$("vDone").hidden) { ev.preventDefault(); visStart(vis.game); }
+    else if (kidTab === "end" && eg && eg.over === "win") { ev.preventDefault(); egNext(); }
   } else if (ev.key === "ArrowLeft" && kidTab === "school" && sc) { ev.preventDefault(); $("sDone").hidden = true; schoolStart(sc.pc, sc.li); }
 });
 function openKids(sub) {
@@ -1925,21 +2277,35 @@ function openKids(sub) {
   const pl = pzPlayers();
   if (!kidsWired) {
     kidsWired = true;
-    document.querySelectorAll("[data-kt]").forEach(b => b.onclick = () => { kidTab = b.dataset.kt; openKids(); });
+    document.querySelectorAll("[data-kt]").forEach(b => b.onclick = () => {
+      if (b.dataset.kt === "rated") { pzKidNext = true; return go("puzzles"); }     // 🧩: rating-matched puzzles
+      kidTab = b.dataset.kt; openKids();
+    });
     $("sboard").addEventListener("pointerdown", ev => {
       const sq = squareAt(ev, $("sboard"), "w");
       if (sq) schoolMove(sq);
     });
+    $("vboard").addEventListener("pointerdown", ev => visTap(squareAt(ev, $("vboard"), "w")));
+    $("vYes").onclick = () => visAnswer(true); $("vNo").onclick = () => visAnswer(false);
+    $("eboard").addEventListener("pointerdown", ev => {     // tap your piece, then where it goes (as in the bot games)
+      const sq = squareAt(ev, $("eboard"), "w");
+      if (!eg || eg.over || eg.g.turn() !== "w" || !sq) return;
+      if (eg.sel && eg.sel !== sq && egUserMove(eg.sel, sq)) return;
+      const p = eg.g.get(sq); eg.sel = p && p.color === "w" ? sq : null; egDraw();
+    });
+    $("eUndo").onclick = egUndo;
     $("kSound").onclick = () => { const p = pzPlayers(); p.sound = !soundOn(); save(); openKids(); if (p.sound) sfx("right"); };
   }
   $("kPlayers").innerHTML = Object.entries(S.players).map(([id, p]) =>
     `<button type="button" data-pl="${id}" aria-pressed="${id === S.player}">${esc(p.name)}</button>`).join("");
-  $("kPlayers").querySelectorAll("[data-pl]").forEach(b => b.onclick = () => { S.player = b.dataset.pl; save(); sc = null; bg = null; openKids(); });
+  $("kPlayers").querySelectorAll("[data-pl]").forEach(b => b.onclick = () => { S.player = b.dataset.pl; save(); sc = null; bg = null; vis = null; eg = null; openKids(); });
   $("kSound").textContent = soundOn() ? "🔊" : "🔇";
   $("kStarsTop").innerHTML = `⭐ <b>${pl.stars || 0}</b>`;
-  document.querySelectorAll("[data-kt]").forEach(b => b.setAttribute("aria-pressed", b.dataset.kt === kidTab));
-  for (const [t, id] of [["path", "kPath"], ["school", "kSchool"], ["play", "kPlay"], ["stickers", "kStickers"], ["parents", "kParents"]]) $(id).hidden = t !== kidTab;
+  document.querySelectorAll("[data-kt]").forEach(b => b.setAttribute("aria-pressed", b.dataset.kt === (kidTab === "end" ? "path" : kidTab)));
+  for (const [t, id] of [["path", "kPath"], ["school", "kSchool"], ["vision", "kVision"], ["play", "kPlay"], ["end", "kEnd"], ["stickers", "kStickers"], ["parents", "kParents"]]) $(id).hidden = t !== kidTab;
   if (kidTab === "path") renderPath();
+  else if (kidTab === "vision") { if (!vis) visStart("go"); else visDraw(); }
+  else if (kidTab === "end") { if (!eg || eg.st !== egSt) egStart(egSt); else egDraw(); }
   else if (kidTab === "play") openBots();
   else if (kidTab === "school") { if (!sc) schoolStart("R", firstOpenLevel("R")); else schoolDraw(); }
   else if (kidTab === "stickers") renderStickers();
@@ -1957,7 +2323,8 @@ const BOTS = [
   { id: "pete", face: "🐣", name: "Pawn Pete", elo: "Pawn Wars", think: 500, pawns: true },
 ];
 const VALUE = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
-let bg = null;   // {bot, game (chess.js) | pw (pawn wars state), me: 'w'|'b', sel, last, over, hist:[fen…]}
+let bg = null;   // {bot, game (chess.js) | pw (pawn wars state), me: 'w'|'b', sel, last, over, hist:[fen…], log, rp}
+// log (chess games): every move as {fen before, from, to, me, piece, captured}; rp: the replay after the game {list, k}
 
 function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 function material(g, side) {
@@ -2067,7 +2434,7 @@ function pwBot(s) {
 function botStart(id) {
   const bot = BOTS.find(b => b.id === id), pl = pzPlayers();
   const me = (pl.botColor || "w");
-  bg = { bot, me, sel: null, last: [], over: null, hist: [] };
+  bg = { bot, me, sel: null, last: [], over: null, hist: [], log: [], rp: null };
   if (bot.pawns) bg.pw = pwNew();
   else {
     bg.game = new Chess();
@@ -2099,6 +2466,7 @@ function dangerMarks() {   // your pieces that are attacked and not defended (or
   return marks;
 }
 function botDraw() {
+  if (bg.rp) return rpDraw();
   const tg = bg.sel && !bg.over && botTurn() === bg.me ? myTargets(bg.sel) : [];
   renderBoard(botPos(), { el: $("gboard"), o: bg.me, hl: bg.last, sel: bg.sel, tgts: tg, marks: bg.over ? {} : dangerMarks() });
   $("gboard").classList.toggle("mine", !bg.over && botTurn() === bg.me);
@@ -2119,20 +2487,27 @@ function botAfterMove() {
     if (Math.floor(pl.stars / 10) > Math.floor(had / 10)) celebrate(STICKERS[(Math.floor(pl.stars / 10) - 1) % STICKERS.length], "sticker");
   } else if (res === "loss") sfx("wrong"); else sfx("right");
   save();
-  $("bOver").innerHTML = `<div class="burst">${res === "win" ? "🏆" : res === "loss" ? bg.bot.face : "🤝"}</div>
-    ${res === "win" ? `<div class="big">⭐ +3</div>` : ""}
+  botOverShow();
+  botDraw();
+  return true;
+}
+// the game-over panel: result, then ↻ rematch, 🤖 another bot, 🔍 what did you miss? (a ⭐ instead once nothing was missed)
+function botOverShow(clean = false) {
+  const res = bg.over;
+  $("bOver").innerHTML = `<div class="burst">${clean ? "⭐" : res === "win" ? "🏆" : res === "loss" ? bg.bot.face : "🤝"}</div>
+    ${res === "win" && !clean ? `<div class="big">⭐ +3</div>` : ""}
     <div class="row"><button class="btn primary big" type="button" id="bAgain" aria-label="Play again">↻</button>
-    <button class="btn big" type="button" id="bPickAgain" aria-label="Choose a bot">🤖</button></div>`;
+    <button class="btn big" type="button" id="bPickAgain" aria-label="Choose a bot">🤖</button>
+    ${bg.game && !clean ? `<button class="btn big" type="button" id="bReview" aria-label="What did I miss?">🔍</button>` : ""}</div>`;
   $("bOver").hidden = false;
   $("bAgain").onclick = () => botStart(bg.bot.id);
   $("bPickAgain").onclick = () => { bg = null; renderBots(); };
-  botDraw();
-  return true;
+  if ($("bReview")) $("bReview").onclick = rpStart;
 }
 function botReply() {
   if (!bg || bg.over || botTurn() === bg.me) return;
   if (bg.pw) { const m = pwBot(bg.pw); bg.pw = pwPlay(bg.pw, m); bg.last = [m.from, m.to]; }
-  else { const m = botMove(bg.bot, bg.game); bg.game.move(m); bg.last = [m.from, m.to]; }
+  else { const m = botMove(bg.bot, bg.game); botLog(m, false); bg.game.move(m); bg.last = [m.from, m.to]; }
   sfx("move");
   if (!botAfterMove()) botDraw();
 }
@@ -2140,7 +2515,7 @@ function botUserMove(from, to) {
   if (!bg || bg.over || botTurn() !== bg.me || !myTargets(from).includes(to)) return false;
   bg.hist.push(bg.pw ? JSON.stringify(bg.pw) : bg.game.fen());
   if (bg.pw) bg.pw = pwPlay(bg.pw, pwMoves(bg.pw).find(m => m.from === from && m.to === to));
-  else bg.game.move({ from, to, promotion: "q" });
+  else botLog(bg.game.move({ from, to, promotion: "q" }), true, bg.hist[bg.hist.length - 1]);
   bg.sel = null; bg.last = [from, to]; sfx("move");
   if (!botAfterMove()) { botDraw(); setTimeout(botReply, bg.bot.think); }
   return true;
@@ -2148,8 +2523,91 @@ function botUserMove(from, to) {
 function botUndo() {   // takes back your last move and the bot's reply
   if (!bg || !bg.hist.length || bg.over || botTurn() !== bg.me) return;
   const prev = bg.hist.pop();
-  if (bg.pw) bg.pw = JSON.parse(prev); else bg.game.load(prev);
+  if (bg.pw) bg.pw = JSON.parse(prev);
+  else { bg.game.load(prev); bg.log.length = Math.max(0, bg.log.map(x => x.fen).lastIndexOf(prev)); }
   bg.last = []; bg.sel = null; botDraw();
+}
+function botLog(m, me, fen = bg.game.fen()) { bg.log.push({ fen, from: m.from, to: m.to, me, piece: m.piece, captured: m.captured }); }
+
+/* ---- after a game, "what did you miss?": pieces you left hanging that the bot took, free pieces you didn't take ---- */
+// a move's material result for its player: what it takes (or a new queen), minus the most the other side can then win
+// (a capture it can make, less the piece it loses if you can take back on that square); mate = 100
+function rpGain(m) { return /#$/.test(m.san) ? 100 : (m.captured ? VALUE[m.captured] : 0) + (m.promotion ? 8 : 0); }   // the most a move can score
+function rpScore(g, m) {
+  if (/#$/.test(m.san)) return 100;
+  g.move(m);
+  let worst = 0;
+  for (const r of g.moves({ verbose: true })) {
+    if (!r.captured) continue;
+    g.move(r); const back = g.moves({ verbose: true }).some(x => x.to === r.to); g.undo();
+    worst = Math.max(worst, VALUE[r.captured] - (back ? VALUE[r.piece] : 0));
+  }
+  g.undo();
+  return rpGain(m) - worst;
+}
+function rpMateNext(g, m) {   // would this move allow a mate in one?
+  g.move(m);
+  const bad = g.moves({ verbose: true }).some(r => { g.move(r); const x = g.in_checkmate(); g.undo(); return x; });
+  g.undo();
+  return bad;
+}
+// your moves that were at least a minor piece worse than the best one, when the bot then took the piece (lost) or
+// the better move takes a free piece (free); at most 5, the biggest, in game order.
+// Moves are tried best-first by what they could at most win, so most of them never need scoring.
+function rpMoments(log) {
+  const out = [];
+  log.forEach((x, i) => {
+    if (!x.me) return;
+    const g = new Chess(x.fen), ms = g.moves({ verbose: true }).sort((a, b) => rpGain(b) - rpGain(a));
+    const mine = ms.find(m => m.from === x.from && m.to === x.to);
+    if (!mine) return;
+    const act = rpScore(g, mine);
+    if (act >= 100) return;
+    let best = null;
+    for (const m of ms) {
+      if (rpGain(m) < act + 3 || (best && rpGain(m) <= best[0])) break;
+      const s = rpScore(g, m);
+      if (s >= act + 3 && (!best || s > best[0]) && (s >= 100 || !rpMateNext(g, m))) best = [s, m];
+    }
+    if (!best) return;
+    const reply = log[i + 1];
+    let kind = null;
+    if (reply && !reply.me && reply.captured) {          // the bot took something: was it a real loss (≥ 3)?
+      const h = new Chess(x.fen); h.move({ from: x.from, to: x.to, promotion: "q" }); h.move({ from: reply.from, to: reply.to, promotion: "q" });
+      const back = h.moves({ verbose: true }).some(m => m.to === reply.to);
+      if (VALUE[reply.captured] - (back ? VALUE[reply.piece] : 0) >= 3) kind = "lost";
+    }
+    if (!kind && best[1].captured && best[0] >= 3 && best[0] < 100) kind = "free";
+    if (!kind) return;
+    out.push({ i, kind, fen: x.fen, mine: x.from + x.to, took: kind === "lost" ? reply.from + reply.to : null,
+               best: best[1].from + best[1].to, gap: best[0] - act,
+               at: kind === "lost" ? (reply.to === x.to ? x.from : reply.to) : best[1].to });
+  });
+  return out.sort((a, b) => b.gap - a.gap).slice(0, 5).sort((a, b) => a.i - b.i);
+}
+function rpStart() {
+  const list = rpMoments(bg.log || []);
+  if (!list.length) { sfx("star"); return botOverShow(true); }     // nothing missed: a happy ⭐
+  bg.rp = { list, k: 0 };
+  $("bOver").hidden = true; rpDraw();
+}
+// one moment: the position before your move, red = what happened (your move, and the bot's capture), then green = better
+function rpDraw() {
+  const r = bg.rp, x = r.list[r.k], red = [[x.mine, "red"], ...(x.took ? [[x.took, "red"]] : [])];
+  const marks = { [x.at]: x.kind === "lost" ? "dg" : "esc" };
+  renderBoard(parseFen(x.fen), { el: $("gboard"), o: bg.me, marks, arrows: red });
+  const my = x; clearTimeout(rpDraw.t);
+  rpDraw.t = setTimeout(() => { if (bg && bg.rp && bg.rp.list[bg.rp.k] === my) renderBoard(parseFen(x.fen), { el: $("gboard"), o: bg.me, marks, arrows: [...red, [x.best, "green"]] }); }, 1100);
+  $("gboard").classList.remove("mine");
+  $("bFace").innerHTML = `<span class="face">🔍</span><span class="dots">${r.list.map((_, i) => `<i class="${i <= r.k ? "on" : ""}">★</i>`).join("")}</span>
+    <button class="btn primary big" type="button" id="rpNext" aria-label="Next">▶</button>`;
+  $("rpNext").onclick = rpStep;
+  $("bUndo").disabled = true;
+}
+function rpStep() {   // ▶: the next moment; after the last one, back to the game-over panel
+  if (!bg || !bg.rp) return;
+  if (++bg.rp.k < bg.rp.list.length) return rpDraw();
+  bg.rp = null; clearTimeout(rpDraw.t); botOverShow(); botDraw();
 }
 function renderBots() {
   const pl = pzPlayers(), rec = pl.bots || {};
@@ -2188,6 +2646,201 @@ function openBots() {
   if (bg) { $("bPick").hidden = true; $("bGame").hidden = false; botDraw(); } else renderBots();
 }
 
+/* ================= coach: your own games vs the repertoire, timed answers, playing out the plan ================= */
+
+/* ---- your games (data/mygames.js, made offline by mygames.py and resolved to node ids by build.py) ---- */
+let MYG = {};             // node index -> {played: [records], n, last (ms)} for positions you got wrong in real games
+function myGamesOf(oid) { const g = window.GYM && GYM.mygames; return g && g.openings ? g.openings[oid] : null; }
+// sound = what the trainer itself would pass: a listed alternative, or an engine-sound move (mv row ok flag)
+function mgSound(m) {
+  if (m.kind === "also") return true;
+  const row = (N[m.node].mv || []).find(x => x[1] === m.played);
+  return !!(row && row[3]) && !(N[m.node].wrong || {})[row[0]];
+}
+function useMyGames() {   // called by useOpening
+  MYG = {};
+  const g = myGamesOf(DATA.id); if (!g) return;
+  for (const m of g.mine) {
+    if (m.node === undefined || mgSound(m)) continue;                  // sound alternatives aren't mistakes
+    const x = MYG[m.node] = MYG[m.node] || { played: [], n: 0, last: 0 };
+    x.played.push(m); x.n += m.n; x.last = Math.max(x.last, Date.parse(m.last) || 0);
+  }
+}
+// a position you got wrong in a real game stays in Review until you answer it right after that game
+function myGamesDue(i) { const x = MYG[i], r = recOf(i); return !!x && !(r && r.last === "ok" && r.t > x.last); }
+function myGamesNote(i) {
+  const x = MYG[i]; if (!x) return "";
+  const p = x.played.slice(0, 3).map(m => `<b>${ME === "b" ? "…" : ""}${esc(m.played)}</b> (${m.n}×)`).join(", ");
+  return `In your own games you played ${p} here, last on ${esc(new Date(x.last).toLocaleDateString())}.`;
+}
+function renderMine() {
+  const g = myGamesOf(DATA.id), el = $("mine2");
+  if (!g) { el.innerHTML = `<p class="empty">No games analysed yet. In Claude Code, ask to "refresh my games": Claude downloads your Lichess games and compares them with this repertoire.</p>`; return; }
+  const all = GYM.mygames, when = d => d ? esc(new Date(d).toLocaleDateString()) : "";
+  const pos = i => `${esc(N[i].line)}`;
+  const mine = g.mine.filter(m => m.node !== undefined && !mgSound(m)).slice(0, 20);
+  const sound = g.mine.filter(m => m.node !== undefined && mgSound(m)).slice(0, 10);
+  const theirs = g.theirs.filter(t => t.node !== undefined).slice(0, 20);
+  $("mine2").innerHTML = `
+    <p class="lede">${g.games} of your games (up to ${when(all.updated)}) reached this repertoire, and stayed in it for ${g.avg_depth} of your moves on average.
+      Mistakes below are in your Review until you get them right here.</p>
+    <h3>Where you left the repertoire</h3>
+    <div class="misses">${mine.map(m => `<div class="miss"><span class="what"><span>${pos(m.node)}</span>
+        <span>You played <span class="bad">${ME === "b" ? "…" : ""}${esc(m.played)}</span> ${m.n}×</span><span>Learn <span class="good">${lmNo(moveNo(m.node), N[m.node].s)}</span></span></span>
+        <span class="ln">Scored ${Math.round(100 * m.score)}% in those games · last ${when(m.last)} ${m.games.slice(0, 2).map(id => `<a href="https://lichess.org/${encodeURIComponent(id)}" target="_blank" rel="noopener">game</a>`).join(" ")}</span>
+        <button class="btn" data-mfix="${m.node}">Practice</button></div>`).join("") || `<p class="empty">None: you played the repertoire moves every time.</p>`}</div>
+    ${sound.length ? `<h3>Sound alternatives you chose</h3><p class="tiny">Fine moves, just not the ones this repertoire teaches: ${sound.map(m => `${pos(m.node)} <b>${ME === "b" ? "…" : ""}${esc(m.played)}</b> (${m.n}×)`).join("; ")}.</p>` : ""}
+    <h3>Where opponents surprised you</h3>
+    <p class="tiny">Moves your opponents played that the repertoire doesn't cover yet. Add one and Claude will analyse it when you ask to "add the lines I requested".</p>
+    <div class="misses">${theirs.map((t, k) => `<div class="miss"><span class="what"><span>${pos(t.node)} ${lmNo(moveNo(t.node), N[t.node].s)}</span>
+        <span>${OPP} played <span class="bad">${esc(t.san)}</span> ${t.n}×</span></span>
+        <span class="ln">You scored ${Math.round(100 * t.score)}% · last ${when(t.last)}</span>
+        <button class="btn" data-mreq="${k}">Add to requests</button></div>`).join("") || `<p class="empty">Nothing yet.</p>`}</div>`;
+  el.querySelectorAll("[data-mfix]").forEach(b => b.onclick = () => { mode = "review"; markTabs(); showTrainer(); startReview(+b.dataset.mfix); });
+  el.querySelectorAll("[data-mreq]").forEach(b => b.onclick = () => {
+    const t = theirs[+b.dataset.mreq], n = N[t.node];
+    const line = `[${DATA.name}] ` + sanLine([...n.pre, n.s, t.san]);
+    if (!(S.req || []).some(r => r.line === line)) { const r = { line, t: Date.now() }; (S.req = S.req || []).push(r); save(); pushReq(r); renderReqs(); }
+    b.textContent = "Added"; b.disabled = true;
+  });
+}
+function showTrainer() { $("mineView").hidden = true; $("ideasView").hidden = true; $("oTrainer").hidden = false; }
+
+/* ---- timed answers (blitz pressure): the move must come within S.timed seconds, or it counts as a miss ---- */
+let tmRaf = null;
+function timedStart() {
+  timedStop();
+  const secs = S.timed || 0;
+  if (!secs || phase !== "black" || (lesson && lesson.phase !== "test")) return;   // not in walkthroughs
+  const t0 = performance.now(), ms = secs * 1000;
+  $("tbar").hidden = false;
+  const tick = now => {
+    const left = 1 - (now - t0) / ms;
+    $("tbarFill").style.width = Math.max(0, 100 * left) + "%";
+    if (left > 0) tmRaf = requestAnimationFrame(tick); else { tmRaf = null; timedOut(); }
+  };
+  tmRaf = requestAnimationFrame(tick);
+}
+function timedStop() { if (tmRaf) cancelAnimationFrame(tmRaf); tmRaf = null; const b = $("tbar"); if (b) b.hidden = true; }
+function timedOut() {
+  if (phase !== "black") return;
+  timedStop();
+  showFail(cur, { san: null, text: `Time's up (${S.timed} s). In a blitz game this move has to come quicker, so it goes back into Review.` }, null);
+}
+$("bTimed").value = String(S.timed || 0);
+$("bTimed").onchange = () => { S.timed = +$("bTimed").value; save(); if (phase === "black") timedStart(); };
+
+/* ---- play out the plan: from a line's last position, against Stockfish (Tactic Tiger if the engine can't load) ---- */
+const SF_URL = "https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js";
+const PO_MOVES = 15, PO_SKILL = 8, PO_SLIP = 120;   // your moves per game, engine skill (0–20, ~club level), a slip in cp
+let sfReady = null, sfQueue = Promise.resolve(), po = null;
+function sfEngine() {
+  if (sfReady) return sfReady;
+  sfReady = new Promise((ok, fail) => {
+    try {
+      const w = new Worker(URL.createObjectURL(new Blob([`importScripts("${SF_URL}")`], { type: "text/javascript" })));
+      const wait = window.SF_START_MS ?? 10000;          // tests set 0 (no timeout): headless virtual time jumps ahead
+      const to = wait ? setTimeout(() => fail(new Error("the engine didn't start")), wait) : null;
+      w.onmessage = e => { if (String(e.data).startsWith("uciok")) { clearTimeout(to); ok(w); } };
+      w.onerror = () => { clearTimeout(to); fail(new Error("the engine couldn't load here")); };
+      w.postMessage("uci");
+    } catch (e) { fail(e); }
+  });
+  sfReady.catch(e => console.error(e));
+  return sfReady;
+}
+// one search at a time; resolves {best (uci), score (centipawns for the side to move)}
+function sfSearch(fen, { depth = 11, skill = 20, movetime = 0 } = {}) {
+  const run = () => sfEngine().then(w => new Promise(ok => {
+    let score = 0;
+    w.onmessage = e => {
+      const s = String(e.data), m = s.match(/score (cp|mate) (-?\d+)/);
+      if (m) score = m[1] === "cp" ? +m[2] : (+m[2] > 0 ? 10000 : -10000);
+      if (s.startsWith("bestmove")) ok({ best: s.split(" ")[1], score });
+    };
+    w.postMessage(`setoption name Skill Level value ${skill}`);
+    w.postMessage("position fen " + fen);
+    w.postMessage(movetime ? `go movetime ${movetime}` : `go depth ${depth}`);
+  }));
+  return (sfQueue = sfQueue.then(run, run));
+}
+const poCp = cp => (cp >= 0 ? "+" : "") + (cp / 100).toFixed(1);
+function poSan(fen, uci) { const g = new Chess(fen); const m = g.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || "q" }); return m ? m.san : uci; }
+function startPlayout(i) {
+  timedStop(); resetLine();
+  const n = N[i], g = new Chess(n.fen); g.move({ from: n.m.slice(0, 2), to: n.m.slice(2, 4), promotion: n.m[4] || "q" });
+  po = { id: Date.now(), node: i, g, mine: 0, slips: [], engine: true, before: null, start: null };
+  hist = histFromPre([...n.pre, n.s]);
+  phase = "wait"; pos = parseFen(g.fen()); lastMove = [n.m.slice(0, 2), n.m.slice(2, 4)];
+  $("idea").innerHTML = `<span class="who">Play it out</span><span>${esc(n.plan || "")}</span>`;
+  setState("Play it out");
+  setCard("done", `<p class="text">Play ${PO_MOVES} moves from here against the engine (club strength), following the plan above. Afterwards you see which of your moves slipped and what was better.</p>
+    <div class="controls"><button class="btn" id="poStop">Stop</button></div><p class="sub" id="poMsg">Starting the engine…</p>`);
+  $("poStop").onclick = () => poEnd();
+  $("bNext").hidden = true;
+  renderMoves(); draw();
+  const id = po.id;
+  sfSearch(g.fen(), { depth: 11 }).then(r => { if (po && po.id === id) { po.start = -r.score; poOpp(); } })
+    .catch(() => { if (po && po.id === id) { po.engine = false; $("poMsg").textContent = "The engine couldn't load here, so Tactic Tiger plays and there's no move review."; poOpp(); } });
+}
+function poBoard(u) {
+  const g = po.g;
+  hist.push({ san: poSan(g.fen(), u), side: g.turn(), no: +g.fen().split(" ")[5] });
+  g.move({ from: u.slice(0, 2), to: u.slice(2, 4), promotion: u[4] || "q" });
+  pos = parseFen(g.fen()); lastMove = [u.slice(0, 2), u.slice(2, 4)];
+  sfx("move"); renderMoves(); draw();
+}
+function poOpp() {
+  const id = po.id, g = po.g;
+  if (g.game_over() || po.mine >= PO_MOVES) return poEnd();
+  phase = "wait"; setState(`${OPP} is thinking…`);
+  const reply = po.engine ? sfSearch(g.fen(), { skill: PO_SKILL, movetime: 400 }).then(r => r.best)
+    : Promise.resolve().then(() => { const m = botMove(BOTS.find(b => b.id === "tiger") || BOTS[BOTS.length - 1], g); return m.from + m.to + (m.promotion || ""); });
+  reply.then(u => {
+    if (!po || po.id !== id) return;
+    poBoard(u);
+    if (g.game_over()) return poEnd();
+    phase = "play"; setState(`Your move (${po.mine + 1} of ${PO_MOVES})`); draw();
+    if (po.engine) po.before = { fen: g.fen(), r: sfSearch(g.fen(), { depth: 11 }) };   // think along while you think
+  });
+}
+function poMove(u) {
+  if (!po || phase !== "play" || !u) return;
+  const id = po.id, before = po.before, fen = po.g.fen();
+  poBoard(u); po.mine++;
+  if (po.engine && before) {
+    Promise.all([before.r, sfSearch(po.g.fen(), { depth: 11 })]).then(([b, a]) => {
+      if (!po || po.id !== id) return;
+      const drop = b.score - (-a.score);
+      if (drop >= PO_SLIP && b.best !== u) po.slips.push({ no: +fen.split(" ")[5], played: poSan(fen, u), best: poSan(fen, b.best), drop, fen });
+      po.last = -a.score;
+    });
+  }
+  poOpp();
+}
+function poEnd() {
+  if (!po) return;
+  const p = po, g = p.g, id = p.id;
+  phase = "done"; setState("Play-out finished", "pass");
+  const res = g.in_checkmate() ? (g.turn() === ME ? "You got mated." : "You gave mate!") : g.in_draw() ? "It ended in a draw." : "";
+  const done = final => {
+    if (!po || po.id !== id) return;
+    const slips = p.slips.sort((a, b) => b.drop - a.drop).slice(0, 4);
+    setCard(slips.length ? "alt" : "pass", `<div class="head"><span class="tag ${slips.length ? "alt" : "pass"}">Play-out</span></div>
+      <p class="text">${res} ${p.engine && p.start !== null && final !== null ? `The position went from ${poCp(p.start)} to ${poCp(final)} for you over ${p.mine} moves.` : ""}</p>
+      ${p.engine ? (slips.length ? `<div class="plan"><span class="lbl">Where it slipped</span>${slips.map(s =>
+        `<p class="text">Move ${s.no}: you played <span class="bad">${esc(s.played)}</span>, better was <span class="good">${esc(s.best)}</span> (${poCp(-s.drop)}).</p>`).join("")}</div>`
+        : `<p class="sub">No slips: every move kept the balance.</p>`) : ""}
+      <div class="controls"><button class="btn primary" id="poAgain">Play it again</button><button class="btn" id="poBack">Back to the lines</button></div>`);
+    $("poAgain").onclick = () => startPlayout(p.node);
+    $("poBack").onclick = () => { po = null; syncControls(); next(); };
+  };
+  if (p.engine) sfSearch(g.fen(), { depth: 11 }).then(r => done(g.turn() === ME ? r.score : -r.score), () => done(null));
+  else done(null);
+}
+function poStop() { po = null; }
+function poLegal() { return po && phase === "play" && po.g.turn() === ME ? po.g.moves({ verbose: true }).map(m => m.from + m.to + (m.promotion || "")) : []; }
+
 
 /* ================= sections: puzzles and the openings ================= */
 window.SECTION = null;
@@ -2210,6 +2863,7 @@ async function go(sec, sub) {
   try {
     if (sec === "puzzles") {
       await loadScript("data/puzzles.js");
+      if (!window.GYM_KIDS_ONLY) await loadScript("data/mygames.js").catch(() => {});   // "From my games" (optional)
       if (stale()) return;
       if (typeof Chess === "undefined") throw new Error("chess.js missing");
       window.SECTION = "puzzles"; openPuzzles(sub && sub.stage);
@@ -2219,6 +2873,7 @@ async function go(sec, sub) {
       window.SECTION = "kids"; openKids(sub);
     } else {
       await loadScript(`data/${sec}.js`);
+      await loadScript("data/mygames.js").catch(() => {});      // optional: your own games (mygames.py)
       if (stale()) return;
       window.SECTION = "opening";
       const d = GYM[sec];
