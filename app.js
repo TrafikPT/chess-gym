@@ -1,0 +1,2122 @@
+/* ---------- the opening being trained (switchable) ---------- */
+let DATA = null, N = [], P = {}, L = [], BYKEY = {}, nodeLesson = {}, lessonSets = [];
+let ME = "b", OPPC = "w", MEN = "Black", OPP = "White", orient = "b";
+function useOpening(d) {
+  DATA = d; N = d.nodes; P = d.principles; L = d.lessons;
+  BYKEY = {}; N.forEach((n, i) => BYKEY[n.k] = i);
+  nodeLesson = {}; L.forEach((l, li) => l.nodes.forEach(i => { if (nodeLesson[i] === undefined) nodeLesson[i] = li; }));
+  lessonSets = L.map(l => new Set(l.nodes));
+  ME = d.side; OPPC = ME === "b" ? "w" : "b"; MEN = ME === "b" ? "Black" : "White"; OPP = ME === "b" ? "White" : "Black"; orient = ME;
+  for (const k in subCache) delete subCache[k];
+}
+const FILES = "abcdefgh";
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+// move labels: the learner's move at a node, and an opponent move with its number
+function lmNo(no, san) { return ME === "b" ? `${lmNo(no, san)}` : `${no}.${esc(san)}`; }
+function oppLbl(no, san) { return ME === "b" ? `${no}.${esc(san)}` : `${lmNo(no, san)}`; }
+function isMine(p) { return (p === p.toUpperCase()) === (ME === "w"); }
+
+/* ---------- memory: browser storage always, plus the viewer's private store when available ---------- */
+const STORE = "modern-drill-v2";
+let S = { n: {}, les: {}, lines: 0, best: 0, req: [] };
+try { const raw = localStorage.getItem(STORE); if (raw) S = Object.assign(S, JSON.parse(raw)); } catch (e) {}
+let remote = null, writing = false, dirty = false, timer = null, sharedDb = null;
+// requested lines also live in a shared "requests" collection so Claude can read them without a copy-paste
+function reqId(line) { let h = 2166136261; for (const c of line) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; } return "r" + h.toString(16); }
+async function pushReq(r) {
+  if (!sharedDb) return;
+  try { await sharedDb.doc("requests/" + reqId(r.line)).set({ line: r.line, t: r.t }); r.synced = true; save(); } catch (e) {}
+}
+function save() {
+  try { localStorage.setItem(STORE, JSON.stringify(S)); } catch (e) {}
+  if (!remote) return;
+  dirty = true; clearTimeout(timer); timer = setTimeout(flush, 1200);
+}
+async function flush() {
+  if (!remote || writing || !dirty) return;
+  writing = true; dirty = false;
+  try { await remote.set(JSON.parse(JSON.stringify(S))); setSync(true); }
+  catch (e) { if (e && (e.code === "invalid_argument" || e.code === "revoked" || e.code === "not_granted")) { remote = null; setSync(false); } else dirty = true; }
+  writing = false;
+  if (dirty) timer = setTimeout(flush, 2000);
+}
+function setSync(ok) {
+  $("sync").textContent = ok ? "Saved to your Claude account, so it follows you across devices and Claude can read it to plan your next session." : "Saved in this browser only.";
+}
+function merge(o) {
+  if (!o || typeof o !== "object") return;
+  for (const [k, r] of Object.entries(o.n || {})) if (!S.n[k] || (r.t || 0) > (S.n[k].t || 0)) S.n[k] = r;
+  for (const [k, r] of Object.entries(o.les || {})) S.les[k] = Object.assign({}, S.les[k] || {}, r, { done: !!(r.done || S.les[k]?.done), walk: !!(r.walk || S.les[k]?.walk) });
+  S.lines = Math.max(S.lines || 0, o.lines || 0); S.best = Math.max(S.best || 0, o.best || 0);
+  if (o.players) {           // puzzle profiles: keep whichever copy has more history
+    S.players = S.players || {};
+    for (const [id, p] of Object.entries(o.players)) {
+      const mine = S.players[id];
+      if (!mine || (p.hist || []).length > (mine.hist || []).length) S.players[id] = p;
+    }
+    for (const k of ["player", "sonSeeded"]) if (S[k] === undefined && o[k] !== undefined) S[k] = o[k];
+    S.pzv = Math.max(S.pzv || 0, o.pzv || 0);
+  }
+  const seenReq = new Set((S.req || []).map(r => r.line)); S.req = S.req || [];
+  (o.req || []).forEach(r => { if (!seenReq.has(r.line)) S.req.push(r); });
+}
+(async () => {
+  try {
+    if (!window.claude || !window.claude.use) return;
+    const [db, user] = await Promise.all([window.claude.use("db"), window.claude.use("user")]);
+    if (!db || !user) return;
+    const uid = await user.id();
+    if (!uid) return;
+    const ref = db.doc("data/users/" + uid + "/drill");
+    const snap = await ref.get();
+    if (snap.exists) merge(snap.data());
+    sharedDb = db;
+    try {   // shared request list is the source of truth: Claude removes lines once they're added to the repertoire
+      const qs = await db.collection("requests").get();
+      const shared = qs.docs.map(d => d.data()).filter(x => x && x.line).map(x => ({ line: x.line, t: x.t || 0, synced: true }));
+      const have = new Set(shared.map(x => x.line));
+      const pending = (S.req || []).filter(x => !x.synced && !have.has(x.line));
+      S.req = [...shared, ...pending];
+      pending.forEach(pushReq);
+    } catch (e) {}
+    remote = ref; dirty = true; await flush();
+    if (DATA) { refreshPanels(); if (mode === "lessons" && !lesson) showLessonList(); }
+    if (window.onGymStore) window.onGymStore();
+  } catch (e) { /* stay on browser storage */ }
+})();
+function rec(i) { const k = N[i].k; return S.n[k] || (S.n[k] = { ok: 0, bad: 0, streak: 0, last: null, t: 0, wrong: {} }); }
+function recOf(i) { return S.n[N[i].k]; }
+
+/* ---------- board ---------- */
+function parseFen(fen) {
+  const b = {};
+  fen.split(" ")[0].split("/").forEach((row, r) => {
+    let f = 0;
+    for (const ch of row) { if (/\d/.test(ch)) { f += +ch; continue; } b[FILES[f] + (8 - r)] = ch; f++; }
+  });
+  return b;
+}
+function applyMove(b, uci) {
+  const n = { ...b }, from = uci.slice(0, 2), to = uci.slice(2, 4), pc = n[from];
+  delete n[from];
+  if (pc === "p" && from[0] !== to[0] && !b[to]) delete n[to[0] + (+to[1] + 1)];
+  if (pc === "P" && from[0] !== to[0] && !b[to]) delete n[to[0] + (+to[1] - 1)];
+  n[to] = uci.length > 4 ? (pc === pc.toLowerCase() ? uci[4] : uci[4].toUpperCase()) : pc;
+  if (pc === "k" && from === "e8" && to === "g8") { n.f8 = n.h8; delete n.h8; }
+  if (pc === "k" && from === "e8" && to === "c8") { n.d8 = n.a8; delete n.a8; }
+  if (pc === "K" && from === "e1" && to === "g1") { n.f1 = n.h1; delete n.h1; }
+  if (pc === "K" && from === "e1" && to === "c1") { n.d1 = n.a1; delete n.a1; }
+  return n;
+}
+function epdAfter(fen, uci) {   // EPD after a move, matching python-chess Board.epd()
+  const parts = fen.split(" "), before = parseFen(fen), b = applyMove(before, uci), rows = [], white = parts[1] === "w";
+  for (let r = 8; r >= 1; r--) {
+    let s = "", e = 0;
+    for (let f = 0; f < 8; f++) { const p = b[FILES[f] + r]; if (p) { if (e) { s += e; e = 0; } s += p; } else e++; }
+    if (e) s += e; rows.push(s);
+  }
+  let c = parts[2] === "-" ? "" : parts[2];
+  const from = uci.slice(0, 2), to = uci.slice(2, 4), pc = before[from];
+  if (from === "e8") c = c.replace(/[kq]/g, ""); if (from === "e1") c = c.replace(/[KQ]/g, "");
+  if (from === "h8" || to === "h8") c = c.replace("k", ""); if (from === "a8" || to === "a8") c = c.replace("q", "");
+  if (from === "h1" || to === "h1") c = c.replace("K", ""); if (from === "a1" || to === "a1") c = c.replace("Q", "");
+  let ep = "-";
+  const dbl = white ? pc === "P" && from[1] === "2" && to[1] === "4" : pc === "p" && from[1] === "7" && to[1] === "5";
+  if (dbl) {
+    const f = FILES.indexOf(to[0]), enemy = white ? "p" : "P";
+    if ([f - 1, f + 1].some(x => x >= 0 && x < 8 && b[FILES[x] + to[1]] === enemy)) ep = to[0] + (white ? "3" : "6");
+  }
+  return `${rows.join("/")} ${white ? "b" : "w"} ${c || "-"} ${ep}`;
+}
+function sqXY(sq, o = orient) { const f = FILES.indexOf(sq[0]), r = +sq[1]; return o === "b" ? [7 - f, r - 1] : [f, 8 - r]; }
+function sqOf(col, row, o = orient) { return o === "b" ? FILES[7 - col] + (row + 1) : FILES[col] + (8 - row); }
+let drag = null;
+function renderBoard(pos, { hl = [], sel = null, tgts = [], arrows = [], el = null, o = orient, marks = {} } = {}) {
+  let html = "";
+  for (let row = 0; row < 8; row++) for (let col = 0; col < 8; col++) {
+    const sq = sqOf(col, row, o), f = FILES.indexOf(sq[0]), r = +sq[1], p = pos[sq];
+    let cls = `sq ${(f + r) % 2 === 1 ? "l" : "d"}`;
+    if (hl.includes(sq)) cls += " hl";
+    if (sel === sq) cls += " sel";
+    if (tgts.includes(sq)) cls += " tgt" + (p ? " occ" : "");
+    let st = "";
+    if (marks[sq]) { const [mc, md] = String(marks[sq]).split(":"); cls += " " + mc; if (md) st = ` style="--d:${0.4 + md * 0.35}s"`; }
+    let inner = "";
+    if (p) {
+      const w = p === p.toUpperCase();
+      inner += `<span class="pc ${w ? "w" : "b"}${p.toUpperCase()}${drag && drag.from === sq && drag.moved ? " lift" : ""}"></span>`;
+    }
+    if (col === 7) inner += `<span class="coord r">${r}</span>`;
+    if (row === 7) inner += `<span class="coord f">${FILES[f]}</span>`;
+    html += `<div class="${cls}"${st}>${inner}</div>`;
+  }
+  const root = el || $("board");
+  root.querySelector(".squares").innerHTML = html;
+  root.querySelector(".arrows").innerHTML = arrows.map(([u, c], i) =>
+    `<g class="arr"${c === "cover" || c === "escape" ? ` style="animation-delay:${0.4 + i * 0.35}s"` : ""}>${arrowPath(u, c, o)}</g>`).join("");
+}
+// Lichess (chessground) arrow style: thick round-capped line with a triangular head; a square is 1 unit
+const BRUSH = { green: "#15781B", red: "#882020", blue: "#003088", cover: "#d4552f", escape: "#1f9d55" };
+const ARROW_DEFS = "";
+// head drawn per arrow (a shared <marker> breaks when the first board defining it is hidden)
+function arrowPath(uci, brush, o = orient) {
+  const [x1, y1] = sqXY(uci.slice(0, 2), o), [x2, y2] = sqXY(uci.slice(2, 4), o);
+  const ax = x1 + .5, ay = y1 + .5, bx = x2 + .5, by = y2 + .5, len = Math.hypot(bx - ax, by - ay);
+  const ux = (bx - ax) / len, uy = (by - ay) / len, px = -uy, py = ux, sw = (brush === "cover" || brush === "escape" ? 6 : 10) / 64;
+  const ex = bx - ux * sw, ey = by - uy * sw;                 // line end (chessground margin)
+  const bx0 = ex - ux * 2.05 * sw, by0 = ey - uy * 2.05 * sw;  // head base centre
+  const tx = ex + ux * .95 * sw, ty = ey + uy * .95 * sw;      // head tip
+  const hw = 2 * sw, c = BRUSH[brush];
+  return `<line x1="${ax}" y1="${ay}" x2="${bx0}" y2="${by0}" stroke="${c}" stroke-width="${sw}" stroke-linecap="round"/>` +
+    `<polygon points="${bx0 + px * hw},${by0 + py * hw} ${tx},${ty} ${bx0 - px * hw},${by0 - py * hw}" fill="${c}"/>`;
+}
+
+/* ---------- line state ---------- */
+let mode = "lessons";
+let cur = null, pos = parseFen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+let hist = [], path = [], lastPath = null, forced = null;
+let phase = "idle";          // idle | white | black | fail | done
+let sel = null, lastMove = [], arrowsNow = [], hintShown = false, streak = 0;
+let scope = null;            // Set of node ids the line may use, or null
+let lesson = null;           // {li, phase: 'intro'|'walk'|'test'|'done', got:Set, misses:[]}
+let review = null;           // {queue:[ids], single:bool}
+let filter = "all";
+try { filter = localStorage.getItem(STORE + ":filter") || "all"; } catch (e) {}
+const FIRST = { e2e4: "1.e4", d2d4: "1.d4", c2c4: "1.c4", g1f3: "1.Nf3" };
+
+function getWM() { return wiPar === "root" ? DATA.roots.map(e => [e[0], e[1], e[4]]) : (wiPar === null ? [] : N[wiPar].wm); }
+function legalList() { return phase === "black" ? N[cur].mv.map(m => m[0]) : phase === "whatif" ? getWM().map(w => w[0]) : []; }
+function draw() {
+  const tg = sel ? legalList().filter(u => u.startsWith(sel)).map(u => u.slice(2, 4)) : [];
+  renderBoard(pos, { hl: lastMove, sel, tgts: tg, arrows: arrowsNow });
+  $("board").classList.toggle("mine", phase === "black" || phase === "whatif");
+}
+function renderMoves() {
+  if (!hist.length) { $("moves").innerHTML = `<span class="fam">The line appears here.</span>`; return; }
+  const at = frames.length ? frames[fi].h : hist.length, base = frames.length ? frames[0].h : 0;
+  $("moves").innerHTML = hist.map((h, i) =>
+    (h.side === "w" ? `<span class="n">${h.no}.</span>` : i === 0 ? `<span class="n">${h.no}…</span>` : "") +
+    `<span class="m ${h.cls || ""}${i === at - 1 ? " last" : ""}${i >= at ? " fut" : ""}${i >= base - 1 ? " nav" : ""}" data-h="${i + 1}">${esc(h.san)}</span>`).join("");
+  $("moves").querySelectorAll(".m.nav").forEach(el => el.onclick = () => {
+    const k = frames.findIndex(f => f.h === +el.dataset.h);
+    if (k >= 0 && !(lesson && lesson.phase === "walk")) goFrame(k);
+  });
+}
+function tally() { $("tally").innerHTML = `<span>streak <b>${streak}</b></span><span>best <b>${S.best}</b></span><span>lines <b>${S.lines}</b></span>`; }
+function setState(t, cls = "") { $("state").textContent = t; $("state").className = "state " + cls; }
+function setCard(cls, html) { $("card").className = "card " + cls; $("card").innerHTML = html; }
+function pchip(p) { return P[p] ? `<span class="pchip" title="${esc(P[p][1])}">${esc(P[p][0])}</span>` : ""; }
+function moveNo(i) { return +N[i].fen.split(" ")[5]; }
+function histFromPre(pre, cls = "") { return pre.map((san, i) => ({ san, side: i % 2 ? "b" : "w", no: Math.floor(i / 2) + 1 })); }
+
+/* ---------- choosing White's moves ---------- */
+const subCache = {};
+function subtree(id) {
+  if (subCache[id]) return subCache[id];
+  const seen = new Set(), st = [id];
+  while (st.length) { const x = st.pop(); if (seen.has(x)) continue; seen.add(x); N[x].next.forEach(e => st.push(e[4])); }
+  return (subCache[id] = [...seen]);
+}
+function due(i) {
+  if (lesson && lesson.phase === "test") return lesson.got.has(i) ? 0.05 : (recOf(i)?.last === "bad" ? 4 : 1.5);
+  const r = recOf(i);
+  if (!r) return 1;
+  return r.last === "bad" ? 3 : Math.pow(0.55, r.streak);
+}
+function weightOf(e, depth) {
+  let ids = subtree(e[4]);
+  if (scope) ids = ids.filter(x => scope.has(x));
+  if (!ids.length) return 0.01;
+  const need = ids.reduce((s, x) => s + due(x), 0) / ids.length;
+  let w = Math.sqrt(Math.max(e[2], 0.3)) * (0.12 + need);
+  if (lastPath && lastPath[depth] === e[0] && !(lesson && lesson.phase === "test")) w *= 0.35;
+  return w;
+}
+function pick(edges, depth) {
+  if (lesson && lesson.phase === "walk") return edges.reduce((a, b) => (b[2] > a[2] ? b : a));   // walkthrough: most common move
+  if (forced && forced[depth]) { const f = edges.find(x => x[0] === forced[depth]); if (f) return f; }
+  const ws = edges.map(e => weightOf(e, depth));
+  let x = Math.random() * ws.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < edges.length; i++) { x -= ws[i]; if (x <= 0) return edges[i]; }
+  return edges[edges.length - 1];
+}
+function inScope(edges) { return scope ? edges.filter(e => scope.has(e[4])) : edges; }
+
+/* ---------- starting lines ---------- */
+function resetLine() {
+  frames = []; fi = 0; wiPar = null; clearTimeout(whiteTimer); shownSt = null; $("struct").hidden = true;
+  hist = []; path = []; hintShown = false; arrowsNow = []; sel = null; lastMove = [];
+  document.querySelector(".ghost")?.remove(); drag = null;
+}
+function startFromRoot(replay = false) {           // free play
+  if (ME === "w") {
+    forced = null; if (path.length) lastPath = [...path];
+    startAt(DATA.start, `<span class="who">Free play</span><span>You're White. Play your repertoire from move one.</span>`);
+    return;
+  }
+  forced = replay && path.length ? [...path] : null;
+  if (!replay && path.length) lastPath = [...path];
+  resetLine();
+  pos = parseFen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+  setState("White to move"); setCard("", `<p class="sub">White is choosing a first move…</p>`);
+  $("idea").innerHTML = "";
+  pushFrame("white", { wmOf: "root", resume: "root" });
+  renderMoves(); draw();
+  let edges = DATA.roots.filter(e => filter === "all" || (filter === "other" ? !FIRST[e[0]] : e[0] === filter));
+  if (!edges.length) edges = DATA.roots;
+  playWhite(edges, 0);
+}
+function startAt(i, ideaHtml) {                     // start mid-tree at node i (Black to move)
+  forced = null;
+  if (path.length) lastPath = [...path];
+  resetLine();
+  cur = i; pos = parseFen(N[i].fen); hist = histFromPre(N[i].pre);
+  lastMove = N[i].lu ? [N[i].lu.slice(0, 2), N[i].lu.slice(2, 4)] : [];
+  $("idea").innerHTML = ideaHtml || "";
+  beginBlack();
+}
+function playWhite(edges, depth) {
+  phase = "white"; wiPar = null;
+  const e = pick(edges, depth);
+  path[depth] = e[0];
+  const delay = matchMedia("(prefers-reduced-motion: reduce)").matches ? 120 : 420;
+  whiteTimer = setTimeout(() => {
+    const to = N[e[4]], no = +to.fen.split(" ")[5] - (ME === "w" ? 1 : 0);
+    pos = parseFen(to.fen); lastMove = [e[0].slice(0, 2), e[0].slice(2, 4)]; arrowsNow = [];
+    if (depth === 0 && e[5]) e[5].forEach(([san, side, n]) => hist.push({ san, side, no: n }));
+    hist.push({ san: e[1], side: OPPC, no });
+    $("idea").innerHTML = `<span class="who">${OPP} played <b>${oppLbl(no, e[1])}</b></span>${e[3] ? `<span>${esc(e[3])}</span>` : ""}`;
+    cur = e[4];
+    beginBlack();
+  }, delay);
+}
+let whiteTimer = null, frames = [], fi = 0, wiPar = null;
+// one frame per ply of the current line: what the board showed and whose turn it was
+function pushFrame(kind, extra = {}) {
+  frames.push(Object.assign({ kind, pos, lastMove, h: hist.length, cur, arrows: arrowsNow.slice(), idea: $("idea").innerHTML,
+    card: [$("card").className, $("card").innerHTML], state: [$("state").textContent, $("state").className] }, extra));
+  fi = frames.length - 1;
+}
+function snapFrame() {   // refresh the live frame's stored card after it changed
+  const f = frames[fi]; if (!f) return;
+  f.card = [$("card").className, $("card").innerHTML]; f.state = [$("state").textContent, $("state").className]; f.arrows = arrowsNow.slice(); f.idea = $("idea").innerHTML;
+}
+function wireCard() {
+  wireTwins();
+  const b = $("bBack"); if (b) b.onclick = back;
+  $("card").querySelectorAll("[data-wi]").forEach(x => x.onclick = () => whatIfMove(x.dataset.wi));
+}
+function goFrame(k) {
+  if (k < 0 || k >= frames.length) return;
+  clearTimeout(whiteTimer); drag = null; sel = null; document.querySelector(".ghost")?.remove();
+  fi = k;
+  const f = frames[k], live = k === frames.length - 1;
+  pos = f.pos; lastMove = f.lastMove; cur = f.cur; arrowsNow = live ? f.arrows : [];
+  $("idea").innerHTML = f.idea;
+  if (f.kind === "black") {
+    phase = "black"; hintShown = !live;
+    showStruct(N[cur].stb, N[cur].sbi);
+    if (live) { $("card").className = f.card[0]; $("card").innerHTML = f.card[1]; setState(...f.state); }
+    else { setState("Your move again"); setCard("", `<p class="sub">You've stepped back. Play a move to try it (it won't count toward your progress), or press → to go forward.</p>`); }
+  } else if (f.kind === "white") {
+    phase = "whatif"; wiPar = f.wmOf;
+    const inRep = getWM().filter(w => w[2] >= 0), no = wiPar === "root" ? 1 : moveNo(wiPar) + (ME === "b" ? 1 : 0);
+    setState(`${OPP} to move`);
+    setCard("alt", `<div class="head"><span class="tag alt">Your choice for ${OPP}</span></div>
+      <p class="text">Play any ${OPP} move to test a variation. If it's in your repertoire the line continues; if not, it's saved to <b>Lines to investigate</b>.${live && f.resume !== undefined ? " Or press → to let White choose." : ""}</p>
+      ${inRep.length ? `<p class="sub">In your repertoire here: ${inRep.map(w => `<button class="chip" data-wi="${w[0]}">${oppLbl(no, w[1])}</button>`).join(" ")}</p>` : ""}`);
+  } else {
+    phase = live ? f.phase || "done" : "view";
+    if (live) { $("card").className = f.card[0]; $("card").innerHTML = f.card[1]; setState(...f.state); }
+    else { setState("Looking back"); setCard("", `<p class="sub">Press → to go forward, or ← to go back further.</p>`); }
+  }
+  wireCard(); renderMoves(); draw(); syncControls();
+}
+function back() { if (!(lesson && lesson.phase === "walk") && fi > 0) goFrame(fi - 1); }
+function forward() {
+  if (lesson && lesson.phase === "walk") return;
+  if (fi < frames.length - 1) return goFrame(fi + 1);
+  const f = frames[fi];                                   // at the live end: let White continue if it was cut short
+  if (f && f.kind === "white" && f.resume !== undefined && phase === "whatif") continueFrom(f.resume, f.via || null);
+}
+function beginBlack() {
+  phase = "black"; hintShown = false; sel = null;
+  showStruct(N[cur].stb, N[cur].sbi);
+  const n = N[cur];
+  if (lesson && lesson.phase === "walk") {
+    arrowsNow = [[n.m, "green"]];
+    setState("Play the arrow move");
+    setCard("pass", `<div class="head"><span class="tag pass">Learn</span><span class="mvname">${lmNo(moveNo(cur), n.s)}</span>${pchip(n.p)}</div><p class="text">${esc(n.why)}</p>`);
+  } else {
+    arrowsNow = [];
+    setState("Your move");
+    if (!$("card").classList.contains("pass") && !$("card").classList.contains("alt")) setCard("", `<p class="sub">Find the move to learn. Sound alternatives count too.</p>`);
+  }
+  pushFrame("black");
+  renderMoves(); draw(); refreshBar();
+}
+
+/* ---------- judging ---------- */
+function judge(uci) {
+  const n = N[cur], m = n.mv.find(x => x[0] === uci);
+  if (!m) return null;
+  if (uci === n.m) return { kind: "main", san: m[1] };
+  if (n.wrong[uci]) return { kind: "fail", san: m[1], text: n.wrong[uci] };
+  if (n.also[uci]) return { kind: "alt", san: m[1], text: n.also[uci] };
+  if (m[3]) return { kind: "alt", san: m[1], text: m[2] <= 15 ? "The engine rates it as highly as the main move." : `Sound: the engine rates it only ${(m[2] / 100).toFixed(1)} pawns below its top choice.` };
+  return { kind: "fail", san: m[1], text: m[4] || `This hands ${OPP} the initiative.` };
+}
+function playerMove(uci) {
+  if (phase !== "black") return;
+  const v = judge(uci);
+  if (!v) return;
+  if (frames.length && fi < frames.length - 1) { hist = hist.slice(0, frames[fi].h); frames = frames.slice(0, fi + 1); }
+  const n = N[cur], id = cur, no = moveNo(id);
+  sel = null;
+  if (lesson && lesson.phase === "walk" && v.kind !== "main") {
+    setCard("alt", `<div class="head"><span class="tag alt">Walkthrough</span></div><p class="text">In the walkthrough, play the green arrow: <b>${lmNo(no, n.s)}</b>. The test comes next.</p><p class="sub">${esc(n.why)}</p>`);
+    draw(); return;
+  }
+  const r = rec(id);
+  if (v.kind === "fail") {
+    r.bad++; r.streak = 0; r.last = "bad"; r.t = Date.now(); r.wrong = r.wrong || {}; r.wrong[v.san] = (r.wrong[v.san] || 0) + 1;
+    save();
+    phase = "fail"; streak = 0;
+    if (lesson) lesson.misses.push(id);
+    hist.push({ san: v.san, side: ME, no, cls: "me x" });
+    arrowsNow = [[uci, "red"], [n.m, "green"]]; lastMove = [];
+    setState("Not this one", "fail");
+    setCard("fail", `<div class="head"><span class="tag fail">Wrong</span><span class="mvname">${lmNo(no, v.san)}</span></div>
+      <p class="text">${esc(v.text)}</p>
+      <div class="plan"><span class="lbl">The move to learn: <span class="mvname" style="font-size:14px;color:var(--pass)">${lmNo(no, n.s)}</span></span>
+      <div class="head">${pchip(n.p)}</div><p class="text">${esc(n.why)}</p></div>
+      <p class="sub">Saved to your notebook. ${review ? "It stays in Review until you get it right." : "Review will bring it back."}</p>
+      <div class="controls"><button class="btn" id="bBack">← Take back and retry</button></div>${contrastHtml(id)}`);
+    wireCard();
+    $("bNext").textContent = review ? "Next position" : "Next line";
+    pushFrame("view", { phase: "fail" });
+    renderMoves(); draw(); tally(); refreshPanels(); return;
+  }
+  if (!(lesson && lesson.phase === "walk")) {
+    if (!hintShown) { r.ok++; r.streak++; r.last = "ok"; r.t = Date.now(); }
+    streak++; S.best = Math.max(S.best, streak);
+    if (lesson && lesson.phase === "test" && !hintShown && lessonSets[lesson.li].has(id)) lesson.got.add(id);
+  }
+  save();
+  let from = cur, note = "", via = null;
+  if (v.kind === "main") {
+    showStruct(n.st, n.sai);
+    hist.push({ san: v.san, side: ME, no, cls: "me" });
+    pos = applyMove(pos, uci);
+    lastMove = [uci.slice(0, 2), uci.slice(2, 4)];
+    if (!(lesson && lesson.phase === "walk")) {
+      setState("Right", "pass");
+      setCard("pass", `<div class="head"><span class="tag pass">Right</span><span class="mvname">${lmNo(no, v.san)}</span>${pchip(n.p)}</div><p class="text">${esc(n.why)}</p>${contrastHtml(id)}`);
+      wireTwins();
+    }
+  } else {
+    const tr = DATA.posts[epdAfter(n.fen, uci)];
+    if (tr !== undefined && tr !== cur && N[tr].next.length && (!scope || scope.has(tr))) {
+      from = tr; hist.push({ san: v.san, side: ME, no, cls: "me a" });
+      pos = applyMove(pos, uci); lastMove = [uci.slice(0, 2), uci.slice(2, 4)];
+      note = `<p class="sub">It transposes to a line in the repertoire, so we carry on from there.</p>`;
+    } else if ((via = ((n.tr || {})[uci] || []).find(t => !scope || scope.has(t[2])))) {
+      hist.push({ san: v.san, side: ME, no, cls: "me a" });
+      pos = applyMove(pos, uci); lastMove = [uci.slice(0, 2), uci.slice(2, 4)];
+      note = `<p class="sub">${OPP} can bring this back into your repertoire with ${esc(via[1])}, so we follow that line.</p>`;
+    } else {
+      hist.push({ san: n.s, side: ME, no, cls: "me" });
+      pos = applyMove(parseFen(n.fen), n.m); lastMove = [n.m.slice(0, 2), n.m.slice(2, 4)];
+      note = `<p class="sub">We continue with the move to learn, <b>${lmNo(no, n.s)}</b>: ${esc(n.why)}</p>`;
+    }
+    setState("Playable", "alt");
+    setCard("alt", `<div class="head"><span class="tag alt">Playable</span><span class="mvname">${lmNo(no, v.san)}</span></div><p class="text">${esc(v.text)}</p>${note}`);
+  }
+  arrowsNow = [];
+  if (via) pushFrame("view", { phase: "white" });
+  else pushFrame("white", { wmOf: from, resume: from });
+  tally(); renderMoves(); draw(); refreshBar();
+  continueFrom(from, via);
+}
+function continueFrom(from, via) {
+  if (from === "root") {
+    let edges = DATA.roots.filter(e => filter === "all" || (filter === "other" ? !FIRST[e[0]] : e[0] === filter));
+    return playWhite(edges.length ? edges : DATA.roots, 0);
+  }
+  if (via) return playWhite([[via[0], via[1], 1, "A transposition: this reaches a position from your repertoire.", via[2]]], path.length);
+  const all = N[from].next, edges = inScope(all);
+  if (!all.length) return finishLine(from, null);
+  if (!edges.length) return finishLine(from, all);
+  playWhite(edges, path.length);
+}
+function finishLine(i, exits) {
+  phase = "done"; S.lines++; save();
+  const n = N[i];
+  let extra;
+  if (exits) {
+    const names = [...new Set(exits.map(e => nodeLesson[e[4]]).filter(x => x !== undefined && (!lesson || x !== lesson.li)))].map(x => `<b>${esc(L[x].title)}</b>`);
+    extra = `<div class="plan"><span class="lbl">From here</span><p class="text">${OPP} now picks a system${names.length ? ": " + names.join(", ") : ""}. ${names.length ? "Each has its own lesson." : ""}</p></div>`;
+  } else extra = `<div class="plan"><span class="lbl">Your plan from here</span><p class="text">${esc(n.plan || "")}</p></div>`;
+  const cls = $("card").className.includes("alt") ? "alt" : "done";
+  $("card").className = "card " + cls;
+  $("card").innerHTML = $("card").innerHTML.replace('class="tag pass">Right', 'class="tag done">Line complete') + extra;
+  setState("Line complete", "pass");
+  if (lesson && lesson.phase === "walk") {
+    S.les[L[lesson.li].id] = Object.assign(S.les[L[lesson.li].id] || {}, { walk: true }); save();
+    $("card").innerHTML = `<div class="head"><span class="tag done">Walkthrough done</span></div><p class="text">That's the main line of <b>${esc(L[lesson.li].title)}</b>.</p>${extra}<p class="sub">Now the test: ${OPP} will vary its moves until you've answered every position in this lesson.</p>`;
+    $("bNext").textContent = "Start the test";
+  } else if (lesson && lesson.phase === "test" && lesson.got.size >= lessonSets[lesson.li].size) {
+    return lessonDone();
+  } else $("bNext").textContent = review ? "Next position" : "Next line";
+  const f = frames[fi];
+  if (f && f.kind === "white" && !(lesson && lesson.phase === "walk")) {
+    phase = "whatif"; wiPar = f.wmOf;
+    $("card").insertAdjacentHTML("beforeend", `<p class="sub">Want to take this line further? Play a ${OPP} move on the board: if it's in your repertoire the line continues, if not it's saved for Claude to add.</p>`);
+    draw();
+  }
+  if (f) { f.resume = undefined; snapFrame(); }
+  wireCard(); tally(); refreshPanels();
+}
+
+/* ---------- lessons ---------- */
+function mastery(li) {
+  const ids = L[li].nodes; let s = 0, b = 0;
+  ids.forEach(i => { const r = recOf(i); if (r?.last === "ok") s++; else if (r?.last === "bad") b++; });
+  return { s, b, t: ids.length };
+}
+function recommended() {
+  const i = L.findIndex(l => !S.les[l.id]?.done);
+  if (i >= 0) return i;
+  let best = 0, bv = 2;
+  L.forEach((l, li) => { const m = mastery(li), v = m.s / m.t - m.b / m.t; if (v < bv) { bv = v; best = li; } });
+  return best;
+}
+function showLessonList() {
+  lesson = null; scope = null; review = null; phase = "idle";
+  $("lessonbar").hidden = true;
+  const ri = recommended();
+  const l0 = L[ri];
+  const st = N[l0.starts[0]];
+  resetLine(); pos = parseFen(st.fen); hist = histFromPre(st.pre); lastMove = st.lu ? [st.lu.slice(0, 2), st.lu.slice(2, 4)] : [];
+  $("idea").innerHTML = `<span class="who">Lesson preview</span><span>${esc(l0.idea)}</span>`;
+  setState("Pick a lesson");
+  const groups = [...new Set(L.map(l => l.group))];
+  const rows = groups.map(g => `<div class="lgroup"><span class="gname">${esc(g)}</span>` + L.map((l, li) => {
+    if (l.group !== g) return "";
+    const m = mastery(li), done = S.les[l.id]?.done;
+    const status = m.b ? `<span class="st fix">${m.b} to fix</span>` : done ? `<span class="st done">done</span>` : "";
+    return `<div class="lrow${li === ri ? " rec" : ""}"><span class="nm">${esc(l.title)}</span>
+      <span class="meta"><span class="mini"><i style="width:${100 * m.s / m.t}%"></i></span>${m.s}/${m.t} solid ${status}</span>
+      <button class="btn${li === ri ? " primary" : ""}" data-li="${li}">${done ? "Redo" : m.s ? "Continue" : "Start"}</button></div>`;
+  }).join("") + `</div>`).join("");
+  setCard("", `<div class="recbox"><span class="lbl">Suggested next</span><h3>${esc(l0.title)}</h3><p class="sub">${esc(l0.plan)}</p>
+    <div class="controls"><button class="btn primary" data-li="${ri}">Start this lesson</button></div></div><div class="llist">${rows}</div>`);
+  $("card").querySelectorAll("[data-li]").forEach(b => b.onclick = () => openLesson(+b.dataset.li));
+  syncControls(); renderMoves(); draw();
+}
+function openLesson(li) {
+  lesson = { li, phase: "intro", got: new Set(), misses: [] };
+  scope = lessonSets[li]; review = null;
+  const l = L[li], st = N[l.starts[0]];
+  resetLine(); pos = parseFen(st.fen); hist = histFromPre(st.pre); lastMove = st.lu ? [st.lu.slice(0, 2), st.lu.slice(2, 4)] : [];
+  phase = "idle";
+  const principles = {};
+  l.nodes.forEach(i => principles[N[i].p] = (principles[N[i].p] || 0) + 1);
+  const top = Object.entries(principles).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([p]) => pchip(p)).join(" ");
+  $("idea").innerHTML = `<span class="who">${OPP}'s idea</span><span>${esc(l.idea)}</span>`;
+  setState(l.title);
+  setCard("done", `<div class="head"><span class="tag done">Lesson</span></div>
+    <p class="text"><b>Your plan.</b> ${esc(l.plan)}</p>
+    <div class="head">${top}</div>
+    <p class="sub">First a walkthrough of the main line with the reasons, then a test across all ${l.nodes.length} positions in this lesson. A miss ends the line and goes to your notebook.</p>
+    <div class="controls"><button class="btn primary" id="goWalk">Start the walkthrough</button><button class="btn" id="goTest">Skip to the test</button></div>`);
+  $("goWalk").onclick = () => { lesson.phase = "walk"; lessonLine(); };
+  $("goTest").onclick = () => { lesson.phase = "test"; lessonLine(); };
+  syncControls(); renderMoves(); draw(); refreshBar();
+}
+function lessonLine() {
+  const l = L[lesson.li];
+  let start;
+  if (lesson.phase === "walk") start = l.starts[0];
+  else {
+    const ws = l.starts.map(s => subtree(s).filter(x => scope.has(x)).reduce((a, x) => a + due(x), 0) + 0.01);
+    let x = Math.random() * ws.reduce((a, b) => a + b, 0); start = l.starts[l.starts.length - 1];
+    for (let i = 0; i < ws.length; i++) { x -= ws[i]; if (x <= 0) { start = l.starts[i]; break; } }
+  }
+  if (lesson.phase === "walk") forced = null;
+  startAt(start, `<span class="who">${esc(l.title)}</span><span>${esc(l.idea)}</span>`);
+  $("bNext").textContent = "Next line"; syncControls();
+}
+function lessonDone() {
+  const l = L[lesson.li];
+  S.les[l.id] = Object.assign(S.les[l.id] || {}, { done: true, walk: true, t: Date.now() }); save();
+  lesson.phase = "done"; phase = "done";
+  const miss = [...new Set(lesson.misses)];
+  const nx = recommended();
+  setState("Lesson complete", "pass");
+  setCard("done", `<div class="head"><span class="tag done">Lesson complete</span><span class="mvname">${esc(l.title)}</span></div>
+    <p class="text">You've answered all ${lessonSets[lesson.li].size} positions${miss.length ? `, with ${miss.length} miss${miss.length === 1 ? "" : "es"} along the way` : " without a miss"}.</p>
+    ${miss.length ? `<p class="sub">Those positions are in your notebook and in Review.</p>` : ""}
+    <div class="plan"><span class="lbl">Remember</span><p class="text">${esc(l.plan)}</p></div>
+    <div class="controls"><button class="btn primary" id="goNextL">Next lesson: ${esc(L[nx].title)}</button><button class="btn" id="goList">All lessons</button></div>`);
+  $("goNextL").onclick = () => openLesson(nx);
+  $("goList").onclick = showLessonList;
+  refreshBar(); refreshPanels(); syncControls();
+}
+function refreshBar() {
+  if (!lesson) { $("lessonbar").hidden = true; return; }
+  $("lessonbar").hidden = false;
+  const tot = lessonSets[lesson.li].size, got = lesson.got.size;
+  $("lbTitle").textContent = L[lesson.li].title;
+  $("lbPhase").textContent = lesson.phase === "walk" ? "walkthrough" : lesson.phase === "intro" ? "intro" : `${Math.min(got, tot)}/${tot} positions`;
+  $("lbFill").style.width = (lesson.phase === "test" || lesson.phase === "done" ? 100 * Math.min(got, tot) / tot : 0) + "%";
+}
+
+/* ---------- review ---------- */
+function reviewQueue() {
+  return N.map((n, i) => i).filter(i => recOf(i)?.last === "bad")
+    .sort((a, b) => (recOf(b).bad - recOf(a).bad) || (recOf(b).t - recOf(a).t));
+}
+function startReview(single) {
+  lesson = null; scope = null;
+  const q = single !== undefined ? [single] : reviewQueue();
+  review = { queue: q, single: single !== undefined };
+  $("lessonbar").hidden = true;
+  nextReview();
+}
+let lastReviewed = null;
+// pick at random, weighted to your most-missed positions, avoiding the lesson you just saw so each answer is real recall
+function pickReview(q) {
+  if (q.length < 2) return q;
+  const lastL = lastReviewed === null ? -1 : nodeLesson[lastReviewed];
+  const ws = q.map(i => i === lastReviewed ? 0 : (1 + recOf(i).bad) * (nodeLesson[i] === lastL ? 0.1 : 1));
+  let x = Math.random() * ws.reduce((a, b) => a + b, 0);
+  for (let k = 0; k < q.length; k++) { x -= ws[k]; if (x <= 0) return [q[k], ...q.filter((_, j) => j !== k)]; }
+  return q;
+}
+function nextReview() {
+  let q = review.single ? review.queue : pickReview(reviewQueue());
+  if (!q.length || (review.single && review.done && recOf(q[0])?.last !== "bad")) {
+    phase = "idle"; resetLine(); renderMoves(); draw();
+    setState(review.single ? "Done" : "Nothing to review", "pass");
+    setCard("done", `<p class="text">${review.single ? "That position is done." : "No missed positions right now. Lessons or free play will find new ones."}</p>
+      <div class="controls"><button class="btn primary" id="goL">Back to lessons</button></div>`);
+    $("goL").onclick = () => setMode("lessons");
+    syncControls(); return;
+  }
+  if (review.single) review.done = true;
+  const i = q[0], r = recOf(i);
+  lastReviewed = i;
+  const wrong = r && r.wrong ? Object.keys(r.wrong) : [];
+  startAt(i, `<span class="who">From your notebook</span><span>You missed this ${r?.bad || 1}×${wrong.length ? ` (you played ${wrong.map(w => (ME === "b" ? "…" : "") + esc(w)).join(", ")})` : ""}. What's the move here?</span>`);
+  setCard("", `<p class="sub">${q.length} position${q.length === 1 ? "" : "s"} to fix. Get this one right and the line continues from there.</p>`);
+  snapFrame();
+  $("bNext").textContent = "Next position"; syncControls();
+}
+
+/* ---------- modes & controls ---------- */
+function setMode(m) {
+  mode = m; markTabs();
+  $("filters").hidden = m !== "free" || ME !== "b";
+  $("ideasView").hidden = m !== "ideas";
+  document.querySelector(".trainer").hidden = m === "ideas";
+  if (m === "ideas") { lesson = null; scope = null; review = null; resetLine(); phase = "idle"; syncControls(); return; }
+  lesson = null; scope = null; review = null;
+  if (m === "lessons") showLessonList();
+  else if (m === "review") startReview();
+  else { $("lessonbar").hidden = true; startFromRoot(); }
+  syncControls();
+}
+function syncControls() {
+  $("bReplay").hidden = mode !== "free";
+  $("bLeave").hidden = !(mode === "lessons" && lesson);
+  $("bNext").hidden = (mode === "lessons" && (!lesson || lesson.phase === "intro" || lesson.phase === "done"));
+  $("bHint").hidden = !!(lesson && lesson.phase === "walk");
+  $("bPlan").hidden = mode === "lessons" && (!lesson || lesson.phase === "intro");
+}
+function next() {
+  if (mode === "free") return startFromRoot();
+  if (mode === "review") return nextReview();
+  if (lesson) {
+    if (lesson.phase === "walk" && phase === "done") lesson.phase = "test";
+    if (lesson.phase === "walk" || lesson.phase === "test") lessonLine();
+  }
+}
+let shownSt = null;
+function showStruct(id, idx) {
+  const el = $("struct");
+  if (!id || !DATA.structs[id]) { el.hidden = true; shownSt = null; return; }
+  const sig = id + ":" + (idx || []).join(",");
+  const changed = shownSt !== null && shownSt.split(":")[0] !== id, first = shownSt === null;
+  if (shownSt === sig) return;
+  const [name, desc, all] = DATA.structs[id];
+  const ideas = idx ? idx.map(i => all[i]) : all;
+  el.hidden = false;
+  el.innerHTML = `<div class="top"><span class="lbl">Structure</span><span class="nm">${esc(name)}</span>${changed ? `<span class="new">just changed</span>` : ""}</div>
+    <span class="d">${esc(desc)} Use that opening's ideas:</span><ul>${ideas.map(x => `<li>${esc(x)}</li>`).join("")}</ul>`;
+  if (changed || first) { el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash"); }
+  shownSt = sig;
+}
+function contrastHtml(i) {
+  const c = N[i].cmp || [];
+  if (!c.length) return "";
+  return c.slice(0, 2).map(([j, diff]) => `<div class="plan"><span class="lbl">Looks similar, different answer</span>
+    <p class="sub"><span class="mvname" style="font-size:13px">${esc(N[j].line)}</span>: there the move is <b>${lmNo(moveNo(j), N[j].s)}</b>.</p>
+    <p class="text">${esc(diff)}</p><div class="controls"><button class="btn" data-twin="${j}">Practice the twin</button></div></div>`).join("");
+}
+function wireTwins() {
+  $("card").querySelectorAll("[data-twin]").forEach(b => b.onclick = () => practiceNode(+b.dataset.twin));
+}
+function sanLine(sans) { return sans.map((x, i) => (i % 2 ? "" : (i / 2 + 1) + ".") + x).join(" "); }
+function whatIfMove(uci) {
+  const w = getWM().find(x => x[0] === uci);
+  if (!w) return;
+  const root = wiPar === "root", p = root ? null : N[wiPar], no = root ? 1 : moveNo(wiPar) + (ME === "b" ? 1 : 0);
+  hist = hist.slice(0, frames[fi].h); frames = frames.slice(0, fi + 1);   // branch off here
+  clearTimeout(whiteTimer);
+  if (w[2] >= 0) {
+    const t = w[2], li = nodeLesson[t];
+    let switched = "";
+    if (lesson && lesson.phase !== "walk") {
+      if (lessonSets[lesson.li].has(t)) scope = lessonSets[lesson.li];
+      else if (li !== undefined) {
+        lesson = { li, phase: "test", got: new Set(), misses: [] }; scope = lessonSets[li];
+        switched = ` It transposes into the lesson <b>${esc(L[li].title)}</b>, so you're now practising that one.`;
+        refreshBar();
+      } else scope = null;
+    } else scope = null;
+    hist.push({ san: w[1], side: OPPC, no });
+    cur = t; pos = parseFen(N[t].fen); lastMove = [uci.slice(0, 2), uci.slice(2, 4)];
+    $("idea").innerHTML = `<span class="who">You chose <b>${oppLbl(no, w[1])}</b></span><span>That's in your repertoire${li !== undefined ? ` (lesson: ${esc(L[li].title)})` : ""}.${switched || " Carry on from here."}</span>`;
+    setCard("", `<p class="sub">Find the move to learn after ${oppLbl(no, w[1])}.</p>`);
+    beginBlack();
+  } else {
+    const line = `[${DATA.name}] ` + sanLine(root ? [w[1]] : [...p.pre, p.s, w[1]]);
+    S.req = S.req || [];
+    if (!S.req.some(r => r.line === line)) { const r = { line, t: Date.now() }; S.req.push(r); pushReq(r); }
+    save();
+    pos = applyMove(pos, uci); lastMove = [uci.slice(0, 2), uci.slice(2, 4)];
+    hist.push({ san: w[1], side: OPPC, no }); phase = "done";
+    $("idea").innerHTML = `<span class="who">You chose <b>${oppLbl(no, w[1])}</b></span><span>Not in your repertoire yet.</span>`;
+    setState("Not covered yet", "alt");
+    setCard("alt", `<div class="head"><span class="tag alt">Saved</span><span class="mvname">${oppLbl(no, w[1])}</span></div>
+      <p class="text">This line isn't in your repertoire yet, so there's no move to learn here. It's saved under <b>Lines to investigate</b> in your notebook.</p>
+      <p class="sub">Next time you're in Claude Code, just ask Claude to add the lines you requested: it reads this list itself.</p>`);
+    pushFrame("view", { phase: "done" });
+    renderMoves(); draw(); refreshPanels();
+  }
+  syncControls();
+}
+// what the page knows about the position on the board
+function posNode() {
+  if (phase === "black" || phase === "fail") return { n: cur, black: true };
+  if (phase === "whatif" && wiPar !== null && wiPar !== "root") return { n: wiPar, black: false };
+  if (cur !== null) return { n: cur, black: false };
+  return null;
+}
+function heading(i) {   // follow the most common continuation to the end of the line
+  let x = i;
+  for (let k = 0; k < 12 && N[x].next.length; k++) x = N[x].next.reduce((a, b) => (b[2] > a[2] ? b : a))[4];
+  return x;
+}
+function plan() {
+  const pn = posNode(); if (!pn) return;
+  const n = N[pn.n], end = N[heading(pn.n)], li = nodeLesson[pn.n];
+  if (pn.black && phase === "black") hintShown = true;
+  const stId = pn.black ? n.stb : n.st, stIdx = pn.black ? n.sbi : n.sai;
+  const st = stId ? DATA.structs[stId] : null;
+  const white = $("idea").querySelector("span:not(.who)")?.textContent || "";
+  const parts = [];
+  if (white) parts.push(`<div class="plan"><span class="lbl">What ${OPP} is doing</span><p class="text">${esc(white)}</p></div>`);
+  if (st) parts.push(`<div class="plan"><span class="lbl">Your structure: ${esc(st[0])}</span><ul style="margin:0;padding-left:18px">${stIdx.map(k => `<li>${esc(st[2][k])}</li>`).join("")}</ul></div>`);
+  if (end && end.plan && end !== n) parts.push(`<div class="plan"><span class="lbl">Where the main line is heading</span><p class="text">${esc(end.plan)}</p></div>`);
+  else if (n.plan) parts.push(`<div class="plan"><span class="lbl">Your plan</span><p class="text">${esc(n.plan)}</p></div>`);
+  if (li !== undefined) parts.push(`<div class="plan"><span class="lbl">The big picture (${esc(L[li].title)})</span><p class="text">${esc(L[li].plan)}</p></div>`);
+  setCard("", `<div class="head"><span class="tag" style="background:var(--alt)">Plan here</span></div>${parts.join("") || `<p class="sub">No notes for this position yet.</p>`}
+    ${pn.black && phase === "black" ? `<p class="sub">You looked at the plan, so this answer won't count as solid.</p>` : ""}
+    <div class="controls" id="askRow" hidden><button class="btn primary" id="bAsk">Ask Claude about this position</button></div><div id="askOut" class="text" style="white-space:pre-wrap"></div>`);
+  if (sampleFn) { $("askRow").hidden = false; $("bAsk").onclick = () => askClaude(pn); }
+  wireCard();
+}
+let sampleFn = null;
+(async () => { try { if (window.claude?.use) sampleFn = await window.claude.use("sample"); } catch (e) {} })();
+function pieceList(side) {
+  const names = { k: "K", q: "Q", r: "R", b: "B", n: "N", p: "" };
+  const out = [];
+  for (const [sq, p] of Object.entries(pos)) if ((p === p.toUpperCase()) === (side === "w")) out.push(names[p.toLowerCase()] + sq);
+  const order = "KQRBN";
+  return out.sort((a, b) => (order.indexOf(a[0]) + 1 || 9) - (order.indexOf(b[0]) + 1 || 9)).join(", ");
+}
+async function askClaude(pn) {
+  const n = N[pn.n], out = $("askOut"), btn = $("bAsk");
+  btn.disabled = true; out.textContent = "Thinking…";
+  const sans = hist.slice(0, frames.length ? frames[fi].h : hist.length).map(h => h.san);
+  const stId = pn.black ? n.stb : n.st, st = stId ? DATA.structs[stId] : null, stIdx = pn.black ? n.sbi : n.sai;
+  const facts = [
+    `Moves so far: ${sanLine(sans)}`,
+    `Side to move: ${pn.black ? MEN : OPP} (the learner plays ${MEN}).`,
+    `White pieces: ${pieceList("w")}`, `Black pieces: ${pieceList("b")}`,
+  ];
+  if (pn.black) {
+    const top = n.mv.slice().sort((a, b) => a[2] - b[2]).slice(0, 4).map(m => `${m[1]} (${m[2] === 0 ? "best" : "-" + (m[2] / 100).toFixed(1)})`).join(", ");
+    facts.push(`Repertoire move for ${MEN} here: ${n.s}. Reason given: ${n.why}`, `Engine's top moves for ${MEN} (pawns lost vs best): ${top}`);
+  } else {
+    facts.push(`${MEN}'s last move in the repertoire: ${n.s}. Reason given: ${n.why}`);
+    const reps = n.next.map(e => `${e[1]} (${Math.round(e[2])}% at 1800-2000)`).join(", ");
+    if (reps) facts.push(`${OPP}'s common replies here: ${reps}`);
+  }
+  if (st) facts.push(`Pawn structure family: ${st[0]}. Notes: ${stIdx.map(k => st[2][k]).join(" ")}`);
+  const prompt = `You are a chess coach helping a 1900-rated club player who plays the ${DATA.name} (${DATA.blurb}) and wants to understand plans, not memorise lines.
+
+Position facts (trust these exactly; they come from the board and Stockfish):
+${facts.join("\n")}
+
+Explain, in at most 170 words of plain English, the plan for ${MEN} in this position and the positional considerations to keep in mind: which pawn breaks matter, where the pieces belong, what ${OPP} is aiming for and how to counter it. Rules: only name squares and pieces that match the piece lists above; do not claim a piece is attacked, defended, loose or trapped unless it is certain from the lists; keep any concrete line to at most 3 moves; write "White" or "Black" rather than he/she. If ${MEN} is to move, do not give away the repertoire move directly: describe the idea instead. No headings or bullet symbols; two or three short paragraphs.`;
+  try {
+    const r = await sampleFn(prompt, { onText: ({ text }) => { out.textContent = text; } });
+    out.textContent = r.text;
+  } catch (e) {
+    out.textContent = e && e.text ? e.text : (e && e.code === "not_granted" ? "Asking Claude isn't allowed on this page for you." : e && e.code === "rate_limited" ? "Too many questions right now; try again in a minute." : "Claude couldn't answer right now.");
+  }
+  btn.disabled = false;
+}
+function hint() {
+  if (phase !== "black" || (lesson && lesson.phase === "walk")) return;
+  hintShown = true;
+  const n = N[cur];
+  setCard("", `<div class="head"><span class="tag" style="background:var(--hint)">Hint</span>${pchip(n.p)}</div><p class="sub">${esc(P[n.p] ? P[n.p][1] : "")}</p><p class="sub">A hinted answer doesn't count as solid.</p>`);
+}
+$("bNext").onclick = next;
+$("bHint").onclick = hint;
+$("bReplay").onclick = () => startFromRoot(true);
+$("bLeave").onclick = showLessonList;
+$("bPlan").onclick = plan;
+document.querySelectorAll(".tab").forEach(t => t.onclick = () => setMode(t.dataset.mode));
+document.addEventListener("keydown", ev => {
+  if (ev.target.closest("input, textarea")) return;
+  const k = ev.key.toLowerCase();
+  if (window.SECTION !== "opening" || mode === "ideas") return;
+  if (ev.key === "ArrowRight") { ev.preventDefault(); forward(); }
+  else if (ev.key === "ArrowLeft") { ev.preventDefault(); back(); }
+  else if ((ev.key === "ArrowDown" || k === "n") && !$("bNext").hidden) { ev.preventDefault(); next(); }
+  else if (k === "h") hint();
+  else if (k === "p") plan();
+});
+
+/* ---------- input ---------- */
+function sqAt(ev) {
+  const r = $("board").getBoundingClientRect();
+  const col = Math.floor((ev.clientX - r.left) / r.width * 8), row = Math.floor((ev.clientY - r.top) / r.height * 8);
+  return col < 0 || col > 7 || row < 0 || row > 7 ? null : sqOf(col, row);
+}
+function tryMove(from, to) {
+  if (!from || !to || from === to) return false;
+  const cand = legalList().filter(u => u.slice(0, 4) === from + to);
+  if (!cand.length) return false;
+  const u = cand.find(x => x.length === 4 || x[4] === "q") || cand[0];
+  sel = null;
+  if (phase === "whatif") whatIfMove(u); else playerMove(u);
+  return true;
+}
+$("board").addEventListener("pointerdown", ev => {
+  if (phase !== "black" && phase !== "whatif") return;
+  const sq = sqAt(ev); if (!sq) return;
+  const p = pos[sq], mine = x => phase === "black" ? isMine(x) : !isMine(x);
+  if (sel && sel !== sq && legalList().some(u => u.startsWith(sel + sq))) { tryMove(sel, sq); return; }
+  if (p && mine(p)) { sel = sq; drag = { from: sq, moved: false, x: ev.clientX, y: ev.clientY }; $("board").setPointerCapture(ev.pointerId); draw(); }
+  else { sel = null; draw(); }
+});
+$("board").addEventListener("pointermove", ev => {
+  if (!drag) return;
+  if (!drag.moved && Math.hypot(ev.clientX - drag.x, ev.clientY - drag.y) < 6) return;
+  const r = $("board").getBoundingClientRect();
+  if (!drag.moved) { drag.moved = true; draw(); }
+  let g = document.querySelector(".ghost");
+  if (!g) { const pc = pos[drag.from]; g = document.createElement("span"); g.className = "pc ghost " + (pc === pc.toUpperCase() ? "w" : "b") + pc.toUpperCase(); $("board").appendChild(g); }
+  g.style.left = (ev.clientX - r.left) + "px"; g.style.top = (ev.clientY - r.top) + "px";
+});
+$("board").addEventListener("pointerup", ev => {
+  if (!drag) return;
+  const d = drag; drag = null; document.querySelector(".ghost")?.remove();
+  if (d.moved && !tryMove(d.from, sqAt(ev))) draw();
+});
+$("board").addEventListener("pointercancel", () => { drag = null; document.querySelector(".ghost")?.remove(); draw(); });
+
+/* ---------- panels ---------- */
+function renderFilters() {
+  const groups = [["all", "All"], ["e2e4", "1.e4"], ["d2d4", "1.d4"], ["c2c4", "1.c4"], ["g1f3", "1.Nf3"], ["other", "Other"]];
+  const share = k => DATA.roots.filter(e => k === "all" || (k === "other" ? !FIRST[e[0]] : e[0] === k)).reduce((s, e) => s + e[2], 0);
+  $("filters").innerHTML = `<span class="lbl">White opens with</span>` + groups.map(([k, l]) =>
+    `<button class="chip" data-k="${k}" aria-pressed="${filter === k}">${l}${k === "all" ? "" : `<span class="pct">${Math.round(share(k))}%</span>`}</button>`).join("");
+  $("filters").querySelectorAll(".chip").forEach(b => b.onclick = () => {
+    filter = b.dataset.k; try { localStorage.setItem(STORE + ":filter", filter); } catch (e) {}
+    renderFilters(); lastPath = null; startFromRoot();
+  });
+}
+function renderNotebook() {
+  const q = reviewQueue();
+  $("revCount").hidden = !q.length; $("revCount").textContent = q.length;
+  const byP = {};
+  N.forEach((n, i) => { const r = recOf(i); if (r?.last === "bad") (byP[n.p] = byP[n.p] || []).push(i); });
+  const ideas = Object.entries(byP).sort((a, b) => b[1].length - a[1].length);
+  $("nbIdeas").innerHTML = ideas.length ? ideas.map(([p, ids]) => `<div class="idea-c"><div class="t"><h3>${esc(P[p]?.[0] || p)}</h3><span class="n">${ids.length} to fix</span></div><p>${esc(P[p]?.[1] || "")}</p></div>`).join("")
+    : `<div class="empty">Nothing yet. The principles behind the moves you miss will collect here.</div>`;
+  $("misses").innerHTML = q.length ? q.slice(0, 40).map(i => {
+    const n = N[i], r = recOf(i), no = moveNo(i);
+    const w = Object.entries(r.wrong || {}).sort((a, b) => b[1] - a[1]).map(([s, c]) => `${ME === "b" ? "…" : ""}${esc(s)}${c > 1 ? ` (${c}×)` : ""}`).join(", ");
+    return `<div class="miss"><span class="ln">${esc(n.line)}</span>
+      <span class="what">${w ? `<span>You played <span class="bad">${w}</span></span>` : ""}<span>Learn <span class="good">${lmNo(no, n.s)}</span></span>${pchip(n.p)}</span>
+      <button class="btn" data-i="${i}">Practice</button></div>`;
+  }).join("") : `<div class="empty">No missed positions. When you miss one, it shows up here with what you played and the move to learn.</div>`;
+  $("misses").querySelectorAll("[data-i]").forEach(b => b.onclick = () => practiceNode(+b.dataset.i));
+}
+function renderReqs() {
+  const rq = S.req || [];
+  $("reqs").innerHTML = rq.length ? rq.map((r, i) => `<div class="miss"><span class="ln">${esc(r.line)}</span><span class="what">waiting for analysis</span><button class="btn" data-rm="${i}">Remove</button></div>`).join("") +
+    `<div class="controls"><button class="btn" id="bCopyReq">Copy the list</button><span class="tiny" id="copyMsg"></span></div>`
+    : `<div class="empty">Nothing yet. Step back with ← to ${OPP}'s turn and play a ${OPP} move; if it isn't covered, it lands here.</div>`;
+  $("reqs").querySelectorAll("[data-rm]").forEach(b => b.onclick = () => {
+    const [r] = S.req.splice(+b.dataset.rm, 1); save(); renderReqs();
+    if (sharedDb && r) sharedDb.doc("requests/" + reqId(r.line)).delete().catch(() => {});
+  });
+  const cb = $("bCopyReq");
+  if (cb) cb.onclick = () => {
+    const txt = "Please analyse these lines for my Modern Defence trainer and add them to the repertoire (trainer/rep/USER.py):\n" + rq.map(r => "- " + r.line).join("\n");
+    navigator.clipboard.writeText(txt).then(() => { $("copyMsg").textContent = "Copied."; })
+      .catch(() => { $("copyMsg").textContent = "Couldn't copy automatically; select the lines above instead."; });
+  };
+}
+function renderPrinciples() {
+  const by = {};
+  N.forEach((n, i) => (by[n.p] = by[n.p] || []).push(i));
+  $("plist").innerHTML = Object.entries(P).map(([k, [t, rule]]) => {
+    const ids = by[k] || [];
+    const ok = ids.reduce((s, x) => s + (recOf(x)?.ok || 0), 0), bad = ids.reduce((s, x) => s + (recOf(x)?.bad || 0), 0);
+    return { t, rule, n: ids.length, ok, bad, ex: ids.length ? `${N[ids[0]].line} ${N[ids[0]].s}` : "" };
+  }).sort((a, b) => b.n - a.n).map(r => `<div class="pr"><div class="t"><h3>${esc(r.t)}</h3><span class="rec">${r.ok} ✓ · <span class="${r.bad ? "bad" : ""}">${r.bad} ✗</span></span></div>
+    <p>${esc(r.rule)}</p><span class="ex">${r.n} position${r.n === 1 ? "" : "s"} · e.g. ${esc(r.ex)}</span></div>`).join("");
+}
+function miniBoard(fen, uci) {
+  const pos = parseFen(fen); let html = "";
+  for (let row = 0; row < 8; row++) for (let col = 0; col < 8; col++) {
+    const sq = sqOf(col, row), f = FILES.indexOf(sq[0]), r = +sq[1], p = pos[sq];
+    html += `<div class="sq ${(f + r) % 2 === 1 ? "l" : "d"}">${p ? `<span class="pc ${p === p.toUpperCase() ? "w" : "b"}${p.toUpperCase()}"></span>` : ""}</div>`;
+  }
+  return `<div class="board mini" role="img" aria-label="Example position"><div class="squares">${html}</div><svg class="arrows" viewBox="0 0 8 8" preserveAspectRatio="none">${ARROW_DEFS}${arrowPath(uci, "green")}</svg></div>`;
+}
+function renderIdeas() {
+  const groups = [...new Set(DATA.ideas.map(x => x.group))];
+  $("ideas2").innerHTML = groups.map(g => `<div class="igroup"><h2>${esc(g)}</h2>` + DATA.ideas.filter(x => x.group === g).map(it => {
+    const first = it.ex[0];
+    return `<div class="icard"><div class="txt"><h3>${esc(it.title)}</h3><p class="sig"><b>When</b>${esc(it.signal)}</p>
+      ${it.body.map(p => `<p>${esc(p)}</p>`).join("")}
+      <div class="exs">${it.ex.map(i => `<div class="ex"><span class="ln">${esc(N[i].line)} <b>${lmNo(moveNo(i), N[i].s)}</b></span><button class="btn" data-practice="${i}">Practice</button></div>`).join("")}</div></div>
+      ${first !== undefined ? `<div>${miniBoard(N[first].fen, N[first].m)}<p class="minicap">${lmNo(moveNo(first), N[first].s)} in the first example</p></div>` : ""}</div>`;
+  }).join("") + `</div>`).join("");
+  const order = N.map((n, i) => i).sort((a, b) => moveNo(a) - moveNo(b));
+  $("ideas2").innerHTML += `<div class="igroup"><h2>Pawn structures you'll reach</h2><p class="lede">When a line turns into one of these, the strip under the board names it. Borrow the ideas of the opening it comes from.</p>` +
+    Object.entries(DATA.structs).map(([id, [name, desc, ideas]]) => {
+      const ex = order.filter(i => N[i].stb === id).slice(0, 3);
+      const first = ex[0];
+      return `<div class="icard"><div class="txt"><h3>${esc(name)}</h3><p class="sig"><b>When</b>${esc(desc)}</p>
+        <ul style="margin:0;padding-left:18px;display:grid;gap:4px">${ideas.map(x => `<li>${esc(x)}</li>`).join("")}</ul>
+        <div class="exs">${ex.map(i => `<div class="ex"><span class="ln">${esc(N[i].line)} <b>${lmNo(moveNo(i), N[i].s)}</b></span><button class="btn" data-practice="${i}">Practice</button></div>`).join("")}</div></div>
+        ${first !== undefined ? `<div>${miniBoard(N[first].fen, N[first].m)}<p class="minicap">${lmNo(moveNo(first), N[first].s)} in the first example</p></div>` : ""}</div>`;
+    }).join("") + `</div>`;
+  $("ideas2").querySelectorAll("[data-practice]").forEach(b => b.onclick = () => practiceNode(+b.dataset.practice));
+}
+function practiceNode(i) {
+  mode = "review"; markTabs();
+  $("filters").hidden = true; $("ideasView").hidden = true; document.querySelector(".trainer").hidden = false;
+  startReview(i);
+  $("board").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" });
+}
+function markTabs() { ["lessons", "review", "free", "ideas"].forEach(x => $("t" + x[0].toUpperCase() + x.slice(1)).setAttribute("aria-selected", x === mode)); }
+function refreshPanels() { renderNotebook(); renderReqs(); renderPrinciples(); tally(); }
+let resetArmed = false;
+$("bReset").onclick = () => {
+  if (!resetArmed) { resetArmed = true; $("bReset").textContent = "Click again to erase all progress"; return; }
+  S = { n: {}, les: {}, lines: 0, best: 0 }; save(); resetArmed = false; streak = 0;
+  $("bReset").textContent = "Progress erased"; refreshPanels(); setMode(mode);
+};
+new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+function openOpening(d, sub) {
+  useOpening(d);
+  renderFilters(); refreshPanels(); renderIdeas();
+  $("struct").hidden = true;
+  setMode(["lessons", "review", "free", "ideas"].includes(sub) ? sub : "lessons");
+}
+
+
+/* ================= puzzles ================= */
+// data: GYM.puzzles = [[lichessId, fen, "uci uci …", rating, "theme theme"], …] sorted by rating.
+// The first move in each solution is the opponent's; the solver plays every other move after it.
+const PZ_BANDS = [[200, 400], [400, 600], [600, 800], [800, 1000], [1000, 1200], [1200, 1400], [1400, 1600], [1600, 1800],
+                  [1800, 2000], [2000, 2200], [2200, 2400], [2400, 2600]];
+const THEME = {
+  mateIn1: "Mate in 1", mateIn2: "Mate in 2", mateIn3: "Mate in 3", mateIn4: "Mate in 4", mate: "Checkmate",
+  backRankMate: "Back-rank mate", smotheredMate: "Smothered mate", anastasiaMate: "Anastasia's mate", arabianMate: "Arabian mate",
+  bodenMate: "Boden's mate", doubleBishopMate: "Two-bishop mate", dovetailMate: "Dovetail mate", hookMate: "Hook mate",
+  fork: "Fork", pin: "Pin", skewer: "Skewer", hangingPiece: "Hanging piece", trappedPiece: "Trapped piece",
+  discoveredAttack: "Discovered attack", doubleCheck: "Double check", deflection: "Deflection", attraction: "Attraction",
+  clearance: "Clearance", interference: "Interference", sacrifice: "Sacrifice", promotion: "Promotion", underPromotion: "Under-promotion",
+  advancedPawn: "Advanced pawn", exposedKing: "Exposed king", kingsideAttack: "Kingside attack", quietMove: "Quiet move",
+  defensiveMove: "Defensive move", giveCheck: "Give check", saveQueen: "Save the queen", savePiece: "Save your piece", xRayAttack: "X-ray", zugzwang: "Zugzwang", capturingDefender: "Remove the defender",
+  intermezzo: "In-between move", enPassant: "En passant", castling: "Castling",
+  endgame: "Endgame", rookEndgame: "Rook endgame", pawnEndgame: "Pawn endgame", queenEndgame: "Queen endgame",
+  opening: "Opening", middlegame: "Middlegame", crushing: "Winning", advantage: "Advantage", equality: "Saving the game",
+};
+let pzCur = null, pzGame = null, pzIdx = 0, pzOrient = "w", pzSel = null, pzLast = [], pzArrows = [], pzState = "idle";
+let pzStage = null;
+let pzHinted = false, pzFailed = false, pzScored = false, pzDrag = null, pzTimer = null, pzMarks = {};
+
+/* ---- "why is it mate?": which pieces take away each square around the mated king ---- */
+const PNAME = { k: "king", q: "queen", r: "rook", b: "bishop", n: "knight", p: "pawn" };
+function colorOf(p) { return p === p.toUpperCase() ? "w" : "b"; }
+function attacksSq(pos, from, to) {
+  const p = pos[from], t = p.toLowerCase();
+  const fx = FILES.indexOf(from[0]), fy = +from[1], tx = FILES.indexOf(to[0]), ty = +to[1], dx = tx - fx, dy = ty - fy;
+  if (!dx && !dy) return false;
+  if (t === "p") return Math.abs(dx) === 1 && dy === (colorOf(p) === "w" ? 1 : -1);
+  if (t === "n") return (Math.abs(dx) === 1 && Math.abs(dy) === 2) || (Math.abs(dx) === 2 && Math.abs(dy) === 1);
+  if (t === "k") return Math.abs(dx) <= 1 && Math.abs(dy) <= 1;
+  const straight = !dx || !dy, diag = Math.abs(dx) === Math.abs(dy);
+  if ((t === "r" && !straight) || (t === "b" && !diag) || (t === "q" && !straight && !diag)) return false;
+  const sx = Math.sign(dx), sy = Math.sign(dy);
+  for (let x = fx + sx, y = fy + sy; x !== tx || y !== ty; x += sx, y += sy) if (pos[FILES[x] + y]) return false;
+  return true;
+}
+function attackersOf(pos, sq, color) { return Object.keys(pos).filter(f => colorOf(pos[f]) === color && attacksSq(pos, f, sq)); }
+// after a wrong answer in a mate puzzle: where the king gets out, and which pieces can take or block
+function escapes() {
+  const ms = pzGame.moves({ verbose: true }), check = pzGame.in_check();
+  const seen = new Set(), kings = ms.filter(m => m.piece === "k" && !seen.has(m.to) && seen.add(m.to));
+  const saves = check ? ms.filter(m => m.piece !== "k").slice(0, 3) : [];
+  const marks = {}, arrows = [];
+  kings.forEach(m => { marks[m.to] = "esc:" + arrows.length; arrows.push([m.from + m.to, "escape"]); });
+  saves.forEach(m => arrows.push([m.from + m.to, "green"]));
+  const them = pzGame.turn() === "w" ? "White" : "Black", to = kings.map(m => m.to).join(", ");
+  let text;
+  if (check) text = `Not checkmate: ${to ? `the ${them.toLowerCase()} king escapes to ${to}` : "the king can't move, but"}${saves.length ? `${to ? ", or" : ""} the ${PNAME[saves[0].piece]} on ${saves[0].from} ${saves[0].captured ? "takes" : "blocks on"} ${saves[0].to}` : ""}.`;
+  else text = `That isn't even check${to ? `: the ${them.toLowerCase()} king can simply walk to ${to}` : ""}.`;
+  return { marks, arrows, text };
+}
+function whyMate() {
+  const pos = parseFen(pzGame.fen()), loser = pzGame.turn(), win = loser === "w" ? "b" : "w";
+  const ksq = Object.keys(pos).find(q => pos[q] === (loser === "w" ? "K" : "k"));
+  const noK = { ...pos }; delete noK[ksq];
+  const checkers = attackersOf(pos, ksq, win);
+  const marks = { [ksq]: "mk" }, arrows = checkers.map(a => [a + ksq, "red"]), covers = {}, own = [];
+  const kx = FILES.indexOf(ksq[0]), ky = +ksq[1];
+  for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
+    const x = kx + dx, y = ky + dy;
+    if ((!dx && !dy) || x < 0 || x > 7 || y < 1 || y > 8) continue;
+    const q = FILES[x] + y;
+    if (pos[q] && colorOf(pos[q]) === loser) { own.push(q); marks[q] = "mo"; continue; }
+    const at = attackersOf(noK, q, win);
+    if (!at.length) continue;
+    const a = at.find(z => checkers.includes(z)) || at[0];     // fewer arrows: prefer the checking piece
+    (covers[a] = covers[a] || []).push(q); marks[q] = "mx:" + arrows.length;   // same delay as its arrow
+    const sameLine = checkers.includes(a) && (() => {      // a checker covering a square on its own line: the × says enough
+      const ax = FILES.indexOf(a[0]), ay = +a[1];
+      return Math.sign(x - ax) === Math.sign(kx - ax) && Math.sign(y - ay) === Math.sign(ky - ay) &&
+             (x - ax) * (ky - ay) === (y - ay) * (kx - ax);
+    })();
+    if (!sameLine) arrows.push([a + q, "cover"]);
+  }
+  const side = win === "w" ? "White" : "Black", them = loser === "w" ? "White" : "Black";
+  const who = sq => `The ${side === "White" ? "white" : "black"} ${PNAME[pos[sq].toLowerCase()]} on ${sq}`;
+  const lines = [];
+  for (const c of checkers) lines.push(`${who(c)} gives check${covers[c] ? ` and covers ${covers[c].join(", ")}` : ""}.`);
+  for (const [a, sqs] of Object.entries(covers)) if (!checkers.includes(a)) lines.push(`${who(a)} covers ${sqs.join(", ")}.`);
+  if (own.length) lines.push(`${own.join(", ")}: ${own.length === 1 ? "that square is" : "those squares are"} blocked by ${them}'s own pieces.`);
+  lines.push(`The king has nowhere to go, and nothing can take the checking piece or block the check, so it's checkmate.`);
+  return { marks, arrows, lines };
+}
+
+function pzPlayers() {
+  S.players = S.players || {};
+  if (!Object.keys(S.players).length) {
+    S.players.me = { name: "You", rating: 2147, n: 0, done: {}, mode: "adaptive", level: 8, goal: false, hist: [] };
+    S.player = "me"; S.pzv = 4;
+  }
+  if ((S.pzv || 0) < 2) {    // v2 added the 200-400 band in front: shift stored levels, start the Son profile at 200
+    for (const p of Object.values(S.players)) if (typeof p.level === "number") p.level += 1;
+    if (S.players.son) { S.players.son.rating = 200; S.players.son.level = 0; S.players.son.n = 0; }
+    S.pzv = 2;
+  }
+  if ((S.pzv || 0) < 3) {  // v3: your profile back on rating-matched puzzles; pictures-only mode for the young player
+    if (S.players.me) S.players.me.mode = "adaptive";
+    if (S.players.son) S.players.son.kid = true;
+    S.pzv = 3;
+  }
+  if ((S.pzv || 0) < 4) {  // v4: repair the v2/v3 loop that kept resetting ratings; rebuild each rating from its history
+    const start = { me: 2147, son: 200 };
+    for (const [id, p] of Object.entries(S.players)) {
+      p.level = Math.min(Math.max(0, p.level | 0), PZ_BANDS.length - 1);
+      if (id === "me" && p.level < 7) p.level = 8;
+      if (!(id in start)) continue;
+      let r = start[id], n = 0;
+      for (const x of p.hist || []) {
+        const K = n < 20 ? 40 : n < 60 ? 24 : 16, exp = 1 / (1 + Math.pow(10, (x.pr - r) / 400));
+        r = Math.max(100, r + Math.round(K * (x.r - exp))); n++;
+      }
+      p.rating = r; p.n = n;
+    }
+    S.pzv = 4;
+  }
+  if (!S.sonSeeded) {   // a ready-made profile for a beginner: easiest band, goal shown
+    S.sonSeeded = true;
+    if (!Object.values(S.players).some(p => p.name === "Son"))
+      S.players.son = { name: "Son", rating: 200, n: 0, done: {}, mode: "fixed", level: 0, goal: true, kid: true, hist: [] };
+  }
+  if (!S.players[S.player]) S.player = Object.keys(S.players)[0];
+  return S.players[S.player];
+}
+function pzRenderBar() {
+  const pl = pzPlayers();
+  $("pzPlayer").innerHTML = Object.entries(S.players).map(([id, p]) =>
+    `<button type="button" data-pl="${id}" aria-pressed="${id === S.player}">${esc(p.name)} <small>${Math.round(p.rating)}</small></button>`).join("");
+  $("pzPlayer").querySelectorAll("[data-pl]").forEach(b => b.onclick = () => { S.player = b.dataset.pl; save(); pzRenderBar(); pzNext(); });
+  document.querySelectorAll("[data-pm]").forEach(b => b.setAttribute("aria-pressed", b.dataset.pm === pl.mode));
+  $("pzLevel").hidden = pl.mode !== "fixed";
+  $("pzLevel").innerHTML = PZ_BANDS.map(([lo, hi], i) => `<option value="${i}"${i === pl.level ? " selected" : ""}>${lo}–${hi}</option>`).join("");
+  $("pzGoal").checked = !!pl.goal;
+  $("pzKid").checked = !!pl.kid;
+  $("puzzleView").classList.toggle("kid", !!pl.kid);
+  $("pzSound").textContent = soundOn() ? "🔊" : "🔇";
+  $("pzStars").hidden = !pl.kid; $("pzStars").innerHTML = `⭐ <b>${pl.stars || 0}</b>`;
+  renderStageBar();
+  $("pzName").textContent = pl.name + (pl.mode === "fixed" ? ` · fixed level ${PZ_BANDS[pl.level][0]}–${PZ_BANDS[pl.level][1]}, not matched to the rating` : " · puzzles matched to this rating");
+  $("pzRating").textContent = Math.round(pl.rating);
+  const h = (pl.hist || []).slice(-30);
+  $("pzHist").innerHTML = h.length ? `<span class="lbl">Last ${h.length}</span>` + h.map(x => `<i class="${x.r ? "ok" : "bad"}" title="${x.pr}${x.r ? " solved" : " missed"}"></i>`).join("")
+    : `<span class="lbl">Your results will show here.</span>`;
+  const solved = Object.values(pl.done || {}).filter(v => v === 1).length, tried = Object.keys(pl.done || {}).length;
+  $("pzTally").innerHTML = `<span>solved <b>${solved}</b></span><span>tried <b>${tried}</b></span>`;
+}
+function pzPick() {
+  if (pzStage) return stagePick(pzPlayers());
+  const pl = pzPlayers(), P0 = GYM.puzzles, done = pl.done || {};
+  let lo, hi;
+  if (pl.mode === "fixed") [lo, hi] = PZ_BANDS[pl.level];
+  else { lo = pl.rating - 60; hi = pl.rating + 60; }
+  for (let widen = 0; widen < 12; widen++) {
+    const c = P0.filter(p => p[3] >= lo - widen * 50 && p[3] < hi + widen * 50 && !(p[0] in done));
+    if (c.length) return c[Math.floor(Math.random() * c.length)];
+  }
+  const c = P0.filter(p => p[3] >= lo && p[3] < hi);   // everything seen: allow repeats
+  return c.length ? c[Math.floor(Math.random() * c.length)] : P0[Math.floor(Math.random() * P0.length)];
+}
+function pzDraw() {
+  const tg = pzSel && pzState === "solve" ? pzGame.moves({ square: pzSel, verbose: true }).map(m => m.to) : [];
+  renderBoard(parseFen(pzGame.fen()), { el: $("pboard"), o: pzOrient, hl: pzLast, sel: pzSel, tgts: tg, arrows: pzArrows, marks: pzMarks });
+  $("pboard").classList.toggle("mine", pzState === "solve");
+}
+function pzGoalText(p) {
+  const t = p[4].split(" "), n = t.find(x => /^mateIn\d$/.test(x));
+  if (n) return `Find mate in ${n.slice(-1)}.`;
+  if (t.includes("hangingPiece") && p[5]) return "Take the piece you can win for free.";
+  if (t.includes("giveCheck")) return "Give check: attack the king with a piece that stays safe.";
+  if (t.includes("saveQueen")) return "Your queen is attacked: get it to safety.";
+  if (t.includes("savePiece")) return "One of your pieces is attacked: keep it safe.";
+  if (t.includes("promotion") && p[5]) return "Push your pawn to the end and make a new queen.";
+  if (t.includes("equality")) return "Find the move that saves the game.";
+  return "Find the best move: it wins material or more.";
+}
+// the goal as a picture: mate (king in a target), take a piece (+), promote (pawn → queen), or win something (⚔)
+function pzGoalHtml() {
+  const t = pzCur[4].split(" "), me = pzGame.turn(), them = me === "w" ? "b" : "w";
+  const want = pzCur[2].split(" ")[pzIdx] || "", victim = want ? pzGame.get(want.slice(2, 4)) : null;
+  if (t.includes("giveCheck")) return { kind: "check", html: `<span class="goal check" title="Give check"><span class="pc ${them}K"></span></span>` };
+  if (t.includes("saveQueen") || t.includes("savePiece")) {
+    const tp = pzCur[7] ? pzGame.get(pzCur[7]) : null, kind = tp ? tp.type.toUpperCase() : "Q";
+    return { kind: "save", html: `<span class="goal save" title="Keep this piece safe"><span class="pc ${me}${kind}"></span></span>` };
+  }
+  if (t.some(x => /^mate/.test(x))) return { kind: "mate", html: `<span class="goal mate" title="Checkmate"><span class="pc ${them}K"></span></span>` };
+  if (t.includes("promotion") && want[4]) return { kind: "promo", html: `<span class="goal promo" title="Make a queen"><span class="pc ${me}P"></span><b>→</b><span class="pc ${me}Q"></span></span>` };
+  if (victim) return { kind: "take", html: `<span class="goal take" title="Win this piece"><span class="pc ${victim.color}${victim.type.toUpperCase()}"></span></span>` };
+  return { kind: "win", html: `<span class="goal win" title="Win something">⚔</span>` };
+}
+// easy mate in 1: before the move, show which squares round the enemy king your other pieces already cover
+function preCover() {
+  const pos = parseFen(pzGame.fen()), solver = pzGame.turn(), loser = solver === "w" ? "b" : "w";
+  const ksq = Object.keys(pos).find(q => pos[q] === (loser === "w" ? "K" : "k"));
+  const mover = (pzCur[2].split(" ")[pzIdx] || "").slice(0, 2);
+  const noK = { ...pos }; delete noK[ksq];
+  const marks = {}, arrows = [], kx = FILES.indexOf(ksq[0]), ky = +ksq[1];
+  for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
+    const x = kx + dx, y = ky + dy;
+    if ((!dx && !dy) || x < 0 || x > 7 || y < 1 || y > 8) continue;
+    const q = FILES[x] + y;
+    if (pos[q] && colorOf(pos[q]) === loser) { marks[q] = "mo"; continue; }
+    const at = attackersOf(noK, q, solver).filter(a => a !== mover);
+    if (at.length) { marks[q] = "mx:" + arrows.length; arrows.push([at[0] + q, "cover"]); }
+    else marks[q] = "esc:" + arrows.length;
+  }
+  return { marks, arrows };
+}
+function pzShowGoal() {
+  const pl = pzPlayers(), el = $("pzGoalBadge");
+  if (!pl.goal) { el.hidden = true; return; }
+  const g = pzGoalHtml();
+  el.innerHTML = g.html; el.hidden = false;
+  const t = pzCur[4].split(" ");
+  if (t.includes("mateIn1") && (pzCur[5] || pzCur[3] <= 1000)) { const pc = preCover(); pzMarks = pc.marks; pzArrows = pc.arrows; }
+  if (pl.kid) $("pzCard").innerHTML = `<div class="kidgoal">${g.html}</div>`;
+  else $("pzCard").insertAdjacentHTML("afterbegin", `<div class="kidgoal small">${g.html}</div>`);
+}
+function pzNext() {
+  clearTimeout(pzTimer);
+  advanceStage();
+  $("pzGoalBadge").hidden = true;
+  pzCur = pzPick(); pzIdx = 0; pzHinted = pzFailed = pzScored = false; pzSel = null; pzArrows = []; pzLast = []; pzMarks = {};
+  pzGame = new Chess(pzCur[1]);
+  const direct = !!pzCur[5];                             // generated beginner puzzles start with the solver's move
+  pzOrient = direct ? pzGame.turn() : (pzGame.turn() === "w" ? "b" : "w");   // Lichess puzzles: the opponent moves first
+  pzState = "intro";
+  const pl = pzPlayers();
+  $("pzState").textContent = `${pzOrient === "w" ? "White" : "Black"} to play`; $("pzState").className = "state";
+  $("pzDelta").textContent = "";
+  $("pzCard").className = "card";
+  $("pzCard").innerHTML = `<p class="text">${pzOrient === "w" ? "White" : "Black"} to move. ${pl.goal ? esc(pzGoalText(pzCur)) : "Find the best continuation."}</p>
+    <p class="sub">Puzzle rating is shown when you finish.</p>`;
+  pzDraw();
+  if (direct) { pzIdx = 0; pzState = "solve"; pzShowGoal(); pzDraw(); return; }
+  pzTimer = setTimeout(() => { pzPlay(pzCur[2].split(" ")[0]); pzIdx = 1; pzState = "solve"; pzShowGoal(); pzDraw(); }, 650);
+}
+function pzPlay(uci) {
+  const m = pzGame.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || "q" });
+  pzLast = m ? [uci.slice(0, 2), uci.slice(2, 4)] : pzLast;
+  if (m) sfx("move");
+  return m;
+}
+function pzScore(win) {
+  if (pzScored) return;
+  pzScored = true;
+  const pl = pzPlayers(), pr = pzCur[3];
+  pl.done = pl.done || {}; pl.done[pzCur[0]] = win ? 1 : 0;
+  kidReward(pl, win);
+  pl.hist = (pl.hist || []).slice(-199); pl.hist.push({ id: pzCur[0], pr, r: win ? 1 : 0, t: Date.now() });
+  if (pzHinted) { $("pzDelta").textContent = "hint used: no rating change"; $("pzDelta").className = "delta"; save(); pzRenderBar(); return; }
+  const n = pl.n || 0, K = n < 20 ? 40 : n < 60 ? 24 : 16;
+  const exp = 1 / (1 + Math.pow(10, (pr - pl.rating) / 400));
+  const d = Math.round(K * ((win ? 1 : 0) - exp));
+  pl.rating = Math.max(100, pl.rating + d); pl.n = n + 1;
+  pl.hist[pl.hist.length - 1].ra = pl.rating;
+  $("pzDelta").textContent = (d >= 0 ? "+" : "") + d; $("pzDelta").className = "delta " + (d >= 0 ? "up" : "down");
+  save(); pzRenderBar();
+}
+function pzThemes() {
+  const t = pzCur[4].split(" ").filter(x => THEME[x] && !["crushing", "advantage", "middlegame", "opening", "short", "long", "oneMove"].includes(x));
+  return t.map(x => `<span class="pchip">${THEME[x]}</span>`).join(" ");
+}
+function pzBig(ok) {
+  const el = $("pzBig"); el.textContent = ok ? "✓" : "✗"; el.className = "bigmark " + (ok ? "ok" : "bad");
+  el.hidden = false; void el.offsetWidth; el.classList.add("pop");
+  clearTimeout(pzBig.t); pzBig.t = setTimeout(() => { el.hidden = true; }, ok ? 1600 : 1000);
+}
+function pzFinish(win) {
+  pzState = "done"; pzSel = null;
+  const kid = !!pzPlayers().kid;
+  pzScore(win && !pzFailed);
+  const link = pzCur[5] ? "" : `, or <a href="https://lichess.org/training/${esc(pzCur[0])}" target="_blank" rel="noopener">see it on Lichess</a>`;
+  let why = "";
+  if (pzGame.in_checkmate()) {
+    const w = whyMate(); pzMarks = w.marks; pzArrows = w.arrows;
+    if (kid) w.lines = [];
+    why = `<div class="plan why"><span class="lbl">Why it's checkmate</span>
+      <div class="legend"><span><i class="lg mk"></i>king in check</span><span><i class="lg mx"></i>square it can't go to</span>${Object.values(w.marks).includes("mo") ? `<span><i class="lg mo"></i>blocked by its own piece</span>` : ""}</div>
+      ${w.lines.map(l => `<p class="text">${esc(l)}</p>`).join("")}</div>`;
+  }
+  $("pzState").textContent = win && !pzFailed ? "Solved" : "Solution shown";
+  $("pzState").className = "state " + (win && !pzFailed ? "pass" : "alt");
+  $("pzCard").className = "card " + (win && !pzFailed ? "pass" : "alt");
+  $("pzCard").innerHTML = `<div class="head"><span class="tag ${win && !pzFailed ? "pass" : "alt"}">${win && !pzFailed ? "Solved" : "Done"}</span>
+      <span class="mvname">puzzle rating ${pzCur[3]}</span></div>
+    <div class="head">${pzThemes()}</div>${why}
+    <p class="sub">Press → for the next puzzle${link}.</p>`;
+  if (kid) {   // pictures only: no reading needed
+    $("pzCard").innerHTML = `<div class="kidcard ${win && !pzFailed ? "ok" : "alt"}">${win && !pzFailed ? "✓" : "↻"}</div>
+      <button class="btn primary big" id="pzKidNext" aria-label="Next puzzle">▶</button>`;
+    $("pzKidNext").onclick = pzNext;
+  }
+  if (win && !pzFailed) { pzBig(true); sfx("right"); stageStar(); }
+  if (pzStage) $("pzCard").insertAdjacentHTML("beforeend", `<button class="btn big" type="button" id="pzToMap" aria-label="Back to the map">🗺</button>`), $("pzToMap").onclick = () => go("kids", "path");
+  kidAfterPuzzle();
+  pzDraw();
+}
+function pzUserMove(from, to) {
+  if (pzState !== "solve") return false;
+  const want = pzCur[2].split(" ")[pzIdx];
+  const legal = pzGame.moves({ square: from, verbose: true }).filter(m => m.to === to);
+  if (!legal.length) return false;
+  pzMarks = {}; pzArrows = [];
+  const promo = legal[0].promotion ? (want && want.slice(0, 4) === from + to && want[4] ? want[4] : "q") : undefined;
+  const m = pzGame.move({ from, to, promotion: promo });
+  const uci = from + to + (promo || ""), last = pzIdx === pzCur[2].split(" ").length - 1;
+  pzSel = null; pzLast = [from, to];
+  const accepted = pzCur[6] && pzIdx === 0 && pzCur[6].includes(uci);
+  sfx("move");
+  if (uci === want || accepted || (want && uci === want.slice(0, 4) && !want[4]) || (last && pzGame.in_checkmate())) {
+    pzIdx++;
+    if (pzIdx >= pzCur[2].split(" ").length) { pzFinish(true); return true; }
+    $("pzState").textContent = "Good, keep going"; $("pzState").className = "state pass";
+    pzState = "wait"; pzDraw();
+    pzTimer = setTimeout(() => { pzPlay(pzCur[2].split(" ")[pzIdx]); pzIdx++; pzState = "solve"; pzDraw(); }, 450);
+    return true;
+  }
+  // wrong: show it, then offer another go (rating already counts it as a miss)
+  pzFailed = true; pzScore(false); sfx("wrong");
+  pzState = "wrong"; pzArrows = [[uci, "red"]];
+  const mateGoal = /mate/i.test(pzCur[4]) && last;
+  const ex = mateGoal ? escapes() : null;
+  if (ex) { pzMarks = ex.marks; pzArrows = [...pzArrows, ...ex.arrows]; }
+  if (/save(Queen|Piece)/.test(pzCur[4])) {   // show who can take the piece where it now stands
+    const pos = parseFen(pzGame.fen()), them = pzGame.turn(), at = from === pzCur[7] ? to : pzCur[7];
+    const hunters = attackersOf(pos, at, them);
+    if (hunters.length) { pzMarks = { [at]: "mk" }; pzArrows = hunters.map(h => [h + at, "red"]); }
+  }
+  $("pzState").textContent = "Not the best move"; $("pzState").className = "state fail";
+  $("pzCard").className = "card fail";
+  $("pzCard").innerHTML = `${ex ? `<p class="text">${esc(ex.text)}</p>` : ""}<p class="text">That isn't it. Press <b>Try again</b> (or ←) to take it back, or <b>Show solution</b>.</p>`;
+  pzDraw();
+  if (pzPlayers().kid) {   // pictures only: let the escape squares play out before taking the move back
+    pzBig(false);
+    $("pzCard").innerHTML = `<div class="kidcard bad">✗</div>
+      <button class="btn primary big" id="pzKidRetry" aria-label="Try again">↻</button>`;
+    $("pzKidRetry").onclick = pzRetry;
+  }
+  return true;
+}
+function pzRetry() {
+  if (pzState !== "wrong") return;
+  clearTimeout(pzTimer);
+  pzGame.undo(); pzArrows = []; pzMarks = {}; pzState = "solve"; pzLast = [];
+  $("pzState").textContent = "Try again"; $("pzState").className = "state";
+  $("pzCard").className = "card"; $("pzCard").innerHTML = `<p class="text">Your move again. This one already counts as missed.</p>`;
+  pzShowGoal();
+  pzDraw();
+}
+function pzSolution() {
+  if (!pzCur || pzState === "done" || pzState === "intro") return;
+  clearTimeout(pzTimer);
+  if (pzState === "wrong") { pzGame.undo(); pzMarks = {}; }
+  pzFailed = true; pzScore(false);
+  const rest = pzCur[2].split(" ").slice(pzIdx);
+  pzState = "show"; pzArrows = [];
+  let k = 0;
+  const step = () => {
+    if (k >= rest.length) { pzArrows = []; return pzFinish(false); }
+    pzPlay(rest[k]); pzArrows = [[rest[k], k % 2 ? "red" : "green"]]; k++; pzDraw();
+    pzTimer = setTimeout(step, 1400);
+  };
+  step();
+}
+function pzHint() {
+  if (pzState !== "solve") return;
+  pzHinted = true;
+  const want = pzCur[2].split(" ")[pzIdx];
+  pzSel = want.slice(0, 2);
+  $("pzCard").innerHTML = `<p class="text">Move the highlighted piece. ${esc(pzGoalText(pzCur))}</p><p class="sub">With a hint this puzzle won't change your rating.</p>`;
+  pzDraw();
+}
+function pzSqAt(ev) {
+  const r = $("pboard").getBoundingClientRect();
+  const col = Math.floor((ev.clientX - r.left) / r.width * 8), row = Math.floor((ev.clientY - r.top) / r.height * 8);
+  return col < 0 || col > 7 || row < 0 || row > 7 ? null : sqOf(col, row, pzOrient);
+}
+function pzWire() {
+  const bd = $("pboard");
+  bd.addEventListener("pointerdown", ev => {
+    if (pzState !== "solve") return;
+    const sq = pzSqAt(ev); if (!sq) return;
+    const p = pzGame.get(sq);
+    if (pzSel && pzSel !== sq && pzGame.moves({ square: pzSel, verbose: true }).some(m => m.to === sq)) { pzUserMove(pzSel, sq); return; }
+    if (p && p.color === pzGame.turn()) { pzSel = sq; pzDrag = { from: sq, moved: false, x: ev.clientX, y: ev.clientY }; bd.setPointerCapture(ev.pointerId); pzDraw(); }
+    else { if (!pzHinted) pzSel = null; pzDraw(); }
+  });
+  bd.addEventListener("pointermove", ev => {
+    if (!pzDrag) return;
+    if (!pzDrag.moved && Math.hypot(ev.clientX - pzDrag.x, ev.clientY - pzDrag.y) < 6) return;
+    pzDrag.moved = true;
+    const r = bd.getBoundingClientRect(), p = pzGame.get(pzDrag.from);
+    let g = bd.querySelector(".ghost");
+    if (!g) { g = document.createElement("span"); g.className = "pc ghost " + p.color + p.type.toUpperCase(); bd.appendChild(g); }
+    g.style.left = (ev.clientX - r.left) + "px"; g.style.top = (ev.clientY - r.top) + "px";
+  });
+  bd.addEventListener("pointerup", ev => {
+    if (!pzDrag) return;
+    const d = pzDrag; pzDrag = null; bd.querySelector(".ghost")?.remove();
+    if (d.moved && !pzUserMove(d.from, pzSqAt(ev))) pzDraw();
+  });
+  bd.addEventListener("pointercancel", () => { pzDrag = null; bd.querySelector(".ghost")?.remove(); pzDraw(); });
+  $("pzNext").onclick = pzNext; $("pzHint").onclick = pzHint; $("pzSolution").onclick = pzSolution; $("pzRetry").onclick = pzRetry;
+  $("pzRename").onclick = () => { $("pzRenameForm").hidden = false; $("pzRenameName").value = pzPlayers().name; $("pzRenameName").focus(); };
+  $("pzRenameCancel").onclick = () => { $("pzRenameForm").hidden = true; };
+  $("pzRenameForm").addEventListener("submit", ev => {
+    ev.preventDefault();
+    const name = $("pzRenameName").value.trim(); if (!name) return;
+    pzPlayers().name = name; save(); $("pzRenameForm").hidden = true; pzRenderBar();
+  });
+  document.querySelectorAll("[data-pm]").forEach(b => b.onclick = () => { pzPlayers().mode = b.dataset.pm; save(); pzRenderBar(); pzNext(); });
+  $("pzLevel").onchange = () => { pzPlayers().level = +$("pzLevel").value; save(); pzNext(); };
+  $("pzGoal").onchange = () => { pzPlayers().goal = $("pzGoal").checked; save(); };
+  $("pzKid").onchange = () => { pzPlayers().kid = $("pzKid").checked; save(); pzRenderBar(); };
+  $("pzSound").onclick = () => { const pl = pzPlayers(); pl.sound = !soundOn(); save(); pzRenderBar(); if (pl.sound) sfx("right"); };
+  $("pzAdd").onclick = () => { $("pzAddForm").hidden = false; $("pzNewName").focus(); };
+  $("pzCancel").onclick = () => { $("pzAddForm").hidden = true; };
+  $("pzAddForm").addEventListener("submit", ev => {
+    ev.preventDefault();
+    const name = $("pzNewName").value.trim(); if (!name) return;
+    const lvl = +$("pzNewLevel").value, [lo, hi] = PZ_BANDS[lvl];
+    const id = "p" + Date.now().toString(36);
+    S.players[id] = { name, rating: (lo + hi) / 2, n: 0, done: {}, mode: "fixed", level: lvl, goal: true, kid: lvl <= 1, hist: [] };
+    S.player = id; save(); $("pzAddForm").hidden = true; $("pzNewName").value = ""; pzRenderBar(); pzNext();
+  });
+  $("pzNewLevel").innerHTML = PZ_BANDS.map(([lo, hi], i) => `<option value="${i}"${i === 0 ? " selected" : ""}>${lo}–${hi}${i === 0 ? " (first steps)" : i === 1 ? " (beginner)" : ""}</option>`).join("");
+  document.addEventListener("keydown", ev => {
+    if (window.SECTION !== "puzzles" || ev.target.closest("input, textarea, select")) return;
+    const k = ev.key.toLowerCase();
+    if (ev.key === "ArrowRight" || ev.key === "ArrowDown") { if (pzState === "done" || pzState === "wrong") { ev.preventDefault(); pzNext(); } }
+    else if (ev.key === "ArrowLeft") { ev.preventDefault(); pzRetry(); }
+    else if (k === "h") pzHint();
+  });
+}
+let pzReady = false;
+function openPuzzles(stage) {
+  const was = pzStage;
+  pzStage = stage || null;
+  if (was !== pzStage) pzCur = null;
+  if (!pzReady) { pzWire(); pzReady = true; }
+  pzRenderBar();
+  if (!pzCur) pzNext(); else pzDraw();
+}
+
+
+/* ================= kids' corner: sounds, rewards, learning path, piece school, stickers, parent view ================= */
+
+/* ---- sounds (generated with WebAudio; they start after the first tap, as browsers require) ---- */
+let actx = null;
+function soundOn() { const pl = S.players && S.players[S.player]; return pl ? (pl.sound !== undefined ? pl.sound : !!pl.kid) : false; }
+function tone(freq, start, dur, type = "sine", vol = 0.18) {
+  const t0 = actx.currentTime + start, o = actx.createOscillator(), g = actx.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, t0);
+  g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + 0.015);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  o.connect(g).connect(actx.destination); o.start(t0); o.stop(t0 + dur + 0.05);
+}
+function sfx(kind) {
+  if (!soundOn()) return;
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === "suspended") actx.resume();
+    if (kind === "move") tone(520, 0, 0.07, "triangle", 0.07);
+    else if (kind === "right") { tone(523, 0, 0.18); tone(659, 0.1, 0.18); tone(784, 0.2, 0.32); }
+    else if (kind === "wrong") { tone(220, 0, 0.18, "square", 0.05); tone(165, 0.15, 0.3, "square", 0.05); }
+    else if (kind === "trophy") { [523, 659, 784, 1047].forEach((f, i) => tone(f, i * 0.13, 0.35, "triangle", 0.16)); tone(1047, 0.55, 0.6, "sine", 0.12); }
+    else if (kind === "sticker") { [880, 1175, 1397, 1760].forEach((f, i) => tone(f, i * 0.07, 0.25, "sine", 0.1)); }
+    else if (kind === "star") tone(1319, 0, 0.18, "sine", 0.08);
+  } catch (e) {}
+}
+
+/* ---- rewards: stars, 5-in-a-row trophies, a sticker every 10 stars, a 10-puzzle session goal ---- */
+const STICKERS = ["🦁", "🐯", "🐼", "🦊", "🐸", "🐙", "🦄", "🐲", "🐬", "🦉", "🐢", "🦋", "🐝", "🦖", "🐧", "🦒", "🐘", "🦜", "🐳", "🦔",
+  "🚀", "🚂", "🏎️", "🚁", "⛵", "🎈", "🎸", "⚽", "🏀", "🎨", "🌈", "🌋", "🍕", "🍉", "🍦", "🧁", "👑", "💎", "🏰", "🌟"];
+let kidSession = 0;
+function kidReward(pl, win) {
+  if (!pl.kid) return;
+  pl.streak = win ? (pl.streak || 0) + 1 : 0;
+  kidSession++;
+  if (!win) return;
+  pl.stars = (pl.stars || 0) + 1;
+  const events = [];
+  if (pl.streak % 5 === 0) { pl.trophies = (pl.trophies || 0) + 1; events.push(["🏆", "trophy"]); }
+  if (pl.stars % 10 === 0) { const s = STICKERS[(pl.stars / 10 - 1) % STICKERS.length]; events.push([s, "sticker"]); }
+  kidEvents = events;
+}
+let kidEvents = [];
+function kidAfterPuzzle() {
+  const pl = pzPlayers();
+  if (!pl.kid) return;
+  $("pzStars").innerHTML = `⭐ <b>${pl.stars || 0}</b>`;
+  $("pzStars").classList.remove("bump"); void $("pzStars").offsetWidth; $("pzStars").classList.add("bump");
+  let delay = 1400;
+  for (const [icon, kind] of kidEvents) { setTimeout(() => celebrate(icon, kind), delay); delay += 2200; }
+  kidEvents = [];
+  if (kidSession >= 10) { kidSession = 0; setTimeout(() => sessionDone(pl), delay); }
+}
+function celebrate(icon, kind, extra = "") {
+  const el = $("kidOverlay");
+  el.innerHTML = `<div class="session"><div class="burst">${icon}</div>${extra}</div>`;
+  el.hidden = false; el.classList.remove("show"); void el.offsetWidth; el.classList.add("show");
+  sfx(kind === "sticker" ? "sticker" : kind === "quiet" ? "star" : "trophy");
+  el.onclick = () => { el.hidden = true; };
+  clearTimeout(celebrate.t); celebrate.t = setTimeout(() => { el.hidden = true; }, 2200);
+}
+function sessionDone(pl) { celebrate("🎉", "trophy", `<div class="big">⭐ ${pl.stars || 0}</div>`); }
+// finished the current stage? the next puzzle comes from the next unfinished stage
+function advanceStage() {
+  if (!pzStage) return;
+  const pl = pzPlayers();
+  if (stageStars(pl, pzStage.id) < needOf(pzStage)) return;
+  const i = STAGES.findIndex((st, k) => stageOpen(pl, k) && stageStars(pl, st.id) < needOf(st));
+  if (i < 0 || STAGES[i] === pzStage) return;
+  pzStage = STAGES[i];
+  celebrate(`<span class="stageicon">${pzStage.icon}</span>`, "quiet");
+}
+
+/* ---- learning path: stages unlock one after another; 8 stars finish a stage ---- */
+const STAGE_NEED = 8;
+const STAGES = [
+  { id: "take", icon: `<span class="goal take"><span class="pc bQ"></span></span>`, f: p => p[5] && /hangingPiece/.test(p[4]) },
+  { id: "saveq", icon: `<span class="goal save"><span class="pc wQ"></span></span>`, f: p => /saveQueen/.test(p[4]) },
+  { id: "check", icon: `<span class="goal check"><span class="pc bK"></span></span>`, f: p => /giveCheck/.test(p[4]) },
+  { id: "promo", need: 5, icon: `<span class="goal promo"><span class="pc wP"></span><b>→</b><span class="pc wQ"></span></span>`, f: p => p[5] && /promotion/.test(p[4]) },
+  { id: "savep", icon: `<span class="goal save"><span class="pc wR"></span></span>`, f: p => /savePiece/.test(p[4]) },
+  { id: "back", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc bP mini"></span>`, f: p => p[5] && /backRankMate/.test(p[4]) },
+  { id: "mateq", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc wQ mini"></span>`, f: p => p[5] && /mateIn1/.test(p[4]) && !/backRank/.test(p[4]) && /[Qq]/.test(p[1].split(" ")[0]) },
+  { id: "mater", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc wR mini"></span>`, f: p => p[5] && /mateIn1/.test(p[4]) && !/backRank/.test(p[4]) && !/[Qq]/.test(p[1].split(" ")[0]) },
+  { id: "fork", icon: `<span class="goal win">⚔</span>`, f: p => !p[5] && /fork/.test(p[4]) && p[3] < 850 },
+  { id: "mix", icon: `<span class="goal win">🧩</span>`, f: p => !p[5] && p[3] >= 400 && p[3] < 650 },
+];
+const stagePools = {};
+function stagePool(st) { return stagePools[st.id] || (stagePools[st.id] = GYM.puzzles.filter(st.f)); }
+function stageStars(pl, id) { return (pl.stages || {})[id] || 0; }
+function needOf(st) { return st.need || STAGE_NEED; }
+// a stage opens only when every earlier stage is finished (stars from solves elsewhere can't skip ahead)
+function stageOpen(pl, i) { return STAGES.slice(0, i).every(st => stageStars(pl, st.id) >= needOf(st)); }
+function stagePick(pl) {
+  const pool = stagePool(pzStage), done = pl.done || {};
+  const fresh = pool.filter(p => !(p[0] in done));
+  const from = fresh.length ? fresh : pool;
+  return from[Math.floor(Math.random() * from.length)];
+}
+// a clean solve counts for the stage the puzzle belongs to, wherever it was played (path or Puzzles tab)
+function stageOf(p) { return STAGES.find(st => st.f(p)); }
+function stageStar() {
+  const st = stageOf(pzCur); if (!st) return;
+  const pl = pzPlayers(); pl.stages = pl.stages || {};
+  const had = stageStars(pl, st.id);
+  pl.stages[st.id] = had + 1; save(); renderStageBar();
+  if (had + 1 === needOf(st) && pl.kid) setTimeout(() => celebrate("🏅", "trophy"), 1500);
+}
+// one-time recount from history for solves made outside the path before this fix
+function recountStages(pl) {
+  if (pl.stagesRecounted || !GYM.puzzles) return;
+  const byId = {}; for (const p of GYM.puzzles) byId[p[0]] = p;
+  const n = {};
+  for (const x of pl.hist || []) { const p = byId[x.id]; if (x.r && p) { const st = stageOf(p); if (st) n[st.id] = (n[st.id] || 0) + 1; } }
+  pl.stages = pl.stages || {};
+  for (const [id, c] of Object.entries(n)) pl.stages[id] = Math.max(pl.stages[id] || 0, c);
+  pl.stagesRecounted = true; save();
+}
+function renderStageBar() {
+  const bar = $("pzStageBar");
+  if (!pzStage) { bar.hidden = true; return; }
+  const n = Math.min(stageStars(pzPlayers(), pzStage.id), needOf(pzStage));
+  bar.hidden = false;
+  bar.innerHTML = `<button class="btn big" type="button" id="pzMap" aria-label="Back to the map">🗺</button>
+    <span class="stageicon">${pzStage.icon}</span>
+    <span class="dots">${Array.from({ length: needOf(pzStage) }, (_, i) => `<i class="${i < n ? "on" : ""}">★</i>`).join("")}</span>`;
+  $("pzMap").onclick = () => go("kids", "path");
+}
+function renderPath() {
+  const pl = pzPlayers();
+  recountStages(pl);
+  $("kPath").innerHTML = `<div class="path">${STAGES.map((st, i) => {
+    const need = needOf(st), open = stageOpen(pl, i), n = Math.min(stageStars(pl, st.id), need), done = n >= need;
+    const cur = open && !done && (i === 0 || stageOpen(pl, i)) && !(i + 1 < STAGES.length && stageOpen(pl, i + 1));
+    return `<div class="stop ${i % 2 ? "right" : "left"}">
+      <button class="stage${open ? "" : " locked"}${done ? " done" : ""}${cur ? " cur" : ""}" type="button" data-st="${i}" ${open ? "" : "disabled"} aria-label="Stage ${i + 1}${open ? "" : ", locked"}">
+        <span class="ic">${open ? st.icon : "🔒"}</span>
+        <span class="dots">${Array.from({ length: need }, (_, k) => `<i class="${k < n ? "on" : ""}">★</i>`).join("")}</span>
+      </button></div>`;
+  }).join("")}</div>`;
+  $("kPath").querySelectorAll("[data-st]").forEach(b => b.onclick = () => go("puzzles", { stage: STAGES[+b.dataset.st] }));
+}
+
+/* ---- piece school: move one piece to collect every star (pawn levels: capture the black pawns too) ---- */
+const SCHOOL = ["R", "B", "Q", "N", "K", "P"];
+const SCHOOL_START = { R: "a1", B: "c1", Q: "d1", N: "b1", K: "e1" };
+const PAWN_LEVELS = [
+  { start: "e2", stars: ["e4"], enemies: [] },
+  { start: "d2", stars: ["e6"], enemies: ["e3"] },
+  { start: "c2", stars: ["e6"], enemies: ["d3", "e4"] },
+  { start: "a2", stars: ["c8"], enemies: ["b3", "c4"] },
+];
+function rng(seed) { let x = seed; return () => (x = (x * 1103515245 + 12345) % 2147483648) / 2147483648; }
+function schoolLevel(pc, li) {
+  if (pc === "P") return PAWN_LEVELS[li];
+  const r = rng(pc.charCodeAt(0) * 97 + li * 13 + 5), start = SCHOOL_START[pc], stars = new Set();
+  const colorOk = sq => pc !== "B" || (FILES.indexOf(sq[0]) + +sq[1]) % 2 === (FILES.indexOf(start[0]) + +start[1]) % 2;
+  while (stars.size < li + 1) {
+    const sq = FILES[Math.floor(r() * 8)] + (1 + Math.floor(r() * 8));
+    if (sq !== start && colorOk(sq)) stars.add(sq);
+  }
+  return { start, stars: [...stars], enemies: [] };
+}
+function schoolLevels(pc) { return pc === "P" ? PAWN_LEVELS.length : 5; }
+function pieceTargets(pc, from, enemies) {
+  const fx = FILES.indexOf(from[0]), fy = +from[1], out = [], on = (x, y) => x >= 0 && x < 8 && y >= 1 && y <= 8;
+  const add = (x, y) => on(x, y) && out.push(FILES[x] + y);
+  if (pc === "N") {
+    [[1, 2], [2, 1], [2, -1], [1, -2], [-1, -2], [-2, -1], [-2, 1], [-1, 2]].forEach(([a, b]) => add(fx + a, fy + b));
+  } else if (pc === "K") {
+    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) { if (a || b) add(fx + a, fy + b); }
+  } else if (pc === "P") {
+    if (on(fx, fy + 1) && !enemies.includes(FILES[fx] + (fy + 1))) {
+      add(fx, fy + 1);
+      if (fy === 2 && !enemies.includes(FILES[fx] + 4)) add(fx, 4);
+    }
+    for (const a of [-1, 1]) if (on(fx + a, fy + 1) && enemies.includes(FILES[fx + a] + (fy + 1))) add(fx + a, fy + 1);
+  } else {
+    const dirs = pc === "R" ? [[1, 0], [-1, 0], [0, 1], [0, -1]] : pc === "B" ? [[1, 1], [1, -1], [-1, 1], [-1, -1]]
+      : [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+    for (const [a, b] of dirs) for (let k = 1; k < 8 && on(fx + a * k, fy + b * k); k++) {
+      const q = FILES[fx + a * k] + (fy + b * k); out.push(q); if (enemies.includes(q)) break;
+    }
+  }
+  return out;
+}
+function schoolPar(pc, lv) {   // fewest moves to collect everything (breadth-first search over square + collected set)
+  const goals = [...lv.stars, ...lv.enemies], full = (1 << goals.length) - 1, seen = new Set(), q = [[lv.start, 0, 0]];
+  seen.add(lv.start + ":0");
+  while (q.length) {
+    const [sq, mask, d] = q.shift();
+    if (mask === full) return d;
+    const enemiesLeft = lv.enemies.filter((e, i) => !(mask & (1 << (lv.stars.length + i))));
+    for (const t of pieceTargets(pc, sq, enemiesLeft)) {
+      const gi = goals.indexOf(t), m = gi >= 0 ? mask | (1 << gi) : mask, k = t + ":" + m;
+      if (!seen.has(k)) { seen.add(k); q.push([t, m, d + 1]); }
+    }
+    if (q.length > 50000) break;
+  }
+  return 99;
+}
+let sc = null;   // {pc, li, lv, at, got:Set, enemies:[], moves, par, done}
+function schoolStart(pc, li) {
+  const lv = schoolLevel(pc, li);
+  sc = { pc, li, lv, at: lv.start, got: new Set(), enemies: [...lv.enemies], moves: 0, par: schoolPar(pc, lv), done: false, queen: false,
+         demo: li === 0 };   // first level of each piece: show how the piece moves until the first move
+  schoolDraw();
+}
+function schoolDraw() {
+  const pos = { [sc.at]: sc.queen ? "Q" : sc.pc }, marks = {};
+  sc.enemies.forEach(e => pos[e] = "p");
+  sc.lv.stars.forEach(s => { if (!sc.got.has(s)) marks[s] = "star"; });
+  const piece = sc.queen ? "Q" : sc.pc, tg = sc.done ? [] : pieceTargets(piece, sc.at, sc.enemies);
+  // movement picture: one arrow per direction, to the farthest square the piece can reach that way
+  let arrows = [];
+  if (sc.demo && !sc.moves) {
+    const fx = FILES.indexOf(sc.at[0]), fy = +sc.at[1], far = {};
+    for (const t of tg) {
+      const dx = FILES.indexOf(t[0]) - fx, dy = +t[1] - fy, g = Math.max(Math.abs(dx), Math.abs(dy));
+      const dir = "NK".includes(piece) || piece === "P" ? t : Math.sign(dx) + "," + Math.sign(dy);
+      if (!far[dir] || g > far[dir][1]) far[dir] = [t, g];
+    }
+    arrows = Object.values(far).map(([t]) => [sc.at + t, "green"]);
+  }
+  renderBoard(pos, { el: $("sboard"), o: "w", sel: sc.done ? null : sc.at, tgts: tg, marks, arrows });
+  const left = sc.lv.stars.length - sc.got.size;
+  $("sGoal").innerHTML = `<span class="pc w${piece}"></span><b>→</b><span class="st">★</span><b>× ${left}</b>
+    ${sc.enemies.length ? `<b>+</b><span class="pc bP"></span><b>× ${sc.enemies.length}</b>` : ""}
+    <small>Move the ${PNAME[piece.toLowerCase()]} to every star${sc.enemies.length ? " and capture the black pawns" : ""}. The fewer moves, the more ⭐.</small>`;
+  const pl = pzPlayers(), prog = (pl.school || {})[sc.pc] || [];
+  $("sPieces").innerHTML = SCHOOL.map(p => {
+    const got = ((pl.school || {})[p] || []).reduce((a, b) => a + (b || 0), 0), max = schoolLevels(p) * 3;
+    return `<button type="button" data-sp="${p}" aria-pressed="${p === sc.pc}" aria-label="${PNAME[p.toLowerCase()]}"><span class="pc w${p}"></span><small>${got}/${max}★</small></button>`;
+  }).join("");
+  $("sPieces").querySelectorAll("[data-sp]").forEach(b => b.onclick = () => schoolStart(b.dataset.sp, firstOpenLevel(b.dataset.sp)));
+  $("sLevels").innerHTML = Array.from({ length: schoolLevels(sc.pc) }, (_, i) => {
+    const st = prog[i] || 0, open = i === 0 || pl.schoolAll || (prog[i - 1] || 0) > 0;
+    return `<button type="button" data-sl="${i}" aria-pressed="${i === sc.li}" ${open ? "" : "disabled"}>${open ? i + 1 : "🔒"}<small>${"★".repeat(st)}${"☆".repeat(3 - st)}</small></button>`;
+  }).join("");
+  $("sLevels").querySelectorAll("[data-sl]").forEach(b => b.onclick = () => schoolStart(sc.pc, +b.dataset.sl));
+  $("sMoves").innerHTML = `👣 <b>${sc.moves}</b> <span class="par">/ ${sc.par}</span>`;
+}
+function firstOpenLevel(pc) {
+  const prog = (pzPlayers().school || {})[pc] || [];
+  for (let i = 0; i < schoolLevels(pc); i++) if (!(prog[i] > 0)) return i;
+  return 0;
+}
+function schoolMove(to) {
+  if (!sc || sc.done) return;
+  const piece = sc.queen ? "Q" : sc.pc;
+  if (!pieceTargets(piece, sc.at, sc.enemies).includes(to)) return;
+  sc.at = to; sc.moves++;
+  if (sc.enemies.includes(to)) sc.enemies = sc.enemies.filter(e => e !== to);
+  if (sc.lv.stars.includes(to) && !sc.got.has(to)) { sc.got.add(to); sfx("star"); } else sfx("move");
+  if (sc.pc === "P" && to[1] === "8") sc.queen = true;
+  if (sc.got.size === sc.lv.stars.length && !sc.enemies.length) {
+    sc.done = true;
+    const stars = sc.moves <= sc.par ? 3 : sc.moves <= sc.par + 2 ? 2 : 1;
+    const pl = pzPlayers(); pl.school = pl.school || {}; pl.school[sc.pc] = pl.school[sc.pc] || [];
+    pl.school[sc.pc][sc.li] = Math.max(pl.school[sc.pc][sc.li] || 0, stars); save();
+    sfx("right");
+    $("sDone").innerHTML = `<div class="big">${"⭐".repeat(stars)}</div>
+      <div class="row"><button class="btn big" type="button" id="sAgain" aria-label="Try again">↻</button>
+      <button class="btn primary big" type="button" id="sNext" aria-label="Next">▶</button></div>`;
+    $("sDone").hidden = false;
+    $("sAgain").onclick = () => { $("sDone").hidden = true; schoolStart(sc.pc, sc.li); };
+    $("sNext").onclick = schoolNext;
+  }
+  schoolDraw();
+}
+
+/* ---- stickers ---- */
+function renderStickers() {
+  const pl = pzPlayers(), have = Math.floor((pl.stars || 0) / 10);
+  $("kStickers").innerHTML = `<div class="kstat"><span>⭐ <b>${pl.stars || 0}</b></span><span>🏆 <b>${pl.trophies || 0}</b></span></div>
+    <div class="stickers">${STICKERS.map((s, i) => `<div class="stk${i < have ? " got" : ""}">${i < have ? s : "?"}</div>`).join("")}</div>`;
+}
+
+/* ---- parent view ---- */
+const THEME_GROUPS = [
+  ["Take a free piece", t => /hangingPiece/.test(t)], ["Save the queen", t => /saveQueen/.test(t)], ["Save a piece", t => /savePiece/.test(t)], ["Give check", t => /giveCheck/.test(t)],
+  ["Promote a pawn", t => /promotion/.test(t)], ["Back-rank mate", t => /backRankMate/.test(t)], ["Mate in 1", t => /mateIn1/.test(t)],
+  ["Mate in 2+", t => /mateIn[2-9]/.test(t)], ["Forks", t => /fork/.test(t)], ["Pins & skewers", t => /pin|skewer/.test(t)],
+  ["Other tactics", t => true],
+];
+let pzIndex = null;
+function renderParents() {
+  const pl = pzPlayers(), h = pl.hist || [];
+  pzIndex = pzIndex || Object.fromEntries(GYM.puzzles.map(p => [p[0], p[4]]));
+  const solved = h.filter(x => x.r).length;
+  // rating after each puzzle (older entries without a stored value are replayed from the start rating)
+  const series = []; let r = pl.start || (pl.name === "You" ? 2147 : 200), n = 0;
+  for (const x of h) {
+    if (x.ra) r = x.ra;
+    else { const K = n < 20 ? 40 : n < 60 ? 24 : 16, e = 1 / (1 + Math.pow(10, (x.pr - r) / 400)); r = Math.max(100, r + Math.round(K * (x.r - e))); }
+    n++; series.push({ r, t: x.t, ok: x.r, pr: x.pr });
+  }
+  const groups = THEME_GROUPS.map(([name]) => ({ name, n: 0, ok: 0 }));
+  for (const x of h) { const t = pzIndex[x.id] || ""; const gi = THEME_GROUPS.findIndex(([, f]) => f(t)); groups[gi].n++; groups[gi].ok += x.r; }
+  const days = [];
+  for (let d = 13; d >= 0; d--) {
+    const day = new Date(); day.setHours(0, 0, 0, 0); day.setDate(day.getDate() - d);
+    const next = day.getTime() + 864e5, inDay = h.filter(x => x.t >= day.getTime() && x.t < next);
+    days.push({ label: day.toLocaleDateString(undefined, { weekday: "short", day: "numeric" }), n: inDay.length, ok: inDay.filter(x => x.r).length });
+  }
+  const stageDone = STAGES.filter(st => stageStars(pl, st.id) >= needOf(st)).length;
+  const school = SCHOOL.reduce((a, p) => a + ((pl.school || {})[p] || []).reduce((x, y) => x + (y || 0), 0), 0);
+  $("kParents").innerHTML = `
+    <div class="tiles">
+      <div class="tile"><span class="lbl">Puzzle rating</span><b>${Math.round(pl.rating)}</b></div>
+      <div class="tile"><span class="lbl">Puzzles played</span><b>${h.length}</b></div>
+      <div class="tile"><span class="lbl">Solved</span><b>${h.length ? Math.round(100 * solved / h.length) : 0}%</b></div>
+      <div class="tile"><span class="lbl">Learning path</span><b>${stageDone}/${STAGES.length}</b></div>
+      <div class="tile"><span class="lbl">Piece school stars</span><b>${school}</b></div>
+      <div class="tile"><span class="lbl">Bots beaten</span><b>${BOTS.filter(b => ((pl.bots || {})[b.id] || {}).w).length}/${BOTS.length}</b></div>
+    </div>
+    <div class="charts">
+      <figure class="chart"><figcaption>Rating after each puzzle</figcaption>${lineChart(series)}</figure>
+      <figure class="chart"><figcaption>Puzzles per day, last 2 weeks</figcaption>${dayChart(days)}</figure>
+      <figure class="chart wide"><figcaption>Solved by theme</figcaption>${themeChart(groups.filter(g => g.n))}</figure>
+      <figure class="chart wide"><figcaption>Games against the bots (won · lost · drawn)</figcaption>
+        <div class="hbars">${BOTS.map(b => { const r = (pl.bots || {})[b.id] || { w: 0, l: 0, d: 0 }, n = r.w + r.l + r.d;
+          return `<div class="hb" data-tip="${esc(b.name)}: ${r.w} won, ${r.l} lost, ${r.d} drawn"><span class="nm">${b.face} ${esc(b.name)}</span>
+            <span class="track"><i style="width:${n ? 100 * r.w / n : 0}%"></i></span><span class="v">${r.w} · ${r.l} · ${r.d}</span></div>`; }).join("")}</div></figure>
+    <figure class="chart wide unlock"><figcaption>Unlock levels</figcaption>
+      <p class="tiny">To continue where ${esc(pl.name)} is on another device. Tap a learning-path stage to open it: every stage before it counts as finished.</p>
+      <div class="ustages">${STAGES.map((st, i) => `<button class="btn" type="button" data-ul="${i}" ${stageOpen(pl, i) ? "disabled" : ""}
+        aria-label="Open stage ${i + 1}"><span class="stageicon">${st.icon}</span><small>${i + 1}</small></button>`).join("")}</div>
+      <label class="tiny"><input type="checkbox" id="uSchool" ${pl.schoolAll ? "checked" : ""}> Open every piece-school level</label>
+    </figure>
+    </div>
+    <p class="tiny">Stars, trophies and stickers are earned in pictures-only mode. Ratings update after every puzzle (not after hinted ones).</p>`;
+  wireTips($("kParents"));
+  $("kParents").querySelectorAll("[data-ul]").forEach(b => b.onclick = () => {
+    const i = +b.dataset.ul;
+    if (!confirm(`Open stage ${i + 1}? Stages 1–${i} will count as finished.`)) return;
+    pl.stages = pl.stages || {};
+    STAGES.slice(0, i).forEach(st => { pl.stages[st.id] = Math.max(stageStars(pl, st.id), needOf(st)); });
+    save(); renderParents();
+  });
+  $("uSchool").onchange = ev => { pl.schoolAll = ev.target.checked; save(); };
+}
+function lineChart(s) {
+  if (s.length < 2) return `<p class="empty">A rating line appears after a couple of puzzles.</p>`;
+  const W = 520, H = 190, L = 40, R = 12, T = 12, B = 24;
+  const lo = Math.floor((Math.min(...s.map(x => x.r)) - 20) / 50) * 50, hi = Math.ceil((Math.max(...s.map(x => x.r)) + 20) / 50) * 50;
+  const x = i => L + (W - L - R) * i / (s.length - 1), y = v => T + (H - T - B) * (1 - (v - lo) / (hi - lo));
+  const ticks = []; for (let v = lo; v <= hi; v += Math.max(50, Math.round((hi - lo) / 4 / 50) * 50)) ticks.push(v);
+  const d = s.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(p.r).toFixed(1)}`).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" class="svgc" role="img" aria-label="Rating went from ${s[0].r} to ${s[s.length - 1].r}">
+    ${ticks.map(v => `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" class="grid"/><text x="${L - 6}" y="${y(v) + 4}" class="ax" text-anchor="end">${v}</text>`).join("")}
+    <path d="${d}" class="ln"/>
+    <circle cx="${x(s.length - 1)}" cy="${y(s[s.length - 1].r)}" r="4.5" class="end"/>
+    ${s.map((p, i) => `<rect x="${x(i) - (W - L - R) / s.length / 2}" y="${T}" width="${(W - L - R) / s.length}" height="${H - T - B}" class="hit" data-tip="Puzzle ${i + 1}: ${p.ok ? "solved" : "missed"} (rated ${p.pr}) · rating ${p.r}"/>`).join("")}
+  </svg>`;
+}
+function dayChart(days) {
+  const W = 520, H = 190, L = 28, R = 8, T = 12, B = 34, max = Math.max(4, ...days.map(d => d.n));
+  const bw = (W - L - R) / days.length, y = v => T + (H - T - B) * (1 - v / max);
+  return `<svg viewBox="0 0 ${W} ${H}" class="svgc" role="img" aria-label="Puzzles per day over the last 14 days">
+    <line x1="${L}" x2="${W - R}" y1="${y(0)}" y2="${y(0)}" class="grid"/>
+    <text x="${L - 6}" y="${y(max) + 4}" class="ax" text-anchor="end">${max}</text>
+    ${days.map((d, i) => `${d.n ? `<path d="M${L + i * bw + 3},${y(0)} V${y(d.n) + 4} q0,-4 4,-4 H${L + (i + 1) * bw - 7} q4,0 4,4 V${y(0)} Z" class="bar"/>` : ""}
+      ${i % 2 === 0 ? `<text x="${L + i * bw + bw / 2}" y="${H - 14}" class="ax" text-anchor="middle">${esc(d.label)}</text>` : ""}
+      <rect x="${L + i * bw}" y="${T}" width="${bw}" height="${H - T - B}" class="hit" data-tip="${esc(d.label)}: ${d.n} puzzle${d.n === 1 ? "" : "s"}, ${d.ok} solved"/>`).join("")}
+  </svg>`;
+}
+function themeChart(g) {
+  if (!g.length) return `<p class="empty">Nothing played yet.</p>`;
+  return `<div class="hbars">${g.map(x => `<div class="hb" data-tip="${esc(x.name)}: ${x.ok} of ${x.n} solved">
+    <span class="nm">${esc(x.name)}</span><span class="track"><i style="width:${100 * x.ok / x.n}%"></i></span><span class="v">${Math.round(100 * x.ok / x.n)}% <small>(${x.n})</small></span></div>`).join("")}</div>`;
+}
+function wireTips(root) {
+  const tip = $("kTip");
+  root.querySelectorAll("[data-tip]").forEach(el => {
+    el.addEventListener("pointerenter", () => { tip.textContent = el.dataset.tip; tip.hidden = false; });
+    el.addEventListener("pointermove", ev => { tip.style.left = (ev.clientX + 12) + "px"; tip.style.top = (ev.clientY + 12) + "px"; });
+    el.addEventListener("pointerleave", () => { tip.hidden = true; });
+  });
+}
+
+/* ---- the kids' corner screen ---- */
+let kidTab = "path", kidsWired = false;
+// → = next (next level / next piece / rematch), ← = start the level again
+function schoolNext() {
+  if (!sc || !sc.done) return;
+  $("sDone").hidden = true;
+  if (sc.li + 1 < schoolLevels(sc.pc)) return schoolStart(sc.pc, sc.li + 1);
+  const next = SCHOOL[(SCHOOL.indexOf(sc.pc) + 1) % SCHOOL.length];
+  schoolStart(next, firstOpenLevel(next));
+}
+document.addEventListener("keydown", ev => {
+  if (window.SECTION !== "kids" || ev.target.closest("input, textarea, select")) return;
+  if (ev.key === "ArrowRight") {
+    if (kidTab === "school" && sc && sc.done) { ev.preventDefault(); schoolNext(); }
+    else if (kidTab === "play" && bg && bg.over) { ev.preventDefault(); botStart(bg.bot.id); }
+  } else if (ev.key === "ArrowLeft" && kidTab === "school" && sc) { ev.preventDefault(); $("sDone").hidden = true; schoolStart(sc.pc, sc.li); }
+});
+function openKids(sub) {
+  if (typeof sub === "string") kidTab = sub;
+  if (!pzPlayers().kid && !openKids.picked) {        // opening the corner selects a young player's profile
+    const kid = Object.keys(S.players).find(id => S.players[id].kid);
+    if (kid) { S.player = kid; save(); }
+  }
+  openKids.picked = true;
+  const pl = pzPlayers();
+  if (!kidsWired) {
+    kidsWired = true;
+    document.querySelectorAll("[data-kt]").forEach(b => b.onclick = () => { kidTab = b.dataset.kt; openKids(); });
+    $("sboard").addEventListener("pointerdown", ev => {
+      const r = $("sboard").getBoundingClientRect();
+      const col = Math.floor((ev.clientX - r.left) / r.width * 8), row = Math.floor((ev.clientY - r.top) / r.height * 8);
+      if (col >= 0 && col < 8 && row >= 0 && row < 8) schoolMove(sqOf(col, row, "w"));
+    });
+    $("kSound").onclick = () => { const p = pzPlayers(); p.sound = !soundOn(); save(); openKids(); if (p.sound) sfx("right"); };
+  }
+  $("kPlayers").innerHTML = Object.entries(S.players).map(([id, p]) =>
+    `<button type="button" data-pl="${id}" aria-pressed="${id === S.player}">${esc(p.name)}</button>`).join("");
+  $("kPlayers").querySelectorAll("[data-pl]").forEach(b => b.onclick = () => { S.player = b.dataset.pl; save(); sc = null; bg = null; openKids(); });
+  $("kSound").textContent = soundOn() ? "🔊" : "🔇";
+  $("kStarsTop").innerHTML = `⭐ <b>${pl.stars || 0}</b>`;
+  document.querySelectorAll("[data-kt]").forEach(b => b.setAttribute("aria-pressed", b.dataset.kt === kidTab));
+  for (const [t, id] of [["path", "kPath"], ["school", "kSchool"], ["play", "kPlay"], ["stickers", "kStickers"], ["parents", "kParents"]]) $(id).hidden = t !== kidTab;
+  if (kidTab === "path") renderPath();
+  else if (kidTab === "play") openBots();
+  else if (kidTab === "school") { if (!sc) schoolStart("R", firstOpenLevel("R")); else schoolDraw(); }
+  else if (kidTab === "stickers") renderStickers();
+  else renderParents();
+}
+
+
+/* ================= bots for young players ================= */
+// Chess bots are built on chess.js with deliberate weaknesses; Pawn Wars uses its own tiny rules engine.
+const BOTS = [
+  { id: "rex", face: "🦖", name: "Random Rex", elo: "~100", think: 500 },
+  { id: "gus", face: "🐷", name: "Greedy Gus", elo: "~300", think: 600 },
+  { id: "cat", face: "🐱", name: "Careful Cat", elo: "~500", think: 700 },
+  { id: "tiger", face: "🐯", name: "Tactic Tiger", elo: "~800", think: 400 },
+  { id: "pete", face: "🐣", name: "Pawn Pete", elo: "Pawn Wars", think: 500, pawns: true },
+];
+const VALUE = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+let bg = null;   // {bot, game (chess.js) | pw (pawn wars state), me: 'w'|'b', sel, last, over, hist:[fen…]}
+
+function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+function material(g, side) {
+  let s = 0;
+  for (const row of g.board()) for (const p of row) if (p) s += (p.color === side ? 1 : -1) * VALUE[p.type];
+  return s;
+}
+function mateScore(g) { return g.in_checkmate() ? -1000 : (g.in_draw() || g.in_stalemate()) ? 0 : null; }
+// best capture the side to move can make right now (used by Careful Cat and Tactic Tiger to see simple threats)
+function bestCaptureGain(g) {
+  let best = 0;
+  for (const m of g.moves({ verbose: true })) if (m.captured) best = Math.max(best, VALUE[m.captured]);
+  return best;
+}
+function botMove(bot, g) {
+  const ms = shuffle(g.moves({ verbose: true })), me = g.turn();
+  if (bot.id === "rex") return ms[0];
+  // everyone but Rex takes a mate in one
+  for (const m of ms) { g.move(m); const mate = g.in_checkmate(); g.undo(); if (mate) return m; }
+  if (bot.id === "gus") {
+    const caps = ms.filter(m => m.captured).sort((a, b) => VALUE[b.captured] - VALUE[a.captured]);
+    return caps[0] || ms[0];
+  }
+  if (bot.id === "cat") {        // takes what's safe to take and doesn't leave the moved piece hanging
+    let best = null, bs = -1e9;
+    for (const m of ms) {
+      g.move(m);
+      const s = (m.captured ? VALUE[m.captured] : 0) - bestCaptureGain(g) * 0.9 + Math.random() * 0.3;
+      g.undo();
+      if (s > bs) { bs = s; best = m; }
+    }
+    return best;
+  }
+  // Tiger: two plies (its move, your reply) plus the best capture after that
+  let best = null, bs = -1e9;
+  for (const m of ms) {
+    g.move(m);
+    let worst = 1e9;
+    const ms2 = g.moves({ verbose: true });
+    if (!ms2.length) worst = g.in_checkmate() ? 1000 : 0;
+    for (const r of ms2) {
+      g.move(r);
+      const ms_ = mateScore(g);
+      const v = ms_ !== null ? ms_ : material(g, me) + bestCaptureGain(g) * 0.8;   // bot to move: mated = -1000
+      g.undo();
+      if (v < worst) worst = v;
+      if (worst <= bs) break;
+    }
+    g.undo();
+    const s = worst + Math.random() * 0.2;
+    if (s > bs) { bs = s; best = m; }
+  }
+  return best;
+}
+
+/* ---- Pawn Wars: pawns only; first to reach the last rank wins, and a side with no moves loses ---- */
+function pwNew() {
+  const b = {}; for (const f of FILES) { b[f + "2"] = "P"; b[f + "7"] = "p"; }
+  return { b, turn: "w", ep: null };
+}
+function pwMoves(s, side = s.turn) {
+  const out = [], dir = side === "w" ? 1 : -1, start = side === "w" ? 2 : 7, mine = side === "w" ? "P" : "p", theirs = side === "w" ? "p" : "P";
+  for (const [sq, p] of Object.entries(s.b)) {
+    if (p !== mine) continue;
+    const x = FILES.indexOf(sq[0]), y = +sq[1], y1 = y + dir;
+    if (y1 < 1 || y1 > 8) continue;
+    const one = FILES[x] + y1;
+    if (!s.b[one]) {
+      out.push({ from: sq, to: one });
+      const two = FILES[x] + (y + 2 * dir);
+      if (y === start && !s.b[two]) out.push({ from: sq, to: two, dbl: true });
+    }
+    for (const dx of [-1, 1]) {
+      if (x + dx < 0 || x + dx > 7) continue;
+      const t = FILES[x + dx] + y1;
+      if (s.b[t] === theirs) out.push({ from: sq, to: t, cap: true });
+      else if (s.ep === t) out.push({ from: sq, to: t, cap: true, ep: FILES[x + dx] + y });
+    }
+  }
+  return out;
+}
+function pwPlay(s, m) {
+  const b = { ...s.b }, p = b[m.from];
+  delete b[m.from]; if (m.ep) delete b[m.ep];
+  b[m.to] = p;
+  const ep = m.dbl ? m.to[0] + ((+m.from[1] + +m.to[1]) / 2) : null;
+  return { b, turn: s.turn === "w" ? "b" : "w", ep };
+}
+function pwWinner(s) {
+  for (const [sq, p] of Object.entries(s.b)) { if (p === "P" && sq[1] === "8") return "w"; if (p === "p" && sq[1] === "1") return "b"; }
+  if (!Object.values(s.b).includes("P")) return "b";
+  if (!Object.values(s.b).includes("p")) return "w";
+  if (!pwMoves(s).length) return s.turn === "w" ? "b" : "w";
+  return null;
+}
+function pwBot(s) {
+  const ms = shuffle(pwMoves(s)), side = s.turn;
+  for (const m of ms) if (pwWinner(pwPlay(s, m)) === side) return m;              // promote if it can
+  const safe = m => { const n = pwPlay(s, m); return !pwMoves(n).some(r => r.to === m.to); };
+  const runner = m => { const n = pwPlay(s, m); return !pwMoves(n).some(r => pwWinner(pwPlay(n, r)) === n.turn); };
+  const caps = ms.filter(m => m.cap && runner(m));
+  if (caps.length) return caps.find(safe) || caps[0];
+  return ms.find(m => safe(m) && runner(m)) || ms.find(runner) || ms[0];
+}
+
+/* ---- playing a game ---- */
+function botStart(id) {
+  const bot = BOTS.find(b => b.id === id), pl = pzPlayers();
+  const me = (pl.botColor || "w");
+  bg = { bot, me, sel: null, last: [], over: null, hist: [] };
+  if (bot.pawns) bg.pw = pwNew();
+  else {
+    bg.game = new Chess();
+    if (pl.botNoQueen) bg.game.remove(me === "w" ? "d8" : "d1");
+  }
+  $("bPick").hidden = true; $("bGame").hidden = false; $("bOver").hidden = true;
+  botDraw();
+  if (botTurn() !== me) setTimeout(botReply, bot.think);
+}
+function botTurn() { return bg.pw ? bg.pw.turn : bg.game.turn(); }
+function botPos() { return bg.pw ? bg.pw.b : parseFen(bg.game.fen()); }
+function myTargets(sq) {
+  if (bg.pw) return pwMoves(bg.pw).filter(m => m.from === sq).map(m => m.to);
+  return bg.game.moves({ square: sq, verbose: true }).map(m => m.to);
+}
+function dangerMarks() {   // your pieces that are attacked and not defended (or attacked by something cheaper)
+  const marks = {};
+  if (!bg.game) return marks;
+  const pos = parseFen(bg.game.fen()), opp = bg.me === "w" ? "b" : "w";
+  if (bg.game.in_check()) { const k = Object.keys(pos).find(q => pos[q] === (bg.game.turn() === "w" ? "K" : "k")); marks[k] = "mk"; }
+  if (pzPlayers().botDanger === false) return marks;
+  for (const [sq, p] of Object.entries(pos)) {
+    if (colorOf(p) !== bg.me || p.toLowerCase() === "k") continue;
+    const att = attackersOf(pos, sq, opp);
+    if (!att.length) continue;
+    const def = attackersOf(pos, sq, bg.me).length, cheapest = Math.min(...att.map(a => VALUE[pos[a].toLowerCase()] || 0));
+    if (!def || cheapest < VALUE[p.toLowerCase()]) marks[sq] = "dg";
+  }
+  return marks;
+}
+function botDraw() {
+  const tg = bg.sel && !bg.over && botTurn() === bg.me ? myTargets(bg.sel) : [];
+  renderBoard(botPos(), { el: $("gboard"), o: bg.me, hl: bg.last, sel: bg.sel, tgts: tg, marks: bg.over ? {} : dangerMarks() });
+  $("gboard").classList.toggle("mine", !bg.over && botTurn() === bg.me);
+  $("bFace").innerHTML = `<span class="face">${bg.bot.face}</span>${botTurn() !== bg.me && !bg.over ? `<span class="thinking">…</span>` : ""}`;
+  $("bUndo").disabled = !bg.hist.length || !!bg.over;
+}
+function botAfterMove() {
+  const pl = pzPlayers();
+  let res = null;
+  if (bg.pw) { const w = pwWinner(bg.pw); if (w) res = w === bg.me ? "win" : "loss"; }
+  else if (bg.game.game_over()) res = bg.game.in_checkmate() ? (bg.game.turn() === bg.me ? "loss" : "win") : "draw";
+  if (!res) return false;
+  bg.over = res;
+  pl.bots = pl.bots || {}; const r = pl.bots[bg.bot.id] = pl.bots[bg.bot.id] || { w: 0, l: 0, d: 0 };
+  r[res === "win" ? "w" : res === "loss" ? "l" : "d"]++;
+  if (res === "win") { pl.stars = (pl.stars || 0) + 3; sfx("trophy"); } else if (res === "loss") sfx("wrong"); else sfx("right");
+  save();
+  $("bOver").innerHTML = `<div class="burst">${res === "win" ? "🏆" : res === "loss" ? bg.bot.face : "🤝"}</div>
+    ${res === "win" ? `<div class="big">⭐ +3</div>` : ""}
+    <div class="row"><button class="btn primary big" type="button" id="bAgain" aria-label="Play again">↻</button>
+    <button class="btn big" type="button" id="bBack" aria-label="Choose a bot">🤖</button></div>`;
+  $("bOver").hidden = false;
+  $("bAgain").onclick = () => botStart(bg.bot.id);
+  $("bBack").onclick = () => { bg = null; renderBots(); };
+  botDraw();
+  return true;
+}
+function botReply() {
+  if (!bg || bg.over || botTurn() === bg.me) return;
+  if (bg.pw) { const m = pwBot(bg.pw); bg.pw = pwPlay(bg.pw, m); bg.last = [m.from, m.to]; }
+  else { const m = botMove(bg.bot, bg.game); bg.game.move(m); bg.last = [m.from, m.to]; }
+  sfx("move");
+  if (!botAfterMove()) botDraw();
+}
+function botUserMove(from, to) {
+  if (!bg || bg.over || botTurn() !== bg.me || !myTargets(from).includes(to)) return false;
+  bg.hist.push(bg.pw ? JSON.stringify(bg.pw) : bg.game.fen());
+  if (bg.pw) bg.pw = pwPlay(bg.pw, pwMoves(bg.pw).find(m => m.from === from && m.to === to));
+  else bg.game.move({ from, to, promotion: "q" });
+  bg.sel = null; bg.last = [from, to]; sfx("move");
+  if (!botAfterMove()) { botDraw(); setTimeout(botReply, bg.bot.think); }
+  return true;
+}
+function botUndo() {   // takes back your last move and the bot's reply
+  if (!bg || !bg.hist.length || bg.over || botTurn() !== bg.me) return;
+  const prev = bg.hist.pop();
+  if (bg.pw) bg.pw = JSON.parse(prev); else bg.game.load(prev);
+  bg.last = []; bg.sel = null; botDraw();
+}
+function renderBots() {
+  const pl = pzPlayers(), rec = pl.bots || {};
+  $("bPick").hidden = false; $("bGame").hidden = true;
+  $("bPick").innerHTML = `<div class="botopts">
+      <button type="button" class="opt" id="bColor" aria-label="Play as ${pl.botColor === "b" ? "Black" : "White"}"><span class="pc ${pl.botColor === "b" ? "b" : "w"}K"></span></button>
+      <button type="button" class="opt" id="bDanger" aria-pressed="${pl.botDanger !== false}" aria-label="Show my pieces in danger">👁</button>
+      <button type="button" class="opt" id="bNoQ" aria-pressed="${!!pl.botNoQueen}" aria-label="Bot plays without its queen"><span class="pc bQ"></span><b>✕</b></button>
+    </div>
+    <div class="bots">${BOTS.map(b => {
+      const r = rec[b.id] || { w: 0, l: 0, d: 0 };
+      return `<button type="button" class="bot${r.w ? " beaten" : ""}" data-bot="${b.id}" aria-label="${b.name}">
+        <span class="face">${b.face}</span>${b.pawns ? `<span class="pc wP tag"></span>` : ""}
+        <span class="wins">${r.w ? "🏆".repeat(Math.min(r.w, 3)) : "&nbsp;"}</span></button>`;
+    }).join("")}</div>`;
+  $("bPick").querySelectorAll("[data-bot]").forEach(b => b.onclick = () => botStart(b.dataset.bot));
+  $("bColor").onclick = () => { pl.botColor = pl.botColor === "b" ? "w" : "b"; save(); renderBots(); };
+  $("bDanger").onclick = () => { pl.botDanger = pl.botDanger === false; save(); renderBots(); };
+  $("bNoQ").onclick = () => { pl.botNoQueen = !pl.botNoQueen; save(); renderBots(); };
+}
+let botsWired = false;
+function openBots() {
+  if (!botsWired) {
+    botsWired = true;
+    const bd = $("gboard");
+    bd.addEventListener("pointerdown", ev => {
+      if (!bg || bg.over || botTurn() !== bg.me) return;
+      const r = bd.getBoundingClientRect();
+      const col = Math.floor((ev.clientX - r.left) / r.width * 8), row = Math.floor((ev.clientY - r.top) / r.height * 8);
+      if (col < 0 || col > 7 || row < 0 || row > 7) return;
+      const sq = sqOf(col, row, bg.me), p = botPos()[sq];
+      if (bg.sel && bg.sel !== sq && botUserMove(bg.sel, sq)) return;
+      bg.sel = p && colorOf(p) === bg.me ? sq : null; botDraw();
+    });
+    $("bUndo").onclick = botUndo;
+    $("bQuit").onclick = () => { bg = null; renderBots(); };
+  }
+  if (bg) { $("bPick").hidden = true; $("bGame").hidden = false; botDraw(); } else renderBots();
+}
+
+
+/* ================= sections: puzzles and the openings ================= */
+window.SECTION = null;
+const loaded = {};
+function loadScript(src) {
+  return loaded[src] || (loaded[src] = new Promise((ok, fail) => {
+    const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = fail; document.head.appendChild(s);
+  }));
+}
+async function go(sec, sub) {
+  document.querySelectorAll("[data-sec]").forEach(b => b.setAttribute("aria-current", b.dataset.sec === sec ? "page" : "false"));
+  $("puzzleView").hidden = sec !== "puzzles";
+  $("kidsView").hidden = sec !== "kids";
+  $("openingView").hidden = sec === "puzzles" || sec === "kids";
+  $("loading").hidden = false;
+  try {
+    if (sec === "puzzles") {
+      await loadScript("data/puzzles.js");
+      if (typeof Chess === "undefined") throw new Error("chess.js missing");
+      window.SECTION = "puzzles"; openPuzzles(sub && sub.stage);
+    } else if (sec === "kids") {
+      await loadScript("data/puzzles.js");
+      window.SECTION = "kids"; openKids(sub);
+    } else {
+      await loadScript(`data/${sec}.js`);
+      window.SECTION = "opening";
+      const d = GYM[sec];
+      $("openingLede").textContent = d.side === "b"
+        ? "You play Black. Lessons walk you through one White system at a time, then test you until every position in it is right. Misses go into your notebook, and Review brings them back."
+        : "You play White. Lessons walk you through one Black reply at a time, then test you until every position in it is right. Misses go into your notebook, and Review brings them back.";
+      $("openingNote").hidden = d.nodes.length > 20;
+      openOpening(d, sub);
+    }
+    try { localStorage.setItem("gym:sec", sec); } catch (e) {}
+  } catch (e) {
+    $("loadErr").hidden = false; $("loadErr").textContent = "This section didn't load. Reload the page to try again.";
+  }
+  $("loading").hidden = true;
+}
+document.querySelectorAll("[data-sec]").forEach(b => b.onclick = () => go(b.dataset.sec));
+window.onGymStoreKids = () => { if (window.SECTION === "kids") openKids(); };
+window.onGymStore = () => { if (window.SECTION === "puzzles") pzRenderBar(); if (window.SECTION === "kids") openKids(); };
+(function boot() {
+  if (window.GYM_KIDS_ONLY) {     // the standalone kids' site: no section menu, no openings
+    try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch (e) {}
+    return go("kids");
+  }
+  const h = location.hash.slice(1);
+  let sec = "puzzles";
+  try { sec = localStorage.getItem("gym:sec") || sec; } catch (e) {}
+  if (["puzzles", "modern", "tromp", "kids"].includes(h)) sec = h;
+  if (["lessons", "review", "free", "ideas"].includes(h)) return go("modern", h);
+  go(sec);
+})();
