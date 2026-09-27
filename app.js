@@ -9,7 +9,7 @@ function useOpening(d) {
   ME = d.side; OPPC = ME === "b" ? "w" : "b"; MEN = ME === "b" ? "Black" : "White"; OPP = ME === "b" ? "White" : "Black"; orient = ME;
   for (const k in subCache) delete subCache[k];
   lastPath = null; lastReviewed = null; forced = null;      // nothing carries over from the other opening
-  useMyGames();
+  useMyGames(); replySeen = {};
   resetArmed = false; $("bReset").textContent = "Reset my progress in this opening";
 }
 const FILES = "abcdefgh";
@@ -128,6 +128,7 @@ function merge(o) {
     S.pzv = Math.max(S.pzv || 0, o.pzv || 0);
   }
   delete S.fresh;
+  S.seenGames = Object.assign({}, o.seenGames || {}, S.seenGames || {});      // games you opened in the Game list
   const seenReq = new Set((S.req || []).map(r => r.line)); S.req = S.req || [];
   (o.req || []).forEach(r => { if (!seenReq.has(r.line)) S.req.push(r); });
 }
@@ -347,9 +348,22 @@ function startAt(i, ideaHtml) {                     // start mid-tree at node i 
   $("idea").innerHTML = ideaHtml || "";
   beginBlack();
 }
-function playWhite(edges, depth) {
+// free play: replies already shown at each position; stepping back and replaying your move shows a new one
+let replySeen = {}, replayAgain = false;
+function playWhite(edges, depth, key) {
   phase = "white"; wiPar = null;
+  let seenNote = "";
+  if (key !== undefined && mode === "free") {
+    const seen = replySeen[key] = replySeen[key] || new Set(), total = edges.length;
+    if (replayAgain && total > 1) {
+      const fresh = edges.filter(e => !seen.has(e[0]));
+      if (fresh.length) { edges = fresh; seenNote = `A different reply: ${seen.size + 1} of the ${total} ${OPP} replies in your repertoire here.`; }
+      else { seen.clear(); seenNote = `You've seen all ${total} ${OPP} replies in your repertoire here, so they start over.`; }
+    } else if (replayAgain) seenNote = `This is the only ${OPP} reply in your repertoire here.`;
+  }
+  replayAgain = false;
   const e = pick(edges, depth);
+  if (key !== undefined && replySeen[key]) replySeen[key].add(e[0]);
   path[depth] = e[0];
   const delay = matchMedia("(prefers-reduced-motion: reduce)").matches ? 120 : 420;
   whiteTimer = setTimeout(() => {
@@ -357,7 +371,7 @@ function playWhite(edges, depth) {
     pos = parseFen(to.fen); lastMove = [e[0].slice(0, 2), e[0].slice(2, 4)]; arrowsNow = [];
     if (depth === 0 && e[5]) e[5].forEach(([san, side, n]) => hist.push({ san, side, no: n }));
     hist.push({ san: e[1], side: OPPC, no });
-    $("idea").innerHTML = `<span class="who">${OPP} played <b>${oppLbl(no, e[1])}</b></span>${e[3] ? `<span>${esc(e[3])}</span>` : ""}`;
+    $("idea").innerHTML = `<span class="who">${OPP} played <b>${oppLbl(no, e[1])}</b></span>${e[3] ? `<span>${esc(e[3])}</span>` : ""}${seenNote ? `<span class="tiny">${esc(seenNote)}</span>` : ""}`;
     cur = e[4];
     beginBlack();
   }, delay);
@@ -377,11 +391,13 @@ function wireCard() {
   wireTwins();
   const b = $("bBack"); if (b) b.onclick = back;
   const po = $("bPlayOut"); if (po) po.onclick = () => startPlayout(+po.dataset.node);
+  const so = $("bStartOver"); if (so) so.onclick = next;                       // a new line (free play: from move 1)
+  const rh = $("bReplayHere"); if (rh) rh.onclick = () => startFromRoot(true);
   $("card").querySelectorAll("[data-wi]").forEach(x => x.onclick = () => whatIfMove(x.dataset.wi));
 }
 function goFrame(k) {
   if (k < 0 || k >= frames.length) return;
-  clearTimeout(whiteTimer); drag = null; sel = null; document.querySelector(".ghost")?.remove(); timedStop();
+  clearTimeout(whiteTimer); drag = null; sel = null; document.querySelector(".ghost")?.remove(); timedStop(); altWait = null;
   fi = k;
   const f = frames[k], live = k === frames.length - 1;
   pos = f.pos; lastMove = f.lastMove; cur = f.cur; arrowsNow = live ? f.arrows : [];
@@ -407,6 +423,7 @@ function goFrame(k) {
 }
 function back() { if (!(lesson && lesson.phase === "walk") && fi > 0) goFrame(fi - 1); }
 function forward() {
+  if (phase === "alt") return altContinue();
   if (lesson && lesson.phase === "walk") return;
   if (fi < frames.length - 1) return goFrame(fi + 1);
   const f = frames[fi];                                   // at the live end: let White continue if it was cut short
@@ -445,7 +462,8 @@ function playerMove(uci) {
   const v = judge(uci);
   if (!v) return;
   timedStop();
-  if (frames.length && fi < frames.length - 1) { hist = hist.slice(0, frames[fi].h); frames = frames.slice(0, fi + 1); }
+  replayAgain = frames.length && fi < frames.length - 1;          // you stepped back and are playing this position again
+  if (replayAgain) { hist = hist.slice(0, frames[fi].h); frames = frames.slice(0, fi + 1); }
   const n = N[cur], id = cur, no = moveNo(id);
   sel = null;
   if (lesson && lesson.phase === "walk" && v.kind !== "main") {
@@ -482,18 +500,62 @@ function playerMove(uci) {
       pos = applyMove(pos, uci); lastMove = [uci.slice(0, 2), uci.slice(2, 4)];
       note = `<p class="sub">${OPP} can bring this back into your repertoire with ${esc(via[1])}, so we follow that line.</p>`;
     } else {
-      hist.push({ san: n.s, side: ME, no, cls: "me" });
-      pos = applyMove(parseFen(n.fen), n.m); lastMove = [n.m.slice(0, 2), n.m.slice(2, 4)];
+      hist.push({ san: v.san, side: ME, no, cls: "me a" });            // your move stays on the board until you continue
+      pos = applyMove(pos, uci); lastMove = [uci.slice(0, 2), uci.slice(2, 4)];
       note = `<p class="sub">We continue with the move to learn, <b>${lmNo(no, n.s)}</b>: ${esc(n.why)}</p>`;
     }
+    const replace = from === cur && !via;
     setState("Playable", "alt");
-    setCard("alt", `<div class="head"><span class="tag alt">Playable</span><span class="mvname">${lmNo(no, v.san)}</span></div><p class="text">${esc(v.text)}</p>${note}`);
+    setCard("alt", `<div class="head"><span class="tag alt">Playable</span><span class="mvname">${lmNo(no, v.san)}</span></div><p class="text">${esc(v.text)}</p>
+      ${engineCompare(n, uci, no, v.san)}${note}
+      <div class="controls"><button class="btn primary" id="bAltGo">${replace ? `Continue with ${lmNo(no, n.s)}` : "Continue"} ▶</button></div>`);
+    // pause here: you see your move (blue) and the move to learn (green); → or the button carries on
+    arrowsNow = replace ? [[uci, "blue"], [n.m, "green"]] : [];
+    phase = "alt"; altWait = { from, via, id, replace };
+    $("bAltGo").onclick = altContinue;
+    tally(); renderMoves(); draw(); refreshBar();
+    return;
   }
   arrowsNow = [];
-  if (via) pushFrame("view", { phase: "white" });
-  else pushFrame("white", { wmOf: from, resume: from });
+  pushFrame("white", { wmOf: from, resume: from });
   tally(); renderMoves(); draw(); refreshBar();
   continueFrom(from, via);
+}
+// a playable move: carry on (with the move to learn instead of yours, unless yours transposes into the repertoire)
+let altWait = null;
+function altContinue() {
+  const a = altWait; if (!a || phase !== "alt") return;
+  altWait = null;
+  const n = N[a.id];
+  if (a.replace) {
+    hist.pop(); hist.push({ san: n.s, side: ME, no: moveNo(a.id), cls: "me" });
+    pos = applyMove(parseFen(n.fen), n.m); lastMove = [n.m.slice(0, 2), n.m.slice(2, 4)];
+  }
+  arrowsNow = [];
+  if (a.via) pushFrame("view", { phase: "white" });
+  else pushFrame("white", { wmOf: a.from, resume: a.from });
+  renderMoves(); draw();
+  continueFrom(a.from, a.via);
+}
+// the engine's verdict on the final position (stored by the build: after the move to learn, from your side)
+function evalLine(n) {
+  if (n.ev === null || n.ev === undefined) return "";
+  const cp = n.ev, fmt = x => Math.abs(x) >= 9000 ? "mate" : (x > 0 ? "+" : x < 0 ? "−" : "") + (Math.abs(x) / 100).toFixed(2);
+  const verdict = Math.abs(cp) >= 9000 ? (cp > 0 ? "a forced mate for you" : "a forced mate against you")
+    : cp >= 150 ? "clearly better for you" : cp >= 50 ? "a pleasant edge for you" : cp > -50 ? "about equal" : cp > -150 ? `a small edge for ${OPP}` : `clearly better for ${OPP}`;
+  const white = ME === "w" ? cp : -cp;
+  return `<p class="sub eng">Engine: <b>${fmt(cp)}</b> for you, ${verdict}${ME === "b" ? ` (${fmt(white)} in White's terms)` : ""}.</p>`;
+}
+// how much the engine prefers the move to learn over the move you played (the build's depth-12 check)
+function engineCompare(n, uci, no, san) {
+  const loss = u => { const r = (n.mv || []).find(x => x[0] === u); return r ? r[2] : null; };
+  const mine = loss(uci), main = loss(n.m);
+  if (mine === null || main === null) return "";
+  const d = mine - main, p = x => (Math.abs(x) / 100).toFixed(2);
+  const text = d > 5 ? `${lmNo(no, san)} is <b>${p(d)}</b> pawns worse than ${lmNo(no, n.s)}.`
+    : d < -5 ? `the engine even rates ${lmNo(no, san)} <b>${p(d)}</b> pawns better than the move to learn.`
+    : `practically equal to ${lmNo(no, n.s)}.`;
+  return `<p class="sub eng">Engine: ${text}</p>`;
 }
 // a wrong answer (or, with timed answers, no answer in time: v.san and uci are null)
 function showFail(id, v, uci) {
@@ -521,13 +583,13 @@ function showFail(id, v, uci) {
 function continueFrom(from, via) {
   if (from === "root") {
     let edges = DATA.roots.filter(e => filter === "all" || (filter === "other" ? !FIRST[e[0]] : e[0] === filter));
-    return playWhite(edges.length ? edges : DATA.roots, 0);
+    return playWhite(edges.length ? edges : DATA.roots, 0, "root");
   }
   if (via) return playWhite([[via[0], via[1], 1, "A transposition: this reaches a position from your repertoire.", via[2]]], path.length);
   const all = N[from].next, edges = inScope(all);
   if (!all.length) return finishLine(from, null);
   if (!edges.length) return finishLine(from, all);
-  playWhite(edges, path.length);
+  playWhite(edges, path.length, from);
 }
 function finishLine(i, exits) {
   phase = "done"; S.lines++; save();
@@ -536,7 +598,7 @@ function finishLine(i, exits) {
   if (exits) {
     const names = [...new Set(exits.map(e => nodeLesson[e[4]]).filter(x => x !== undefined && (!lesson || x !== lesson.li)))].map(x => `<b>${esc(L[x].title)}</b>`);
     extra = `<div class="plan"><span class="lbl">From here</span><p class="text">${OPP} now picks a system${names.length ? ": " + names.join(", ") : ""}. ${names.length ? "Each has its own lesson." : ""}</p></div>`;
-  } else extra = `<div class="plan"><span class="lbl">Your plan from here</span><p class="text">${esc(n.plan || "")}</p>
+  } else extra = `<div class="plan"><span class="lbl">Your plan from here</span><p class="text">${esc(n.plan || "")}</p>${evalLine(n)}
     ${n.plan && !(lesson && lesson.phase === "walk") ? `<div class="controls"><button class="btn" id="bPlayOut" data-node="${i}">▶ Play it out against the engine</button></div>` : ""}</div>`;
   const cls = $("card").className.includes("alt") ? "alt" : "done";
   $("card").className = "card " + cls;
@@ -714,9 +776,13 @@ function setMode(m) {
   mode = m; markTabs();
   $("filters").hidden = m !== "free" || ME !== "b";
   $("ideasView").hidden = m !== "ideas";
-  $("mineView").hidden = m !== "mine";
-  $("oTrainer").hidden = m === "ideas" || m === "mine";
-  if (m === "ideas" || m === "mine") { lesson = null; scope = null; review = null; resetLine(); phase = "idle"; if (m === "mine") renderMine(); syncControls(); return; }
+  $("mineView").hidden = m !== "mine"; $("gamesView").hidden = m !== "games";
+  $("oTrainer").hidden = m === "ideas" || m === "mine" || m === "games";
+  if (m === "ideas" || m === "mine" || m === "games") {
+    lesson = null; scope = null; review = null; resetLine(); phase = "idle";
+    if (m === "mine") renderMine(); if (m === "games") renderGames();
+    syncControls(); return;
+  }
   lesson = null; scope = null; review = null;
   if (m === "lessons") showLessonList();
   else if (m === "review") startReview();
@@ -797,8 +863,11 @@ function whatIfMove(uci) {
     setState("Not covered yet", "alt");
     setCard("alt", `<div class="head"><span class="tag alt">Saved</span><span class="mvname">${oppLbl(no, w[1])}</span></div>
       <p class="text">This line isn't in your repertoire yet, so there's no move to learn here. It's saved under <b>Lines to investigate</b> in your notebook.</p>
-      <p class="sub">Next time you're in Claude Code, just ask Claude to add the lines you requested: it reads this list itself.</p>`);
+      <p class="sub">Next time you're in Claude Code, just ask Claude to add the lines you requested: it reads this list itself.</p>
+      <div class="controls"><button class="btn primary" id="bStartOver">↺ Start over</button><button class="btn" id="bBack">← Take back</button>
+        ${mode === "free" ? `<button class="btn" id="bReplayHere">Replay this line</button>` : ""}</div>`);
     pushFrame("view", { phase: "done" });
+    wireCard();
     renderMoves(); draw(); refreshPanels();
   }
   syncControls();
@@ -892,7 +961,7 @@ document.querySelectorAll(".tab").forEach(t => t.onclick = () => setMode(t.datas
 document.addEventListener("keydown", ev => {
   if (ev.target.closest("input, textarea")) return;
   const k = ev.key.toLowerCase();
-  if (window.SECTION !== "opening" || mode === "ideas" || mode === "mine") return;
+  if (window.SECTION !== "opening" || mode === "ideas" || mode === "mine" || mode === "games") return;
   if (ev.key === "ArrowRight") { ev.preventDefault(); forward(); }
   else if (ev.key === "ArrowLeft") { ev.preventDefault(); back(); }
   else if ((ev.key === "ArrowDown" || k === "n") && !$("bNext").hidden) { ev.preventDefault(); next(); }
@@ -1031,7 +1100,7 @@ function practiceNode(i) {
   startReview(i);
   $("board").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" });
 }
-function markTabs() { ["lessons", "review", "free", "ideas", "mine"].forEach(x => $("t" + x[0].toUpperCase() + x.slice(1)).setAttribute("aria-selected", x === mode)); }
+function markTabs() { ["lessons", "review", "free", "ideas", "mine", "games"].forEach(x => $("t" + x[0].toUpperCase() + x.slice(1)).setAttribute("aria-selected", x === mode)); }
 function refreshPanels() { renderNotebook(); renderReqs(); renderPrinciples(); tally(); }
 let resetArmed = false;
 // erases only this opening's positions and lessons: puzzle players, the kids' progress and the other opening stay
@@ -3015,6 +3084,7 @@ function mgSound(m) {
 }
 function useMyGames() {   // called by useOpening
   MYG = {};
+  if ($("gamesNew")) setTimeout(markGamesTab, 0);           // unseen count on the Game list tab
   const g = myGamesOf(DATA.id); if (!g) return;
   for (const m of g.mine) {
     if (m.node === undefined || mgSound(m)) continue;                  // sound alternatives aren't mistakes
@@ -3060,7 +3130,54 @@ function renderMine() {
     b.textContent = "Added"; b.disabled = true;
   });
 }
-function showTrainer() { $("mineView").hidden = true; $("ideasView").hidden = true; $("oTrainer").hidden = false; }
+/* ---- the chronological game list: every game in this opening, newest first; opening one marks it seen ---- */
+let gamesFilter = "all";
+function gamesSeen(id) { return !!(S.seenGames || {})[id]; }
+function gamesUnseen() { const g = myGamesOf(DATA.id); return g && g.list ? [...g.list, ...(GYM.mygames.other || [])].filter(x => !gamesSeen(x.id)).length : 0; }
+function markGamesTab() { const n = gamesUnseen(); $("gamesNew").hidden = !n; $("gamesNew").textContent = n; }
+function renderGames() {
+  const g = myGamesOf(DATA.id), el = $("games2");
+  gaView = null;
+  markGamesTab();
+  if (!g || !g.list) { el.innerHTML = `<p class="empty">No games yet. In Claude Code, ask to "refresh my games".</p>`; return; }
+  const list = g.list.filter(x => gamesFilter === "all" || (gamesFilter === "unseen" ? !gamesSeen(x.id) : gamesFilter === "mine" ? x.left === "me" : x.left === "opp"));
+  const other = (GYM.mygames.other || []).filter(x => gamesFilter === "all" || (gamesFilter === "unseen" && !gamesSeen(x.id)));
+  const nAn = g.list.filter(x => x.an).length + (GYM.mygames.other || []).filter(x => x.an).length;
+  const res = x => x.score === 1 ? ["w", "1-0"] : x.score === 0 ? ["l", "0-1"] : ["d", "½"];
+  const where = x => {
+    const no = x.ply ? Math.ceil(x.ply / 2) + (x.ply % 2 ? "." : "…") : "";
+    if (x.left === "me") return `you left the repertoire: <span class="bad">${no}${esc(x.played)}</span>, learn <span class="good">${no}${esc(x.learn)}</span>${x.kind === "also" ? " (sound alternative)" : ""}`;
+    if (x.left === "opp") return `${OPP} left the repertoire: <span class="bad">${no}${esc(x.played)}</span> (not covered yet)`;
+    return x.plies <= 2 * x.depth + 2 ? `the game ended while still in the repertoire (after ${Math.ceil(x.plies / 2)} moves)`
+      : `stayed in the repertoire until the prepared line ended (${x.depth} of your moves)`;
+  };
+  const row = (x, ln) => { const [c, t] = res(x), seen = gamesSeen(x.id);
+    return `<div class="grow${seen ? "" : " new"}">
+        <span class="res ${c}">${t}</span>
+        <span class="who">${seen ? "" : `<span class="dot" title="Not seen yet"></span>`}${esc(x.date)} · ${esc(x.speed)} · vs <b>${esc(x.opp)}</b> (${esc(x.opp_elo)}) · you ${esc(x.my_elo)}${x.color ? ` as ${x.color === "w" ? "White" : "Black"}` : ""}</span>
+        <span class="acts">${x.an ? `<button class="btn primary" data-gan="${esc(x.id)}">Analyse</button>` : ""}
+          <a class="btn" href="https://lichess.org/${encodeURIComponent(x.id)}${x.ply ? "#" + x.ply : ""}" target="_blank" rel="noopener" data-gopen="${esc(x.id)}">Open game</a>
+          ${x.node !== undefined && x.left === "me" ? `<button class="btn" data-gfix="${x.node}">Practice</button>` : ""}
+          <button class="btn" data-gseen="${esc(x.id)}">${seen ? "Mark unseen" : "Mark seen"}</button></span>
+        <span class="ln">${ln}</span></div>`; };
+  const f = (k, t) => `<button type="button" data-gf="${k}" aria-pressed="${gamesFilter === k}">${t}</button>`;
+  el.innerHTML = `<div class="head" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <div class="seg">${f("all", `All ${g.list.length}`)}${f("unseen", `Unseen ${gamesUnseen()}`)}${f("mine", "You left")}${f("opp", `${OPP} left`)}</div>
+      <button class="btn" id="gAllSeen">Mark all as seen</button></div>
+    <p class="tiny">${nAn ? `Games from ${gaSinceTxt()} on have a move-by-move analysis: <b>Analyse</b> shows your inaccuracies, mistakes and blunders with the better move.`
+      : `Move-by-move analysis starts with games from ${gaSinceTxt()}: from then on, each game gets an <b>Analyse</b> button after "refresh my games".`}</p>
+    <div class="glist">${list.slice(0, 300).map(x => row(x, `${esc(x.start)} … · ${where(x)}`)).join("") || `<p class="empty">No games here.</p>`}</div>
+    ${gamesFilter === "all" || gamesFilter === "unseen" ? `<h3>Other games (other openings, from ${gaSinceTxt()})</h3>
+    <div class="glist" id="gOther">${other.map(x => row(x, `${esc(x.eco)} ${esc(x.opening)} · ${esc(x.start)} …`)).join("") || `<p class="empty">None${gamesFilter === "unseen" ? " unseen" : " yet"}.</p>`}</div>` : ""}`;
+  const setSeen = (id, on) => { S.seenGames = S.seenGames || {}; if (on) S.seenGames[id] = Date.now(); else delete S.seenGames[id]; save(); };
+  el.querySelectorAll("[data-gf]").forEach(b => b.onclick = () => { gamesFilter = b.dataset.gf; renderGames(); });
+  el.querySelectorAll("[data-gopen]").forEach(a => a.addEventListener("click", () => { setSeen(a.dataset.gopen, true); setTimeout(renderGames, 50); }));
+  el.querySelectorAll("[data-gseen]").forEach(b => b.onclick = () => { setSeen(b.dataset.gseen, !gamesSeen(b.dataset.gseen)); renderGames(); });
+  el.querySelectorAll("[data-gfix]").forEach(b => b.onclick = () => { mode = "review"; markTabs(); showTrainer(); startReview(+b.dataset.gfix); });
+  el.querySelectorAll("[data-gan]").forEach(b => b.onclick = () => gaOpen(b.dataset.gan));
+  $("gAllSeen").onclick = () => { S.seenGames = S.seenGames || {}; [...g.list, ...(GYM.mygames.other || [])].forEach(x => { S.seenGames[x.id] = S.seenGames[x.id] || Date.now(); }); save(); renderGames(); };
+}
+function showTrainer() { $("mineView").hidden = true; $("gamesView").hidden = true; $("ideasView").hidden = true; $("oTrainer").hidden = false; }
 
 /* ---- timed answers (blitz pressure): the move must come within S.timed seconds, or it counts as a miss ---- */
 let tmRaf = null;
@@ -3196,6 +3313,294 @@ function poEnd() {
 }
 function poStop() { po = null; }
 function poLegal() { return po && phase === "play" && po.g.turn() === ME ? po.g.moves({ verbose: true }).map(m => m.from + m.to + (m.promotion || "")) : []; }
+
+/* ---- move-by-move analysis of your games from GYM.mygames.analysis_since on (mygames.py Part C, lazily loaded
+   data/mygames_analysis.js): board + marked move list + eval graph; at a flagged move of yours, a "decision" frame
+   shows the position before it with your move (red) and the engine's best (green) ---- */
+const GA_MARK = { inaccuracy: "?!", mistake: "?", blunder: "??" };
+const GA_CLS = { inaccuracy: "i", mistake: "m", blunder: "b" };
+const GA_MATE = 10000;
+// gaView = {id, a, fens, mv, byPly, frames: [{k, f}], fi}; gaPositional = "positional only" (tactical flags get
+// no mark, no stop and no graph dot)
+let gaView = null;
+let gaPositional = false;
+try { gaPositional = localStorage.getItem("gym:gaPos") === "1"; } catch (e) {}
+function gaSince() { const g = window.GYM && GYM.mygames; return (g && g.analysis_since) || "2026-09-27"; }
+function gaSinceTxt() { return new Date(gaSince() + "T12:00:00Z").toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }); }
+function gaWin(cp) { cp = Math.max(-1000, Math.min(1000, cp)); return 50 + 50 * (2 / (1 + Math.exp(-0.00368208 * cp)) - 1); }
+function gaEv(cp) { return Math.abs(cp) >= GA_MATE ? (cp > 0 ? "White mates" : "Black mates") : (cp >= 0 ? "+" : "−") + Math.abs(cp / 100).toFixed(1); }
+function gaShown(f) { return !!f && (!gaPositional || f.type === "positional"); }
+function gaNo(k) { return Math.floor(k / 2) + 1 + (k % 2 ? "…" : "."); }       // "12." / "12…" for ply k
+function gaLine(k, sans) { return sans.map((s, i) => (i === 0 || (k + i) % 2 === 0 ? gaNo(k + i) : "") + s).join(" "); }
+function gaUci(fen, san) { const g = new Chess(fen), m = g.move(san); return m ? m.from + m.to + (m.promotion || "") : null; }
+async function gaOpen(id) {
+  const el = $("games2");
+  el.innerHTML = `<p class="empty">Loading the analysis…</p>`;
+  try { await loadScript("data/mygames_analysis.js"); } catch (e) { console.error(e); }
+  const a = window.GYM && GYM.mygamesAnalysis && GYM.mygamesAnalysis[id];
+  if (!a) {
+    el.innerHTML = `<div class="controls"><button class="btn" id="gaBack">← Back to the list</button></div><p class="empty">This game's analysis couldn't be loaded here.</p>`;
+    $("gaBack").onclick = gaClose; return;
+  }
+  S.seenGames = S.seenGames || {}; if (!S.seenGames[id]) { S.seenGames[id] = Date.now(); save(); }
+  markGamesTab();
+  const g = new Chess(), fens = [g.fen()], mv = [];
+  for (const san of a.san) { const m = g.move(san); if (!m) break; mv.push(m); fens.push(g.fen()); }
+  gaView = { id, a, fens, mv, byPly: Object.fromEntries(a.flags.map(f => [f.ply, f])), frames: [], fi: 0 };
+  gaFrames(0);
+  gaLayout(); gaShow();
+}
+function gaClose() { gaView = null; renderGames(); }
+function gaFrames(k, dec = false) {    // rebuild the frame list (the filter changes it), keep position k
+  const v = gaView; v.frames = [];
+  for (let i = 0; i <= v.mv.length; i++) {
+    const f = i > 0 ? v.byPly[i - 1] : null;
+    if (gaShown(f)) v.frames.push({ k: i - 1, f });
+    v.frames.push({ k: i, f: null });
+  }
+  v.fi = Math.max(0, v.frames.findIndex(x => x.k === k && !!x.f === dec));
+}
+function gaGo(k, dec = false) { const v = gaView; const i = v.frames.findIndex(x => x.k === k && !!x.f === dec); if (i >= 0) { v.fi = i; gaShow(); } }
+function gaStep(d) { const v = gaView; if (!v) return; const i = Math.max(0, Math.min(v.frames.length - 1, v.fi + d)); if (i !== v.fi) { v.fi = i; gaShow(); } }
+function gaNextFlag(d = 1) {
+  const v = gaView; if (!v) return;
+  for (let i = v.fi + d; i >= 0 && i < v.frames.length; i += d) if (v.frames[i].f) { v.fi = i; return gaShow(); }
+}
+function gaLayout() {
+  const v = gaView, a = v.a, res = a.score === 1 ? "won" : a.score === 0 ? "lost" : "drew";
+  const cnt = c => `<span class="gam ga-${GA_CLS[c]}">${GA_MARK[c]}</span> ${a.n[c] || 0} ${(a.n[c] || 0) === 1 ? c : c === "inaccuracy" ? "inaccuracies" : c + "s"}`;
+  const pos = a.flags.filter(f => f.type === "positional").length;
+  $("games2").innerHTML = `<div class="gaview">
+    <div class="gahead">
+      <button class="btn" id="gaBack">← Back to the list</button>
+      <div class="gattl"><b>vs ${esc(a.opp)}</b> (${esc(a.opp_elo)}) · ${esc(a.date)} · ${esc(a.speed)} · you ${a.color === "w" ? "White" : "Black"} (${esc(a.my_elo)}), ${res}
+        <span class="tiny">${esc(a.eco)} ${esc(a.opening)}</span></div>
+      <div class="gasum"><span>Accuracy <b>${a.acc === null || a.acc === undefined ? "–" : Math.round(a.acc) + "%"}</b></span>
+        <span>${cnt("inaccuracy")}</span><span>${cnt("mistake")}</span><span>${cnt("blunder")}</span>
+        <span class="tiny">${pos} positional, ${a.flags.length - pos} tactical · Stockfish depth ${a.depth}</span></div>
+    </div>
+    <div class="trainer">
+      <div class="boardcol">
+        <div class="board" id="gaBoard" aria-label="Analysis board"><div class="squares"></div><svg class="arrows" viewBox="0 0 8 8" preserveAspectRatio="none"></svg></div>
+        <div class="gagraph" id="gaGraphBox"><svg id="gaGraph" role="img" aria-label="Evaluation graph (White up, Black down): click to jump"></svg><span class="tiny" id="gaHover">Click the graph to jump to a move.</span></div>
+        <div class="controls">
+          <button class="btn" id="gaFirst" aria-label="Start">⏮</button><button class="btn" id="gaPrev" aria-label="Back">◀</button>
+          <button class="btn" id="gaNext" aria-label="Forward">▶</button><button class="btn" id="gaLast" aria-label="End">⏭</button>
+          <button class="btn" id="gaNextErr">Next mistake</button>
+          <button class="chip" id="gaPosOnly" aria-pressed="${gaPositional}">Positional only</button>
+        </div>
+        <span class="keys"><kbd>←</kbd> <kbd>→</kbd> step through the game (it stops before each of your mistakes) · click a move or the graph to jump · <a href="https://lichess.org/${encodeURIComponent(a.id)}" target="_blank" rel="noopener">game on Lichess</a></span>
+      </div>
+      <div class="side">
+        <div class="card" id="gaCard" aria-live="polite"></div>
+        <div class="moves gamoves" id="gaMoves"></div>
+        <div class="galist" id="gaList"></div>
+      </div>
+    </div></div>`;
+  $("gaBack").onclick = gaClose;
+  $("gaFirst").onclick = () => { v.fi = 0; gaShow(); };
+  $("gaLast").onclick = () => { v.fi = v.frames.length - 1; gaShow(); };
+  $("gaPrev").onclick = () => gaStep(-1);
+  $("gaNext").onclick = () => gaStep(1);
+  $("gaNextErr").onclick = () => gaNextFlag(1);
+  $("gaPosOnly").onclick = () => {
+    gaPositional = !gaPositional; try { localStorage.setItem("gym:gaPos", gaPositional ? "1" : "0"); } catch (e) {}
+    $("gaPosOnly").setAttribute("aria-pressed", gaPositional);
+    const cur = v.frames[v.fi]; gaFrames(cur.k, !!cur.f && gaShown(cur.f)); gaShow();
+  };
+  const svg = $("gaGraph");
+  const kAt = ev => { const r = svg.getBoundingClientRect(), n = v.mv.length; return Math.max(0, Math.min(n, Math.round((ev.clientX - r.left - 6) / Math.max(1, r.width - 12) * n))); };
+  svg.onclick = ev => { const k = kAt(ev), f = k > 0 ? v.byPly[k - 1] : null; if (gaShown(f)) gaGo(k - 1, true); else gaGo(k); };   // a flagged move: its decision frame
+  svg.onmousemove = ev => { const k = kAt(ev); $("gaHover").textContent = k ? `${gaNo(k - 1)}${v.mv[k - 1].san}: ${gaEv(a.ev[k])}` : `Start: ${gaEv(a.ev[0])}`; };
+  svg.onmouseleave = () => { $("gaHover").textContent = "Click the graph to jump to a move."; };
+}
+function gaShow() {
+  const v = gaView; if (!v || !$("gaBoard")) return;
+  const a = v.a, fr = v.frames[v.fi], k = fr.k;
+  const his = a.color;
+  // board
+  if (fr.f) {
+    const fen = v.fens[k], mine = v.mv[k].from + v.mv[k].to, best = gaUci(fen, fr.f.best);
+    renderBoard(parseFen(fen), { el: $("gaBoard"), o: his, hl: k > 0 ? [v.mv[k - 1].from, v.mv[k - 1].to] : [], arrows: [[mine, "red"], ...(best ? [[best, "green"]] : [])] });
+  } else {
+    renderBoard(parseFen(v.fens[k]), { el: $("gaBoard"), o: his, hl: k > 0 ? [v.mv[k - 1].from, v.mv[k - 1].to] : [] });
+  }
+  // card
+  const f = fr.f || (k > 0 && gaShown(v.byPly[k - 1]) ? v.byPly[k - 1] : null);
+  let html;
+  if (f) {
+    const c = GA_CLS[f.cls], you = `${gaNo(f.ply)}${esc(f.played)}${GA_MARK[f.cls]}`;
+    html = `<div class="head"><span class="tag ga-bg-${c}">${esc(f.cls)}</span><span class="tag gatype">${esc(f.type)}</span><span class="tiny">${esc(f.phase)}</span></div>
+      <p class="text">${fr.f ? `You are about to play <span class="bad">${you}</span>.` : `You played <span class="bad">${you}</span>.`}
+        Better was <span class="good">${gaNo(f.ply)}${esc(f.best)}</span>.</p>
+      <p class="sub">Eval ${gaEv(f.before)} → ${gaEv(f.after)} (White's view): ${Math.round(f.lost)}% of your winning chances lost.</p>
+      <div class="plan"><span class="lbl">Best line</span><p class="text mono">${esc(gaLine(f.ply, f.line))}</p>
+        ${f.second ? `<p class="sub">Engine's second choice: ${gaNo(f.ply)}${esc(f.second)} (${gaEv(f.second_ev)}).</p>` : ""}
+        ${f.reply && f.reply.length ? `<p class="sub">After ${esc(f.played)} the engine expects ${esc(gaLine(f.ply + 1, f.reply))}.</p>` : ""}</div>
+      ${fr.f ? `<p class="sub">Red: your move. Green: the engine's. Step on to see the game continue.</p>` : `<div class="controls"><button class="btn" id="gaSeeBest">Show the better move</button></div>`}
+      ${f.type === "positional" && sampleFn ? `<div class="controls"><button class="btn primary" id="gaExplain">Explain</button></div><div id="gaExplainOut" class="text" style="white-space:pre-wrap"></div>` : ""}`;
+  } else if (k === 0) {
+    html = `<p class="text">Step through the game with ▶ or <kbd>→</kbd>. It stops before each of your ${gaPositional ? "positional " : ""}mistakes and shows what was better.</p>
+      <p class="sub">Marks: <span class="gam ga-i">?!</span> inaccuracy, <span class="gam ga-m">?</span> mistake, <span class="gam ga-b">??</span> blunder (by the winning chances lost, like Lichess).</p>`;
+  } else {
+    const flag = v.byPly[k - 1];
+    html = `<p class="text">${gaNo(k - 1)}${esc(v.mv[k - 1].san)}${flag ? `<span class="gam ga-${GA_CLS[flag.cls]}">${GA_MARK[flag.cls]}</span>` : ""} · eval ${gaEv(a.ev[k])}</p>
+      ${flag && !gaShown(flag) ? `<p class="sub">A tactical ${esc(flag.cls)} (hidden by “positional only”): better was ${esc(flag.best)}.</p>` : ""}
+      ${k === v.mv.length ? `<p class="sub">End of the game.</p>` : ""}`;
+  }
+  $("gaCard").className = "card" + (f ? " fail" : "");
+  $("gaCard").innerHTML = html;
+  if ($("gaSeeBest")) $("gaSeeBest").onclick = () => gaGo(f.ply, true);
+  if ($("gaExplain")) $("gaExplain").onclick = () => gaExplain(f);
+  // move list
+  const cur = fr.f ? k : k - 1;
+  $("gaMoves").innerHTML = v.mv.map((m, i) => {
+    const fl = v.byPly[i], mine = (i % 2 === 0) === (his === "w");
+    return (i % 2 === 0 ? `<span class="n">${i / 2 + 1}.</span> ` : "") +
+      `<span class="m nav${mine ? " me" : ""}${i === cur ? " last" : ""}" data-k="${i}">${esc(m.san)}${gaShown(fl) ? `<span class="gam ga-${GA_CLS[fl.cls]}">${GA_MARK[fl.cls]}</span>` : ""}</span>`;
+  }).join(" ");
+  $("gaMoves").querySelectorAll("[data-k]").forEach(el => el.onclick = () => { const i = +el.dataset.k; gaGo(gaShown(v.byPly[i]) ? i : i + 1, gaShown(v.byPly[i])); });
+  const curEl = $("gaMoves").querySelector(".m.last"); if (curEl && curEl.scrollIntoView && $("gaMoves").scrollHeight > $("gaMoves").clientHeight) curEl.scrollIntoView({ block: "nearest" });
+  // list of your flagged moves
+  const shown = a.flags.filter(gaShown);
+  $("gaList").innerHTML = `<h3>Your ${gaPositional ? "positional " : ""}mistakes (${shown.length})</h3>` + (shown.map(x =>
+    `<button class="gaitem${fr.f === x ? " on" : ""}" data-gp="${x.ply}"><span class="gam ga-${GA_CLS[x.cls]}">${GA_MARK[x.cls]}</span> ${gaNo(x.ply)}${esc(x.played)} → <b>${esc(x.best)}</b> <span class="tiny">${esc(x.type)}, ${gaEv(x.before)} → ${gaEv(x.after)}</span></button>`).join("")
+    || `<p class="empty">${a.flags.length ? "No positional mistakes in this game: the flagged moves were all tactical." : "No inaccuracies, mistakes or blunders: well played."}</p>`);
+  $("gaList").querySelectorAll("[data-gp]").forEach(b => b.onclick = () => gaGo(+b.dataset.gp, true));
+  gaGraph();
+}
+function gaGraph() {
+  const v = gaView, a = v.a, svg = $("gaGraph"), n = Math.max(1, v.mv.length);
+  const W = Math.max(200, Math.round(svg.getBoundingClientRect().width) || 480), H = 90, P = 6;
+  const x = k => P + k / n * (W - 2 * P), y = k => H - gaWin(a.ev[k]) / 100 * H;
+  const pts = a.ev.slice(0, v.mv.length + 1).map((_, k) => `${x(k).toFixed(1)},${y(k).toFixed(1)}`);
+  const fr = v.frames[v.fi], at = fr.f ? fr.k + 1 : fr.k;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("height", H);
+  svg.innerHTML = `<rect class="gabg" x="0" y="0" width="${W}" height="${H}"/>
+    <path class="gawhite" d="M${x(0)},${H} L${pts.join(" L")} L${x(v.mv.length)},${H} Z"/>
+    <line class="gamid" x1="0" y1="${H / 2}" x2="${W}" y2="${H / 2}"/>
+    <polyline class="galine" points="${pts.join(" ")}"/>
+    <line class="gacur" x1="${x(at)}" y1="0" x2="${x(at)}" y2="${H}"/>
+    ${a.flags.filter(gaShown).map(f => `<circle class="ga-dot ga-f-${GA_CLS[f.cls]}" cx="${x(f.ply + 1)}" cy="${y(f.ply + 1)}" r="4.5"><title>${gaNo(f.ply)}${esc(f.played)}${GA_MARK[f.cls]} (${esc(f.type)})</title></circle>`).join("")}`;
+}
+document.addEventListener("keydown", ev => {
+  if (!gaView || !$("gaBoard") || $("gamesView").hidden || window.SECTION !== "opening" || ev.target.closest("input, textarea, select")) return;
+  if (ev.key === "ArrowRight") { ev.preventDefault(); gaStep(1); }
+  else if (ev.key === "ArrowLeft") { ev.preventDefault(); gaStep(-1); }
+  else if (ev.key === "Home") { ev.preventDefault(); gaView.fi = 0; gaShow(); }
+  else if (ev.key === "End") { ev.preventDefault(); gaView.fi = gaView.frames.length - 1; gaShow(); }
+});
+window.addEventListener("resize", () => { if (gaView && $("gaGraph")) gaGraph(); });
+
+/* ---- "Explain" for a positional mistake: Claude (sample capability) gets only facts computed here from the board ---- */
+const GA_VAL = { p: 1, n: 3, b: 3, r: 5, q: 9 };
+const GA_NAME = { p: "pawn", n: "knight", b: "bishop", r: "rook", q: "queen", k: "king" };
+function gaSide(c) { return c === "w" ? "White" : "Black"; }
+// board facts of one position: [[key, text]], the key lets the caller list only what a move changed
+function gaFacts(fen) {
+  const g = new Chess(fen), bd = g.board(), pcs = { w: [], b: [] };
+  bd.forEach((row, r) => row.forEach((p, f) => { if (p) pcs[p.color].push({ t: p.type, sq: FILES[f] + (8 - r), f, r: 8 - r }); }));
+  const out = [];
+  const pawns = c => pcs[c].filter(p => p.t === "p");
+  const files = c => { const s = new Set(); pawns(c).forEach(p => s.add(p.f)); return s; };
+  const mat = c => pcs[c].reduce((s, p) => s + (GA_VAL[p.t] || 0), 0);
+  for (const c of ["w", "b"]) {
+    const cnt = t => pcs[c].filter(p => p.t === t).length;
+    const list = ["q", "r", "b", "n"].filter(t => cnt(t)).map(t => `${cnt(t)} ${GA_NAME[t]}${cnt(t) > 1 ? "s" : ""}`);
+    out.push([`mat${c}`, `${gaSide(c)} material: ${list.join(", ") || "no pieces"}, ${cnt("p")} pawn${cnt("p") === 1 ? "" : "s"} (${mat(c)} points).`]);
+  }
+  const bal = mat("w") - mat("b");
+  out.push(["bal", bal ? `Material balance: ${gaSide(bal > 0 ? "w" : "b")} is up ${Math.abs(bal)} point${Math.abs(bal) === 1 ? "" : "s"}.` : "Material is level."]);
+  for (const c of ["w", "b"]) {
+    const bishops = pcs[c].filter(p => p.t === "b");
+    if (bishops.length >= 2 && pcs[c === "w" ? "b" : "w"].filter(p => p.t === "b").length < 2) out.push([`bp${c}`, `${gaSide(c)} has the bishop pair.`]);
+  }
+  for (const c of ["w", "b"]) {
+    const o = c === "w" ? "b" : "w", my = pawns(c), their = pawns(o), mf = files(c), dir = c === "w" ? 1 : -1;
+    const sq = ps => ps.map(p => p.sq).sort().join(", ");
+    out.push([`pw${c}`, `${gaSide(c)} pawns: ${sq(my) || "none"}.`]);
+    const isolated = my.filter(p => !mf.has(p.f - 1) && !mf.has(p.f + 1));
+    const doubled = [...mf].filter(f => my.filter(p => p.f === f).length > 1).map(f => FILES[f] + "-file");
+    const passed = my.filter(p => !their.some(q => Math.abs(q.f - p.f) <= 1 && (q.r - p.r) * dir > 0));
+    let islands = 0; for (let f = 0; f < 8; f++) if (mf.has(f) && !mf.has(f - 1)) islands++;
+    out.push([`iso${c}`, `${gaSide(c)} isolated pawns: ${sq(isolated) || "none"}.`]);
+    out.push([`dbl${c}`, `${gaSide(c)} doubled pawns: ${doubled.join(", ") || "none"}.`]);
+    out.push([`pas${c}`, `${gaSide(c)} passed pawns: ${sq(passed) || "none"}.`]);
+    out.push([`isl${c}`, `${gaSide(c)} pawn islands: ${islands}.`]);
+    const centre = my.filter(p => ["d4", "e4", "d5", "e5"].includes(p.sq));
+    out.push([`cen${c}`, `${gaSide(c)} centre pawns (d4/e4/d5/e5): ${sq(centre) || "none"}.`]);
+  }
+  const wf = files("w"), bf = files("b"), open = [], semiW = [], semiB = [];
+  for (let f = 0; f < 8; f++) {
+    if (!wf.has(f) && !bf.has(f)) open.push(FILES[f]);
+    else if (!wf.has(f)) semiW.push(FILES[f]); else if (!bf.has(f)) semiB.push(FILES[f]);
+  }
+  out.push(["open", `Open files (no pawns): ${open.join(", ") || "none"}.`]);
+  out.push(["semiw", `Half-open files for White (only Black pawns): ${semiW.join(", ") || "none"}.`]);
+  out.push(["semib", `Half-open files for Black (only White pawns): ${semiB.join(", ") || "none"}.`]);
+  for (const c of ["w", "b"]) {
+    const k = pcs[c].find(p => p.t === "k"); if (!k) continue;
+    const dir = c === "w" ? 1 : -1;
+    const shelter = pawns(c).filter(p => Math.abs(p.f - k.f) <= 1 && (p.r - k.r) * dir > 0 && (p.r - k.r) * dir <= 2);
+    const bare = [k.f - 1, k.f, k.f + 1].filter(f => f >= 0 && f < 8 && !files(c).has(f)).map(f => FILES[f]);
+    out.push([`king${c}`, `${gaSide(c)} king on ${k.sq}; its own pawns within two squares in front: ${shelter.map(p => p.sq).sort().join(", ") || "none"}; files next to it with no ${gaSide(c)} pawn: ${bare.join(", ") || "none"}.`]);
+  }
+  for (const c of ["w", "b"]) {       // mobility as if it were that side's turn (en passant ignored)
+    const parts = fen.split(" "); parts[1] = c; parts[3] = "-";
+    const h = new Chess(); let moves = [];
+    if (h.load(parts.join(" "))) moves = h.moves({ verbose: true });
+    const by = t => new Set(moves.filter(m => m.piece === t).map(m => m.from + m.to)).size;
+    const bits = ["n", "b", "r", "q"].filter(t => pcs[c].some(p => p.t === t)).map(t => `${GA_NAME[t]}s ${by(t)}`);
+    out.push([`mob${c}`, `${gaSide(c)} piece mobility (legal moves per piece type, counted with ${gaSide(c)} to move): ${bits.join(", ") || "no pieces"}.`]);
+    const home = c === "w" ? { b1: "n", g1: "n", c1: "b", f1: "b" } : { b8: "n", g8: "n", c8: "b", f8: "b" };
+    const undev = pcs[c].filter(p => home[p.sq] === p.t).map(p => `${GA_NAME[p.t]} ${p.sq}`);
+    out.push([`dev${c}`, `${gaSide(c)} knights/bishops still on their starting squares: ${undev.join(", ") || "none"}.`]);
+  }
+  out.push(["cas", `Castling rights left: ${fen.split(" ")[2] === "-" ? "none" : fen.split(" ")[2]}.`]);
+  if (g.in_check()) out.push(["chk", `${gaSide(g.turn())} is in check.`]);
+  return out;
+}
+function gaChanges(before, after) {
+  const b = Object.fromEntries(before);
+  return after.filter(([k, t]) => b[k] !== t).map(([, t]) => t);
+}
+function gaPrompt(f) {
+  const v = gaView, a = v.a, fen = v.fens[f.ply], me = gaSide(a.color);
+  const after = v.fens[f.ply + 1], g = new Chess(fen); g.move(f.best);
+  const fb = gaFacts(fen), fMine = gaFacts(after), fBest = gaFacts(g.fen());
+  const ch = (x, what) => { const c = gaChanges(fb, x); return c.length ? c.map(t => "- " + t).join("\n") : `- (no change in these facts after ${what})`; };
+  return `You are a chess coach for a club player rated about 1850 on Lichess (blitz and bullet). He wants to understand a positional mistake from one of his own games.
+
+He played ${me}. Game phase: ${f.phase}. Move ${gaNo(f.ply)}
+Position before his move (FEN): ${fen}
+He played: ${gaNo(f.ply)}${f.played}
+Stockfish's best move: ${gaNo(f.ply)}${f.best}. Best line: ${gaLine(f.ply, f.line)}
+${f.second ? `Stockfish's second choice: ${gaNo(f.ply)}${f.second} (${gaEv(f.second_ev)}).\n` : ""}Stockfish's expected continuation after his move: ${f.reply && f.reply.length ? gaLine(f.ply + 1, f.reply) : "(none)"}
+Evaluation (pawns, White's point of view): ${gaEv(f.before)} with the best move, ${gaEv(f.after)} after his move; he lost ${Math.round(f.lost)}% of his winning chances (classified as: ${f.cls}). Neither the best line nor the continuation after his move wins or loses 2 or more points of material within its first 4 half-moves, neither contains a mate, and the evaluation changed by less than 3 pawns, so this counts as a positional mistake.
+
+Board facts before his move (computed from the board; they are exact):
+${fb.map(([, t]) => "- " + t).join("\n")}
+
+What his move ${f.played} changes in these facts:
+${ch(fMine, f.played)}
+
+What the best move ${f.best} changes in these facts:
+${ch(fBest, f.best)}
+
+Task: in 3 to 4 sentences, explain the positional idea: why ${f.best} is better than ${f.played} here and what he should take away for similar positions. Use only the facts and lines given above. Never claim a tactic, threat, attack, defence, pin, weakness of a particular square or any relation between pieces that the facts above don't state; if the facts don't make the reason certain, say what the engine's line suggests about plans and structure, and say it cautiously. Address him as "you" (he is ${me}); write moves in SAN; plain prose, no headings, no bullet points.`;
+}
+async function gaExplain(f) {
+  const out = $("gaExplainOut"), btn = $("gaExplain");
+  if (!sampleFn || !out) return;
+  btn.disabled = true; out.textContent = "Thinking…";
+  try {
+    const r = await sampleFn(gaPrompt(f), { onText: ({ text }) => { out.textContent = text; } });
+    out.textContent = r.text;
+  } catch (e) {
+    out.textContent = e && e.text ? e.text : (e && e.code === "not_granted" ? "Asking Claude isn't allowed on this page for you." : e && e.code === "rate_limited" ? "Too many questions right now; try again in a minute." : "Claude couldn't answer right now.");
+  }
+  btn.disabled = false;
+}
 
 
 /* ================= sections: puzzles and the openings ================= */
