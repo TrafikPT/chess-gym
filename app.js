@@ -1139,7 +1139,7 @@ const THEME = {
   opening: "Opening", middlegame: "Middlegame", crushing: "Winning", advantage: "Advantage", equality: "Saving the game",
 };
 let pzCur = null, pzGame = null, pzIdx = 0, pzOrient = "w", pzSel = null, pzLast = [], pzArrows = [], pzState = "idle";
-let pzStage = null;
+let pzStage = null, pzReplay = false;     // pzReplay: the stage was already finished when opened from the map
 // the kids' corner 🧩 tab: rating-matched puzzles, pictures only, for the young player (asked once per opening of the view)
 let pzKidNext = false, pzKidRated = false;
 function pzKid() { return !!pzPlayers().kid || pzKidRated; }
@@ -1335,8 +1335,8 @@ function pzGoalText(p) {
     return t.includes("blunder") ? `In your game${when} you played ${s.played || "something else"} here. ${task}`
       : `Your opponent had just blundered in your game${when}, and you played ${s.played || "something else"}. ${task}`;
   }
-  if (t.includes("safeTake")) return "Can you take it? Take only if it wins something; if taking loses your piece, make a safe move instead.";
-  if (t.includes("stopMate")) return "Your opponent threatens checkmate in one (red arrow). Stop it without losing a piece.";
+  if (t.includes("safeTake")) return "Is the capture on the blue arrow safe? 👍 if it wins something, 👎 if your piece would be taken back for more.";
+  if (t.includes("stopMate")) return "Your opponent threatens checkmate in one (red arrow). Stop it: every move that stops the mate counts.";
   if (n) return `Find mate in ${n.slice(-1)}.`;
   if (t.includes("hangingPiece") && p[5]) return "Take the piece you can win for free.";
   if (t.includes("giveCheck")) return "Give check: attack the king with a piece that stays safe.";
@@ -1420,7 +1420,7 @@ function pzNext() {
   clearTimeout(pzTimer);
   if (advanceStage()) return;
   $("pzGoalBadge").hidden = true;
-  pzCur = pzPick(); pzIdx = 0; pzHinted = pzFailed = pzScored = false; pzSel = null; pzArrows = []; pzLast = []; pzMarks = {};
+  pzCur = pzPick(); pzIdx = 0; pzHinted = pzFailed = pzScored = pzEscape = false; pzSel = null; pzArrows = []; pzLast = []; pzMarks = {};
   pzGame = new Chess(pzCur[1]);
   const direct = !!pzCur[5];                             // generated beginner puzzles start with the solver's move
   pzOrient = direct ? pzGame.turn() : (pzGame.turn() === "w" ? "b" : "w");   // Lichess puzzles: the opponent moves first
@@ -1436,8 +1436,55 @@ function pzNext() {
   if (pzKid()) { $("pzYou").innerHTML = `<span class="pc ${pzOrient}K"></span>`; $("pzKGoal").innerHTML = ""; $("pzCard").innerHTML = ""; }
   renderStageBar();
   pzDraw();
-  if (direct) { pzIdx = 0; pzState = "solve"; pzShowGoal(); pzDraw(); return; }
+  if (direct) { pzIdx = 0; pzState = "solve"; pzShowGoal(); sgAsk(); pzDraw(); return; }
   pzTimer = setTimeout(() => { pzPlay(pzCur[2].split(" ")[0]); pzIdx = 1; pzState = "solve"; pzShowGoal(); pzDraw(); }, 650);
+}
+/* ---- stop the mate: after some defences the opponent still gives the check it threatened (the luft h3, then the
+   rook checks anyway); the child then gets out of check with any move that leaves no mate in one (pzEscape) ---- */
+let pzEscape = false;
+function smReply(reply) {
+  $("pzState").textContent = "Good, now get out of check"; $("pzState").className = "state pass";
+  pzState = "wait"; pzDraw();
+  pzTimer = setTimeout(() => {
+    pzPlay(reply); pzEscape = true; pzState = "solve";
+    const pos = parseFen(pzGame.fen()), k = Object.keys(pos).find(q => pos[q] === (pzGame.turn() === "w" ? "K" : "k"));
+    pzArrows = [[reply, "red"]]; pzMarks = { [k]: "mk" }; pzDraw();
+  }, 600);
+  return true;
+}
+function smEscapes() { return pzGame.moves({ verbose: true }).filter(m => { pzGame.move(m); const x = !sgMates().length; pzGame.undo(); return x; }); }
+/* ---- is it safe to take? a yes/no question: the capture is drawn as a blue arrow, 👍 = take it, 👎 = don't.
+   The answer is then played out: the capture, and on a trap the opponent taking back */
+let pzAsk = null;
+function sgCapture() {     // the capture asked about, onto the pictured square: a winning one ("take" rows), else the biggest piece
+  const caps = pzGame.moves({ verbose: true }).filter(m => m.to === pzCur[7]);
+  const ok = caps.filter(m => pzCur[6].includes(m.from + m.to + (m.promotion || "")));
+  const pick = / take /.test(pzCur[4]) && ok.length ? ok : caps;
+  return pick.sort((a, b) => VALUE[b.piece] - VALUE[a.piece])[0];
+}
+function sgAsk() {
+  if (!/safeTake/.test(pzCur[4]) || pzIdx) return;
+  const m = sgCapture(); if (!m) return;
+  pzAsk = m.from + m.to + (m.promotion || ""); pzState = "ask"; pzArrows = [[pzAsk, "blue"]]; pzMarks = {};
+  $("pzCard").insertAdjacentHTML("beforeend", `${pzKid() ? "" : `<p class="text">Is it safe to take? Y = yes, N = no.</p>`}
+    <div class="yesno"><button class="btn big yes" type="button" id="pzYes" aria-label="Yes, take it">👍</button><button class="btn big no" type="button" id="pzNo" aria-label="No, don't take it">👎</button></div>`);
+  $("pzYes").onclick = () => sgAnswer(true); $("pzNo").onclick = () => sgAnswer(false);
+}
+function sgAnswer(yes, shown = false) {
+  if (pzState !== "ask") return;
+  clearTimeout(pzTimer);
+  const safe = / take /.test(pzCur[4]), right = yes === safe, u = pzAsk, to = u.slice(2, 4);
+  pzState = "show";
+  if (!right || shown) { pzFailed = true; pzScore(false); if (!shown) { sfx("wrong"); pzBig(false); } }
+  $("pzCard").innerHTML = pzKid() ? `<div class="kidcard ${right ? "ok" : "bad"}">${right ? "✓" : "✗"}</div>` : `<p class="text">${right ? "Right" : "Not quite"}: ${safe ? "the capture wins material." : "your piece would be taken back."}</p>`;
+  pzPlay(u); pzArrows = [[u, safe ? "green" : "red"]]; pzMarks = {}; pzDraw();
+  pzTimer = setTimeout(() => {      // what happens next: on a trap the cheapest piece takes back, a safe capture just stands there
+    const back = safe ? null : pzGame.moves({ verbose: true }).filter(m => m.to === to).sort((a, b) => VALUE[a.piece] - VALUE[b.piece])[0];
+    if (back) { pzPlay(back.from + back.to); pzArrows = [[back.from + back.to, "red"]]; pzMarks = { [to]: "mk" }; }
+    else pzMarks = { [to]: "esc" };
+    pzDraw();
+    pzTimer = setTimeout(() => pzFinish(right && !shown), 900);
+  }, 800);
 }
 function pzPlay(uci) {
   const m = pzGame.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || "q" });
@@ -1484,7 +1531,7 @@ function pzFinish(win) {
   const link = src && src.game ? `, or <a href="https://lichess.org/${encodeURIComponent(src.game)}#${src.ply || 0}" target="_blank" rel="noopener">see your game</a>`
     : pzCur[5] ? "" : `, or <a href="https://lichess.org/training/${esc(pzCur[0])}" target="_blank" rel="noopener">see it on Lichess</a>`;
   let why = "";
-  if (pzGame.in_checkmate()) {
+  if (pzGame.in_checkmate() && kid) {        // the "why it's mate" picture is for the child (pictures-only mode) only
     const w = whyMate(); pzMarks = w.marks; pzArrows = w.arrows;
     if (kid) w.lines = [];
     why = `<div class="plan why"><span class="lbl">Why it's checkmate</span>
@@ -1518,10 +1565,12 @@ function pzUserMove(from, to) {
   const m = pzGame.move({ from, to, promotion: promo });
   const uci = from + to + (promo || ""), last = pzIdx === pzCur[2].split(" ").length - 1;
   pzSel = null; pzLast = [from, to];
-  const accepted = pzCur[6] && pzIdx === 0 && pzCur[6].includes(uci);
+  const accepted = (pzCur[6] && pzIdx === 0 && pzCur[6].includes(uci)) || (pzEscape && !sgMates().length);
   sfx("move");
   if (uci === want || accepted || (want && uci === want.slice(0, 4) && !want[4]) || (last && pzGame.in_checkmate())) {
     pzIdx++;
+    const reply = pzIdx === 1 && pzCur[9] && pzCur[9][uci];
+    if (reply) return smReply(reply);
     if (pzIdx >= pzCur[2].split(" ").length) { pzFinish(true); return true; }
     $("pzState").textContent = "Good, keep going"; $("pzState").className = "state pass";
     pzState = "wait"; pzDraw();
@@ -1576,19 +1625,20 @@ function pzRetry() {
 // the same puzzle again from its first position (after "Show solution" or a finish): already scored, so no rating change
 function pzRestart() {
   clearTimeout(pzTimer);
-  pzGame = new Chess(pzCur[1]); pzIdx = 0; pzSel = null; pzArrows = []; pzLast = []; pzMarks = {};
+  pzGame = new Chess(pzCur[1]); pzIdx = 0; pzSel = null; pzArrows = []; pzLast = []; pzMarks = {}; pzEscape = false;
   $("pzGoalBadge").hidden = true; $("pzCard").className = "card";
   $("pzCard").innerHTML = pzKid() ? "" : `<p class="text">Same puzzle again. It already counts, so try it (or watch the solution) as often as you like.</p>`;
-  if (pzCur[5]) { pzState = "solve"; pzShowGoal(); pzDraw(); return; }
+  if (pzCur[5]) { pzState = "solve"; pzShowGoal(); sgAsk(); pzDraw(); return; }
   pzState = "intro"; pzDraw();
   pzTimer = setTimeout(() => { pzPlay(pzCur[2].split(" ")[0]); pzIdx = 1; pzState = "solve"; pzShowGoal(); pzDraw(); }, 650);
 }
 function pzSolution() {
-  if (!pzCur || pzState === "done" || pzState === "intro") return;
+  if (!pzCur || pzState === "done" || pzState === "intro" || pzState === "show") return;
+  if (pzState === "ask") return sgAnswer(/ take /.test(pzCur[4]), true);
   clearTimeout(pzTimer);
   if (pzState === "wrong") { pzGame.undo(); pzMarks = {}; }
   pzFailed = true; pzScore(false);
-  const rest = pzCur[2].split(" ").slice(pzIdx);
+  const rest = pzEscape ? [(m => m.from + m.to + (m.promotion || ""))(smEscapes()[0])] : pzCur[2].split(" ").slice(pzIdx);
   pzState = "show"; pzArrows = [];
   let k = 0;
   const step = () => {
@@ -1601,7 +1651,7 @@ function pzSolution() {
 function pzHint() {
   if (pzState !== "solve") return;
   pzHinted = true;
-  const want = pzCur[2].split(" ")[pzIdx];
+  const want = pzEscape ? (m => m.from + m.to)(smEscapes()[0]) : pzCur[2].split(" ")[pzIdx];
   pzSel = want.slice(0, 2);
   $("pzCard").innerHTML = `<p class="text">Move the highlighted piece. ${esc(pzGoalText(pzCur))}</p><p class="sub">With a hint this puzzle won't change your rating.</p>`;
   pzDraw();
@@ -1662,6 +1712,7 @@ function pzWire() {
     if (ev.key === "ArrowRight" || ev.key === "ArrowDown") { if (pzState === "done" || pzState === "wrong") { ev.preventDefault(); pzNext(); } }
     else if (ev.key === "ArrowLeft") { ev.preventDefault(); pzRetry(); }
     else if (k === "h") pzHint();
+    else if (pzState === "ask" && (k === "y" || k === "n")) sgAnswer(k === "y");
   });
 }
 let pzReady = false;
@@ -1669,6 +1720,7 @@ function openPuzzles(stage) {
   if (stage && stage.eg) return stageGo(stage);      // endgame stages are games in the kids' corner
   const was = pzStage, wasRated = pzKidRated;
   pzStage = stage || null;
+  pzReplay = !!pzStage && stageStars(pzPlayers(), pzStage.id) >= needOf(pzStage);
   pzKidRated = !pzStage && pzKidNext; pzKidNext = false;
   if (was !== pzStage || wasRated !== pzKidRated) pzCur = null;
   if (!pzReady) { pzWire(); pzReady = true; }
@@ -1747,9 +1799,10 @@ function showCelebration() {
   celebrate.t = setTimeout(showCelebration, 2200);
 }
 function sessionDone(pl) { celebrate("🎉", "trophy", `<div class="big">⭐ ${pl.stars || 0}</div>`); }
-// finished the current stage? the next puzzle comes from the next unfinished stage (true: went to an endgame stage)
+// finished the current stage? the next puzzle comes from the next unfinished stage (true: went to an endgame stage).
+// A stage picked on the map after it was already finished is a replay (pzReplay): it stays until the child leaves it
 function advanceStage() {
-  if (!pzStage) return;
+  if (!pzStage || pzReplay) return;
   const pl = pzPlayers();
   if (stageStars(pl, pzStage.id) < needOf(pzStage)) return;
   const i = stageCur(pl);
@@ -1908,7 +1961,7 @@ function stageGo(st) {
     return window.SECTION === "kids" ? openKids() : go("kids", "play");
   }
   if (!st.eg) return go("puzzles", { stage: st });
-  eg = null; egSt = st;
+  eg = null; egSt = st; egReplay = stageStars(pzPlayers(), st.id) >= needOf(st);
   if (window.SECTION === "kids") { kidTab = "end"; openKids(); } else go("kids", "end");
 }
 // a stage picture drawn from the solver's side: the path icons show White's view, so swap the colours for Black
@@ -2213,7 +2266,7 @@ function visEnd() {
 
 /* ---- first endgames on the path: mate the lone king with king + queen or king + rook; the black king runs away ---- */
 const EG_PAR = { QR: [7, 12], RR: [9, 15], KQ: [12, 20], KR: [20, 32] };   // your moves for ⭐⭐⭐ / ⭐⭐ (slower: ⭐)
-let eg = null, egSt = null;   // eg = {st, g (chess.js), sel, last, moves, over, hist: [fen]}; egSt = the endgame stage to open
+let eg = null, egSt = null, egReplay = false;   // eg = {st, g (chess.js), sel, last, moves, over, hist: [fen]}; egSt = the endgame stage to open; egReplay: it was finished already
 // a start with the black king in the middle, not in check, none of your pieces next to it; White (you) to move.
 // pcs = your pieces besides the king ("QR", "RR", "KQ" = the queen, "KR" = the rook)
 function egStartFen(pcs) {
@@ -2327,9 +2380,10 @@ function egEnd() {
   egDraw();
   return true;
 }
-function egNext() {   // after a win: the same stage again, or the next unfinished stage once this one is done
+// after a win: the same stage again, or the next unfinished stage once this one is done (a replay stays put)
+function egNext() {
   const pl = pzPlayers(), i = stageCur(pl);
-  if (stageStars(pl, eg.st.id) < needOf(eg.st) || i < 0) return egStart(eg.st);
+  if (egReplay || stageStars(pl, eg.st.id) < needOf(eg.st) || i < 0) return egStart(eg.st);
   if (STAGES[i].eg) return egStart(STAGES[i]);
   stageGo(STAGES[i]);
 }
@@ -3115,7 +3169,7 @@ function renderMine() {
         <span>You played <span class="bad">${ME === "b" ? "…" : ""}${esc(m.played)}</span> ${m.n}×</span><span>Learn <span class="good">${lmNo(moveNo(m.node), N[m.node].s)}</span></span></span>
         <span class="ln">Scored ${Math.round(100 * m.score)}% in those games · last ${when(m.last)} ${m.games.slice(0, 2).map(id => `<a href="https://lichess.org/${encodeURIComponent(id)}" target="_blank" rel="noopener">game</a>`).join(" ")}</span>
         <button class="btn" data-mfix="${m.node}">Practice</button></div>`).join("") || `<p class="empty">None: you played the repertoire moves every time.</p>`}</div>
-    ${sound.length ? `<h3>Sound alternatives you chose</h3><p class="tiny">Fine moves, just not the ones this repertoire teaches: ${sound.map(m => `${pos(m.node)} <b>${ME === "b" ? "…" : ""}${esc(m.played)}</b> (${m.n}×)`).join("; ")}.</p>` : ""}
+    ${sound.length ? `<h3>Playable alternatives you chose</h3><p class="tiny">Sound moves, just not the ones this repertoire teaches (engine difference to the move to learn): ${sound.map(m => `${pos(m.node)} <b>${ME === "b" ? "…" : ""}${esc(m.played)}</b> ${m.n}×, ${mgVerdict(m).replace(/^Playable: /, "")}`).join("; ")}.</p>` : ""}
     <h3>Where opponents surprised you</h3>
     <p class="tiny">Moves your opponents played that the repertoire doesn't cover yet. Add one and Claude will analyse it when you ask to "add the lines I requested".</p>
     <div class="misses">${theirs.map((t, k) => `<div class="miss"><span class="what"><span>${pos(t.node)} ${lmNo(moveNo(t.node), N[t.node].s)}</span>
@@ -3129,6 +3183,14 @@ function renderMine() {
     if (!(S.req || []).some(r => r.line === line)) { const r = { line, t: Date.now() }; (S.req = S.req || []).push(r); save(); pushReq(r); renderReqs(); }
     b.textContent = "Added"; b.disabled = true;
   });
+}
+// how the trainer grades a move you played instead of the move to learn, with the engine's difference (depth 12)
+function mgVerdict(m) {
+  const n = m.node !== undefined ? N[m.node] : null, row = n && (n.mv || []).find(x => x[1] === m.played), main = n && (n.mv || []).find(x => x[0] === n.m);
+  const grade = m.kind === "also" || (row && row[3] && !(n.wrong || {})[row[0]]) ? "Playable" : "Wrong";
+  if (!row || !main) return grade;
+  const d = row[2] - main[2], p = (Math.abs(d) / 100).toFixed(2), learn = lmNo(moveNo(m.node), n.s);
+  return `${grade}: ${d > 5 ? `${p} pawns worse than ${learn}` : d < -5 ? `the engine rates it ${p} pawns better than ${learn}` : `about equal to ${learn}`}`;
 }
 /* ---- the chronological game list: every game in this opening, newest first; opening one marks it seen ---- */
 let gamesFilter = "all";
@@ -3146,7 +3208,7 @@ function renderGames() {
   const res = x => x.score === 1 ? ["w", "1-0"] : x.score === 0 ? ["l", "0-1"] : ["d", "½"];
   const where = x => {
     const no = x.ply ? Math.ceil(x.ply / 2) + (x.ply % 2 ? "." : "…") : "";
-    if (x.left === "me") return `you left the repertoire: <span class="bad">${no}${esc(x.played)}</span>, learn <span class="good">${no}${esc(x.learn)}</span>${x.kind === "also" ? " (sound alternative)" : ""}`;
+    if (x.left === "me") return `you left the repertoire: <span class="bad">${no}${esc(x.played)}</span>, learn <span class="good">${no}${esc(x.learn)}</span> (${mgVerdict(x)})`;
     if (x.left === "opp") return `${OPP} left the repertoire: <span class="bad">${no}${esc(x.played)}</span> (not covered yet)`;
     return x.plies <= 2 * x.depth + 2 ? `the game ended while still in the repertoire (after ${Math.ceil(x.plies / 2)} moves)`
       : `stayed in the repertoire until the prepared line ended (${x.depth} of your moves)`;

@@ -377,6 +377,9 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
 .kidcard { font-size: 96px; line-height: 1; text-align: center; font-weight: 700; }
 .kidcard.ok { color: var(--pass); } .kidcard.bad { color: var(--fail); } .kidcard.alt { color: var(--alt); }
 .btn.big { font-size: 32px; padding: 10px 28px; justify-self: center; }
+.yesno { display: flex; gap: 18px; justify-content: center; margin: 6px 0; }
+.yesno .btn.big { font-size: 44px; padding: 10px 26px; }
+.yesno .yes { border-color: var(--pass); } .yesno .no { border-color: var(--fail); }
 .arrows .arr { animation: appear .45s ease both; }
 @keyframes appear { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .bigmark.pop, .arrows .arr { animation: none; } }
