@@ -109,6 +109,10 @@ function mergePlayer(a, b) {
     if (!y || x.due > y.due || (x.due === y.due && x.n > y.n)) out.again[id] = x;
   }
   out.stagesRecounted = !!(a.stagesRecounted || b.stagesRecounted);
+  out.gateFree = maxMap(a.gateFree, b.gateFree);         // boss gates the child was already past when gates came
+  // gates migration (kids.js gateMigrate): a gate counts as seen only if both copies with progress had seen it
+  const seenA = blankPlayer(a) ? null : a.gatesSeen || {}, seenB = blankPlayer(b) ? null : b.gatesSeen || {};
+  out.gatesSeen = !seenA ? { ...(b.gatesSeen || {}) } : !seenB ? { ...seenA } : Object.fromEntries(Object.keys(seenA).filter(k => seenB[k]).map(k => [k, 1]));
   out.u = Math.max(a.u || 0, b.u || 0);
   return out;
 }
@@ -1060,7 +1064,7 @@ const THEME = {
   discoveredAttack: "Discovered attack", doubleCheck: "Double check", deflection: "Deflection", attraction: "Attraction",
   clearance: "Clearance", interference: "Interference", sacrifice: "Sacrifice", promotion: "Promotion", underPromotion: "Under-promotion",
   advancedPawn: "Advanced pawn", exposedKing: "Exposed king", kingsideAttack: "Kingside attack", quietMove: "Quiet move",
-  defensiveMove: "Defensive move", giveCheck: "Give check", saveQueen: "Save the queen", savePiece: "Save your piece", xRayAttack: "X-ray", zugzwang: "Zugzwang", capturingDefender: "Remove the defender",
+  defensiveMove: "Defensive move", giveCheck: "Give check", saveQueen: "Save the queen", savePiece: "Save your piece", safeTake: "Is it safe to take?", stopMate: "Stop the mate", xRayAttack: "X-ray", zugzwang: "Zugzwang", capturingDefender: "Remove the defender",
   intermezzo: "In-between move", enPassant: "En passant", castling: "Castling",
   endgame: "Endgame", rookEndgame: "Rook endgame", pawnEndgame: "Pawn endgame", queenEndgame: "Queen endgame",
   opening: "Opening", middlegame: "Middlegame", crushing: "Winning", advantage: "Advantage", equality: "Saving the game",
@@ -1262,6 +1266,8 @@ function pzGoalText(p) {
     return t.includes("blunder") ? `In your game${when} you played ${s.played || "something else"} here. ${task}`
       : `Your opponent had just blundered in your game${when}, and you played ${s.played || "something else"}. ${task}`;
   }
+  if (t.includes("safeTake")) return "Can you take it? Take only if it wins something; if taking loses your piece, make a safe move instead.";
+  if (t.includes("stopMate")) return "Your opponent threatens checkmate in one (red arrow). Stop it without losing a piece.";
   if (n) return `Find mate in ${n.slice(-1)}.`;
   if (t.includes("hangingPiece") && p[5]) return "Take the piece you can win for free.";
   if (t.includes("giveCheck")) return "Give check: attack the king with a piece that stays safe.";
@@ -1272,16 +1278,25 @@ function pzGoalText(p) {
   return "Find the best move: it wins material or more.";
 }
 // the goal as a picture, from the solver's side (targets in the opponent's colour, own pieces in the solver's):
-// mate (king in a target), check, save (shield), promote (pawn → queen), fork (🍴), take a piece (+), or win something (⚔)
+// mate (king in a target, with the number of moves from 2 on), check, save (shield), promote (pawn → queen), fork (🍴),
+// take a piece (+), win something (⚔), is it safe to take (⚖ + the piece), stop the mate (own king, shield and #)
 function pzGoalHtml() {
   const t = pzCur[4].split(" "), me = pzGame.turn(), them = me === "w" ? "b" : "w";
   const want = pzCur[2].split(" ")[pzIdx] || "", victim = want ? pzGame.get(want.slice(2, 4)) : null;
+  if (t.includes("safeTake")) {
+    const tp = pzCur[7] ? pzGame.get(pzCur[7]) : null;
+    return { kind: "safe", html: `<span class="goal scale" title="Is it safe to take?">⚖️${tp ? `<span class="pc ${tp.color}${tp.type.toUpperCase()}"></span>` : ""}</span>` };
+  }
+  if (t.includes("stopMate")) return { kind: "guard", html: `<span class="goal guard" title="Stop the mate"><span class="pc ${me}K"></span></span>` };
   if (t.includes("giveCheck")) return { kind: "check", html: `<span class="goal check" title="Give check"><span class="pc ${them}K"></span></span>` };
   if (t.includes("saveQueen") || t.includes("savePiece")) {
     const tp = pzCur[7] ? pzGame.get(pzCur[7]) : null, kind = tp ? tp.type.toUpperCase() : "Q";
     return { kind: "save", html: `<span class="goal save" title="Keep this piece safe"><span class="pc ${me}${kind}"></span></span>` };
   }
-  if (t.some(x => /^mate/.test(x))) return { kind: "mate", html: `<span class="goal mate" title="Checkmate"><span class="pc ${them}K"></span></span>` };
+  if (t.some(x => /^mate/.test(x))) {
+    const n = (t.find(x => /^mateIn[2-9]$/.test(x)) || "").slice(6);
+    return { kind: "mate", html: `<span class="goal mate${n ? " mn" : ""}"${n ? ` data-n="${n}"` : ""} title="Checkmate${n ? " in " + n : ""}"><span class="pc ${them}K"></span></span>` };
+  }
   if (t.includes("promotion") && want[4]) return { kind: "promo", html: `<span class="goal promo" title="Make a queen"><span class="pc ${me}P"></span><b>→</b><span class="pc ${me}Q"></span></span>` };
   if (t.includes("fork")) return { kind: "fork", html: `<span class="goal win" title="Fork">🍴</span>` };
   if (victim) return { kind: "take", html: `<span class="goal take" title="Win this piece"><span class="pc ${victim.color}${victim.type.toUpperCase()}"></span></span>` };
@@ -1305,8 +1320,18 @@ function preCover() {
   }
   return { marks, arrows };
 }
+// stop the mate: the threat, drawn before the move (red arrow onto the mate square, your king glowing in danger)
+function sgThreat() {
+  const pos = parseFen(pzGame.fen()), k = Object.keys(pos).find(q => pos[q] === (pzGame.turn() === "w" ? "K" : "k"));
+  return { marks: { [k]: "dg" }, arrows: (pzCur[8] || []).map(u => [u, "red"]) };
+}
+// the opponent's mates in one right now (after a wrong answer in "stop the mate")
+function sgMates() {
+  return pzGame.moves({ verbose: true }).filter(m => { pzGame.move(m); const x = pzGame.in_checkmate(); pzGame.undo(); return x; });
+}
 function pzShowGoal() {
   const pl = pzPlayers(), el = $("pzGoalBadge");
+  if (/stopMate/.test(pzCur[4]) && pzIdx === 0) { const th = sgThreat(); pzMarks = th.marks; pzArrows = th.arrows; }   // the task needs it: always shown
   if (!pl.goal) { el.hidden = true; return; }
   const g = pzGoalHtml();
   el.innerHTML = g.html; el.hidden = pzKid();          // pictures only: the goal is in the big panel instead
@@ -1430,13 +1455,25 @@ function pzUserMove(from, to) {
   // wrong: show it, then offer another go (rating already counts it as a miss)
   pzFailed = true; pzScore(false); sfx("wrong");
   pzState = "wrong"; pzArrows = [[uci, "red"]];
-  const mateGoal = /mate/i.test(pzCur[4]) && last;
+  const mateGoal = /mate/i.test(pzCur[4]) && !/stopMate/.test(pzCur[4]) && last;
   const ex = mateGoal ? escapes() : null;
   if (ex) { pzMarks = ex.marks; pzArrows = [...pzArrows, ...ex.arrows]; }
   if (/save(Queen|Piece)/.test(pzCur[4])) {   // show who can take the piece where it now stands
     const pos = parseFen(pzGame.fen()), them = pzGame.turn(), at = from === pzCur[7] ? to : pzCur[7];
     const hunters = attackersOf(pos, at, them);
     if (hunters.length) { pzMarks = { [at]: "mk" }; pzArrows = hunters.map(h => [h + at, "red"]); }
+  }
+  if (/safeTake|stopMate/.test(pzCur[4])) {   // the piece you moved can now be taken (for less, or unguarded): who takes it
+    const pos = parseFen(pzGame.fen()), them = pzGame.turn(), mine = them === "w" ? "b" : "w", hunters = attackersOf(pos, to, them);
+    if (hunters.length && (!attackersOf(pos, to, mine).length || hunters.some(h => VALUE[pos[h].toLowerCase()] < VALUE[pos[to].toLowerCase()]))) {
+      pzMarks = { [to]: "mk" }; pzArrows = [[uci, "red"], ...hunters.map(h => [h + to, "red"])];
+    } else if (/safeTake/.test(pzCur[4]) && pzCur[6].some(u => u.slice(2, 4) === pzCur[7]) && to !== pzCur[7]) {
+      pzMarks = { [pzCur[7]]: "esc" };     // a free piece was there to take: it glows green
+    }
+  }
+  if (/stopMate/.test(pzCur[4])) {           // the mate is still there: show it
+    const mates = sgMates(), pos = parseFen(pzGame.fen()), k = Object.keys(pos).find(q => pos[q] === (pzGame.turn() === "w" ? "k" : "K"));
+    if (mates.length) { pzMarks = { [k]: "mk" }; pzArrows = [[uci, "red"], ...mates.map(m => [m.from + m.to, "red"])]; }
   }
   $("pzState").textContent = "Not the best move"; $("pzState").className = "state fail";
   $("pzCard").className = "card fail";
@@ -1631,40 +1668,84 @@ function advanceStage() {
   const i = stageCur(pl);
   if (i < 0 || STAGES[i] === pzStage) return;
   celebrate(`<span class="stageicon">${STAGES[i].icon}</span>`, "quiet");
-  if (STAGES[i].eg) { stageGo(STAGES[i]); return true; }     // next up is an endgame: pzNext stops here
+  if (STAGES[i].eg || STAGES[i].gate) { stageGo(STAGES[i]); return true; }     // next up is an endgame or a boss: pzNext stops here
   pzStage = STAGES[i];
 }
 
 /* ---- learning path: stages unlock one after another; 8 stars finish a stage ---- */
 const STAGE_NEED = 8;
 function egIcon(pcs) { return `<span class="goal mate"><span class="pc bK"></span></span><span class="egm">${[...pcs].map(c => `<span class="pc w${c} mini"></span>`).join("")}</span>`; }
+// boss gates: one win against that bot (any 🤖 handicap counts) opens the way on; the picture is the bot's face
+function gateIcon(face) { return `<span class="gate">${face}</span>`; }
+// name: for the parent view only (the child sees the pictures)
 const STAGES = [
-  { id: "take", icon: `<span class="goal take"><span class="pc bQ"></span></span>`, f: p => p[5] && /hangingPiece/.test(p[4]) },
-  { id: "saveq", icon: `<span class="goal save"><span class="pc wQ"></span></span>`, f: p => /saveQueen/.test(p[4]) },
-  { id: "check", icon: `<span class="goal check"><span class="pc bK"></span></span>`, f: p => /giveCheck/.test(p[4]) },
-  { id: "promo", need: 5, icon: `<span class="goal promo"><span class="pc wP"></span><b>→</b><span class="pc wQ"></span></span>`, f: p => p[5] && /promotion/.test(p[4]) },
-  { id: "savep", icon: `<span class="goal save"><span class="pc wR"></span></span>`, f: p => /savePiece/.test(p[4]) },
-  { id: "back", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc bP mini"></span>`, f: p => p[5] && /backRankMate/.test(p[4]) },
-  { id: "mateq", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc wQ mini"></span>`, f: p => p[5] && /mateIn1/.test(p[4]) && !/backRank/.test(p[4]) && /[Qq]/.test(p[1].split(" ")[0]) },
-  { id: "mater", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc wR mini"></span>`, f: p => p[5] && /mateIn1/.test(p[4]) && !/backRank/.test(p[4]) && !/[Qq]/.test(p[1].split(" ")[0]) },
+  { id: "take", name: "Take a free piece", icon: `<span class="goal take"><span class="pc bQ"></span></span>`, f: p => p[5] && /hangingPiece/.test(p[4]) },
+  { id: "saveq", name: "Save the queen", icon: `<span class="goal save"><span class="pc wQ"></span></span>`, f: p => /saveQueen/.test(p[4]) },
+  { id: "check", name: "Give check", icon: `<span class="goal check"><span class="pc bK"></span></span>`, f: p => /giveCheck/.test(p[4]) },
+  { id: "promo", name: "Make a queen", need: 5, icon: `<span class="goal promo"><span class="pc wP"></span><b>→</b><span class="pc wQ"></span></span>`, f: p => p[5] && /promotion/.test(p[4]) },
+  { id: "gate1", name: "Boss: beat Greedy Gus", need: 1, gate: "gus", icon: gateIcon("🐷"), f: () => false },
+  { id: "savep", name: "Save your pieces", icon: `<span class="goal save"><span class="pc wR"></span></span>`, f: p => /savePiece/.test(p[4]) },
+  { id: "back", name: "Back-rank mate", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc bP mini"></span>`, f: p => p[5] && /backRankMate/.test(p[4]) },
+  { id: "mateq", name: "Mate with the queen", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc wQ mini"></span>`, f: p => p[5] && /mateIn1/.test(p[4]) && !/backRank/.test(p[4]) && /[Qq]/.test(p[1].split(" ")[0]) },
+  { id: "mater", name: "Mate with a rook", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc wR mini"></span>`, f: p => p[5] && /mateIn1/.test(p[4]) && !/backRank/.test(p[4]) && !/[Qq]/.test(p[1].split(" ")[0]) },
+  { id: "gate2", name: "Boss: beat Careful Cat", need: 1, gate: "cat", icon: gateIcon("🐱"), f: () => false },
   // endgames (played in the kids' corner, not puzzles): mate the lone king; the picture shows the pieces you mate with
-  { id: "egqr", need: 3, eg: "QR", icon: egIcon("QR"), f: () => false },
-  { id: "egrr", need: 3, eg: "RR", icon: egIcon("RR"), f: () => false },
-  { id: "egq", need: 3, eg: "KQ", icon: egIcon("KQ"), f: () => false },
-  { id: "egr", need: 3, eg: "KR", icon: egIcon("KR"), f: () => false },
-  { id: "fork", icon: `<span class="goal win">🍴</span>`, f: p => !p[5] && /fork/.test(p[4]) && p[3] < 850 },
-  { id: "mix", icon: `<span class="goal win">🧩</span>`, f: p => !p[5] && p[3] >= 400 && p[3] < 650 },
+  { id: "egqr", name: "Endgame: mate with queen + rook", need: 3, eg: "QR", icon: egIcon("QR"), f: () => false },
+  { id: "egrr", name: "Endgame: mate with two rooks", need: 3, eg: "RR", icon: egIcon("RR"), f: () => false },
+  { id: "egq", name: "Endgame: mate with king + queen", need: 3, eg: "KQ", icon: egIcon("KQ"), f: () => false },
+  { id: "egr", name: "Endgame: mate with king + rook", need: 3, eg: "KR", icon: egIcon("KR"), f: () => false },
+  { id: "gate3", name: "Boss: beat Tactic Tiger", need: 1, gate: "tiger", icon: gateIcon("🐯"), f: () => false },
+  { id: "fork", name: "Forks", icon: `<span class="goal win">🍴</span>`, f: p => !p[5] && /fork/.test(p[4]) && p[3] < 850 },
+  { id: "mix", name: "Mixed puzzles", icon: `<span class="goal win">🧩</span>`, f: p => !p[5] && p[3] >= 400 && p[3] < 650 },
+  // generated by puzzles/safe_gen.py: take only when it wins something / stop a mate in one (the threat is drawn)
+  { id: "safe", name: "Is it safe to take?", icon: `<span class="goal scale">⚖️<span class="pc bN"></span></span>`, f: p => /safeTake/.test(p[4]) },
+  { id: "stopm", name: "Stop the mate", icon: `<span class="goal guard"><span class="pc wK"></span></span>`, f: p => /stopMate/.test(p[4]) },
+  { id: "gate4", name: "Boss: beat Pawn Pete (Pawn Wars)", need: 1, gate: "pete", icon: gateIcon("🐣"), f: () => false },
+  { id: "mate2", name: "Mate in 2", icon: `<span class="goal mate mn" data-n="2"><span class="pc bK"></span></span>`, f: p => !p[5] && /mateIn2/.test(p[4]) && p[3] < 1000 },
 ];
 const stagePools = {};
 function stagePool(st) { return stagePools[st.id] || (stagePools[st.id] = GYM.puzzles.filter(st.f)); }
 function stageStars(pl, id) { return (pl.stages || {})[id] || 0; }
 function needOf(st) { return st.need || STAGE_NEED; }
 // a stage opens when every earlier stage is finished, and stays open once it (or any later stage) has stars:
-// stages added later in the list (the endgames) never lock a stage the child had already reached
+// stages added later in the list (the endgames) never lock a stage the child had already reached.
+// Boss gates added later: a gate the child was already past (every stage before it finished) is "free": it doesn't
+// block anything, but stays on the map to play (see gateMigrate)
 function stageOpen(pl, i) {
-  return STAGES.slice(i).some(st => stageStars(pl, st.id) > 0) || STAGES.slice(0, i).every(st => stageStars(pl, st.id) >= needOf(st));
+  gateMigrate(pl);
+  return STAGES.slice(i).some(st => stageStars(pl, st.id) > 0) ||
+    STAGES.slice(0, i).every(st => stageStars(pl, st.id) >= needOf(st) || gateFreed(pl, st));
 }
-function stageCur(pl) { return STAGES.findIndex((st, k) => stageOpen(pl, k) && stageStars(pl, st.id) < needOf(st)); }
+// the stage to play next: the first open unfinished one (a free gate behind the child doesn't count)
+function stageCur(pl) { return STAGES.findIndex((st, k) => stageOpen(pl, k) && stageStars(pl, st.id) < needOf(st) && !gateFreed(pl, st)); }
+function gateFreed(pl, st) { return !!(st.gate && (pl.gateFree || {})[st.id]); }
+// once per player and gate (pl.gatesSeen; mergePlayer keeps only gates both copies had seen, so a copy that never
+// looked brings its progress in first): a new gate whose earlier stages are all finished already is "free", so the
+// stage the child was on stays open. Gates added later get the same treatment.
+function gateMigrate(pl) {
+  if (!window.GYM || !GYM.puzzles || (pl.gatesSeen && STAGES.every(st => !st.gate || pl.gatesSeen[st.id]))) return;
+  recountStages(pl);
+  pl.gateFree = pl.gateFree || {}; pl.gatesSeen = pl.gatesSeen || {};
+  STAGES.forEach((st, i) => {
+    if (!st.gate || pl.gatesSeen[st.id]) return;
+    if (STAGES.slice(0, i).every(s => s.gate || stageStars(pl, s.id) >= needOf(s))) pl.gateFree[st.id] = 1;
+    pl.gatesSeen[st.id] = 1;
+  });
+  save();
+}
+// a win against a bot clears the first open, unbeaten gate of that bot (from the gate or from the 🤖 tab)
+function gateWin(pl, botId) {
+  const i = STAGES.findIndex((st, k) => st.gate === botId && stageStars(pl, st.id) < needOf(st) && stageOpen(pl, k));
+  if (i < 0) return null;
+  pl.stages = pl.stages || {}; pl.stages[STAGES[i].id] = needOf(STAGES[i]);
+  setTimeout(() => celebrate("🏅", "trophy"), 1500);
+  return STAGES[i];
+}
+function gateNext() {   // ▶ after beating a boss: the next stage to play, or the map
+  const pl = pzPlayers(), i = stageCur(pl);
+  if (i < 0) { kidTab = "path"; return openKids(); }
+  stageGo(STAGES[i]);
+}
 function stagePick(pl) {
   const again = againPick(pl, pzStage.f); if (again) return again;     // a missed puzzle of this stage comes back
   const pool = stagePool(pzStage), done = pl.done || {};
@@ -1691,8 +1772,12 @@ function recountStages(pl) {
   for (const [id, c] of Object.entries(n)) pl.stages[id] = Math.max(pl.stages[id] || 0, c);
   pl.stagesRecounted = true; save();
 }
-// open a stage: puzzle stages in the puzzle view, endgame stages as a game in the kids' corner
+// open a stage: puzzle stages in the puzzle view, endgame stages as a game in the kids' corner, a gate as a bot game
 function stageGo(st) {
+  if (st.gate) {
+    kidTab = "play"; botStart(st.gate, st);
+    return window.SECTION === "kids" ? openKids() : go("kids", "play");
+  }
   if (!st.eg) return go("puzzles", { stage: st });
   eg = null; egSt = st;
   if (window.SECTION === "kids") { kidTab = "end"; openKids(); } else go("kids", "end");
@@ -1719,10 +1804,12 @@ function renderPath() {
   const pl = pzPlayers();
   recountStages(pl);
   const curI = stageCur(pl);
+  // the iPad lays the path out as a snake (4 columns upright, 7 on its side): each stop's row/column as CSS variables
+  const snake = (i, cols) => { const r = Math.floor(i / cols), c = i % cols; return `--r${cols}:${r + 1};--c${cols}:${r % 2 ? cols - c : c + 1}`; };
   $("kPath").innerHTML = `<div class="path">${STAGES.map((st, i) => {
     const need = needOf(st), open = stageOpen(pl, i), n = Math.min(stageStars(pl, st.id), need), done = n >= need, cur = i === curI;
-    return `<div class="stop ${i % 2 ? "right" : "left"}">
-      <button class="stage${open ? "" : " locked"}${done ? " done" : ""}${cur ? " cur" : ""}" type="button" data-st="${i}" ${open ? "" : "disabled"} aria-label="Stage ${i + 1}${open ? "" : ", locked"}">
+    return `<div class="stop ${i % 2 ? "right" : "left"}" style="${snake(i, 4)};${snake(i, 7)}">
+      <button class="stage${open ? "" : " locked"}${done ? " done" : ""}${cur ? " cur" : ""}${st.gate ? " gatest" : ""}" type="button" data-st="${i}" ${open ? "" : "disabled"} aria-label="Stage ${i + 1}: ${esc(st.name)}${open ? "" : ", locked"}">
         <span class="ic">${open ? st.icon : "🔒"}</span>
         <span class="dots">${Array.from({ length: need }, (_, k) => `<i class="${k < n ? "on" : ""}">★</i>`).join("")}</span>
       </button></div>`;
@@ -2112,6 +2199,7 @@ function renderStickers() {
 /* ---- parent view ---- */
 const THEME_GROUPS = [
   ["Take a free piece", t => /hangingPiece/.test(t)], ["Save the queen", t => /saveQueen/.test(t)], ["Save a piece", t => /savePiece/.test(t)], ["Give check", t => /giveCheck/.test(t)],
+  ["Is it safe to take?", t => /safeTake/.test(t)], ["Stop the mate", t => /stopMate/.test(t)],
   ["Promote a pawn", t => /promotion/.test(t)], ["Back-rank mate", t => /backRankMate/.test(t)], ["Mate in 1", t => /mateIn1/.test(t)],
   ["Mate in 2+", t => /mateIn[2-9]/.test(t)], ["Forks", t => /fork/.test(t)], ["Pins & skewers", t => /pin|skewer/.test(t)],
   ["Other tactics", t => true],
@@ -2159,7 +2247,8 @@ function renderParents() {
     <figure class="chart wide unlock"><figcaption>Unlock levels</figcaption>
       <p class="tiny">To continue where ${esc(pl.name)} is on another device. Tap a learning-path stage to open it: every stage before it counts as finished.</p>
       <div class="ustages">${STAGES.map((st, i) => `<button class="btn" type="button" data-ul="${i}" ${stageOpen(pl, i) ? "disabled" : ""}
-        aria-label="Open stage ${i + 1}"><span class="stageicon">${st.icon}</span><small>${i + 1}</small></button>`).join("")}</div>
+        title="${esc(st.name)}" aria-label="Open stage ${i + 1}: ${esc(st.name)}"><span class="stageicon">${st.icon}</span><small>${i + 1}</small></button>`).join("")}</div>
+      <p class="tiny">${STAGES.map((st, i) => `${i + 1} ${esc(st.name)}${stageStars(pl, st.id) >= needOf(st) ? " ✓" : gateFreed(pl, st) ? " (skipped: was already past it)" : ""}`).join(" · ")}</p>
       <label class="tiny"><input type="checkbox" id="uSchool" ${pl.schoolAll ? "checked" : ""}> Open every piece-school level</label>
     </figure>
     ${window.GYM_KIDS_ONLY ? `<figure class="chart wide"><figcaption>Back up progress</figcaption>
@@ -2172,7 +2261,7 @@ function renderParents() {
   wireTips($("kParents"));
   $("kParents").querySelectorAll("[data-ul]").forEach(b => b.onclick = () => {
     const i = +b.dataset.ul;
-    if (!confirm(`Open stage ${i + 1}? Stages 1–${i} will count as finished.`)) return;
+    if (!confirm(`Open stage ${i + 1} (${STAGES[i].name})? Stages 1–${i} will count as finished (boss gates as beaten).`)) return;
     pl.stages = pl.stages || {};
     STAGES.slice(0, i).forEach(st => { pl.stages[st.id] = Math.max(stageStars(pl, st.id), needOf(st)); });
     save(); renderParents();
@@ -2262,7 +2351,7 @@ document.addEventListener("keydown", ev => {
   if (ev.key === "ArrowRight") {
     if (kidTab === "school" && sc && sc.done) { ev.preventDefault(); schoolNext(); }
     else if (kidTab === "play" && bg && bg.rp) { ev.preventDefault(); rpStep(); }
-    else if (kidTab === "play" && bg && bg.over) { ev.preventDefault(); botStart(bg.bot.id); }
+    else if (kidTab === "play" && bg && bg.over) { ev.preventDefault(); botStart(bg.bot.id, bg.gate); }
     else if (kidTab === "vision" && vis && !$("vDone").hidden) { ev.preventDefault(); visStart(vis.game); }
     else if (kidTab === "end" && eg && eg.over === "win") { ev.preventDefault(); egNext(); }
   } else if (ev.key === "ArrowLeft" && kidTab === "school" && sc) { ev.preventDefault(); $("sDone").hidden = true; schoolStart(sc.pc, sc.li); }
@@ -2323,7 +2412,8 @@ const BOTS = [
   { id: "pete", face: "🐣", name: "Pawn Pete", elo: "Pawn Wars", think: 500, pawns: true },
 ];
 const VALUE = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
-let bg = null;   // {bot, game (chess.js) | pw (pawn wars state), me: 'w'|'b', sel, last, over, hist:[fen…], log, rp}
+let bg = null;   // {bot, game (chess.js) | pw (pawn wars state), me: 'w'|'b', sel, last, over, hist:[fen…], log, rp, gate}
+// gate: the learning-path boss stage this game was started from (a win against the bot clears it)
 // log (chess games): every move as {fen before, from, to, me, piece, captured}; rp: the replay after the game {list, k}
 
 function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
@@ -2431,10 +2521,10 @@ function pwBot(s) {
 }
 
 /* ---- playing a game ---- */
-function botStart(id) {
+function botStart(id, gate = null) {
   const bot = BOTS.find(b => b.id === id), pl = pzPlayers();
   const me = (pl.botColor || "w");
-  bg = { bot, me, sel: null, last: [], over: null, hist: [], log: [], rp: null };
+  bg = { bot, me, sel: null, last: [], over: null, hist: [], log: [], rp: null, gate };
   if (bot.pawns) bg.pw = pwNew();
   else {
     bg.game = new Chess();
@@ -2485,23 +2575,28 @@ function botAfterMove() {
   if (res === "win") {
     const had = pl.stars || 0; pl.stars = had + 3; sfx("trophy");
     if (Math.floor(pl.stars / 10) > Math.floor(had / 10)) celebrate(STICKERS[(Math.floor(pl.stars / 10) - 1) % STICKERS.length], "sticker");
+    const gate = gateWin(pl, bg.bot.id); if (gate) bg.gate = gate;      // a boss gate on the learning path is beaten
   } else if (res === "loss") sfx("wrong"); else sfx("right");
   save();
   botOverShow();
   botDraw();
   return true;
 }
-// the game-over panel: result, then ↻ rematch, 🤖 another bot, 🔍 what did you miss? (a ⭐ instead once nothing was missed)
+// the game-over panel: result, then ↻ rematch, 🤖 another bot, 🔍 what did you miss? (a ⭐ instead once nothing was missed);
+// a boss game from the learning path adds 🗺 back to the map, and ▶ on to the next stage once the boss is beaten
 function botOverShow(clean = false) {
-  const res = bg.over;
+  const res = bg.over, beat = bg.gate && stageStars(pzPlayers(), bg.gate.id) >= needOf(bg.gate);
   $("bOver").innerHTML = `<div class="burst">${clean ? "⭐" : res === "win" ? "🏆" : res === "loss" ? bg.bot.face : "🤝"}</div>
     ${res === "win" && !clean ? `<div class="big">⭐ +3</div>` : ""}
-    <div class="row"><button class="btn primary big" type="button" id="bAgain" aria-label="Play again">↻</button>
-    <button class="btn big" type="button" id="bPickAgain" aria-label="Choose a bot">🤖</button>
+    <div class="row">${beat ? `<button class="btn primary big" type="button" id="bGateNext" aria-label="Next stage">▶</button>` : ""}
+    <button class="btn${beat ? "" : " primary"} big" type="button" id="bAgain" aria-label="Play again">↻</button>
+    ${bg.gate ? `<button class="btn big" type="button" id="bGateMap" aria-label="Back to the map">🗺</button>` : `<button class="btn big" type="button" id="bPickAgain" aria-label="Choose a bot">🤖</button>`}
     ${bg.game && !clean ? `<button class="btn big" type="button" id="bReview" aria-label="What did I miss?">🔍</button>` : ""}</div>`;
   $("bOver").hidden = false;
-  $("bAgain").onclick = () => botStart(bg.bot.id);
-  $("bPickAgain").onclick = () => { bg = null; renderBots(); };
+  $("bAgain").onclick = () => botStart(bg.bot.id, bg.gate);
+  if ($("bGateNext")) $("bGateNext").onclick = () => { bg = null; gateNext(); };
+  if ($("bGateMap")) $("bGateMap").onclick = () => { bg = null; kidTab = "path"; openKids(); };
+  if ($("bPickAgain")) $("bPickAgain").onclick = () => { bg = null; renderBots(); };
   if ($("bReview")) $("bReview").onclick = rpStart;
 }
 function botReply() {
