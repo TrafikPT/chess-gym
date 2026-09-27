@@ -1275,11 +1275,15 @@ function pzGoalText(p) {
   if (t.includes("savePiece")) return "One of your pieces is attacked: keep it safe.";
   if (t.includes("promotion") && p[5]) return "Push your pawn to the end and make a new queen.";
   if (t.includes("equality")) return "Find the move that saves the game.";
+  if (t.includes("pin")) return "Use a pin: a piece that can't move out of the way without exposing its king.";
+  if (t.includes("skewer")) return "Skewer: attack a big piece; when it moves away, take what stood behind it.";
+  if (t.includes("discoveredAttack")) return "Discovered attack: move one piece out of the way so the piece behind it attacks.";
   return "Find the best move: it wins material or more.";
 }
 // the goal as a picture, from the solver's side (targets in the opponent's colour, own pieces in the solver's):
 // mate (king in a target, with the number of moves from 2 on), check, save (shield), promote (pawn → queen), fork (🍴),
-// take a piece (+), win something (⚔), is it safe to take (⚖ + the piece), stop the mate (own king, shield and #)
+// pin (📌), skewer (🍢), discovered attack (two arrows from one line), take a piece (+), win something (⚔),
+// is it safe to take (⚖ + the piece), stop the mate (own king, shield and #)
 function pzGoalHtml() {
   const t = pzCur[4].split(" "), me = pzGame.turn(), them = me === "w" ? "b" : "w";
   const want = pzCur[2].split(" ")[pzIdx] || "", victim = want ? pzGame.get(want.slice(2, 4)) : null;
@@ -1299,6 +1303,9 @@ function pzGoalHtml() {
   }
   if (t.includes("promotion") && want[4]) return { kind: "promo", html: `<span class="goal promo" title="Make a queen"><span class="pc ${me}P"></span><b>→</b><span class="pc ${me}Q"></span></span>` };
   if (t.includes("fork")) return { kind: "fork", html: `<span class="goal win" title="Fork">🍴</span>` };
+  if (t.includes("pin")) return { kind: "pin", html: `<span class="goal win" title="Pin">📌</span>` };
+  if (t.includes("skewer")) return { kind: "skewer", html: `<span class="goal win" title="Skewer">🍢</span>` };
+  if (t.includes("discoveredAttack")) return { kind: "disc", html: DISC_ICON.replace('class="goal disc"', 'class="goal disc" title="Discovered attack"') };
   if (victim) return { kind: "take", html: `<span class="goal take" title="Win this piece"><span class="pc ${victim.color}${victim.type.toUpperCase()}"></span></span>` };
   return { kind: "win", html: `<span class="goal win" title="Win something">⚔</span>` };
 }
@@ -1488,6 +1495,7 @@ function pzUserMove(from, to) {
   return true;
 }
 function pzRetry() {
+  if (pzState === "done" || pzState === "show") return pzRestart();
   if (pzState !== "wrong") return;
   clearTimeout(pzTimer);
   pzGame.undo(); pzArrows = []; pzMarks = {}; pzState = "solve"; pzLast = [];
@@ -1495,6 +1503,16 @@ function pzRetry() {
   $("pzCard").className = "card"; $("pzCard").innerHTML = `<p class="text">Your move again. This one already counts as missed.</p>`;
   pzShowGoal();
   pzDraw();
+}
+// the same puzzle again from its first position (after "Show solution" or a finish): already scored, so no rating change
+function pzRestart() {
+  clearTimeout(pzTimer);
+  pzGame = new Chess(pzCur[1]); pzIdx = 0; pzSel = null; pzArrows = []; pzLast = []; pzMarks = {};
+  $("pzGoalBadge").hidden = true; $("pzCard").className = "card";
+  $("pzCard").innerHTML = pzKid() ? "" : `<p class="text">Same puzzle again. It already counts, so try it (or watch the solution) as often as you like.</p>`;
+  if (pzCur[5]) { pzState = "solve"; pzShowGoal(); pzDraw(); return; }
+  pzState = "intro"; pzDraw();
+  pzTimer = setTimeout(() => { pzPlay(pzCur[2].split(" ")[0]); pzIdx = 1; pzState = "solve"; pzShowGoal(); pzDraw(); }, 650);
 }
 function pzSolution() {
   if (!pzCur || pzState === "done" || pzState === "intro") return;
@@ -1677,6 +1695,15 @@ const STAGE_NEED = 8;
 function egIcon(pcs) { return `<span class="goal mate"><span class="pc bK"></span></span><span class="egm">${[...pcs].map(c => `<span class="pc w${c} mini"></span>`).join("")}</span>`; }
 // boss gates: one win against that bot (any 🤖 handicap counts) opens the way on; the picture is the bot's face
 function gateIcon(face) { return `<span class="gate">${face}</span>`; }
+// discovered attack: the bishop steps off the line (one arrow) and the rook behind it now hits the queen (the other)
+const DISC_ICON = `<span class="goal disc"><span class="pc bQ" style="top:0"></span><span class="pc wB" style="top:33.3%"></span><span class="pc wR" style="top:66.6%"></span>` +
+  `<svg viewBox="0 5 2 3" aria-hidden="true">${arrowPath("a2b3", "green", "w")}${arrowPath("a1a3", "green", "w")}</svg></span>`;
+// a tactic stage's puzzles: that theme and no other path tactic or mate, short (at most 2 moves to find), rated up to 1100
+const TACTIC_THEMES = ["fork", "pin", "skewer", "discoveredAttack"];
+function tacticOnly(p, t) {
+  const ts = p[4].split(" ");
+  return ts.includes(t) && p[3] <= 1100 && p[2].split(" ").length <= 4 && !ts.some(x => x !== t && (TACTIC_THEMES.includes(x) || /^mate/.test(x)));
+}
 // name: for the parent view only (the child sees the pictures)
 const STAGES = [
   { id: "take", name: "Take a free piece", icon: `<span class="goal take"><span class="pc bQ"></span></span>`, f: p => p[5] && /hangingPiece/.test(p[4]) },
@@ -1702,6 +1729,16 @@ const STAGES = [
   { id: "stopm", name: "Stop the mate", icon: `<span class="goal guard"><span class="pc wK"></span></span>`, f: p => /stopMate/.test(p[4]) },
   { id: "gate4", name: "Boss: beat Pawn Pete (Pawn Wars)", need: 1, gate: "pete", icon: gateIcon("🐣"), f: () => false },
   { id: "mate2", name: "Mate in 2", icon: `<span class="goal mate mn" data-n="2"><span class="pc bK"></span></span>`, f: p => !p[5] && /mateIn2/.test(p[4]) && p[3] < 1000 },
+  // one tactic each (Lichess, mostly puzzles/themes.json up to 1100; build.py ships them to the iPad site too)
+  { id: "pin", name: "Pins", icon: `<span class="goal win">📌</span>`, f: p => !p[5] && tacticOnly(p, "pin") },
+  { id: "skewer", name: "Skewers", icon: `<span class="goal win">🍢</span>`, f: p => !p[5] && tacticOnly(p, "skewer") },
+  { id: "disc", name: "Discovered attacks", icon: DISC_ICON, f: p => !p[5] && tacticOnly(p, "discoveredAttack") },
+  { id: "gate5", name: "Boss: beat Tactic Tiger again", need: 1, gate: "tiger", icon: gateIcon("🐯"), f: () => false },
+  // a review stop: puzzles from the stages already finished, missed ones first (reviewPick)
+  { id: "review", name: "Review: puzzles from finished stages", review: true, icon: `<span class="goal win">🔁</span>`, f: () => false },
+  // king-and-pawn games (kids' corner, like the endgames above): catch a running pawn; make a queen with the king's help
+  { id: "egcatch", name: "Endgame: catch the pawn with your king", need: 3, eg: "catch", icon: `<span class="goal take"><span class="pc bP"></span></span><span class="egm"><span class="pc wK mini"></span></span>`, f: () => false },
+  { id: "egkp", name: "Endgame: king + pawn, make a queen", need: 3, eg: "kp", icon: `<span class="goal promo"><span class="pc wP"></span><b>→</b><span class="pc wQ"></span></span><span class="egm"><span class="pc wK mini"></span></span>`, f: () => false },
 ];
 const stagePools = {};
 function stagePool(st) { return stagePools[st.id] || (stagePools[st.id] = GYM.puzzles.filter(st.f)); }
@@ -1733,9 +1770,13 @@ function gateMigrate(pl) {
   });
   save();
 }
-// a win against a bot clears the first open, unbeaten gate of that bot (from the gate or from the 🤖 tab)
-function gateWin(pl, botId) {
-  const i = STAGES.findIndex((st, k) => st.gate === botId && stageStars(pl, st.id) < needOf(st) && stageOpen(pl, k));
+// a win against a bot clears the gate the game was started from, else the first open, unbeaten gate of that bot that
+// still blocks the way (one skipped as "free" only if none does; from the 🤖 tab). Two gates can share a bot (🐯).
+function gateWin(pl, botId, from = null) {
+  const can = (st, k) => st.gate === botId && stageStars(pl, st.id) < needOf(st) && stageOpen(pl, k);
+  let i = from ? STAGES.findIndex((st, k) => st === from && can(st, k)) : -1;
+  if (i < 0) i = STAGES.findIndex((st, k) => can(st, k) && !gateFreed(pl, st));
+  if (i < 0) i = STAGES.findIndex(can);
   if (i < 0) return null;
   pl.stages = pl.stages || {}; pl.stages[STAGES[i].id] = needOf(STAGES[i]);
   setTimeout(() => celebrate("🏅", "trophy"), 1500);
@@ -1747,17 +1788,36 @@ function gateNext() {   // ▶ after beating a boss: the next stage to play, or 
   stageGo(STAGES[i]);
 }
 function stagePick(pl) {
+  if (pzStage.review) return reviewPick(pl);
   const again = againPick(pl, pzStage.f); if (again) return again;     // a missed puzzle of this stage comes back
   const pool = stagePool(pzStage), done = pl.done || {};
   const fresh = pool.filter(p => !(p[0] in done));
   const from = fresh.length ? fresh : pool;
   return from[Math.floor(Math.random() * from.length)];
 }
-// a clean solve counts for the stage the puzzle belongs to, wherever it was played (path or Puzzles tab)
+// the review stop: puzzles from the puzzle stages the child has finished (all puzzle stages before it if none is),
+// half the time one he missed and hasn't yet solved cleanly twice (pl.again, due or not), else a random finished stage
+function reviewStages(pl) {
+  const upTo = STAGES.findIndex(st => st.review), sts = STAGES.filter((st, k) => !st.eg && !st.gate && !st.review && stagePool(st).length && (upTo < 0 || k < upTo));
+  const done = sts.filter(st => stageStars(pl, st.id) >= needOf(st));
+  return done.length ? done : sts;
+}
+function reviewPick(pl, r = Math.random()) {
+  const sts = reviewStages(pl), mine = p => sts.some(st => st.f(p)), rnd = a => a[Math.floor(Math.random() * a.length)];
+  againDue(pl, null);                                   // builds againRows
+  const missed = Object.entries(pl.again || {}).filter(([id, x]) => x.n < 2 && againRows[id] && mine(againRows[id])).map(([id]) => againRows[id]);
+  if (missed.length && r < .5) return rnd(missed);
+  const pool = stagePool(rnd(sts)), done = pl.done || {}, fresh = pool.filter(p => !(p[0] in done));
+  return rnd(fresh.length ? fresh : pool);
+}
+// a clean solve counts for the stage the puzzle belongs to, wherever it was played (path or Puzzles tab), but only
+// once that stage is open: a pin solved in the 🧩 tab doesn't open the whole path up to the pins
 function stageOf(p) { return STAGES.find(st => st.f(p)); }
 function stageStar() {
-  const st = pzStage && pzStage.f(pzCur) ? pzStage : stageOf(pzCur); if (!st) return;
-  const pl = pzPlayers(); pl.stages = pl.stages || {};
+  const pl = pzPlayers();
+  const st = pzStage && (pzStage.review || pzStage.f(pzCur)) ? pzStage : stageOf(pzCur); if (!st) return;
+  if (st !== pzStage && !stageOpen(pl, STAGES.indexOf(st))) return;
+  pl.stages = pl.stages || {};
   const had = stageStars(pl, st.id);
   pl.stages[st.id] = had + 1; save(); renderStageBar();
   if (had + 1 === needOf(st) && pl.kid) setTimeout(() => celebrate("🏅", "trophy"), 1500);
@@ -1804,11 +1864,11 @@ function renderPath() {
   const pl = pzPlayers();
   recountStages(pl);
   const curI = stageCur(pl);
-  // the iPad lays the path out as a snake (4 columns upright, 7 on its side): each stop's row/column as CSS variables
+  // the iPad lays the path out as a snake (5 columns upright, 8 on its side): each stop's row/column as CSS variables
   const snake = (i, cols) => { const r = Math.floor(i / cols), c = i % cols; return `--r${cols}:${r + 1};--c${cols}:${r % 2 ? cols - c : c + 1}`; };
   $("kPath").innerHTML = `<div class="path">${STAGES.map((st, i) => {
     const need = needOf(st), open = stageOpen(pl, i), n = Math.min(stageStars(pl, st.id), need), done = n >= need, cur = i === curI;
-    return `<div class="stop ${i % 2 ? "right" : "left"}" style="${snake(i, 4)};${snake(i, 7)}">
+    return `<div class="stop ${i % 2 ? "right" : "left"}" style="${snake(i, 5)};${snake(i, 8)}">
       <button class="stage${open ? "" : " locked"}${done ? " done" : ""}${cur ? " cur" : ""}${st.gate ? " gatest" : ""}" type="button" data-st="${i}" ${open ? "" : "disabled"} aria-label="Stage ${i + 1}: ${esc(st.name)}${open ? "" : ", locked"}">
         <span class="ic">${open ? st.icon : "🔒"}</span>
         <span class="dots">${Array.from({ length: need }, (_, k) => `<i class="${k < n ? "on" : ""}">★</i>`).join("")}</span>
@@ -2088,6 +2148,8 @@ let eg = null, egSt = null;   // eg = {st, g (chess.js), sel, last, moves, over,
 // a start with the black king in the middle, not in check, none of your pieces next to it; White (you) to move.
 // pcs = your pieces besides the king ("QR", "RR", "KQ" = the queen, "KR" = the rook)
 function egStartFen(pcs) {
+  if (pcs === "catch") return cpStartFen();
+  if (pcs === "kp") return kpStartFen();
   for (;;) {
     const bk = kidSq(3, 6, "cdef"), pos = { [bk]: "k" }, mine = ["K", ...pcs.replace("K", "")];
     for (const p of mine) { const q = kidSq(); if (!pos[q]) pos[q] = p; }
@@ -2120,14 +2182,19 @@ function egBotMove(g) {
 }
 function egStart(st) {
   egSt = st || egSt || STAGES.find(s => s.eg);
-  eg = { st: egSt, g: new Chess(egStartFen(egSt.eg)), sel: null, last: [], moves: 0, over: null, hist: [] };
+  eg = { st: egSt, g: new Chess(egStartFen(egSt.eg)), sel: null, last: [], moves: 0, over: null, hist: [], undos: 0, slip: false };
   $("eDone").hidden = true; egDraw();
 }
 function egDraw() {
   const g = eg.g, pos = parseFen(g.fen()), mine = !eg.over && g.turn() === "w", marks = {};
   if (g.in_check()) marks[Object.keys(pos).find(q => pos[q] === "k")] = "mk";
-  if (mine) for (const q of Object.keys(pos)) {      // your queen/rook next to the king with no guard
-    if ("QR".includes(pos[q]) && attackersOf(pos, q, "b").length && !attackersOf(pos, q, "w").length) marks[q] = "dg";
+  if (mine) for (const q of Object.keys(pos)) {      // your queen/rook (or the pawn you escort) next to the king with no guard
+    if ("QRP".includes(pos[q]) && attackersOf(pos, q, "b").length && !attackersOf(pos, q, "w").length) marks[q] = "dg";
+  }
+  const pawnGoal = eg.st.eg === "catch" ? "p" : eg.st.eg === "kp" ? "P" : null;   // the square the pawn runs to
+  if (pawnGoal && !eg.over) {
+    const at = Object.keys(pos).find(q => pos[q] === pawnGoal);
+    if (at) { const goal = at[0] + (pawnGoal === "p" ? 1 : 8); marks[goal] = marks[goal] || (pawnGoal === "p" ? "dg" : "star"); }
   }
   const tgts = eg.sel && mine ? g.moves({ square: eg.sel, verbose: true }).map(m => m.to) : [];
   renderBoard(pos, { el: $("eboard"), o: "w", hl: eg.last, sel: eg.sel, tgts, marks });
@@ -2139,6 +2206,7 @@ function egDraw() {
   $("eMap").onclick = () => { kidTab = "path"; openKids(); };
   $("eMoves").innerHTML = `👣 <b>${eg.moves}</b>`;
   $("eUndo").disabled = !eg.hist.length || !mine;
+  $("eUndo").classList.toggle("nudge", !!eg.slip && mine && !!eg.hist.length);   // the win slipped away: ↶ glows
 }
 function egUserMove(from, to) {
   const g = eg.g;
@@ -2150,19 +2218,27 @@ function egUserMove(from, to) {
 }
 function egReply() {
   if (eg.over || eg.g.turn() !== "b") return;
-  const m = egBotMove(eg.g); eg.g.move(m); eg.last = [m.from, m.to]; sfx("move");
-  if (!egEnd()) egDraw();
+  const kind = eg.st.eg, m = kind === "catch" ? cpBotMove(eg.g) : kind === "kp" ? kpBotMove(eg.g) : egBotMove(eg.g);
+  eg.g.move(m); eg.last = [m.from, m.to]; sfx("move");
+  if (egEnd()) return;
+  if (kind === "catch") eg.slip = !cpCatchable(eg.g.fen());
+  else if (kind === "kp") eg.slip = kpkProbe(eg.g.fen()) !== KPK_WIN;
+  egDraw();
 }
 function egUndo() {   // takes back your last move and the king's reply
   if (!eg || !eg.hist.length || eg.over || eg.g.turn() !== "w") return;
-  eg.g.load(eg.hist.pop()); eg.moves--; eg.last = []; eg.sel = null; egDraw();
+  eg.g.load(eg.hist.pop()); eg.moves--; eg.last = []; eg.sel = null; eg.undos++; eg.slip = false; egDraw();
 }
-// mate: ⭐ by speed and one win for the stage; stalemate or a lost piece: 🤝, then a new position by itself
+// mate (or the pawn caught / a safe new queen in the pawn games): ⭐ and one win for the stage; stalemate, a lost
+// piece or a pawn game gone wrong: 🤝 (↻ if the running pawn became a queen), then a new position by itself
 function egEnd() {
-  const g = eg.g;
-  if (g.in_checkmate()) {
+  const g = eg.g, kind = eg.st.eg;
+  const res = kind === "catch" ? cpResult(g) : kind === "kp" ? kpResult(g)
+    : g.in_checkmate() ? "win" : g.in_stalemate() || g.insufficient_material() ? "draw" : null;
+  if (res === "win") {
     eg.over = "win";
-    const [p3, p2] = EG_PAR[eg.st.eg], stars = eg.moves <= p3 ? 3 : eg.moves <= p2 ? 2 : 1, pl = pzPlayers();
+    const par = EG_PAR[kind], pl = pzPlayers();
+    const stars = par ? (eg.moves <= par[0] ? 3 : eg.moves <= par[1] ? 2 : 1) : eg.undos ? 2 : 3;   // pawn games: ⭐⭐⭐ without take-backs
     pl.stages = pl.stages || {};
     const had = stageStars(pl, eg.st.id); pl.stages[eg.st.id] = had + 1;
     kidAddStars(stars); sfx("right");
@@ -2173,10 +2249,10 @@ function egEnd() {
     $("eDone").hidden = false;
     $("eAgain").onclick = () => egStart(eg.st);
     $("eNext").onclick = egNext;
-  } else if (g.in_stalemate() || g.insufficient_material()) {
+  } else if (res) {
     eg.over = "draw";
     const my = eg;
-    setTimeout(() => { if (eg !== my) return; $("eDone").innerHTML = `<div class="burst">🤝</div>`; $("eDone").hidden = false; }, 700);
+    setTimeout(() => { if (eg !== my) return; $("eDone").innerHTML = `<div class="burst">${res === "loss" ? "↻" : "🤝"}</div>`; $("eDone").hidden = false; }, 700);
     setTimeout(() => { if (eg === my) egStart(my.st); }, 2800);
   } else return false;
   egDraw();
@@ -2187,6 +2263,188 @@ function egNext() {   // after a win: the same stage again, or the next unfinish
   if (stageStars(pl, eg.st.id) < needOf(eg.st) || i < 0) return egStart(eg.st);
   if (STAGES[i].eg) return egStart(STAGES[i]);
   stageGo(STAGES[i]);
+}
+
+/* ---- catch the pawn: your king against a black pawn running to promote (its king stays far away) ----
+   The bot pushes the pawn one square every move; only when your king stands in front of it does its king move
+   (towards the pawn). You win by taking the pawn (or the new queen, if your king is right there). */
+const CP_MAX = 25;          // your moves before a gentle restart (a blockade with the black king defending)
+function cpStartFen() {
+  for (let tries = 0; ; tries++) {
+    const pf = FILES[Math.floor(Math.random() * 8)], pr = 4 + Math.floor(Math.random() * 4), ps = pf + pr;   // pawn on rank 4–7
+    const pos = { [ps]: "p" }, dist = (a, b) => Math.max(Math.abs(FILES.indexOf(a[0]) - FILES.indexOf(b[0])), Math.abs(a[1] - b[1]));
+    const bk = kidSq(pr, 8);
+    if (dist(bk, ps) < 4 || +bk[1] < pr) continue;        // its king far away and not ahead of the pawn: it can't help
+    const wk = kidSq(1, 7);
+    if (wk === ps || dist(wk, bk) < 2 || dist(wk, ps) < 2) continue;   // no capture at once
+    if (dist(wk, pf + 1) > pr) continue;                    // far outside the pawn's "square": can't be caught (quick test)
+    pos[bk] = "k"; pos[wk] = "K";
+    if (attacksSq(pos, ps, wk)) continue;                  // not in check from the pawn
+    const fen = kidFen(pos, "w"), need = cpCatchable(fen, true);
+    // catchable, with a few moves to find; mostly with room to spare, sometimes only just (the "square" rule)
+    if (need && need >= 2 && (need <= pr - 2 || Math.random() < .3 || tries > 500)) return fen;
+  }
+}
+// the bot: push the pawn (one square, a new queen), else walk the king towards the pawn
+function cpBotMove(g) {
+  const ms = g.moves({ verbose: true }), push = ms.find(m => m.piece === "p" && !m.captured && Math.abs(m.from[1] - m.to[1]) === 1 && (!m.promotion || m.promotion === "q"));
+  if (push) return push;
+  const pos = parseFen(g.fen()), ps = Object.keys(pos).find(q => pos[q] === "p");
+  const d = sq => ps ? Math.max(Math.abs(FILES.indexOf(sq[0]) - FILES.indexOf(ps[0])), Math.abs(sq[1] - ps[1])) : 0;
+  return ms.filter(m => m.piece === "k").sort((a, b) => d(a.to) - d(b.to))[0] || ms[0];
+}
+function cpCaught(g) { const b = g.fen().split(" ")[0]; return !/[pq]/.test(b); }
+// can you still catch it (you to move)? with count: the fewest moves it takes (0 = no). Exhaustive over your king
+// moves against the bot's fixed replies, memoised by position.
+function cpCatchable(fen, count = false) {
+  const g = new Chess(fen), memo = {};
+  const win = d => {                                     // white to move: catch within d moves?
+    const key = g.fen().split(" ")[0] + d;
+    if (key in memo) return memo[key];
+    let ok = false;
+    for (const m of g.moves({ verbose: true })) {
+      g.move(m);
+      if (cpCaught(g)) ok = true;
+      else if (d > 1 && !/q/.test(g.fen().split(" ")[0]) && !g.game_over()) {   // a new queen left standing: too late
+        g.move(cpBotMove(g));
+        ok = !g.game_over() && win(d - 1);
+        g.undo();
+      }
+      g.undo();
+      if (ok) break;
+    }
+    return (memo[key] = ok);
+  };
+  for (let d = 1; d <= 9; d++) if (win(d)) return count ? d : true;
+  return count ? 0 : false;
+}
+function cpResult(g) {
+  if (cpCaught(g)) return "win";
+  const b = g.fen().split(" ")[0];
+  if (/q/.test(b)) return g.turn() === "w" && g.moves({ verbose: true }).some(m => m.captured === "q") ? null : "loss";   // take the new queen now, or it got away
+  if (g.game_over() || eg.moves >= CP_MAX) return "draw";
+  return null;
+}
+
+/* ---- king + pawn: help your pawn to the star and make a queen; the black king defends as well as it can ----
+   Exact results from a small king-and-pawn table built in the browser (kpkBuild: every position with White's king
+   and pawn against the lone black king, worked back from the promotions, ~0.2 s once). The bot keeps a draw whenever
+   your move let one slip (and ↶ glows); otherwise it heads for the square in front of the pawn. */
+const KP_MAX = 40, KPK_WIN = 2, KPK_DRAW = 1;
+let kpk = null;
+function kpkIdx(wk, bk, p, stm) { return ((((p >> 3) - 1) * 4 + (p & 7)) * 4096 + wk * 64 + bk) * 2 + stm; }   // pawn on files a–d, ranks 2–7
+function kpkBuild() {
+  if (kpk) return kpk;
+  const T = new Uint8Array(24 * 4096 * 2), fx = s => s & 7, ry = s => s >> 3;
+  const dist = (a, b) => Math.max(Math.abs(fx(a) - fx(b)), Math.abs(ry(a) - ry(b)));
+  const pawnHits = (p, s) => ry(s) === ry(p) + 1 && Math.abs(fx(s) - fx(p)) === 1;
+  const kSteps = s => { const o = []; for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) { const x = fx(s) + dx, y = ry(s) + dy; if ((dx || dy) && x >= 0 && x < 8 && y >= 0 && y < 8) o.push(y * 8 + x); } return o; };
+  const STEPS = Array.from({ length: 64 }, (_, s) => kSteps(s));
+  // after promoting on q (black to move): the queen is safe and black isn't stalemated
+  const qHits = (q, wk, s) => {
+    const dx = Math.sign(fx(s) - fx(q)), dy = Math.sign(ry(s) - ry(q));
+    if (s === q || !(fx(s) === fx(q) || ry(s) === ry(q) || Math.abs(fx(s) - fx(q)) === Math.abs(ry(s) - ry(q)))) return false;
+    for (let x = fx(q) + dx, y = ry(q) + dy; x !== fx(s) || y !== ry(s); x += dx, y += dy) if (y * 8 + x === wk) return false;
+    return true;
+  };
+  const promoWins = (wk, bk, q) => {
+    if (bk === q || (dist(bk, q) === 1 && dist(wk, q) !== 1)) return false;
+    return qHits(q, wk, bk) || STEPS[bk].some(s => s !== wk && dist(s, wk) > 1 && !qHits(q, wk, s));
+  };
+  for (let p = 8; p < 56; p++) {
+    if (fx(p) > 3) continue;
+    for (let wk = 0; wk < 64; wk++) for (let bk = 0; bk < 64; bk++) for (let stm = 0; stm < 2; stm++) {
+      const i = kpkIdx(wk, bk, p, stm);
+      if (wk === bk || wk === p || bk === p || dist(wk, bk) < 2 || (stm === 0 && pawnHits(p, bk))) { T[i] = 3; continue; }
+    }
+  }
+  for (let changed = true; changed;) {
+    changed = false;
+    for (let p = 8; p < 56; p++) {
+      if (fx(p) > 3) continue;
+      for (let wk = 0; wk < 64; wk++) for (let bk = 0; bk < 64; bk++) {
+        // White to move
+        let i = kpkIdx(wk, bk, p, 0);
+        if (!T[i]) {
+          let win = false, open = false, any = false;
+          for (const s of STEPS[wk]) {
+            if (s === p || s === bk || dist(s, bk) < 2) continue;
+            any = true; const v = T[kpkIdx(s, bk, p, 1)];
+            if (v === KPK_WIN) { win = true; break; } if (!v) open = true;
+          }
+          const up = p + 8;
+          if (!win && up !== wk && up !== bk) {
+            any = true;
+            if (ry(up) === 7) { if (promoWins(wk, bk, up)) win = true; }
+            else { const v = T[kpkIdx(wk, bk, up, 1)]; if (v === KPK_WIN) win = true; else if (!v) open = true;
+              if (!win && ry(p) === 1 && p + 16 !== wk && p + 16 !== bk) { const v2 = T[kpkIdx(wk, bk, p + 16, 1)]; if (v2 === KPK_WIN) win = true; else if (!v2) open = true; } }
+          }
+          if (win) { T[i] = KPK_WIN; changed = true; } else if (!open || !any) { T[i] = KPK_DRAW; changed = true; }
+        }
+        // Black to move
+        i = kpkIdx(wk, bk, p, 1);
+        if (!T[i]) {
+          let draw = false, open = false, any = false;
+          for (const s of STEPS[bk]) {
+            if (s === wk || dist(s, wk) < 2 || pawnHits(p, s)) continue;
+            any = true;
+            if (s === p) { draw = true; break; }             // takes the pawn (it isn't guarded: that square is next to the king)
+            const v = T[kpkIdx(wk, s, p, 0)];
+            if (v === KPK_DRAW) { draw = true; break; } if (!v) open = true;
+          }
+          if (draw) { T[i] = KPK_DRAW; changed = true; }
+          else if (!any) { T[i] = pawnHits(p, bk) ? KPK_WIN : KPK_DRAW; changed = true; }   // mated by the pawn / stalemate
+          else if (!open) { T[i] = KPK_WIN; changed = true; }
+        }
+      }
+    }
+  }
+  for (let i = 0; i < T.length; i++) if (!T[i]) T[i] = KPK_DRAW;
+  return (kpk = T);
+}
+// KPK_WIN / KPK_DRAW for a position with White's king and pawn against Black's king (0 if it isn't one)
+function kpkProbe(fen) {
+  const pos = parseFen(fen), stm = fen.split(" ")[1] === "w" ? 0 : 1;
+  const sqOf2 = pc => { const q = Object.keys(pos).find(x => pos[x] === pc); return q ? (+q[1] - 1) * 8 + FILES.indexOf(q[0]) : -1; };
+  let wk = sqOf2("K"), bk = sqOf2("k"), p = sqOf2("P");
+  if (wk < 0 || bk < 0 || p < 0 || Object.keys(pos).length !== 3 || p < 8 || p > 55) return 0;
+  if ((p & 7) > 3) { wk ^= 7; bk ^= 7; p ^= 7; }        // mirror to files a–d
+  const v = kpkBuild()[kpkIdx(wk, bk, p, stm)];
+  return v === 3 ? 0 : v;
+}
+// starts: a won position (you to move) with a b–g pawn on ranks 2–5, your king on a key square in front of it
+// (two ranks ahead, or one for a pawn on the 5th), the black king in front too, and more than one winning first move
+function kpStartFen() {
+  for (let tries = 0; ; tries++) {
+    const pf = 1 + Math.floor(Math.random() * 6), pr = 2 + Math.floor(Math.random() * 4);
+    const wf = pf + Math.floor(Math.random() * 3) - 1, wr = pr + (pr === 5 && Math.random() < .5 ? 1 : 2);
+    const ps = FILES[pf] + pr, wk = FILES[wf] + wr, bk = kidSq(Math.min(8, wr + 1), 8);
+    const pos = { [ps]: "P", [wk]: "K", [bk]: "k" };
+    if (Object.keys(pos).length < 3 || attacksSq(pos, wk, bk) || attacksSq(pos, ps, bk)) continue;
+    const fen = kidFen(pos, "w");
+    if (kpkProbe(fen) !== KPK_WIN) continue;
+    const g = new Chess(fen), good = g.moves({ verbose: true }).filter(m => { g.move(m); const v = kpkProbe(g.fen()); g.undo(); return v === KPK_WIN; });
+    if (good.length >= 2 || tries > 2000) return fen;
+  }
+}
+// the bot keeps a draw if it can (taking the pawn first); else it goes for the square in front of the pawn
+function kpBotMove(g) {
+  const ms = g.moves({ verbose: true }), take = ms.find(m => m.captured);
+  if (take) return take;
+  const pos = parseFen(g.fen()), ps = Object.keys(pos).find(q => pos[q] === "P");
+  const front = ps ? ps[0] + Math.min(8, +ps[1] + 1) : null;
+  const d = sq => front ? Math.max(Math.abs(FILES.indexOf(sq[0]) - FILES.indexOf(front[0])), Math.abs(sq[1] - front[1])) : 0;
+  const score = m => { g.move(m); const v = kpkProbe(g.fen()); g.undo(); return (v === KPK_DRAW ? 100 : 0) - d(m.to) + Math.random() * .5; };
+  return ms.map(m => [score(m), m]).sort((a, b) => b[0] - a[0])[0][1];
+}
+function kpResult(g) {
+  const b = g.fen().split(" ")[0];
+  if (/Q/.test(b)) {
+    if (g.in_stalemate()) return "draw";
+    return g.turn() === "b" && g.moves({ verbose: true }).some(m => m.captured) ? null : "win";   // a queen the king can't take
+  }
+  if (!/P/.test(b) || g.game_over() || eg.moves >= KP_MAX) return "draw";
+  return null;
 }
 
 /* ---- stickers ---- */
@@ -2201,7 +2459,8 @@ const THEME_GROUPS = [
   ["Take a free piece", t => /hangingPiece/.test(t)], ["Save the queen", t => /saveQueen/.test(t)], ["Save a piece", t => /savePiece/.test(t)], ["Give check", t => /giveCheck/.test(t)],
   ["Is it safe to take?", t => /safeTake/.test(t)], ["Stop the mate", t => /stopMate/.test(t)],
   ["Promote a pawn", t => /promotion/.test(t)], ["Back-rank mate", t => /backRankMate/.test(t)], ["Mate in 1", t => /mateIn1/.test(t)],
-  ["Mate in 2+", t => /mateIn[2-9]/.test(t)], ["Forks", t => /fork/.test(t)], ["Pins & skewers", t => /pin|skewer/.test(t)],
+  ["Mate in 2+", t => /mateIn[2-9]/.test(t)], ["Forks", t => /fork/.test(t)], ["Pins & skewers", t => /\bpin\b|skewer/.test(t)],
+  ["Discovered attacks", t => /discoveredAttack/.test(t)],
   ["Other tactics", t => true],
 ];
 let pzIndex = null;
@@ -2560,7 +2819,9 @@ function botDraw() {
   const tg = bg.sel && !bg.over && botTurn() === bg.me ? myTargets(bg.sel) : [];
   renderBoard(botPos(), { el: $("gboard"), o: bg.me, hl: bg.last, sel: bg.sel, tgts: tg, marks: bg.over ? {} : dangerMarks() });
   $("gboard").classList.toggle("mine", !bg.over && botTurn() === bg.me);
-  $("bFace").innerHTML = `<span class="face">${bg.bot.face}</span>${botTurn() !== bg.me && !bg.over ? `<span class="thinking">…</span>` : ""}`;
+  const mat = bg.pw ? null : material(bg.game, bg.me);
+  $("bFace").innerHTML = `<span class="face">${bg.bot.face}</span>${botTurn() !== bg.me && !bg.over ? `<span class="thinking">…</span>` : ""}`
+    + (mat === null ? "" : `<span class="bmat ${mat > 0 ? "up" : mat < 0 ? "down" : ""}" aria-label="Material">${mat > 0 ? "+" + mat : mat < 0 ? "−" + -mat : "="}</span>`);
   $("bUndo").disabled = !bg.hist.length || !!bg.over;
 }
 function botAfterMove() {
@@ -2575,7 +2836,7 @@ function botAfterMove() {
   if (res === "win") {
     const had = pl.stars || 0; pl.stars = had + 3; sfx("trophy");
     if (Math.floor(pl.stars / 10) > Math.floor(had / 10)) celebrate(STICKERS[(Math.floor(pl.stars / 10) - 1) % STICKERS.length], "sticker");
-    const gate = gateWin(pl, bg.bot.id); if (gate) bg.gate = gate;      // a boss gate on the learning path is beaten
+    const gate = gateWin(pl, bg.bot.id, bg.gate); if (gate) bg.gate = gate;      // a boss gate on the learning path is beaten
   } else if (res === "loss") sfx("wrong"); else sfx("right");
   save();
   botOverShow();
@@ -2992,6 +3253,12 @@ window.onGymStore = () => { if (window.SECTION === "puzzles") pzRenderBar(); if 
 (function boot() {
   if (window.GYM_KIDS_ONLY) {     // the standalone kids' site: no section menu, no openings
     document.documentElement.classList.add("kidsonly");
+    // no zooming on the iPad (a child's pinch or double tap zoomed the board with no way back): Safari ignores
+    // user-scalable=no, so block its gesture events and a quick second tap as well
+    for (const ev of ["gesturestart", "gesturechange", "gestureend"]) document.addEventListener(ev, e => e.preventDefault(), { passive: false });
+    document.addEventListener("touchmove", e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
+    let lastTap = 0;
+    document.addEventListener("touchend", e => { const t = Date.now(); if (t - lastTap < 350 && !e.target.closest("input, select")) e.preventDefault(); lastTap = t; }, { passive: false });
     try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch (e) {}
     return go("kids");
   }
