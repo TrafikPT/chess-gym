@@ -1551,7 +1551,6 @@ function pzFinish(win) {
     $("pzKidNext").onclick = pzNext;
   }
   if (win && !pzFailed) { pzBig(true); sfx("right"); stageStar(); }
-  if (pzStage) $("pzCard").insertAdjacentHTML("beforeend", `<button class="btn big" type="button" id="pzToMap" aria-label="Back to the map">🗺</button>`), $("pzToMap").onclick = () => go("kids", "path");
   kidAfterPuzzle();
   pzDraw();
 }
