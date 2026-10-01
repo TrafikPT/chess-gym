@@ -251,7 +251,8 @@ let phase = "idle";          // idle | white | black | fail | done
 let sel = null, lastMove = [], arrowsNow = [], hintShown = false, streak = 0;
 let scope = null;            // Set of node ids the line may use, or null
 let lesson = null;           // {li, phase: 'intro'|'walk'|'test'|'done', got:Set, misses:[]}
-let review = null;           // {queue:[ids], single:bool}
+let review = null;           // {queue:[ids], single:bool, round, target, seenAt: {node: round it was last answered}}
+const REVIEW_COOL = 3;       // a position answered in Review isn't asked again (picked or on the way) for 3 more items
 let filter = "all";
 try { filter = localStorage.getItem(STORE + ":filter") || "all"; } catch (e) {}
 const FIRST = { e2e4: "1.e4", d2d4: "1.d4", c2c4: "1.c4", g1f3: "1.Nf3" };
@@ -430,6 +431,7 @@ function forward() {
   if (f && f.kind === "white" && f.resume !== undefined && phase === "whatif") continueFrom(f.resume, f.via || null);
 }
 function beginBlack() {
+  if (reviewAutoplay()) return;
   phase = "black"; hintShown = false; sel = null;
   showStruct(N[cur].stb, N[cur].sbi);
   const n = N[cur];
@@ -462,6 +464,7 @@ function playerMove(uci) {
   const v = judge(uci);
   if (!v) return;
   timedStop();
+  if (review) review.seenAt[cur] = review.round;
   replayAgain = frames.length && fi < frames.length - 1;          // you stepped back and are playing this position again
   if (replayAgain) { hist = hist.slice(0, frames[fi].h); frames = frames.slice(0, fi + 1); }
   const n = N[cur], id = cur, no = moveNo(id);
@@ -506,7 +509,7 @@ function playerMove(uci) {
     }
     const replace = from === cur && !via;
     setState("Playable", "alt");
-    setCard("alt", `<div class="head"><span class="tag alt">Playable</span><span class="mvname">${lmNo(no, v.san)}</span></div><p class="text">${esc(v.text)}</p>
+    setCard("alt", `<div class="head"><span class="tag alt">Playable</span><span class="mvname">${lmNo(no, v.san)} ${lossTag(n, uci)}</span></div><p class="text">${esc(v.text)}</p>
       ${engineCompare(n, uci, no, v.san)}${note}
       <div class="controls"><button class="btn primary" id="bAltGo">${replace ? `Continue with ${lmNo(no, n.s)}` : "Continue"} ▶</button></div>`);
     // pause here: you see your move (blue) and the move to learn (green); → or the button carries on
@@ -546,6 +549,13 @@ function evalLine(n) {
   const white = ME === "w" ? cp : -cp;
   return `<p class="sub eng">Engine: <b>${fmt(cp)}</b> for you, ${verdict}${ME === "b" ? ` (${fmt(white)} in White's terms)` : ""}.</p>`;
 }
+// right after a playable or wrong move (and the move to learn): the engine's loss against its best move, "(−0.3)" or
+// "(best)" (depth 12, from the build)
+function lossTag(n, uci) {
+  const r = (n.mv || []).find(x => x[0] === uci);
+  if (!r || r[2] === null || r[2] === undefined) return "";
+  return `<span class="evd" title="Engine: difference to its best move, in pawns">(${r[2] <= 0 ? "best" : "−" + (r[2] / 100).toFixed(r[2] < 5 ? 2 : 1)})</span>`;
+}
 // how much the engine prefers the move to learn over the move you played (the build's depth-12 check)
 function engineCompare(n, uci, no, san) {
   const loss = u => { const r = (n.mv || []).find(x => x[0] === u); return r ? r[2] : null; };
@@ -561,6 +571,7 @@ function engineCompare(n, uci, no, san) {
 function showFail(id, v, uci) {
   const n = N[id], no = moveNo(id), r = rec(id);
   timedStop();
+  if (review) review.seenAt[id] = review.round;        // (a timed-out answer too)
   r.bad++; r.streak = 0; r.last = "bad"; r.t = Date.now(); r.wrong = r.wrong || {};
   if (v.san) r.wrong[v.san] = (r.wrong[v.san] || 0) + 1;
   save();
@@ -569,9 +580,9 @@ function showFail(id, v, uci) {
   if (v.san) hist.push({ san: v.san, side: ME, no, cls: "me x" });
   arrowsNow = uci ? [[uci, "red"], [n.m, "green"]] : [[n.m, "green"]]; lastMove = [];
   setState(v.san ? "Not this one" : "Too slow", "fail");
-  setCard("fail", `<div class="head"><span class="tag fail">${v.san ? "Wrong" : "Time"}</span>${v.san ? `<span class="mvname">${lmNo(no, v.san)}</span>` : ""}</div>
+  setCard("fail", `<div class="head"><span class="tag fail">${v.san ? "Wrong" : "Time"}</span>${v.san ? `<span class="mvname">${lmNo(no, v.san)} ${lossTag(n, uci)}</span>` : ""}</div>
       <p class="text">${esc(v.text)}</p>
-      <div class="plan"><span class="lbl">The move to learn: <span class="mvname" style="font-size:14px;color:var(--pass)">${lmNo(no, n.s)}</span></span>
+      <div class="plan"><span class="lbl">The move to learn: <span class="mvname" style="font-size:14px;color:var(--pass)">${lmNo(no, n.s)} ${lossTag(n, n.m)}</span></span>
       <div class="head">${pchip(n.p)}</div><p class="text">${esc(n.why)}</p></div>
       <p class="sub">Saved to your notebook. ${review ? "It stays in Review until you get it right." : "Review will bring it back."}</p>
       <div class="controls"><button class="btn" id="bBack">← Take back and retry</button></div>${contrastHtml(id)}`);
@@ -579,6 +590,19 @@ function showFail(id, v, uci) {
   $("bNext").textContent = review ? "Next position" : "Next line";
   pushFrame("view", { phase: "fail" });
   renderMoves(); draw(); tally(); refreshPanels();
+}
+// Review, on the way through a line: a position answered a moment ago (not the one being reviewed) isn't asked again;
+// its move to learn is played for you and the line goes on
+function reviewAutoplay() {
+  if (!review || review.single || cur === review.target || !reviewCool(cur) || lesson) return false;
+  const n = N[cur], id = cur;
+  hist.push({ san: n.s, side: ME, no: moveNo(id), cls: "me" });
+  pos = applyMove(pos, n.m); lastMove = [n.m.slice(0, 2), n.m.slice(2, 4)]; arrowsNow = [];
+  setCard("", `<p class="sub">You answered <b>${lmNo(moveNo(id), n.s)}</b> a moment ago in this review, so it's played for you.</p>`);
+  pushFrame("white", { wmOf: id, resume: id });
+  renderMoves(); draw();
+  continueFrom(id, null);
+  return true;
 }
 function continueFrom(from, via) {
   if (from === "root") {
@@ -736,16 +760,19 @@ function reviewQueue() {
 function startReview(single) {
   lesson = null; scope = null;
   const q = single !== undefined ? [single] : reviewQueue();
-  review = { queue: q, single: single !== undefined };
+  review = { queue: q, single: single !== undefined, round: 0, target: null, seenAt: {} };
   $("lessonbar").hidden = true;
   nextReview();
 }
 let lastReviewed = null;
 // pick at random, weighted to your most-missed positions, avoiding the lesson you just saw so each answer is real recall
+// Positions answered in the last REVIEW_COOL items (picked, or met on the way through a line) wait, unless nothing else is left
+function reviewCool(i) { return !!review && review.seenAt[i] !== undefined && review.round - review.seenAt[i] < REVIEW_COOL; }
 function pickReview(q) {
   if (q.length < 2) return q;
   const lastL = lastReviewed === null ? -1 : nodeLesson[lastReviewed];
-  const ws = q.map(i => i === lastReviewed ? 0 : (1 + (recOf(i)?.bad || 0) + Math.min(5, MYG[i]?.n || 0)) * (nodeLesson[i] === lastL ? 0.1 : 1));
+  const warm = q.filter(i => i !== lastReviewed && !reviewCool(i));
+  const ws = q.map(i => i === lastReviewed || (warm.length && reviewCool(i)) ? 0 : (1 + (recOf(i)?.bad || 0) + Math.min(5, MYG[i]?.n || 0)) * (nodeLesson[i] === lastL ? 0.1 : 1));
   let x = Math.random() * ws.reduce((a, b) => a + b, 0);
   for (let k = 0; k < q.length; k++) { x -= ws[k]; if (x <= 0) return [q[k], ...q.filter((_, j) => j !== k)]; }
   return q;
@@ -762,7 +789,7 @@ function nextReview() {
   }
   if (review.single) review.done = true;
   const i = q[0], r = recOf(i);
-  lastReviewed = i;
+  lastReviewed = i; review.round++; review.target = i;
   const wrong = r && r.wrong ? Object.keys(r.wrong) : [];
   startAt(i, r?.bad ? `<span class="who">From your notebook</span><span>You missed this ${r.bad}×${wrong.length ? ` (you played ${wrong.map(w => (ME === "b" ? "…" : "") + esc(w)).join(", ")})` : ""}. ${myGamesNote(i)} What's the move here?</span>`
     : `<span class="who">From your games</span><span>${myGamesNote(i)} What's the move to learn?</span>`);
@@ -1133,7 +1160,7 @@ const THEME = {
   discoveredAttack: "Discovered attack", doubleCheck: "Double check", deflection: "Deflection", attraction: "Attraction",
   clearance: "Clearance", interference: "Interference", sacrifice: "Sacrifice", promotion: "Promotion", underPromotion: "Under-promotion",
   advancedPawn: "Advanced pawn", exposedKing: "Exposed king", kingsideAttack: "Kingside attack", quietMove: "Quiet move",
-  defensiveMove: "Defensive move", giveCheck: "Give check", saveQueen: "Save the queen", savePiece: "Save your piece", safeTake: "Is it safe to take?", stopMate: "Stop the mate", xRayAttack: "X-ray", zugzwang: "Zugzwang", capturingDefender: "Remove the defender",
+  defensiveMove: "Defensive move", giveCheck: "Give check", saveQueen: "Save the queen", savePiece: "Save your piece", safeTake: "Is it safe to take?", safeTakeHard: "Is it safe to take? (harder)", stopMate: "Stop the mate", xRayAttack: "X-ray", zugzwang: "Zugzwang", capturingDefender: "Remove the defender",
   intermezzo: "In-between move", enPassant: "En passant", castling: "Castling",
   endgame: "Endgame", rookEndgame: "Rook endgame", pawnEndgame: "Pawn endgame", queenEndgame: "Queen endgame",
   opening: "Opening", middlegame: "Middlegame", crushing: "Winning", advantage: "Advantage", equality: "Saving the game",
@@ -1335,7 +1362,7 @@ function pzGoalText(p) {
     return t.includes("blunder") ? `In your game${when} you played ${s.played || "something else"} here. ${task}`
       : `Your opponent had just blundered in your game${when}, and you played ${s.played || "something else"}. ${task}`;
   }
-  if (t.includes("safeTake")) return "Is the capture on the blue arrow safe? 👍 if it wins something, 👎 if your piece would be taken back for more.";
+  if (t.some(x => /^safeTake/.test(x))) return "Is the capture on the blue arrow safe? 👍 if it wins something, 👎 if your piece would be taken back for more.";
   if (t.includes("stopMate")) return "Your opponent threatens checkmate in one (red arrow). Stop it: every move that stops the mate counts.";
   if (n) return `Find mate in ${n.slice(-1)}.`;
   if (t.includes("hangingPiece") && p[5]) return "Take the piece you can win for free.";
@@ -1356,7 +1383,7 @@ function pzGoalText(p) {
 function pzGoalHtml() {
   const t = pzCur[4].split(" "), me = pzGame.turn(), them = me === "w" ? "b" : "w";
   const want = pzCur[2].split(" ")[pzIdx] || "", victim = want ? pzGame.get(want.slice(2, 4)) : null;
-  if (t.includes("safeTake")) {
+  if (t.some(x => /^safeTake/.test(x))) {
     const tp = pzCur[7] ? pzGame.get(pzCur[7]) : null;
     return { kind: "safe", html: `<span class="goal scale" title="Is it safe to take?">⚖️${tp ? `<span class="pc ${tp.color}${tp.type.toUpperCase()}"></span>` : ""}</span>` };
   }
@@ -1457,6 +1484,7 @@ function smEscapes() { return pzGame.moves({ verbose: true }).filter(m => { pzGa
    The answer is then played out: the capture, and on a trap the opponent taking back */
 let pzAsk = null;
 function sgCapture() {     // the capture asked about, onto the pictured square: a winning one ("take" rows), else the biggest piece
+  if (/safeTakeHard/.test(pzCur[4])) return pzGame.moves({ verbose: true }).find(m => m.from + m.to === pzCur[8].slice(0, 4));   // the harder level names it
   const caps = pzGame.moves({ verbose: true }).filter(m => m.to === pzCur[7]);
   const ok = caps.filter(m => pzCur[6].includes(m.from + m.to + (m.promotion || "")));
   const pick = / take /.test(pzCur[4]) && ok.length ? ok : caps;
@@ -1473,18 +1501,38 @@ function sgAsk() {
 function sgAnswer(yes, shown = false) {
   if (pzState !== "ask") return;
   clearTimeout(pzTimer);
-  const safe = / take /.test(pzCur[4]), right = yes === safe, u = pzAsk, to = u.slice(2, 4);
+  const safe = / take /.test(pzCur[4]), right = yes === safe, u = pzAsk, to = u.slice(2, 4), me = pzGame.turn();
   pzState = "show";
   if (!right || shown) { pzFailed = true; pzScore(false); if (!shown) { sfx("wrong"); pzBig(false); } }
   $("pzCard").innerHTML = pzKid() ? `<div class="kidcard ${right ? "ok" : "bad"}">${right ? "✓" : "✗"}</div>` : `<p class="text">${right ? "Right" : "Not quite"}: ${safe ? "the capture wins material." : "your piece would be taken back."}</p>`;
-  pzPlay(u); pzArrows = [[u, safe ? "green" : "red"]]; pzMarks = {}; pzDraw();
-  pzTimer = setTimeout(() => {      // what happens next: on a trap the cheapest piece takes back, a safe capture just stands there
+  // the capture, then the exchange on that square (the harder level stores Stockfish's line; the first level: on a trap
+  // the cheapest piece takes back), then what each side won, as pictures
+  const won = [], lost = [], tally = m => { if (m && m.captured) (m.color === me ? won : lost).push((m.color === me ? (me === "w" ? "b" : "w") : me) + m.captured.toUpperCase()); };
+  tally(pzPlay(u)); pzArrows = [[u, safe ? "green" : "red"]]; pzMarks = {}; pzDraw();
+  let line = pzCur[9];
+  if (!Array.isArray(line)) {
     const back = safe ? null : pzGame.moves({ verbose: true }).filter(m => m.to === to).sort((a, b) => VALUE[a.piece] - VALUE[b.piece])[0];
-    if (back) { pzPlay(back.from + back.to); pzArrows = [[back.from + back.to, "red"]]; pzMarks = { [to]: "mk" }; }
-    else pzMarks = { [to]: "esc" };
-    pzDraw();
-    pzTimer = setTimeout(() => pzFinish(right && !shown), 900);
-  }, 800);
+    line = back ? [back.from + back.to] : [];
+  }
+  let k = 0;
+  const step = () => {
+    if (k < line.length) {
+      const x = line[k++], m = pzPlay(x); tally(m);
+      pzArrows = [[x, m && m.color === me ? "green" : "red"]]; pzMarks = {}; pzDraw();
+      pzTimer = setTimeout(step, 900); return;
+    }
+    pzMarks = { [to]: safe ? "esc" : "mk" }; pzDraw();
+    pzTimer = setTimeout(() => {
+      pzFinish(right && !shown);
+      $("pzCard").insertAdjacentHTML("afterbegin", sgTally(won, lost));
+    }, 700);
+  };
+  pzTimer = setTimeout(step, 800);
+}
+// the exchange as pictures: what you took (+) and what you lost (−)
+function sgTally(won, lost) {
+  const pcs = a => a.map(c => `<span class="pc ${c}"></span>`).join("");
+  return `<div class="swap" aria-label="Pieces won and lost">${won.length ? `<span class="won">+${pcs(won)}</span>` : ""}${lost.length ? `<span class="lost">−${pcs(lost)}</span>` : ""}</div>`;
 }
 function pzPlay(uci) {
   const m = pzGame.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || "q" });
@@ -1846,7 +1894,7 @@ const STAGES = [
   { id: "fork", name: "Forks", icon: `<span class="goal win">🍴</span>`, f: p => !p[5] && /fork/.test(p[4]) && p[3] < 850 },
   { id: "mix", name: "Mixed puzzles", icon: `<span class="goal win">🧩</span>`, f: p => !p[5] && p[3] >= 400 && p[3] < 650 },
   // generated by puzzles/safe_gen.py: take only when it wins something / stop a mate in one (the threat is drawn)
-  { id: "safe", name: "Is it safe to take?", icon: `<span class="goal scale">⚖️<span class="pc bN"></span></span>`, f: p => /safeTake/.test(p[4]) },
+  { id: "safe", name: "Is it safe to take?", icon: `<span class="goal scale">⚖️<span class="pc bN"></span></span>`, f: p => p[4].split(" ").includes("safeTake") },
   { id: "stopm", name: "Stop the mate", icon: `<span class="goal guard"><span class="pc wK"></span></span>`, f: p => /stopMate/.test(p[4]) },
   { id: "gate4", name: "Boss: beat Pawn Pete (Pawn Wars)", need: 1, gate: "pete", icon: gateIcon("🐣"), f: () => false },
   { id: "mate2", name: "Mate in 2", icon: `<span class="goal mate mn" data-n="2"><span class="pc bK"></span></span>`, f: p => !p[5] && /mateIn2/.test(p[4]) && p[3] < 1000 },
@@ -1855,6 +1903,9 @@ const STAGES = [
   { id: "skewer", name: "Skewers", icon: `<span class="goal win">🍢</span>`, f: p => !p[5] && tacticOnly(p, "skewer") },
   { id: "disc", name: "Discovered attacks", icon: DISC_ICON, f: p => !p[5] && tacticOnly(p, "discoveredAttack") },
   { id: "gate5", name: "Boss: beat Tactic Tiger again", need: 1, gate: "tiger", icon: gateIcon("🐯"), f: () => false },
+  // the harder ⚖️ (safe_gen.py, safeTakeHard): count attackers and defenders, take with the smaller piece, hidden
+  // defenders, a big piece worth taking even though it's defended
+  { id: "safe2", name: "Is it safe to take? (harder)", icon: `<span class="goal scale mn" data-n="2">⚖️<span class="pc bR"></span></span>`, f: p => /safeTakeHard/.test(p[4]) },
   // a review stop: puzzles from the stages already finished, missed ones first (reviewPick)
   { id: "review", name: "Review: puzzles from finished stages", review: true, icon: `<span class="goal win">🔁</span>`, f: () => false },
   // king-and-pawn games (kids' corner, like the endgames above): catch a running pawn; make a queen with the king's help
@@ -2579,7 +2630,7 @@ function renderStickers() {
 /* ---- parent view ---- */
 const THEME_GROUPS = [
   ["Take a free piece", t => /hangingPiece/.test(t)], ["Save the queen", t => /saveQueen/.test(t)], ["Save a piece", t => /savePiece/.test(t)], ["Give check", t => /giveCheck/.test(t)],
-  ["Is it safe to take?", t => /safeTake/.test(t)], ["Stop the mate", t => /stopMate/.test(t)],
+  ["Is it safe to take? (harder)", t => /safeTakeHard/.test(t)], ["Is it safe to take?", t => /safeTake/.test(t)], ["Stop the mate", t => /stopMate/.test(t)],
   ["Promote a pawn", t => /promotion/.test(t)], ["Back-rank mate", t => /backRankMate/.test(t)], ["Mate in 1", t => /mateIn1/.test(t)],
   ["Mate in 2+", t => /mateIn[2-9]/.test(t)], ["Forks", t => /fork/.test(t)], ["Pins & skewers", t => /\bpin\b|skewer/.test(t)],
   ["Discovered attacks", t => /discoveredAttack/.test(t)],

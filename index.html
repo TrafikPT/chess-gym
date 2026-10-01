@@ -152,6 +152,8 @@ kbd { font-family: var(--mono); font-size: 11.5px; border: 1px solid var(--line)
 .card.alt { border-left-color: var(--alt); } .card.done { border-left-color: var(--accent); }
 .card .head { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .card .mvname { font-family: var(--mono); font-weight: 600; font-size: 16px; }
+.card .mvname .evd { color: var(--muted); font-weight: 400; }
+.plan .lbl .mvname { text-transform: none; letter-spacing: 0; }   /* "3.e4", not "3.E4", in the capitalised label */
 .card .text { max-width: 62ch; }
 .card .sub { font-size: 14.5px; color: var(--muted); max-width: 62ch; }
 .card .sub b { color: var(--ink); }
@@ -380,6 +382,11 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
 .yesno { display: flex; gap: 18px; justify-content: center; margin: 6px 0; }
 .yesno .btn.big { font-size: 44px; padding: 10px 26px; }
 .yesno .yes { border-color: var(--pass); } .yesno .no { border-color: var(--fail); }
+.swap { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; font: 700 30px/1 var(--display); }
+.swap span { display: inline-flex; align-items: center; gap: 2px; padding: 4px 10px; border-radius: 12px; }
+.swap .pc { width: 1.3em; height: 1.3em; display: inline-block; }
+.swap .won { color: var(--pass); background: color-mix(in srgb, var(--pass) 14%, transparent); }
+.swap .lost { color: var(--fail); background: color-mix(in srgb, var(--fail) 14%, transparent); }
 .arrows .arr { animation: appear .45s ease both; }
 @keyframes appear { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .bigmark.pop, .arrows .arr { animation: none; } }
