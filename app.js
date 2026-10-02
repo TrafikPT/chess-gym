@@ -112,6 +112,13 @@ function mergePlayer(a, b) {
   out.pathV = Math.max(a.pathV || 0, b.pathV || 0);
   // stages either copy has seen (stageMigrate decided whether each was free; a blank copy brings nothing)
   out.gatesSeen = { ...(blankPlayer(a) ? {} : a.gatesSeen || {}), ...(blankPlayer(b) ? {} : b.gatesSeen || {}) };
+  // the path was started over (kids.js "Start the path over"): only the copy with the later restart counts for it,
+  // so a device or backup from before the restart can't bring the old stars back
+  if ((a.pathReset || 0) !== (b.pathReset || 0)) {
+    const r = (a.pathReset || 0) > (b.pathReset || 0) ? a : b;
+    for (const k of ["stages", "gateFree", "gatesSeen"]) out[k] = { ...(r[k] || {}) };
+    out.pathV = r.pathV || 0; out.pathReset = r.pathReset;
+  }
   out.u = Math.max(a.u || 0, b.u || 0);
   return out;
 }
@@ -2641,6 +2648,7 @@ function renderParents() {
         title="${esc(st.name)}" aria-label="Open stage ${i + 1}: ${esc(st.name)}"><span class="stageicon">${st.icon}</span><small>${i + 1}</small></button>`).join("")}</div>
       <p class="tiny">${STAGES.map((st, i) => `${i + 1} ${esc(st.name)}${stageStars(pl, st.id) >= needOf(st) ? " ✓" : stageFree(pl, st) ? " (skipped: was already past it)" : ""}`).join(" · ")}</p>
       <label class="tiny"><input type="checkbox" id="uSchool" ${pl.schoolAll ? "checked" : ""}> Open every piece-school level</label>
+      <div class="controls"><button class="btn" type="button" id="uRestart">Start the path over</button></div>
     </figure>
     ${window.GYM_KIDS_ONLY ? `<figure class="chart wide"><figcaption>Back up progress</figcaption>
       <p class="tiny">Progress on this site is saved only in this browser. Add the page to the Home Screen so Safari keeps it, and save a backup file now and then (it goes to Files). Restoring merges: nothing already earned here is lost.</p>
@@ -2658,6 +2666,14 @@ function renderParents() {
     save(); renderParents();
   });
   $("uSchool").onchange = ev => { pl.schoolAll = ev.target.checked; save(); };
+  // back to stage 1, every other stage locked; rating, bot record, piece school and stickers stay.
+  // pathReset makes the restart win over older copies in mergePlayer
+  $("uRestart").onclick = () => {
+    if (!confirm(`Start the learning path over for ${pl.name}? All path stars and beaten bosses are cleared and only stage 1 stays open. Puzzle rating, bot games, piece school and stickers are kept.`)) return;
+    pl.stages = {}; pl.gateFree = {}; pl.gatesSeen = Object.fromEntries(STAGES.map(st => [st.id, 1])); pl.pathV = 2;
+    pl.pathReset = Date.now();
+    save(); renderParents();
+  };
   if (window.GYM_KIDS_ONLY) wireBackup();
 }
 // standalone site only: the whole saved state as a file, and back (restore = merge, so nothing earned is lost)
