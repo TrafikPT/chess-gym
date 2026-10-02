@@ -1445,6 +1445,10 @@ function sgMates() {
 function pzShowGoal() {
   const pl = pzPlayers(), el = $("pzGoalBadge");
   if (/stopMate/.test(pzCur[4]) && pzIdx === 0) { const th = sgThreat(); pzMarks = th.marks; pzArrows = th.arrows; }   // the task needs it: always shown
+  if (/save(Queen|Piece)/.test(pzCur[4]) && pzIdx === 0 && pzCur[7]) {   // save your piece: it glows red, a red arrow from each attacker
+    const them = pzGame.turn() === "w" ? "b" : "w";
+    pzMarks = { [pzCur[7]]: "mk" }; pzArrows = attackersOf(parseFen(pzGame.fen()), pzCur[7], them).map(h => [h + pzCur[7], "red"]);
+  }
   if (!pl.goal) { el.hidden = true; return; }
   const g = pzGoalHtml();
   el.innerHTML = g.html; el.hidden = pzKid();          // pictures only: the goal is in the big panel instead
@@ -1827,23 +1831,8 @@ function kidAfterPuzzle() {
   $("pzStars").innerHTML = `⭐ <b>${pl.stars || 0}</b>`;
   $("pzStars").classList.remove("bump"); void $("pzStars").offsetWidth; $("pzStars").classList.add("bump");
 }
-// celebrations queue up (one at a time, each ~2 s or until tapped), so a medal never hides a trophy
-const celebrations = [];
-function celebrate(icon, kind, extra = "") {
-  celebrations.push([icon, kind, extra]);
-  if ($("kidOverlay").hidden) showCelebration();
-}
-function showCelebration() {
-  const el = $("kidOverlay"), item = celebrations.shift();
-  clearTimeout(celebrate.t);
-  if (!item) { el.hidden = true; return; }
-  const [icon, kind, extra] = item;
-  el.innerHTML = `<div class="session"><div class="burst">${icon}</div>${extra}</div>`;
-  el.hidden = false; el.classList.remove("show"); void el.offsetWidth; el.classList.add("show");
-  sfx(kind === "sticker" ? "sticker" : kind === "quiet" ? "star" : "trophy");
-  el.onclick = showCelebration;
-  celebrate.t = setTimeout(showCelebration, 2200);
-}
+// No pop-ups in the kids' corner (no medals, trophies or pictures between stages): the owner wants nothing to
+// interrupt the playing. Progress shows on the map, the stage stars and the sticker counters.
 // finished the current stage? the next puzzle comes from the next unfinished stage (true: went to an endgame stage).
 // A stage picked on the map after it was already finished is a replay (pzReplay): it stays until the child leaves it
 function advanceStage() {
@@ -1852,7 +1841,6 @@ function advanceStage() {
   if (stageStars(pl, pzStage.id) < needOf(pzStage)) return;
   const i = stageCur(pl);
   if (i < 0 || STAGES[i] === pzStage) return;
-  celebrate(`<span class="stageicon">${STAGES[i].icon}</span>`, "quiet");
   if (STAGES[i].eg || STAGES[i].gate) { stageGo(STAGES[i]); return true; }     // next up is an endgame or a boss: pzNext stops here
   pzStage = STAGES[i];
 }
@@ -1979,15 +1967,13 @@ function stageMigrate(pl) {
   });
   save();
 }
-// a win in a game started from a boss gate clears that gate (games from the 🤖 tab don't count); a medal, and the
-// next world's picture when the boss was the last stage of a world
+// a win in a game started from a boss gate clears that gate (games from the 🤖 tab don't count) and puts the boss's
+// sticker in the book (no pop-up)
 function gateWin(pl, botId, from = null) {
   const i = STAGES.indexOf(from);
   if (i < 0 || from.gate !== botId || stageDone(pl, from) || !stageOpen(pl, i)) return null;
   pl.stages = pl.stages || {}; pl.stages[from.id] = needOf(from);
-  setTimeout(() => celebrate("🏅", "trophy"), 1500);
   albumBoss(pl, from.id);
-  if (WORLDS[worldOf(i + 1)] && i + 1 < STAGES.length) setTimeout(() => celebrate(`<span class="wbig">${WORLDS[worldOf(i + 1)].icon}</span>`, "trophy"), 1600);
   return from;
 }
 function gateNext() {   // ▶ after beating a boss: the next stage to play, or the map
@@ -2033,7 +2019,6 @@ function stageStar() {
   pl.stages = pl.stages || {};
   const had = stageStars(pl, st.id);
   pl.stages[st.id] = had + 1; stageLost = null; albumSolve(pl); save(); renderStageBar();
-  if (had + 1 === needOf(st) && pl.kid) setTimeout(() => celebrate("🏅", "trophy"), 1500);
 }
 // a miss on the path costs a star of that stage, while it isn't finished (a replay never takes a finished stage back);
 // the star falls off the row of stars (stageLost, until the next puzzle or game: renderStageBar / egDraw)
@@ -2370,7 +2355,6 @@ function egEnd() {
     pl.stages = pl.stages || {};
     const had = stageStars(pl, eg.st.id); pl.stages[eg.st.id] = had + 1;
     albumSolve(pl); kidAddStars(stars); sfx("right");
-    if (had + 1 === needOf(eg.st)) setTimeout(() => celebrate("🏅", "trophy"), 1200);
     $("eDone").innerHTML = `<div class="big">${"⭐".repeat(stars)}</div>
       <div class="row">${albumTake() ? aPackChip() : ""}<button class="btn big" type="button" id="eAgain" aria-label="Play again">↻</button>
       <button class="btn primary big" type="button" id="eNext" aria-label="Next">▶</button></div>`;

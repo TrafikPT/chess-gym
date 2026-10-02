@@ -599,15 +599,7 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
   .stk.t3, .stk .sin::after, .stk .sin::before, .stk.land, .apack.ready, .apchip, .apackbig, .atray .aitem, .apage[class*="out-"], .apage[class*="in-"] { animation: none !important; }
   .aflip, .aflip .amark { animation: none; } .aflip .aback { display: none; } .aflip .afront { transform: none; animation: none; }
 }
-.kidoverlay { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0, 0, 0, .35); z-index: 50; }
-.kidoverlay .burst { font-size: min(40vw, 260px); line-height: 1; }
-.kidoverlay.show .burst { animation: pop2 1.2s ease both; }
 @keyframes pop2 { 0% { transform: scale(.2) rotate(-20deg); opacity: 0; } 40% { transform: scale(1.15) rotate(6deg); opacity: 1; } 70% { transform: scale(1) rotate(0); } 100% { transform: scale(1); } }
-.kidoverlay { cursor: pointer; }
-.kidoverlay .session { display: grid; gap: 16px; justify-items: center; background: var(--surface); border-radius: 24px; padding: 24px 32px; box-shadow: var(--shadow); }
-.kidoverlay .stageicon { font-size: 160px; display: inline-flex; align-items: center; }
-.kidoverlay .stageicon .pc.mini { width: .5em; height: .5em; display: inline-block; }
-.kidoverlay .session .burst { font-size: 120px; }
 #puzzleView.kid .trainer { grid-template-columns: minmax(0, 1fr) minmax(0, 280px); }
 #puzzleView.kid .boardcol { max-width: min(100%, 70vh); width: 100%; justify-self: center; }
 /* pictures only: "you play" (your king in a ring) and the goal, big, beside the board (above it when narrow) */
@@ -625,7 +617,7 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
   #puzzleView.kid .kidpanel .kidgoal { font-size: 84px; }
   .youplay { width: 96px; height: 96px; } .youplay .pc { width: 72px; height: 72px; }
 }
-@media (prefers-reduced-motion: reduce) { .kidoverlay.show .burst, .dots i.lost, .map .node.cur, .map .me, .map .world::before, .kstars.bump, #eUndo.nudge { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .dots i.lost, .map .node.cur, .map .me, .map .world::before, .kstars.bump, #eUndo.nudge { animation: none; } }
 /* ---- kids-only site (html.kidsonly, the iPad): no page header, every screen fits without scrolling ----
    Only rules under .kidsonly live here, so the claude.ai page is unaffected. Sizes use dvh (the visible height). */
 .kidsonly body { padding-block: 10px 16px; }
@@ -778,7 +770,6 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
   <p class="tiny" id="loading">Loading…</p>
   <p class="note" id="loadErr" hidden></p>
   <p class="note" id="problem" role="alert" hidden></p>
-  <div class="kidoverlay" id="kidOverlay" hidden></div>
   <div class="aoverlay" id="aOverlay" hidden></div>
 
   <div id="kidsView" class="section" hidden>
