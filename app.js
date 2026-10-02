@@ -108,11 +108,10 @@ function mergePlayer(a, b) {
     const y = out.again[id];
     if (!y || x.due > y.due || (x.due === y.due && x.n > y.n)) out.again[id] = x;
   }
-  out.stagesRecounted = !!(a.stagesRecounted || b.stagesRecounted);
-  out.gateFree = maxMap(a.gateFree, b.gateFree);         // boss gates the child was already past when gates came
-  // gates migration (kids.js gateMigrate): a gate counts as seen only if both copies with progress had seen it
-  const seenA = blankPlayer(a) ? null : a.gatesSeen || {}, seenB = blankPlayer(b) ? null : b.gatesSeen || {};
-  out.gatesSeen = !seenA ? { ...(b.gatesSeen || {}) } : !seenB ? { ...seenA } : Object.fromEntries(Object.keys(seenA).filter(k => seenB[k]).map(k => [k, 1]));
+  out.gateFree = maxMap(a.gateFree, b.gateFree);         // stages the child was already past when they came (kids.js stageMigrate)
+  out.pathV = Math.max(a.pathV || 0, b.pathV || 0);
+  // stages either copy has seen (stageMigrate decided whether each was free; a blank copy brings nothing)
+  out.gatesSeen = { ...(blankPlayer(a) ? {} : a.gatesSeen || {}), ...(blankPlayer(b) ? {} : b.gatesSeen || {}) };
   out.u = Math.max(a.u || 0, b.u || 0);
   return out;
 }
@@ -1447,7 +1446,7 @@ function pzNext() {
   clearTimeout(pzTimer);
   if (advanceStage()) return;
   $("pzGoalBadge").hidden = true;
-  pzCur = pzPick(); pzIdx = 0; pzHinted = pzFailed = pzScored = pzEscape = false; pzSel = null; pzArrows = []; pzLast = []; pzMarks = {};
+  pzCur = pzPick(); pzIdx = 0; pzHinted = pzFailed = pzScored = pzEscape = false; stageLost = null; pzSel = null; pzArrows = []; pzLast = []; pzMarks = {};
   pzGame = new Chess(pzCur[1]);
   const direct = !!pzCur[5];                             // generated beginner puzzles start with the solver's move
   pzOrient = direct ? pzGame.turn() : (pzGame.turn() === "w" ? "b" : "w");   // Lichess puzzles: the opponent moves first
@@ -1550,6 +1549,7 @@ function pzScore(win) {
     $("pzDelta").textContent = "from your game: no rating change"; $("pzDelta").className = "delta"; save(); pzRenderBar(); return;
   }
   kidReward(pl, win);
+  if (!win) stageMissPuzzle();
   pl.hist = (pl.hist || []).slice(-(HIST_MAX - 1)); pl.hist.push({ id: pzCur[0], pr, r: win ? 1 : 0, t: Date.now() });
   if (pzHinted) {
     pl.hist[pl.hist.length - 1].h = 1;      // hinted: no rating change (the parent chart skips it)
@@ -1859,10 +1859,11 @@ function advanceStage() {
   pzStage = STAGES[i];
 }
 
-/* ---- learning path: stages unlock one after another; 8 stars finish a stage ---- */
+/* ---- learning path: a stage opens once the one before it is finished; 8 stars finish a stage, a miss costs one ---- */
 const STAGE_NEED = 8;
 function egIcon(pcs) { return `<span class="goal mate"><span class="pc bK"></span></span><span class="egm">${[...pcs].map(c => `<span class="pc w${c} mini"></span>`).join("")}</span>`; }
-// boss gates: one win against that bot (any 🤖 handicap counts) opens the way on; the picture is the bot's face
+// boss gates: one win against that bot, in a game started from the gate (any 🤖 handicap counts), opens the way on;
+// the picture is the bot's face
 function gateIcon(face) { return `<span class="gate">${face}</span>`; }
 // discovered attack: the bishop steps off the line (one arrow) and the rook behind it now hits the queen (the other)
 const DISC_ICON = `<span class="goal disc"><span class="pc bQ" style="top:0"></span><span class="pc wB" style="top:33.3%"></span><span class="pc wR" style="top:66.6%"></span>` +
@@ -1873,99 +1874,143 @@ function tacticOnly(p, t) {
   const ts = p[4].split(" ");
   return ts.includes(t) && p[3] <= 1100 && p[2].split(" ").length <= 4 && !ts.some(x => x !== t && (TACTIC_THEMES.includes(x) || /^mate/.test(x)));
 }
-// name: for the parent view only (the child sees the pictures)
+// name: for the parent view only (the child sees the pictures). Seven worlds of four stages and a boss each (the last
+// one without a boss), climbing from the sea to space; WORLDS draws them on the map (renderPath)
 const STAGES = [
+  // 🌊 the sea
   { id: "take", name: "Take a free piece", icon: `<span class="goal take"><span class="pc bQ"></span></span>`, f: p => p[5] && /hangingPiece/.test(p[4]) },
   { id: "saveq", name: "Save the queen", icon: `<span class="goal save"><span class="pc wQ"></span></span>`, f: p => /saveQueen/.test(p[4]) },
   { id: "check", name: "Give check", icon: `<span class="goal check"><span class="pc bK"></span></span>`, f: p => /giveCheck/.test(p[4]) },
   { id: "promo", name: "Make a queen", need: 5, icon: `<span class="goal promo"><span class="pc wP"></span><b>→</b><span class="pc wQ"></span></span>`, f: p => p[5] && /promotion/.test(p[4]) },
-  { id: "gate1", name: "Boss: beat Greedy Gus", need: 1, gate: "gus", icon: gateIcon("🐷"), f: () => false },
+  { id: "gate1", name: "Boss: beat Greedy Cat", need: 1, gate: "gus", icon: gateIcon("🐱"), f: () => false },
+  // 🌳 the forest
   { id: "savep", name: "Save your pieces", icon: `<span class="goal save"><span class="pc wR"></span></span>`, f: p => /savePiece/.test(p[4]) },
-  { id: "back", name: "Back-rank mate", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc bP mini"></span>`, f: p => p[5] && /backRankMate/.test(p[4]) },
   { id: "mateq", name: "Mate with the queen", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc wQ mini"></span>`, f: p => p[5] && /mateIn1/.test(p[4]) && !/backRank/.test(p[4]) && /[Qq]/.test(p[1].split(" ")[0]) },
+  { id: "back", name: "Back-rank mate", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc bP mini"></span>`, f: p => p[5] && /backRankMate/.test(p[4]) },
   { id: "mater", name: "Mate with a rook", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc wR mini"></span>`, f: p => p[5] && /mateIn1/.test(p[4]) && !/backRank/.test(p[4]) && !/[Qq]/.test(p[1].split(" ")[0]) },
-  { id: "gate2", name: "Boss: beat Careful Cat", need: 1, gate: "cat", icon: gateIcon("🐱"), f: () => false },
-  // endgames (played in the kids' corner, not puzzles): mate the lone king; the picture shows the pieces you mate with
+  { id: "gate2", name: "Boss: beat Wily Wolf", need: 1, gate: "cat", icon: gateIcon("🐺"), f: () => false },
+  // ❄️ the snow: endgames (played in the kids' corner, not puzzles): mate the lone king; the picture shows the pieces
+  // you mate with (king + rook, the hardest, comes after the Tiger). Then the first puzzles from real games (Lichess)
   { id: "egqr", name: "Endgame: mate with queen + rook", need: 3, eg: "QR", icon: egIcon("QR"), f: () => false },
   { id: "egrr", name: "Endgame: mate with two rooks", need: 3, eg: "RR", icon: egIcon("RR"), f: () => false },
   { id: "egq", name: "Endgame: mate with king + queen", need: 3, eg: "KQ", icon: egIcon("KQ"), f: () => false },
-  { id: "egr", name: "Endgame: mate with king + rook", need: 3, eg: "KR", icon: egIcon("KR"), f: () => false },
-  { id: "gate3", name: "Boss: beat Tactic Tiger", need: 1, gate: "tiger", icon: gateIcon("🐯"), f: () => false },
-  { id: "fork", name: "Forks", icon: `<span class="goal win">🍴</span>`, f: p => !p[5] && /fork/.test(p[4]) && p[3] < 850 },
+  { id: "hang", name: "Win the free piece (real games)", icon: `<span class="goal take"><span class="pc bR"></span></span><span class="pc wN mini"></span>`, f: p => !p[5] && /hangingPiece/.test(p[4]) && p[3] <= 800 && !/mate/.test(p[4]) },
+  { id: "gate4", name: "Boss: beat Pawn Pete (Pawn Wars)", need: 1, gate: "pete", icon: gateIcon("🐣"), f: () => false },
+  // 🏜️ the desert
   { id: "mix", name: "Mixed puzzles", icon: `<span class="goal win">🧩</span>`, f: p => !p[5] && p[3] >= 400 && p[3] < 650 },
+  { id: "fork", name: "Forks", icon: `<span class="goal win">🍴</span>`, f: p => !p[5] && /fork/.test(p[4]) && p[3] < 850 },
   // generated by puzzles/safe_gen.py: take only when it wins something / stop a mate in one (the threat is drawn)
   { id: "safe", name: "Is it safe to take?", icon: `<span class="goal scale">⚖️<span class="pc bN"></span></span>`, f: p => p[4].split(" ").includes("safeTake") },
   { id: "stopm", name: "Stop the mate", icon: `<span class="goal guard"><span class="pc wK"></span></span>`, f: p => /stopMate/.test(p[4]) },
-  { id: "gate4", name: "Boss: beat Pawn Pete (Pawn Wars)", need: 1, gate: "pete", icon: gateIcon("🐣"), f: () => false },
+  { id: "gate3", name: "Boss: beat Tactic Tiger", need: 1, gate: "tiger", icon: gateIcon("🐯"), f: () => false },
+  // 🌋 the lava
+  { id: "egr", name: "Endgame: mate with king + rook", need: 3, eg: "KR", icon: egIcon("KR"), f: () => false },
+  { id: "mate1", name: "Mate in 1 (real games)", icon: `<span class="goal mate mn" data-n="1"><span class="pc bK"></span></span>`, f: p => !p[5] && /mateIn1/.test(p[4]) && p[3] <= 750 },
   { id: "mate2", name: "Mate in 2", icon: `<span class="goal mate mn" data-n="2"><span class="pc bK"></span></span>`, f: p => !p[5] && /mateIn2/.test(p[4]) && p[3] < 1000 },
   // one tactic each (Lichess, mostly puzzles/themes.json up to 1100; build.py ships them to the iPad site too)
   { id: "pin", name: "Pins", icon: `<span class="goal win">📌</span>`, f: p => !p[5] && tacticOnly(p, "pin") },
+  { id: "gate5", name: "Boss: beat T-Rex", need: 1, gate: "dino", icon: gateIcon("🦖"), f: () => false },
+  // 🏰 the castle in the clouds
   { id: "skewer", name: "Skewers", icon: `<span class="goal win">🍢</span>`, f: p => !p[5] && tacticOnly(p, "skewer") },
   { id: "disc", name: "Discovered attacks", icon: DISC_ICON, f: p => !p[5] && tacticOnly(p, "discoveredAttack") },
-  { id: "gate5", name: "Boss: beat Tactic Tiger again", need: 1, gate: "tiger", icon: gateIcon("🐯"), f: () => false },
   // the harder ⚖️ (safe_gen.py, safeTakeHard): count attackers and defenders, take with the smaller piece, hidden
   // defenders, a big piece worth taking even though it's defended
   { id: "safe2", name: "Is it safe to take? (harder)", icon: `<span class="goal scale mn" data-n="2">⚖️<span class="pc bR"></span></span>`, f: p => /safeTakeHard/.test(p[4]) },
   // a review stop: puzzles from the stages already finished, missed ones first (reviewPick)
   { id: "review", name: "Review: puzzles from finished stages", review: true, icon: `<span class="goal win">🔁</span>`, f: () => false },
-  // king-and-pawn games (kids' corner, like the endgames above): catch a running pawn; make a queen with the king's help
+  { id: "gate6", name: "Boss: beat the Dragon", need: 1, gate: "dragon", icon: gateIcon("🐉"), f: () => false },
+  // 🚀 space: king-and-pawn games (kids' corner, like the endgames above): catch a running pawn; make a queen with the king's help
   { id: "egcatch", name: "Endgame: catch the pawn with your king", need: 3, eg: "catch", icon: `<span class="goal take"><span class="pc bP"></span></span><span class="egm"><span class="pc wK mini"></span></span>`, f: () => false },
   { id: "egkp", name: "Endgame: king + pawn, make a queen", need: 3, eg: "kp", icon: `<span class="goal promo"><span class="pc wP"></span><b>→</b><span class="pc wQ"></span></span><span class="egm"><span class="pc wK mini"></span></span>`, f: () => false },
 ];
-const stagePools = {};
+// the map's worlds, one per boss (in STAGES order): a backdrop (CSS .w-<id>) and things scattered beside the road.
+// Emoji up to Unicode 10 only: the iPad's iOS is old
+const WORLDS = [
+  { id: "sea", icon: "🌊", deco: ["🐚", "🐠", "⛵", "🦀", "🐳", "🐙"] },
+  { id: "forest", icon: "🌳", deco: ["🍄", "🌲", "🦔", "🌻", "🐿️", "🌲"] },
+  { id: "snow", icon: "❄️", deco: ["⛄", "🏔️", "🐧", "❄️", "🎿", "🏔️"] },
+  { id: "desert", icon: "🏜️", deco: ["🌵", "🐪", "🦂", "🌵", "☀️", "🐫"] },
+  { id: "lava", icon: "🌋", deco: ["🔥", "🌋", "💥", "🔥", "☄️", "🌋"] },
+  { id: "castle", icon: "🏰", deco: ["☁️", "🏰", "🌈", "🦅", "☁️", "🎈"] },
+  { id: "space", icon: "🚀", deco: ["🌙", "⭐", "🛸", "🌍", "☄️", "🚀"] },
+];
+function worldOf(i) { return STAGES.slice(0, i).filter(st => st.gate).length; }
+const stagePools = {}, stageLadders = {};
 function stagePool(st) { return stagePools[st.id] || (stagePools[st.id] = GYM.puzzles.filter(st.f)); }
+function stageLadder(st) { return stageLadders[st.id] || (stageLadders[st.id] = [...stagePool(st)].sort((a, b) => a[3] - b[3])); }
 function stageStars(pl, id) { return (pl.stages || {})[id] || 0; }
 function needOf(st) { return st.need || STAGE_NEED; }
-// a stage opens when every earlier stage is finished, and stays open once it (or any later stage) has stars:
-// stages added later in the list (the endgames) never lock a stage the child had already reached.
-// Boss gates added later: a gate the child was already past (every stage before it finished) is "free": it doesn't
-// block anything, but stays on the map to play (see gateMigrate)
+function stageDone(pl, st) { return stageStars(pl, st.id) >= needOf(st); }
+// strict order: a stage opens when every stage before it is finished or "free" (left unfinished behind a finished
+// stage when the path changed, see stageMigrate: it doesn't block, but stays on the map to play)
 function stageOpen(pl, i) {
-  gateMigrate(pl);
-  return STAGES.slice(i).some(st => stageStars(pl, st.id) > 0) ||
-    STAGES.slice(0, i).every(st => stageStars(pl, st.id) >= needOf(st) || gateFreed(pl, st));
+  stageMigrate(pl);
+  return STAGES.slice(0, i).every(st => stageDone(pl, st) || stageFree(pl, st));
 }
-// the stage to play next: the first open unfinished one (a free gate behind the child doesn't count)
-function stageCur(pl) { return STAGES.findIndex((st, k) => stageOpen(pl, k) && stageStars(pl, st.id) < needOf(st) && !gateFreed(pl, st)); }
-function gateFreed(pl, st) { return !!(st.gate && (pl.gateFree || {})[st.id]); }
-// once per player and gate (pl.gatesSeen; mergePlayer keeps only gates both copies had seen, so a copy that never
-// looked brings its progress in first): a new gate whose earlier stages are all finished already is "free", so the
-// stage the child was on stays open. Gates added later get the same treatment.
-function gateMigrate(pl) {
-  if (!window.GYM || !GYM.puzzles || (pl.gatesSeen && STAGES.every(st => !st.gate || pl.gatesSeen[st.id]))) return;
-  recountStages(pl);
-  pl.gateFree = pl.gateFree || {}; pl.gatesSeen = pl.gatesSeen || {};
+// the stage to play next: the first open unfinished one (a free stage behind the child doesn't count)
+function stageCur(pl) { return STAGES.findIndex((st, k) => stageOpen(pl, k) && !stageDone(pl, st) && !stageFree(pl, st)); }
+// pl.gateFree / pl.gatesSeen: named when only boss gates had them; now they hold every stage
+function stageFree(pl, st) { return !!(pl.gateFree || {})[st.id]; }
+// The path before the strict order (pl.pathV < 2) let any star open the stages up to it, and solves in the 🧩 / Puzzles
+// tabs and wins in the 🤖 tab counted too. Once per player: find the stage the child was on then (the first one
+// unfinished and not free, in the old order; a gate not yet seen there was free if everything before it was finished),
+// and drop the stars of puzzle stages and gates after it (they came from outside the path; endgame and review stars
+// only ever came from the path and stay).
+// Then, once per stage the player hasn't seen (pl.gatesSeen; the old order's stages count as seen): a new stage before
+// the first unfinished stage he had is free, so the child keeps his place. Stages added later get the same treatment.
+const OLD_ORDER = "take saveq check promo gate1 savep back mateq mater gate2 egqr egrr egq egr gate3 fork mix safe stopm gate4 mate2 pin skewer disc gate5 safe2 review egcatch egkp".split(" ");
+function stageMigrate(pl) {
+  if (!window.GYM || !GYM.puzzles || ((pl.pathV || 0) >= 2 && pl.gatesSeen && STAGES.every(st => pl.gatesSeen[st.id]))) return;
+  pl.gateFree = pl.gateFree || {}; pl.gatesSeen = pl.gatesSeen || {}; pl.stages = pl.stages || {};
+  if ((pl.pathV || 0) < 2) {
+    const byId = Object.fromEntries(STAGES.map(st => [st.id, st])), fin = id => stageStars(pl, id) >= needOf(byId[id]);
+    const cur = OLD_ORDER.findIndex((id, k) => {
+      if (fin(id) || pl.gateFree[id]) return false;
+      if (byId[id].gate && !pl.gatesSeen[id] && OLD_ORDER.slice(0, k).every(x => byId[x].gate || fin(x))) { pl.gateFree[id] = 1; return false; }
+      return true;
+    });
+    if (cur >= 0) for (const id of OLD_ORDER.slice(cur + 1)) if (!byId[id].eg && !byId[id].review) delete pl.stages[id];
+    OLD_ORDER.forEach(id => { pl.gatesSeen[id] = 1; });
+    pl.pathV = 2;
+  }
+  const first = STAGES.findIndex(st => pl.gatesSeen[st.id] && !stageDone(pl, st) && !stageFree(pl, st));
   STAGES.forEach((st, i) => {
-    if (!st.gate || pl.gatesSeen[st.id]) return;
-    if (STAGES.slice(0, i).every(s => s.gate || stageStars(pl, s.id) >= needOf(s))) pl.gateFree[st.id] = 1;
+    if (pl.gatesSeen[st.id]) return;
+    if (!stageDone(pl, st) && (first < 0 || i < first)) pl.gateFree[st.id] = 1;
     pl.gatesSeen[st.id] = 1;
   });
   save();
 }
-// a win against a bot clears the gate the game was started from, else the first open, unbeaten gate of that bot that
-// still blocks the way (one skipped as "free" only if none does; from the 🤖 tab). Two gates can share a bot (🐯).
+// a win in a game started from a boss gate clears that gate (games from the 🤖 tab don't count); a medal, and the
+// next world's picture when the boss was the last stage of a world
 function gateWin(pl, botId, from = null) {
-  const can = (st, k) => st.gate === botId && stageStars(pl, st.id) < needOf(st) && stageOpen(pl, k);
-  let i = from ? STAGES.findIndex((st, k) => st === from && can(st, k)) : -1;
-  if (i < 0) i = STAGES.findIndex((st, k) => can(st, k) && !gateFreed(pl, st));
-  if (i < 0) i = STAGES.findIndex(can);
-  if (i < 0) return null;
-  pl.stages = pl.stages || {}; pl.stages[STAGES[i].id] = needOf(STAGES[i]);
+  const i = STAGES.indexOf(from);
+  if (i < 0 || from.gate !== botId || stageDone(pl, from) || !stageOpen(pl, i)) return null;
+  pl.stages = pl.stages || {}; pl.stages[from.id] = needOf(from);
   setTimeout(() => celebrate("🏅", "trophy"), 1500);
-  return STAGES[i];
+  if (WORLDS[worldOf(i + 1)] && i + 1 < STAGES.length) setTimeout(() => celebrate(`<span class="wbig">${WORLDS[worldOf(i + 1)].icon}</span>`, "trophy"), 1600);
+  return from;
 }
 function gateNext() {   // ▶ after beating a boss: the next stage to play, or the map
   const pl = pzPlayers(), i = stageCur(pl);
   if (i < 0) { kidTab = "path"; return openKids(); }
   stageGo(STAGES[i]);
 }
+// Lichess stages get harder as they fill up: the pick comes from the stage's puzzles sorted by rating, at stars / need
+// of the way up (at most 85%: the hardest few are left out), so a miss (a star lost) brings easier ones back.
+// Generated stages (ratings are guesses: sorting would serve all the "take" questions before the traps) and replays
+// of a finished stage pick from all of them
 function stagePick(pl) {
   if (pzStage.review) return reviewPick(pl);
   const again = againPick(pl, pzStage.f); if (again) return again;     // a missed puzzle of this stage comes back
-  const pool = stagePool(pzStage), done = pl.done || {};
-  const fresh = pool.filter(p => !(p[0] in done));
-  const from = fresh.length ? fresh : pool;
-  return from[Math.floor(Math.random() * from.length)];
+  const pool = stageLadder(pzStage), done = pl.done || {}, n = pool.length;
+  const rnd = a => a[Math.floor(Math.random() * a.length)];
+  if (pzReplay || pool[0][5]) { const fresh = pool.filter(p => !(p[0] in done)); return rnd(fresh.length ? fresh : pool); }
+  const at = Math.round(Math.min(stageStars(pl, pzStage.id), needOf(pzStage)) / needOf(pzStage) * .85 * (n - 1));
+  for (let w = Math.max(4, Math.round(n * .08)); ; w *= 2) {
+    const near = pool.slice(Math.max(0, at - w), at + w + 1), fresh = near.filter(p => !(p[0] in done));
+    if (fresh.length || w >= n) return rnd(fresh.length ? fresh : near);
+  }
 }
 // the review stop: puzzles from the puzzle stages the child has finished (all puzzle stages before it if none is),
 // half the time one he missed and hasn't yet solved cleanly twice (pl.again, due or not), else a random finished stage
@@ -1982,27 +2027,30 @@ function reviewPick(pl, r = Math.random()) {
   const pool = stagePool(rnd(sts)), done = pl.done || {}, fresh = pool.filter(p => !(p[0] in done));
   return rnd(fresh.length ? fresh : pool);
 }
-// a clean solve counts for the stage the puzzle belongs to, wherever it was played (path or Puzzles tab), but only
-// once that stage is open: a pin solved in the 🧩 tab doesn't open the whole path up to the pins
-function stageOf(p) { return STAGES.find(st => st.f(p)); }
+// stars come only from the path: a clean solve of a puzzle from the open stage (the review stop counts its own)
 function stageStar() {
-  const pl = pzPlayers();
-  const st = pzStage && (pzStage.review || pzStage.f(pzCur)) ? pzStage : stageOf(pzCur); if (!st) return;
-  if (st !== pzStage && !stageOpen(pl, STAGES.indexOf(st))) return;
+  const pl = pzPlayers(), st = pzStage;
+  if (!st || !(st.review || st.f(pzCur))) return;
   pl.stages = pl.stages || {};
   const had = stageStars(pl, st.id);
-  pl.stages[st.id] = had + 1; save(); renderStageBar();
+  pl.stages[st.id] = had + 1; stageLost = null; save(); renderStageBar();
   if (had + 1 === needOf(st) && pl.kid) setTimeout(() => celebrate("🏅", "trophy"), 1500);
 }
-// one-time recount from history for solves made outside the path before this fix
-function recountStages(pl) {
-  if (pl.stagesRecounted || !GYM.puzzles) return;
-  const byId = {}; for (const p of GYM.puzzles) byId[p[0]] = p;
-  const n = {};
-  for (const x of pl.hist || []) { const p = byId[x.id]; if (x.r && p) { const st = stageOf(p); if (st) n[st.id] = (n[st.id] || 0) + 1; } }
-  pl.stages = pl.stages || {};
-  for (const [id, c] of Object.entries(n)) pl.stages[id] = Math.max(pl.stages[id] || 0, c);
-  pl.stagesRecounted = true; save();
+// a miss on the path costs a star of that stage, while it isn't finished (a replay never takes a finished stage back);
+// the star falls off the row of stars (stageLost, until the next puzzle or game: renderStageBar / egDraw)
+let stageLost = null;
+function stageLose(pl, st) {
+  const had = stageStars(pl, st.id);
+  if (!had || had >= needOf(st)) return false;
+  pl.stages[st.id] = had - 1; stageLost = st.id; save();
+  return true;
+}
+function stageMissPuzzle() {   // pzScore(false): a missed puzzle in a path stage
+  if (pzStage && (pzStage.review || pzStage.f(pzCur)) && stageLose(pzPlayers(), pzStage)) renderStageBar();
+}
+function stageDots(pl, st) {   // ★ per star (and the one just lost, falling off)
+  const need = needOf(st), n = Math.min(stageStars(pl, st.id), need), lost = stageLost === st.id;
+  return `<span class="dots">${Array.from({ length: need }, (_, i) => `<i class="${i < n ? "on" : lost && i === n ? "lost" : ""}">★</i>`).join("")}</span>`;
 }
 // open a stage: puzzle stages in the puzzle view, endgame stages as a game in the kids' corner, a gate as a bot game
 function stageGo(st) {
@@ -2025,28 +2073,58 @@ function renderStageBar() {
     return;
   }
   if (!pzStage) { bar.hidden = true; return; }
-  const n = Math.min(stageStars(pzPlayers(), pzStage.id), needOf(pzStage));
   bar.hidden = false;
   bar.innerHTML = `<button class="btn big" type="button" id="pzMap" aria-label="Back to the map">🗺</button>
-    <span class="stageicon">${pzCur && pzGame ? stageIconFor(pzStage, pzOrient) : pzStage.icon}</span>
-    <span class="dots">${Array.from({ length: needOf(pzStage) }, (_, i) => `<i class="${i < n ? "on" : ""}">★</i>`).join("")}</span>`;
+    <span class="stageicon">${pzCur && pzGame ? stageIconFor(pzStage, pzOrient) : pzStage.icon}</span>${stageDots(pzPlayers(), pzStage)}`;
   $("pzMap").onclick = () => go("kids", "path");
 }
+// the map, like a mobile game's: the road winds up from the sea (stage 1, at the bottom) to space, one backdrop per
+// world, the stops on the road (a ring fills with the stars, bosses are bigger with a ring in their strength's colour),
+// your king hopping on the stop to play. Laid out in pixels for the box's width (redrawn when it changes)
 function renderPath() {
-  const pl = pzPlayers();
-  recountStages(pl);
-  const curI = stageCur(pl);
-  // the iPad lays the path out as a snake (5 columns upright, 8 on its side): each stop's row/column as CSS variables
-  const snake = (i, cols) => { const r = Math.floor(i / cols), c = i % cols; return `--r${cols}:${r + 1};--c${cols}:${r % 2 ? cols - c : c + 1}`; };
-  $("kPath").innerHTML = `<div class="path">${STAGES.map((st, i) => {
+  const pl = pzPlayers(), curI = stageCur(pl), box = $("kPath");
+  const W = Math.min(900, box.clientWidth || 600), A = Math.min(W * .3, 250), STEP = W >= 700 ? 118 : 108, GAP = 50, PAD = 80;
+  const nw = WORLDS.length, curW = curI < 0 ? nw : worldOf(curI);
+  const ys = STAGES.map((st, i) => PAD + i * STEP + worldOf(i) * GAP), H = ys[ys.length - 1] + PAD + 70;
+  const pts = STAGES.map((st, i) => [st.gate ? W / 2 : W / 2 + A * Math.sin(i * 1.25 + .4), H - ys[i]]);
+  const road = ps => ps.map((p, i) => {   // Catmull-Rom through the stops, as cubic curves
+    if (!i) return `M${p[0].toFixed(1)},${p[1].toFixed(1)}`;
+    const a = ps[i - 2] || ps[i - 1], b = ps[i - 1], d = ps[i + 1] || p;
+    return `C${(b[0] + (p[0] - a[0]) / 6).toFixed(1)},${(b[1] + (p[1] - a[1]) / 6).toFixed(1)} ${(p[0] - (d[0] - b[0]) / 6).toFixed(1)},${(p[1] - (d[1] - b[1]) / 6).toFixed(1)} ${p[0].toFixed(1)},${p[1].toFixed(1)}`;
+  }).join("");
+  const bands = WORLDS.map((w, k) => {
+    const idx = STAGES.map((_, i) => i).filter(i => worldOf(i) === k); if (!idx.length) return "";
+    const lo = k ? ys[idx[0]] - STEP / 2 - GAP / 2 : 0, hi = k < nw - 1 ? ys[idx[idx.length - 1]] + STEP / 2 + GAP / 2 : H;
+    const r = rng(k * 7919 + 17), deco = [];
+    idx.forEach((i, j) => {         // something beside the road, on the side away from the stop
+      const left = pts[i][0] > W / 2, x = left ? W * (.06 + r() * .2) : W * (.74 + r() * .2), y = pts[i][1] + (r() - .5) * STEP * .5;
+      if (pts.every(p => Math.hypot(p[0] - x, p[1] - y) > 78)) deco.push(`<span class="deco" style="left:${x.toFixed(0)}px;top:${(y - (H - hi)).toFixed(0)}px;font-size:${(30 + r() * 18).toFixed(0)}px">${w.deco[j % w.deco.length]}</span>`);
+    });
+    const allDone = idx.every(i => stageDone(pl, STAGES[i]));
+    return `<div class="world w-${w.id}${k > curW ? " dim" : ""}" style="top:${(H - hi).toFixed(0)}px;height:${(hi - lo).toFixed(0)}px" aria-hidden="true">
+      ${deco.join("")}<span class="wsign${allDone ? " done" : ""}">${w.icon}</span></div>`;
+  }).join("");
+  const nodes = STAGES.map((st, i) => {
     const need = needOf(st), open = stageOpen(pl, i), n = Math.min(stageStars(pl, st.id), need), done = n >= need, cur = i === curI;
-    return `<div class="stop ${i % 2 ? "right" : "left"}" style="${snake(i, 5)};${snake(i, 8)}">
-      <button class="stage${open ? "" : " locked"}${done ? " done" : ""}${cur ? " cur" : ""}${st.gate ? " gatest" : ""}" type="button" data-st="${i}" ${open ? "" : "disabled"} aria-label="Stage ${i + 1}: ${esc(st.name)}${open ? "" : ", locked"}">
-        <span class="ic">${open ? st.icon : "🔒"}</span>
-        <span class="dots">${Array.from({ length: need }, (_, k) => `<i class="${k < n ? "on" : ""}">★</i>`).join("")}</span>
-      </button></div>`;
-  }).join("")}</div>`;
-  $("kPath").querySelectorAll("[data-st]").forEach(b => b.onclick = () => stageGo(STAGES[+b.dataset.st]));
+    const bot = st.gate && typeof BOTS !== "undefined" && BOTS.find(b => b.id === st.gate), ring = bot && bot.lvl ? BOT_RING[bot.lvl - 1] : "#8a7fd0";
+    return `<button class="node${st.gate ? " boss" : ""}${open ? "" : " locked"}${done ? " done" : ""}${cur ? " cur" : ""}" type="button" data-st="${i}" ${open ? "" : "disabled"}
+      style="left:${pts[i][0].toFixed(0)}px;top:${pts[i][1].toFixed(0)}px;--p:${Math.round(100 * n / need)};--ring:${ring}" aria-label="Stage ${i + 1}: ${esc(st.name)}${open ? "" : ", locked"}">
+      <span class="ic">${open || st.gate ? st.icon : "🔒"}</span>${open && !st.gate ? stageDots(pl, st) : ""}</button>`;
+  }).join("");
+  const me = curI >= 0 ? `<span class="me pc wK" style="left:${pts[curI][0].toFixed(0)}px;top:${(pts[curI][1] - (STAGES[curI].gate ? 82 : 70)).toFixed(0)}px" aria-hidden="true"></span>` : "";
+  const goal = pts[pts.length - 1];
+  const keep = box.querySelector(".mapwrap"), was = keep && keep.dataset.cur === String(curI) ? keep.scrollTop : null;
+  box.innerHTML = `<div class="mapwrap" data-cur="${curI}"><div class="map" style="width:${W}px;height:${H.toFixed(0)}px">${bands}
+    <svg class="road" width="${W}" height="${H.toFixed(0)}" viewBox="0 0 ${W} ${H.toFixed(0)}" aria-hidden="true">
+      <path class="rdo" d="${road(pts)}"/><path class="rd" d="${road(pts)}"/><path class="rdl" d="${road(pts)}"/>
+      ${curI !== 0 ? `<path class="rdp" d="${road(curI < 0 ? pts : pts.slice(0, curI + 1))}"/>` : ""}</svg>
+    <span class="goalcup${curI < 0 ? " won" : ""}" style="left:${goal[0].toFixed(0)}px;top:${(goal[1] - 92).toFixed(0)}px" aria-hidden="true">🏆</span>
+    ${nodes}${me}</div></div>`;
+  box.querySelectorAll("[data-st]").forEach(b => b.onclick = () => stageGo(STAGES[+b.dataset.st]));
+  // the map scrolls in its own box below the tabs (they stay in sight), opened at the stop to play (or where it was)
+  const wrap = box.querySelector(".mapwrap");
+  wrap.style.maxHeight = Math.max(360, innerHeight - (wrap.getBoundingClientRect().top + scrollY) - 12) + "px";
+  wrap.scrollTop = was !== null ? was : (curI < 0 ? 0 : pts[curI][1] - wrap.clientHeight / 2);
 }
 
 /* ---- piece school: move one piece to collect every star (pawn levels: capture the black pawns too) ---- */
@@ -2355,6 +2433,7 @@ function egBotMove(g) {
 function egStart(st) {
   egSt = st || egSt || STAGES.find(s => s.eg);
   eg = { st: egSt, g: new Chess(egStartFen(egSt.eg)), sel: null, last: [], moves: 0, over: null, hist: [], undos: 0, slip: false };
+  stageLost = null;
   $("eDone").hidden = true; egDraw();
 }
 function egDraw() {
@@ -2371,10 +2450,8 @@ function egDraw() {
   const tgts = eg.sel && mine ? g.moves({ square: eg.sel, verbose: true }).map(m => m.to) : [];
   renderBoard(pos, { el: $("eboard"), o: "w", hl: eg.last, sel: eg.sel, tgts, marks });
   $("eboard").classList.toggle("mine", mine);
-  const need = needOf(eg.st), n = Math.min(stageStars(pzPlayers(), eg.st.id), need);
   $("eBar").innerHTML = `<button class="btn big" type="button" id="eMap" aria-label="Back to the map">🗺</button>
-    <span class="stageicon">${eg.st.icon}</span>
-    <span class="dots">${Array.from({ length: need }, (_, i) => `<i class="${i < n ? "on" : ""}">★</i>`).join("")}</span>`;
+    <span class="stageicon">${eg.st.icon}</span>${stageDots(pzPlayers(), eg.st)}`;
   $("eMap").onclick = () => { kidTab = "path"; openKids(); };
   $("eMoves").innerHTML = `👣 <b>${eg.moves}</b>`;
   $("eUndo").disabled = !eg.hist.length || !mine;
@@ -2402,7 +2479,8 @@ function egUndo() {   // takes back your last move and the king's reply
   eg.g.load(eg.hist.pop()); eg.moves--; eg.last = []; eg.sel = null; eg.undos++; eg.slip = false; egDraw();
 }
 // mate (or the pawn caught / a safe new queen in the pawn games): ⭐ and one win for the stage; stalemate, a lost
-// piece or a pawn game gone wrong: 🤝 (↻ if the running pawn became a queen), then a new position by itself
+// piece or a pawn game gone wrong: 🤝 (↻ if the running pawn became a queen) and a star of the stage lost (stageLose),
+// then a new position by itself
 function egEnd() {
   const g = eg.g, kind = eg.st.eg;
   const res = kind === "catch" ? cpResult(g) : kind === "kp" ? kpResult(g)
@@ -2423,6 +2501,7 @@ function egEnd() {
     $("eNext").onclick = egNext;
   } else if (res) {
     eg.over = "draw";
+    if (!egReplay) stageLose(pzPlayers(), eg.st);
     const my = eg;
     setTimeout(() => { if (eg !== my) return; $("eDone").innerHTML = `<div class="burst">${res === "loss" ? "↻" : "🤝"}</div>`; $("eDone").hidden = false; }, 700);
     setTimeout(() => { if (eg === my) egStart(my.st); }, 2800);
@@ -2680,7 +2759,7 @@ function renderParents() {
       <p class="tiny">To continue where ${esc(pl.name)} is on another device. Tap a learning-path stage to open it: every stage before it counts as finished.</p>
       <div class="ustages">${STAGES.map((st, i) => `<button class="btn" type="button" data-ul="${i}" ${stageOpen(pl, i) ? "disabled" : ""}
         title="${esc(st.name)}" aria-label="Open stage ${i + 1}: ${esc(st.name)}"><span class="stageicon">${st.icon}</span><small>${i + 1}</small></button>`).join("")}</div>
-      <p class="tiny">${STAGES.map((st, i) => `${i + 1} ${esc(st.name)}${stageStars(pl, st.id) >= needOf(st) ? " ✓" : gateFreed(pl, st) ? " (skipped: was already past it)" : ""}`).join(" · ")}</p>
+      <p class="tiny">${STAGES.map((st, i) => `${i + 1} ${esc(st.name)}${stageStars(pl, st.id) >= needOf(st) ? " ✓" : stageFree(pl, st) ? " (skipped: was already past it)" : ""}`).join(" · ")}</p>
       <label class="tiny"><input type="checkbox" id="uSchool" ${pl.schoolAll ? "checked" : ""}> Open every piece-school level</label>
     </figure>
     ${window.GYM_KIDS_ONLY ? `<figure class="chart wide"><figcaption>Back up progress</figcaption>
@@ -2815,6 +2894,8 @@ function openKids(sub) {
       const p = eg.g.get(sq); eg.sel = p && p.color === "w" ? sq : null; egDraw();
     });
     $("eUndo").onclick = egUndo;
+    let resized = null;     // the map is laid out for its width: draw it again after a turn of the iPad
+    addEventListener("resize", () => { clearTimeout(resized); resized = setTimeout(() => { if (window.SECTION === "kids" && kidTab === "path") renderPath(); }, 200); });
     $("kSound").onclick = () => { const p = pzPlayers(); p.sound = !soundOn(); save(); openKids(); if (p.sound) sfx("right"); };
   }
   $("kPlayers").innerHTML = Object.entries(S.players).map(([id, p]) =>
@@ -2836,13 +2917,20 @@ function openKids(sub) {
 
 /* ================= bots for young players ================= */
 // Chess bots are built on chess.js with deliberate weaknesses; Pawn Wars uses its own tiny rules engine.
+// Weakest first, and the animal grows with the strength so the child can see which bot is harder; lvl = the paw prints
+// on its card and the colour of its ring. The ids are the old names, kept for the stored records (rex was a T-rex, gus
+// a pig, cat the cat): rex = the mouse, gus = the cat, cat = the wolf. T-Rex and the Dragon search (botSearch) to
+// `depth` plies within `ms`. Pawn Pete plays Pawn Wars, a different game: no level.
 const BOTS = [
-  { id: "rex", face: "🦖", name: "Random Rex", elo: "~100", think: 500 },
-  { id: "gus", face: "🐷", name: "Greedy Gus", elo: "~300", think: 600 },
-  { id: "cat", face: "🐱", name: "Careful Cat", elo: "~500", think: 700 },
-  { id: "tiger", face: "🐯", name: "Tactic Tiger", elo: "~800", think: 400 },
+  { id: "rex", face: "🐭", name: "Muddled Mouse", elo: "~100", think: 500, lvl: 1 },
+  { id: "gus", face: "🐱", name: "Greedy Cat", elo: "~300", think: 600, lvl: 2 },
+  { id: "cat", face: "🐺", name: "Wily Wolf", elo: "~500", think: 700, lvl: 3 },
+  { id: "tiger", face: "🐯", name: "Tactic Tiger", elo: "~800", think: 400, lvl: 4 },
+  { id: "dino", face: "🦖", name: "T-Rex", elo: "~1000", think: 250, lvl: 5, depth: 2, ms: 900 },
+  { id: "dragon", face: "🐉", name: "Dragon", elo: "~1200", think: 200, lvl: 6, depth: 3, ms: 1800 },
   { id: "pete", face: "🐣", name: "Pawn Pete", elo: "Pawn Wars", think: 500, pawns: true },
 ];
+const BOT_RING = ["#3cb371", "#9acd32", "#f2c230", "#f39c34", "#e8542f", "#b3202a"];   // lvl 1–6: green to red
 const VALUE = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
 let bg = null;   // {bot, game (chess.js) | pw (pawn wars state), me: 'w'|'b', sel, last, over, hist:[fen…], log, rp, gate}
 // gate: the learning-path boss stage this game was started from (a win against the bot clears it)
@@ -2862,6 +2950,7 @@ function bestCaptureGain(g) {
   return best;
 }
 function botMove(bot, g) {
+  if (bot.depth) return botSearch(bot, g);
   const ms = shuffle(g.moves({ verbose: true })), me = g.turn();
   if (bot.id === "rex") return ms[0];
   // everyone but Rex takes a mate in one
@@ -2900,6 +2989,78 @@ function botMove(bot, g) {
     if (s > bs) { bs = s; best = m; }
   }
   return best;
+}
+
+/* ---- T-Rex and the Dragon: alpha-beta over material and piece placement, captures followed to the end ---- */
+// centipawns, from the side to move; pieces like the middle, pawns like to advance, the king hides while queens are on
+const CP = { p: 100, n: 310, b: 320, r: 500, q: 900, k: 0 };
+function botEval(g) {
+  const b = g.board(), me = g.turn();
+  let s = 0, queens = 0;
+  for (const row of b) for (const p of row) if (p && p.type === "q") queens++;
+  for (let r = 0; r < 8; r++) for (let f = 0; f < 8; f++) {
+    const p = b[r][f]; if (!p) continue;
+    const rank = p.color === "w" ? 7 - r : r, mid = 7 - Math.abs(3.5 - f) - Math.abs(3.5 - r);   // mid: 0 (corner) – 6 (centre)
+    let v = CP[p.type];
+    if (p.type === "n") v += mid * 6; else if (p.type === "b") v += mid * 3; else if (p.type === "q") v += mid;
+    else if (p.type === "p") v += rank * rank * 1.5 + (f > 1 && f < 6 ? rank * 2 : 0);
+    else if (p.type === "k") v += queens ? (rank === 0 ? 20 : -rank * 10) : mid * 5;
+    s += p.color === me ? v : -v;
+  }
+  return s;
+}
+function botOrder(ms) {   // captures first, the biggest victim by the smallest attacker; promotions too
+  const k = m => (m.captured ? 10 * CP[m.captured] - CP[m.piece] + 1000 : 0) + (m.promotion ? 800 : 0);
+  return ms.sort((a, b) => k(b) - k(a));
+}
+// iterative deepening to bot.depth while time (bot.ms) lasts; the move is picked at random among those within 12cp
+// of the best of the last finished depth, so games vary
+function botSearch(bot, g) {
+  const MATE = 1e5, t0 = Date.now(), NOISE = 12;
+  let nodes = 0, stop = false;
+  const quiet = (alpha, beta, d) => {
+    const stand = botEval(g);
+    if (stand >= beta || d <= 0) return stand;
+    let best = stand;              // fail-soft: a bound never passes for a score (the root compares near-equal moves)
+    if (stand > alpha) alpha = stand;
+    for (const m of botOrder(g.moves({ verbose: true }).filter(m => m.captured || m.promotion))) {
+      g.move(m); const v = -quiet(-beta, -alpha, d - 1); g.undo();
+      if (v > best) best = v;
+      if (v >= beta) return v;
+      if (v > alpha) alpha = v;
+    }
+    return best;
+  };
+  const ab = (depth, alpha, beta, ply) => {
+    if ((++nodes & 127) === 0 && Date.now() - t0 > bot.ms) stop = true;
+    if (stop) return 0;
+    const ms = g.moves({ verbose: true });
+    if (!ms.length) return g.in_check() ? -MATE + ply : 0;
+    if (depth <= 0) return quiet(alpha, beta, 5);
+    let best = -Infinity;
+    for (const m of botOrder(ms)) {
+      g.move(m); const v = -ab(depth - 1, -beta, -alpha, ply + 1); g.undo();
+      if (stop) return 0;
+      if (v > best) best = v;
+      if (v > alpha) alpha = v;
+      if (alpha >= beta) break;
+    }
+    return best;
+  };
+  let root = botOrder(shuffle(g.moves({ verbose: true }))).map(m => ({ m, v: 0 })), done = null;
+  for (let d = 1; d <= bot.depth && !stop; d++) {
+    let best = -Infinity;
+    for (const r of root) {
+      g.move(r.m); r.v = -ab(d - 1, -Infinity, -(best - NOISE), 1); g.undo();
+      if (stop) break;
+      if (r.v > best) best = r.v;
+    }
+    if (stop && done) break;
+    root.sort((a, b) => b.v - a.v);
+    done = root.map(r => ({ ...r }));
+  }
+  const top = done[0].v, near = done.filter(r => r.v > top - NOISE && Math.abs(top) < MATE / 2);
+  return (near.length ? near[Math.floor(Math.random() * near.length)] : done[0]).m;
 }
 
 /* ---- Pawn Wars: pawns only; first to reach the last rank wins, and a side with no moves loses ---- */
@@ -3148,8 +3309,9 @@ function renderBots() {
     </div>
     <div class="bots">${BOTS.map(b => {
       const r = rec[b.id] || { w: 0, l: 0, d: 0 };
-      return `<button type="button" class="bot${r.w ? " beaten" : ""}" data-bot="${b.id}" aria-label="${b.name}">
+      return `<button type="button" class="bot${r.w ? " beaten" : ""}" data-bot="${b.id}" aria-label="${b.name}" style="--ring:${b.lvl ? BOT_RING[b.lvl - 1] : "var(--line)"};--lv:${b.lvl || 3}">
         <span class="face">${b.face}</span>${b.pawns ? `<span class="pc wP tag"></span>` : ""}
+        <span class="paws${b.lvl ? "" : " none"}" aria-hidden="true">${b.lvl ? "🐾".repeat(b.lvl) : ""}</span>
         <span class="wins">${r.w ? "🏆".repeat(Math.min(r.w, 3)) : "&nbsp;"}</span></button>`;
     }).join("")}</div>`;
   $("bPick").querySelectorAll("[data-bot]").forEach(b => b.onclick = () => botStart(b.dataset.bot));

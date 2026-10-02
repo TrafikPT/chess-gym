@@ -402,19 +402,66 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
 .kstars.bump { animation: bump .6s ease; }
 @keyframes bump { 40% { transform: scale(1.35); } }
 #pzSound, #kSound { font-size: 22px; padding: 4px 10px; }
-.path { display: grid; gap: 10px; max-width: 520px; margin: 0 auto; position: relative; padding: 10px 0; }
-.path::before { content: ""; position: absolute; left: 50%; top: 30px; bottom: 30px; border-left: 4px dashed color-mix(in srgb, var(--accent) 40%, var(--line)); }
-.stop { display: flex; position: relative; } .stop.left { justify-content: flex-start; padding-left: 12%; } .stop.right { justify-content: flex-end; padding-right: 12%; }
-.stage { appearance: none; cursor: pointer; display: grid; justify-items: center; gap: 6px; width: 150px; padding: 12px 8px; border-radius: 22px;
-  background: var(--surface); border: 3px solid var(--line); box-shadow: var(--shadow); color: var(--ink); font-size: 56px; line-height: 1; }
-.stage .ic { display: inline-flex; align-items: center; gap: 2px; }
-.stage .pc.mini { width: .5em; height: .5em; display: inline-block; }
-.stage .dots { font-size: 13px; }
-.stage.cur { border-color: var(--accent); animation: glow2 1.6s ease-in-out infinite alternate; }
-.stage.done { border-color: #d9a520; background: color-mix(in srgb, #f5c542 14%, var(--surface)); }
-.stage.locked { cursor: default; opacity: .55; font-size: 40px; }
+/* the learning path as a game map (renderPath lays it out in pixels): worlds from the sea (bottom) to space (top) */
+#kPath { padding: 4px 0 12px; }
+.mapwrap { overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; border-radius: 26px; }
+.map { position: relative; margin: 0 auto; border-radius: 26px; overflow: hidden; box-shadow: var(--shadow); max-width: 100%; }
+.map .world { position: absolute; left: 0; right: 0; overflow: hidden; }
+.map .world::before { content: ""; position: absolute; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none; }
+.map .world.dim { filter: grayscale(.65) brightness(.95); }
+.w-sea { background: linear-gradient(to top, #1667b8, #4fb3ea 70%, #8fd6f5); }
+.w-sea::before { background: radial-gradient(ellipse 22px 7px at 50% 100%, rgba(255, 255, 255, .3) 60%, transparent 64%) 0 0 / 64px 34px; animation: waves 7s linear infinite; }
+.w-forest { background: linear-gradient(to top, #f1dd9c, #8fcf5c 18%, #3f9a3c 70%, #2c7a35); }
+.w-forest::before { background: radial-gradient(circle 26px at 30% 40%, rgba(0, 60, 0, .14), transparent 70%) 0 0 / 120px 90px, radial-gradient(circle 18px at 70% 70%, rgba(255, 255, 160, .14), transparent 70%) 0 0 / 90px 80px; }
+.w-snow { background: linear-gradient(to top, #cfe6f7, #f4f9ff 60%, #ffffff); }
+.w-snow::before { background: radial-gradient(circle 3px at 20% 30%, #fff, transparent 70%) 0 0 / 70px 70px, radial-gradient(circle 2px at 60% 70%, #b9d8f0, transparent 70%) 0 0 / 50px 60px; animation: snow 9s linear infinite; }
+.w-desert { background: linear-gradient(to top, #f6dc9a, #f0c06a 60%, #e8a24f); }
+.w-desert::before { background: radial-gradient(ellipse 120px 26px at 50% 100%, rgba(190, 120, 40, .22), transparent 70%) 0 0 / 240px 110px; }
+.w-lava { background: linear-gradient(to top, #5b1409, #3a0b08 55%, #24070a); }
+.w-lava::before { background: radial-gradient(circle at 18% 72%, rgba(255, 120, 0, .55), transparent 22%), radial-gradient(circle at 82% 30%, rgba(255, 70, 0, .5), transparent 20%), radial-gradient(circle at 60% 92%, rgba(255, 170, 0, .45), transparent 18%), radial-gradient(circle at 35% 15%, rgba(255, 90, 0, .35), transparent 16%); animation: lava 2.6s ease-in-out infinite alternate; }
+.w-castle { background: linear-gradient(to top, #ffd6ef, #e6dcff 50%, #b9dcff); }
+.w-castle::before { background: radial-gradient(ellipse 60px 22px at 30% 50%, rgba(255, 255, 255, .85), transparent 70%) 0 0 / 260px 150px, radial-gradient(ellipse 44px 16px at 75% 20%, rgba(255, 255, 255, .7), transparent 70%) 0 0 / 200px 120px; animation: clouds 30s linear infinite; }
+.w-space { background: linear-gradient(to top, #2c1b63, #120f3d 50%, #05071c); }
+.w-space::before { background: radial-gradient(circle 1.5px at 20px 30px, #fff, transparent 100%) 0 0 / 120px 110px, radial-gradient(circle 1px at 70px 80px, #fff, transparent 100%) 0 0 / 90px 100px, radial-gradient(circle 2px at 40px 60px, #ffe9a8, transparent 100%) 0 0 / 170px 150px; animation: twinkle 2.4s ease-in-out infinite alternate; }
+@keyframes waves { to { background-position: 64px 0; } }
+@keyframes snow { to { background-position: 0 70px, 0 60px; } }
+@keyframes lava { from { opacity: .55; } to { opacity: 1; } }
+@keyframes clouds { to { background-position: 260px 0, -200px 0; } }
+@keyframes twinkle { from { opacity: .5; } to { opacity: 1; } }
+.map .deco { position: absolute; transform: translate(-50%, -50%); line-height: 1; pointer-events: none; filter: drop-shadow(0 3px 2px rgba(0, 0, 0, .25)); }
+.map .wsign { position: absolute; left: 12px; bottom: 12px; width: 62px; height: 62px; border-radius: 50%; display: grid; place-items: center; font-size: 36px;
+  background: rgba(255, 255, 255, .8); box-shadow: 0 4px 0 rgba(0, 0, 0, .18); }
+.map .wsign.done { box-shadow: 0 0 0 4px #f0b400, 0 4px 0 rgba(0, 0, 0, .18); }
+.map .road { position: absolute; left: 0; top: 0; pointer-events: none; }
+.road path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.road .rdo { stroke: rgba(0, 0, 0, .22); stroke-width: 30; }
+.road .rd { stroke: #fbf3df; stroke-width: 24; }
+.road .rdl { stroke: rgba(150, 110, 50, .45); stroke-width: 4; stroke-dasharray: 1 13; }
+.road .rdp { stroke: #f5c542; stroke-width: 12; }
+.map .node { --d: 92px; position: absolute; width: var(--d); height: var(--d); margin: calc(var(--d) / -2) 0 0 calc(var(--d) / -2); padding: 0; border: 0; border-radius: 50%;
+  appearance: none; cursor: pointer; display: grid; place-items: center; font-size: 40px; line-height: 1; color: #222; z-index: 2;
+  background: radial-gradient(closest-side, #fff 80%, transparent 82%), conic-gradient(#f0b400 calc(var(--p) * 1%), rgba(0, 0, 0, .2) 0);
+  box-shadow: 0 6px 0 rgba(0, 0, 0, .28), 0 10px 16px rgba(0, 0, 0, .25); transition: transform .15s; }
+.map .node:active { transform: translateY(3px); }
+.map .node .ic { display: inline-flex; align-items: center; gap: 2px; }
+.map .node .pc.mini { width: .5em; height: .5em; display: inline-block; }
+.map .node .dots { position: absolute; top: calc(100% + 4px); left: 50%; transform: translateX(-50%); font-size: 11px; gap: 1px; padding: 2px 6px; border-radius: 10px; background: rgba(255, 255, 255, .92); box-shadow: 0 2px 4px rgba(0, 0, 0, .2); }
+.map .node.done { background: radial-gradient(closest-side, #fff4c8 80%, transparent 82%), conic-gradient(#f0b400 0 100%); }
+.map .node.locked { cursor: default; font-size: 30px; background: radial-gradient(closest-side, #dcdcdc 80%, transparent 82%), conic-gradient(rgba(0, 0, 0, .22) 0 100%); box-shadow: 0 4px 0 rgba(0, 0, 0, .2); }
+.map .node.boss { --d: 118px; font-size: 56px; background: radial-gradient(closest-side, #fff 76%, transparent 78%), conic-gradient(var(--ring) 0 100%); }
+.map .node.boss.done { background: radial-gradient(closest-side, #fff4c8 76%, transparent 78%), conic-gradient(#f0b400 0 100%); }
+.map .node.boss.locked .ic { filter: grayscale(1); opacity: .6; }
+.map .node.cur { animation: pulse 1.3s ease-in-out infinite; z-index: 3; }
+@keyframes pulse { 0%, 100% { box-shadow: 0 6px 0 rgba(0, 0, 0, .28), 0 0 0 0 rgba(255, 255, 255, .9); } 50% { box-shadow: 0 6px 0 rgba(0, 0, 0, .28), 0 0 0 14px rgba(255, 255, 255, 0); } }
+.map .me { position: absolute; width: 50px; height: 50px; margin: -25px 0 0 -25px; z-index: 4; pointer-events: none; filter: drop-shadow(0 5px 3px rgba(0, 0, 0, .4)); animation: hop .9s ease-in-out infinite alternate; }
+@keyframes hop { to { transform: translateY(-10px); } }
+.map .goalcup { position: absolute; transform: translate(-50%, -50%); font-size: 54px; line-height: 1; filter: grayscale(.8) drop-shadow(0 4px 3px rgba(0, 0, 0, .4)); opacity: .7; }
+.map .goalcup.won { filter: drop-shadow(0 0 12px #ffd54a); opacity: 1; }
+.wbig { font-size: 1.2em; }
 @keyframes glow2 { from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 40%, transparent); } to { box-shadow: 0 0 0 10px color-mix(in srgb, var(--accent) 0%, transparent); } }
 .dots { display: flex; gap: 2px; font-size: 15px; line-height: 1; } .dots i { font-style: normal; color: var(--line); } .dots i.on { color: #e0a800; }
+.dots i.lost { display: inline-block; color: #d62828; animation: starfall 1.4s ease-in forwards; }   /* a miss: the star falls off */
+@keyframes starfall { 30% { transform: translateY(-6px) scale(1.3); } 100% { transform: translateY(40px) rotate(160deg); opacity: 0; } }
 .stagebar { display: flex; align-items: center; gap: 14px; font-size: 44px; }
 .stagebar .dots { font-size: 26px; }
 .spieces, .slevels { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
@@ -465,7 +512,7 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
   #puzzleView.kid .kidpanel .kidgoal { font-size: 84px; }
   .youplay { width: 96px; height: 96px; } .youplay .pc { width: 72px; height: 72px; }
 }
-@media (prefers-reduced-motion: reduce) { .kidoverlay.show .burst, .stage.cur, .kstars.bump, #eUndo.nudge { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .kidoverlay.show .burst, .dots i.lost, .map .node.cur, .map .me, .map .world::before, .kstars.bump, #eUndo.nudge { animation: none; } }
 /* ---- kids-only site (html.kidsonly, the iPad): no page header, every screen fits without scrolling ----
    Only rules under .kidsonly live here, so the claude.ai page is unaffected. Sizes use dvh (the visible height). */
 .kidsonly body { padding-block: 10px 16px; }
@@ -483,17 +530,7 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
 .kidsonly #kPlay { --above: 230px; }
 .kidsonly #kVision { --above: 370px; }
 .kidsonly #kEnd { --above: 310px; }
-/* learning path: a snake of 5 columns (portrait) or 8 (landscape) instead of one tall column; renderPath puts each
-   stop's row and column in --r5/--c5 and --r8/--c8 */
-.kidsonly .path { max-width: none; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
-.kidsonly .stage { width: min(150px, 100%); font-size: 48px; padding: 10px 6px; }
-.kidsonly .path::before { display: none; }
-.kidsonly .stop.left, .kidsonly .stop.right { padding: 0; justify-content: center; }
-.kidsonly .stop { grid-row: var(--r5); grid-column: var(--c5); }
 @media (orientation: landscape) {
-  .kidsonly .path { grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 8px; }
-  .kidsonly .stage { font-size: 44px; padding: 8px 4px; } .kidsonly .stage .dots { font-size: 11px; gap: 1px; }
-  .kidsonly .stop { grid-row: var(--r8); grid-column: var(--c8); }
   .kidsonly #puzzleView.kid .trainer { grid-template-columns: min(calc(100dvh - 190px), 60%) minmax(0, 300px); gap: 56px; justify-content: center; }
   .kidsonly #puzzleView.kid .boardcol { max-width: none; }
   /* piece school and bot games: board on the left at full height, everything else beside it */
@@ -520,7 +557,9 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
 .botopts .opt[aria-pressed="false"] { opacity: .55; }
 .bots { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; max-width: 800px; margin: 0 auto; }
 .bot { appearance: none; cursor: pointer; display: grid; justify-items: center; gap: 4px; padding: 14px 8px; border-radius: 20px; border: 3px solid var(--line); background: var(--surface); box-shadow: var(--shadow); position: relative; color: var(--ink); }
-.bot .face { font-size: 72px; line-height: 1; }
+.bot .face { font-size: calc(48px + var(--lv, 3) * 6px); line-height: 1; width: 1.45em; height: 1.45em; display: grid; place-items: center; border-radius: 50%; border: 5px solid var(--ring); }   /* bigger and redder the stronger */
+.bot .paws { font-size: 15px; letter-spacing: -2px; min-height: 18px; padding: 2px 8px 2px 6px; border-radius: 10px; background: rgba(255, 255, 255, .88); }
+.bot .paws.none { background: none; }
 .bot .tag { position: absolute; right: 10px; top: 10px; width: 30px; height: 30px; }
 .bot .wins { font-size: 20px; min-height: 24px; }
 .bot.beaten { border-color: #d9a520; }
@@ -607,7 +646,6 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
 .goal.guard::before { content: "#"; position: absolute; left: -.18em; top: -.2em; font: 700 .42em/1 var(--mono); color: #fff; background: #d62828; border-radius: 50%; width: 1.15em; height: 1.15em; display: grid; place-items: center; }
 .gate { position: relative; display: inline-block; line-height: 1; }   /* a boss gate on the path: the bot's face with crossed swords */
 .gate::after { content: "⚔"; position: absolute; right: -.3em; top: -.25em; font-size: .42em; color: #b8961c; }
-.stage.gatest { border-style: double; border-width: 5px; }
 .goal.win { font-size: .8em; color: #b8961c; }
 .kidgoal { font-size: 110px; line-height: 1; display: grid; place-items: center; padding: 8px 0; }
 .kidgoal.small { font-size: 44px; justify-items: start; padding: 0 0 4px; }
