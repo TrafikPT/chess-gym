@@ -2261,7 +2261,6 @@ function kidAddStars(n) {
   if (Math.floor(pl.stars / 10) > Math.floor(had / 10)) celebrate(STICKERS[(Math.floor(pl.stars / 10) - 1) % STICKERS.length], "sticker");
   const el = $("kStarsTop"); el.innerHTML = `⭐ <b>${pl.stars}</b>`; el.classList.remove("bump"); void el.offsetWidth; el.classList.add("bump");
 }
-const KID_SQS = [...FILES].flatMap(f => [1, 2, 3, 4, 5, 6, 7, 8].map(r => f + r));
 function kidSq(lo = 1, hi = 8, files = FILES) { return files[Math.floor(Math.random() * files.length)] + (lo + Math.floor(Math.random() * (hi - lo + 1))); }
 function kidFen(pos, turn) {
   const rows = [];
@@ -2271,125 +2270,6 @@ function kidFen(pos, turn) {
     rows.push(s + (e || ""));
   }
   return `${rows.join("/")} ${turn} - - 0 1`;
-}
-
-/* ---- board vision (👀): rounds of 5 quick questions, a ⭐ for each one answered right ---- */
-const VIS_GAMES = [
-  { id: "go", label: "Where can it go?", icon: `<span class="pc wN"></span><i class="vdot"></i><i class="vdot"></i>` },
-  { id: "check", label: "Check or not?", icon: `<span class="goal check"><span class="pc bK"></span></span><b>?</b>` },
-  { id: "danger", label: "Which piece is in danger?", icon: `<span class="vdg"><span class="pc wB"></span></span><b>?</b>` },
-];
-const VIS_ROUND = 5;
-let vis = null;   // {game, k (question 0–4), res: [true/false per answered question], q: the question, busy}
-function visStart(game) { vis = { game, k: 0, res: [], q: null }; $("vDone").hidden = true; visAsk(); }
-function visAsk() {
-  vis.q = vis.game === "go" ? visGoQ(vis.k) : vis.game === "check" ? visCheckQ(vis.k) : visDangerQ(vis.k);
-  Object.assign(vis.q, { miss: 0, marks: {}, arrows: [] }); vis.busy = false;
-  $("vYes").className = $("vNo").className = "vbtn";
-  visDraw();
-}
-// where can it go: one white piece; from the 3rd question a white pawn in its way and a black pawn it may take
-function visGoQ(k) {
-  for (;;) {
-    const pc = "RBNKQ"[Math.floor(Math.random() * 5)], at = kidSq(), pos = { [at]: pc };
-    if (k >= 2) {
-      const on = shuffle(KID_SQS.filter(q => attacksSq(pos, at, q) && +q[1] > 1 && +q[1] < 8));   // on its path, so they matter
-      if (on[0]) pos[on[0]] = "P";
-      if (on[1] && pc !== "K") pos[on[1]] = "p";         // no black pawn next to a king (it would guard squares too)
-    }
-    const ans = KID_SQS.filter(q => attacksSq(pos, at, q) && !(pos[q] && colorOf(pos[q]) === "w"));
-    if (ans.length >= 2 && ans.length <= 14) return { pos, at, ans, found: [] };
-  }
-}
-// check or not: the black king and 1–3 white pieces (sometimes a black pawn in the way); half the time it's check,
-// and a "no" always has a white piece close by or on the king's line, so it isn't obvious
-function visCheckQ(k) {
-  const want = Math.random() < .5;
-  for (;;) {
-    const kq = kidSq(), pos = { [kq]: "k" }, n = 1 + Math.floor(Math.random() * (k >= 2 ? 3 : 2));
-    for (let i = 0; i < n; i++) { const t = "QRBNP"[Math.floor(Math.random() * 5)], q = t === "P" ? kidSq(2, 7) : kidSq(); if (!pos[q]) pos[q] = t; }
-    if (Math.random() < .3) { const q = kidSq(2, 7); if (!pos[q]) pos[q] = "p"; }
-    const checkers = attackersOf(pos, kq, "w");
-    if (!!checkers.length !== want) continue;
-    const near = Object.keys(pos).some(q => colorOf(pos[q]) === "w" && (attacksSq({ [q]: pos[q], [kq]: "k" }, q, kq) ||
-      Math.max(Math.abs(FILES.indexOf(q[0]) - FILES.indexOf(kq[0])), Math.abs(q[1] - kq[1])) <= 2));
-    if (want || near) return { pos, kq, checkers };
-  }
-}
-// which piece is in danger: 2–3 white pieces, 1–2 black ones, exactly one white piece can be taken for free
-// (the bots' 👁 rule: attacked and not guarded, or attacked by something cheaper); later questions add a guarded one
-function visInDanger(pos, sq) {
-  const att = attackersOf(pos, sq, "b");
-  return !!att.length && (!attackersOf(pos, sq, "w").length || att.some(a => VALUE[pos[a]] < VALUE[pos[sq].toLowerCase()]));
-}
-function visDangerQ(k) {
-  for (let tries = 0; ; tries++) {
-    const pos = {}, put = t => { const q = "Pp".includes(t) ? kidSq(2, 7) : kidSq(); if (!pos[q]) pos[q] = t; };
-    for (let i = 0; i < 2 + (k >= 2); i++) put("QRBNP"[Math.floor(Math.random() * 5)]);
-    for (let i = 0; i < 1 + (Math.random() < .5); i++) put("rbnp"[Math.floor(Math.random() * 4)]);
-    const mine = Object.keys(pos).filter(q => colorOf(pos[q]) === "w"), danger = mine.filter(q => visInDanger(pos, q));
-    const guarded = mine.some(q => !danger.includes(q) && attackersOf(pos, q, "b").length);
-    if (danger.length === 1 && (k < 3 || guarded || tries > 3000)) return { pos, ans: danger[0] };
-  }
-}
-function visDraw() {
-  const q = vis.q, marks = { ...q.marks };
-  let tgts = [];
-  if (vis.game === "go") {
-    q.found.forEach(s => { marks[s] = marks[s] || "vok"; });
-    if (q.miss >= 3 && !vis.busy) tgts = q.ans.filter(s => !q.found.includes(s));   // stuck: show the rest as dots
-  }
-  renderBoard(q.pos, { el: $("vboard"), o: "w", sel: vis.game === "go" ? q.at : null, tgts, marks, arrows: q.arrows });
-  $("vGames").innerHTML = VIS_GAMES.map(v => `<button type="button" data-vg="${v.id}" aria-pressed="${v.id === vis.game}" aria-label="${v.label}">${v.icon}</button>`).join("");
-  $("vGames").querySelectorAll("[data-vg]").forEach(b => b.onclick = () => visStart(b.dataset.vg));
-  $("vProg").innerHTML = `<span class="dots">${Array.from({ length: VIS_ROUND }, (_, i) =>
-    `<i class="${vis.res[i] ? "on" : vis.res[i] === false ? "x" : i === vis.k ? "now" : ""}">★</i>`).join("")}</span>`;
-  $("vAns").hidden = vis.game !== "check";
-}
-function visTap(sq) {
-  if (!vis || vis.busy || !sq) return;
-  const q = vis.q;
-  if (vis.game === "go") {
-    if (sq === q.at || q.found.includes(sq)) return;
-    if (!q.ans.includes(sq)) { q.miss++; return visShake(sq); }
-    q.found.push(sq); sfx("star");
-    return q.found.length === q.ans.length ? visDone(q.miss <= 1) : visDraw();
-  }
-  if (vis.game !== "danger" || !q.pos[sq] || colorOf(q.pos[sq]) !== "w") return;
-  if (sq !== q.ans) {
-    q.miss++;
-    q.arrows = attackersOf(q.pos, sq, "w").map(d => [d + sq, "green"]);   // a guarded piece: green arrows from its guards
-    if (q.miss < 2) return visShake(sq);
-  }
-  q.marks = { [q.ans]: "dg" }; q.arrows = attackersOf(q.pos, q.ans, "b").map(a => [a + q.ans, "red"]);   // the answer, and who takes it
-  visDone(!q.miss);
-}
-function visAnswer(yes) {   // check or not: then the king glows red with arrows from the checking pieces, or green when safe
-  if (!vis || vis.busy || vis.game !== "check") return;
-  const q = vis.q, check = q.checkers.length > 0, ok = yes === check;
-  q.marks = { [q.kq]: check ? "mk" : "esc" }; q.arrows = q.checkers.map(c => [c + q.kq, "red"]);
-  $(yes ? "vYes" : "vNo").className = "vbtn " + (ok ? "picked" : "shake");
-  visDone(ok, ok ? "right" : "wrong");
-}
-function visShake(sq) {   // a wrong tap: the square shakes a little, nothing else
-  const q = vis.q; q.marks[sq] = "vx"; visDraw();
-  setTimeout(() => { if (vis && vis.q === q && q.marks[sq] === "vx") { delete q.marks[sq]; visDraw(); } }, 600);
-}
-function visDone(ok, sound = ok ? "right" : "move") {
-  vis.busy = true; vis.res[vis.k] = ok; sfx(sound);
-  if (ok) kidAddStars(1);
-  visDraw();
-  const my = vis;
-  setTimeout(() => { if (vis !== my) return; vis.k++; if (vis.k < VIS_ROUND) visAsk(); else visEnd(); }, ok ? 1300 : 2400);
-}
-function visEnd() {
-  const n = vis.res.filter(Boolean).length;
-  $("vDone").innerHTML = `<div class="big">${n ? "⭐".repeat(n) : "🙂"}</div>
-    <div class="row"><button class="btn primary big" type="button" id="vAgain" aria-label="Play again">↻</button></div>`;
-  $("vDone").hidden = false;
-  if (n === VIS_ROUND) sfx("trophy");
-  $("vAgain").onclick = () => visStart(vis.game);
-  visDraw();
 }
 
 /* ---- first endgames on the path: mate the lone king with king + queen or king + rook; the black king runs away ---- */
@@ -2863,7 +2743,6 @@ document.addEventListener("keydown", ev => {
     if (kidTab === "school" && sc && sc.done) { ev.preventDefault(); schoolNext(); }
     else if (kidTab === "play" && bg && bg.rp) { ev.preventDefault(); rpStep(); }
     else if (kidTab === "play" && bg && bg.over) { ev.preventDefault(); botStart(bg.bot.id, bg.gate); }
-    else if (kidTab === "vision" && vis && !$("vDone").hidden) { ev.preventDefault(); visStart(vis.game); }
     else if (kidTab === "end" && eg && eg.over === "win") { ev.preventDefault(); egNext(); }
   } else if (ev.key === "ArrowLeft" && kidTab === "school" && sc) { ev.preventDefault(); $("sDone").hidden = true; schoolStart(sc.pc, sc.li); }
 });
@@ -2885,8 +2764,6 @@ function openKids(sub) {
       const sq = squareAt(ev, $("sboard"), "w");
       if (sq) schoolMove(sq);
     });
-    $("vboard").addEventListener("pointerdown", ev => visTap(squareAt(ev, $("vboard"), "w")));
-    $("vYes").onclick = () => visAnswer(true); $("vNo").onclick = () => visAnswer(false);
     $("eboard").addEventListener("pointerdown", ev => {     // tap your piece, then where it goes (as in the bot games)
       const sq = squareAt(ev, $("eboard"), "w");
       if (!eg || eg.over || eg.g.turn() !== "w" || !sq) return;
@@ -2900,13 +2777,12 @@ function openKids(sub) {
   }
   $("kPlayers").innerHTML = Object.entries(S.players).map(([id, p]) =>
     `<button type="button" data-pl="${id}" aria-pressed="${id === S.player}">${esc(p.name)}</button>`).join("");
-  $("kPlayers").querySelectorAll("[data-pl]").forEach(b => b.onclick = () => { S.player = b.dataset.pl; save(); sc = null; bg = null; vis = null; eg = null; openKids(); });
+  $("kPlayers").querySelectorAll("[data-pl]").forEach(b => b.onclick = () => { S.player = b.dataset.pl; save(); sc = null; bg = null; eg = null; openKids(); });
   $("kSound").textContent = soundOn() ? "🔊" : "🔇";
   $("kStarsTop").innerHTML = `⭐ <b>${pl.stars || 0}</b>`;
   document.querySelectorAll("[data-kt]").forEach(b => b.setAttribute("aria-pressed", b.dataset.kt === (kidTab === "end" ? "path" : kidTab)));
-  for (const [t, id] of [["path", "kPath"], ["school", "kSchool"], ["vision", "kVision"], ["play", "kPlay"], ["end", "kEnd"], ["stickers", "kStickers"], ["parents", "kParents"]]) $(id).hidden = t !== kidTab;
+  for (const [t, id] of [["path", "kPath"], ["school", "kSchool"], ["play", "kPlay"], ["end", "kEnd"], ["stickers", "kStickers"], ["parents", "kParents"]]) $(id).hidden = t !== kidTab;
   if (kidTab === "path") renderPath();
-  else if (kidTab === "vision") { if (!vis) visStart("go"); else visDraw(); }
   else if (kidTab === "end") { if (!eg || eg.st !== egSt) egStart(egSt); else egDraw(); }
   else if (kidTab === "play") openBots();
   else if (kidTab === "school") { if (!sc) schoolStart("R", firstOpenLevel("R")); else schoolDraw(); }

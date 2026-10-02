@@ -528,7 +528,6 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
 .kidsonly .sboardwrap { max-width: min(100%, calc(100dvh - var(--above, 220px))); }
 .kidsonly #kSchool { --above: 420px; }
 .kidsonly #kPlay { --above: 230px; }
-.kidsonly #kVision { --above: 370px; }
 .kidsonly #kEnd { --above: 310px; }
 @media (orientation: landscape) {
   .kidsonly #puzzleView.kid .trainer { grid-template-columns: min(calc(100dvh - 190px), 60%) minmax(0, 300px); gap: 56px; justify-content: center; }
@@ -541,11 +540,9 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
   .kidsonly #kSchool .sboardwrap, .kidsonly #bGame .sboardwrap { grid-area: board; max-width: none; margin: 0; }
   .kidsonly #bGame { display: grid; grid-template-columns: min(calc(100dvh - 150px), 70%) minmax(0, 1fr); grid-template-areas: "board head"; gap: 28px; align-items: start; }
   .kidsonly #bGame .bothead { grid-area: head; flex-direction: column; }
-  .kidsonly #kVision, .kidsonly #kEnd { display: grid; grid-template-columns: min(calc(100dvh - 150px), 62%) minmax(0, 340px); gap: 14px 48px; align-items: start; justify-content: center;
+  .kidsonly #kEnd { display: grid; grid-template-columns: min(calc(100dvh - 150px), 62%) minmax(0, 340px); gap: 14px 48px; align-items: start; justify-content: center;
     grid-template-rows: auto auto 1fr; }
-  .kidsonly #kVision .sboardwrap, .kidsonly #kEnd .sboardwrap { grid-row: 1 / 4; grid-column: 1; max-width: none; margin: 0; }
-  .kidsonly #kVision .vgames { flex-direction: column; align-items: center; }
-  .kidsonly #kVision .vgames button { width: 150px; justify-content: center; }
+  .kidsonly #kEnd .sboardwrap { grid-row: 1 / 4; grid-column: 1; max-width: none; margin: 0; }
   .kidsonly #kEnd .stagebar { flex-direction: column; }
 }
 /* bots */
@@ -572,25 +569,6 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
 .sq.dg::before { content: ""; position: absolute; inset: 0; box-shadow: inset 0 0 0 .5cqw rgba(214, 40, 40, .85); background: rgba(214, 40, 40, .18); animation: glow 1.1s ease-in-out infinite alternate; }
 .bover .burst { font-size: 110px; line-height: 1; }
 .bface .dots { font-size: 24px; }
-/* board vision (👀) */
-.vgames { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
-.vgames button { appearance: none; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; font-size: 40px; line-height: 1; padding: 8px 14px;
-  border-radius: 14px; border: 2px solid var(--line); background: var(--surface); color: var(--ink); }
-.vgames button[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
-.vgames .pc { width: 1em; height: 1em; display: inline-block; }
-.vgames b { font: 700 .6em var(--display); color: var(--muted); }
-.vdot { width: .28em; height: .28em; border-radius: 50%; background: #1f9d55; display: inline-block; }
-.vdg { display: inline-flex; border-radius: .15em; box-shadow: inset 0 0 0 .07em rgba(214, 40, 40, .85); background: rgba(214, 40, 40, .18); }
-.vprog { display: flex; justify-content: center; margin: 8px 0; } .vprog .dots { font-size: 30px; }
-.dots i.x { color: var(--muted); } .dots i.now { color: color-mix(in srgb, #e0a800 35%, var(--line)); }
-.vans { display: flex; gap: 24px; justify-content: center; margin-top: 12px; }
-.vbtn { appearance: none; cursor: pointer; font-size: 56px; line-height: 1; padding: 10px 30px; border-radius: 20px; border: 3px solid var(--line); background: var(--surface); box-shadow: var(--shadow); }
-.vbtn.picked { border-color: #1f9d55; background: color-mix(in srgb, #1f9d55 14%, var(--surface)); }
-.vbtn.shake, .sq.vx .pc, .sq.vx::after { animation: vshake .45s ease; }
-.sq.vx::before { content: ""; position: absolute; inset: 0; background: rgba(214, 40, 40, .22); }
-.sq.vok::after { content: ""; position: absolute; width: 34%; height: 34%; border-radius: 50%; background: #1f9d55; box-shadow: 0 0 0 .4cqw rgba(255, 255, 255, .7); animation: fadein .3s ease both; }
-@keyframes vshake { 20% { transform: translateX(-8%); } 40% { transform: translateX(7%); } 60% { transform: translateX(-5%); } 80% { transform: translateX(3%); } }
-@media (prefers-reduced-motion: reduce) { .vbtn.shake, .sq.vx .pc { animation: none; } }
 /* endgame stages: stage picture with your pieces stacked beside the mate goal; moves + take-back under the board */
 .egm { display: inline-grid; gap: 0; }
 .pc.mini { border: 0; }                         /* a piece, not the mini board of the openings */
@@ -689,7 +667,6 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
       <div class="kidtabs" role="group" aria-label="Kids' corner">
         <button type="button" data-kt="path" aria-label="Learning path">🗺<small>Path</small></button>
         <button type="button" data-kt="school" aria-label="Piece school"><span class="pc wN"></span><small>Pieces</small></button>
-        <button type="button" data-kt="vision" aria-label="Board eyes">👀<small>Eyes</small></button>
         <button type="button" data-kt="rated" aria-label="Puzzles for my rating">🧩<small>Puzzles</small></button>
         <button type="button" data-kt="play" aria-label="Play a bot">🤖<small>Play</small></button>
         <button type="button" data-kt="stickers" aria-label="Stickers">⭐<small>Stickers</small></button>
@@ -720,18 +697,6 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
           <div class="board" id="gboard" aria-label="Game board"><div class="squares"></div><svg class="arrows" viewBox="0 0 8 8" preserveAspectRatio="none"></svg></div>
           <div class="sdone bover" id="bOver" hidden></div>
         </div>
-      </div>
-    </section>
-    <section id="kVision" aria-label="Board eyes" hidden>
-      <div class="vgames" id="vGames" role="group" aria-label="Game"></div>
-      <div class="vprog" id="vProg"></div>
-      <div class="sboardwrap">
-        <div class="board" id="vboard" aria-label="Board eyes board"><div class="squares"></div><svg class="arrows" viewBox="0 0 8 8" preserveAspectRatio="none"></svg></div>
-        <div class="sdone" id="vDone" hidden></div>
-      </div>
-      <div class="vans" id="vAns" hidden>
-        <button type="button" class="vbtn" id="vYes" aria-label="Yes, check">👍</button>
-        <button type="button" class="vbtn" id="vNo" aria-label="No check">👎</button>
       </div>
     </section>
     <section id="kEnd" aria-label="Endgame" hidden>
