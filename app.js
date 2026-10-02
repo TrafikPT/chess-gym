@@ -95,7 +95,11 @@ function mergePlayer(a, b) {
     .filter(x => { const k = x.id + "@" + x.t; if (seen.has(k)) return false; seen.add(k); return true; }).slice(-HIST_MAX);
   out.done = maxMap(a.done, b.done);
   out.stages = maxMap(a.stages, b.stages);
-  for (const k of ["stars", "trophies"]) out[k] = Math.max(a[k] || 0, b[k] || 0);
+  out.stars = Math.max(a.stars || 0, b.stars || 0);
+  if (a.album || b.album) {    // sticker book (album.js): packs are drawn from their number, so the larger count of each is right
+    const x = a.album || {}, y = b.album || {};
+    out.album = { c: Math.max(x.c || 0, y.c || 0), b: Math.max(x.b || 0, y.b || 0), o: Math.max(x.o || 0, y.o || 0), s: maxMap(x.s, y.s) };
+  }
   out.school = {};
   for (const pc of new Set([...Object.keys(a.school || {}), ...Object.keys(b.school || {})])) {
     const x = (a.school || {})[pc] || [], y = (b.school || {})[pc] || [];
@@ -1299,7 +1303,7 @@ function pzRenderBar() {
   $("pzKid").checked = !!pl.kid;
   $("puzzleView").classList.toggle("kid", pzKid());
   $("pzSound").textContent = soundOn() ? "🔊" : "🔇";
-  $("pzStars").hidden = !pzKid(); $("pzStars").innerHTML = `⭐ <b>${pl.stars || 0}</b>`;
+  $("pzStars").hidden = !pzKid(); $("pzStars").innerHTML = `⭐ <b>${pl.stars || 0}</b>`; aBadge();
   renderStageBar();
   $("pzName").textContent = pl.name + (mode === "mine" ? ` · ${myPuzzles().length} puzzles from your own games (no rating change)` : mode === "fixed" ? ` · fixed level ${PZ_BANDS[pl.level][0]}–${PZ_BANDS[pl.level][1]}, not matched to the rating` : " · puzzles matched to this rating");
   $("pzRating").textContent = Math.round(pl.rating);
@@ -1606,6 +1610,7 @@ function pzFinish(win) {
     $("pzKidNext").onclick = pzNext;
   }
   if (win && !pzFailed) { pzBig(true); sfx("right"); stageStar(); }
+  if (albumTake() && kid) $("pzKidNext").insertAdjacentHTML("beforebegin", aPackChip());     // a pack was earned: shown quietly
   kidAfterPuzzle();
   pzDraw();
 }
@@ -1783,7 +1788,7 @@ function openPuzzles(stage) {
 }
 
 
-/* ================= kids' corner: sounds, rewards, learning path, piece school, stickers, parent view ================= */
+/* ================= kids' corner: sounds, rewards, learning path, piece school, parent view (the sticker book: album.js) ================= */
 
 /* ---- sounds (generated with WebAudio; they start after the first tap, as browsers require) ---- */
 let actx = null;
@@ -1806,34 +1811,21 @@ function sfx(kind) {
     else if (kind === "trophy") { [523, 659, 784, 1047].forEach((f, i) => tone(f, i * 0.13, 0.35, "triangle", 0.16)); tone(1047, 0.55, 0.6, "sine", 0.12); }
     else if (kind === "sticker") { [880, 1175, 1397, 1760].forEach((f, i) => tone(f, i * 0.07, 0.25, "sine", 0.1)); }
     else if (kind === "star") tone(1319, 0, 0.18, "sine", 0.08);
+    else if (kind === "tear") { [900, 640, 420].forEach((f, i) => tone(f, i * 0.05, 0.12, "sawtooth", 0.04)); }
+    else if (kind === "flip") tone(1200, 0, 0.06, "triangle", 0.06);
   } catch (e) {}
 }
 
-/* ---- rewards: stars, 5-in-a-row trophies, a sticker every 10 stars, a 10-puzzle session goal ---- */
-const STICKERS = ["🦁", "🐯", "🐼", "🦊", "🐸", "🐙", "🦄", "🐲", "🐬", "🦉", "🐢", "🦋", "🐝", "🦖", "🐧", "🦒", "🐘", "🦜", "🐳", "🦔",
-  "🚀", "🚂", "🏎️", "🚁", "⛵", "🎈", "🎸", "⚽", "🏀", "🎨", "🌈", "🌋", "🍕", "🍉", "🍦", "🧁", "👑", "💎", "🏰", "🌟"];
-let kidSession = 0;
+/* ---- rewards: a star per solved puzzle (the count at the top); stickers come in packs from the path (album.js) ---- */
 function kidReward(pl, win) {
-  if (!pl.kid) return;
-  pl.streak = win ? (pl.streak || 0) + 1 : 0;
-  kidSession++;
-  if (!win) return;
+  if (!pl.kid || !win) return;
   pl.stars = (pl.stars || 0) + 1;
-  const events = [];
-  if (pl.streak % 5 === 0) { pl.trophies = (pl.trophies || 0) + 1; events.push(["🏆", "trophy"]); }
-  if (pl.stars % 10 === 0) { const s = STICKERS[(pl.stars / 10 - 1) % STICKERS.length]; events.push([s, "sticker"]); }
-  kidEvents = events;
 }
-let kidEvents = [];
 function kidAfterPuzzle() {
   const pl = pzPlayers();
   if (!pl.kid) return;
   $("pzStars").innerHTML = `⭐ <b>${pl.stars || 0}</b>`;
   $("pzStars").classList.remove("bump"); void $("pzStars").offsetWidth; $("pzStars").classList.add("bump");
-  let delay = 1400;
-  for (const [icon, kind] of kidEvents) { setTimeout(() => celebrate(icon, kind), delay); delay += 2200; }
-  kidEvents = [];
-  if (kidSession >= 10) { kidSession = 0; setTimeout(() => sessionDone(pl), delay); }
 }
 // celebrations queue up (one at a time, each ~2 s or until tapped), so a medal never hides a trophy
 const celebrations = [];
@@ -1852,7 +1844,6 @@ function showCelebration() {
   el.onclick = showCelebration;
   celebrate.t = setTimeout(showCelebration, 2200);
 }
-function sessionDone(pl) { celebrate("🎉", "trophy", `<div class="big">⭐ ${pl.stars || 0}</div>`); }
 // finished the current stage? the next puzzle comes from the next unfinished stage (true: went to an endgame stage).
 // A stage picked on the map after it was already finished is a replay (pzReplay): it stays until the child leaves it
 function advanceStage() {
@@ -1995,6 +1986,7 @@ function gateWin(pl, botId, from = null) {
   if (i < 0 || from.gate !== botId || stageDone(pl, from) || !stageOpen(pl, i)) return null;
   pl.stages = pl.stages || {}; pl.stages[from.id] = needOf(from);
   setTimeout(() => celebrate("🏅", "trophy"), 1500);
+  albumBoss(pl, from.id);
   if (WORLDS[worldOf(i + 1)] && i + 1 < STAGES.length) setTimeout(() => celebrate(`<span class="wbig">${WORLDS[worldOf(i + 1)].icon}</span>`, "trophy"), 1600);
   return from;
 }
@@ -2040,7 +2032,7 @@ function stageStar() {
   if (!st || !(st.review || st.f(pzCur))) return;
   pl.stages = pl.stages || {};
   const had = stageStars(pl, st.id);
-  pl.stages[st.id] = had + 1; stageLost = null; save(); renderStageBar();
+  pl.stages[st.id] = had + 1; stageLost = null; albumSolve(pl); save(); renderStageBar();
   if (had + 1 === needOf(st) && pl.kid) setTimeout(() => celebrate("🏅", "trophy"), 1500);
 }
 // a miss on the path costs a star of that stage, while it isn't finished (a replay never takes a finished stage back);
@@ -2262,10 +2254,9 @@ function schoolMove(to) {
   schoolDraw();
 }
 
-/* ---- helpers for the mini-games: stars (a sticker every 10, as everywhere else), squares, a FEN from a position ---- */
+/* ---- helpers for the mini-games: stars, squares, a FEN from a position ---- */
 function kidAddStars(n) {
-  const pl = pzPlayers(), had = pl.stars || 0; pl.stars = had + n; save();
-  if (Math.floor(pl.stars / 10) > Math.floor(had / 10)) celebrate(STICKERS[(Math.floor(pl.stars / 10) - 1) % STICKERS.length], "sticker");
+  const pl = pzPlayers(); pl.stars = (pl.stars || 0) + n; save();
   const el = $("kStarsTop"); el.innerHTML = `⭐ <b>${pl.stars}</b>`; el.classList.remove("bump"); void el.offsetWidth; el.classList.add("bump");
 }
 function kidSq(lo = 1, hi = 8, files = FILES) { return files[Math.floor(Math.random() * files.length)] + (lo + Math.floor(Math.random() * (hi - lo + 1))); }
@@ -2378,10 +2369,10 @@ function egEnd() {
     const stars = par ? (eg.moves <= par[0] ? 3 : eg.moves <= par[1] ? 2 : 1) : eg.undos ? 2 : 3;   // pawn games: ⭐⭐⭐ without take-backs
     pl.stages = pl.stages || {};
     const had = stageStars(pl, eg.st.id); pl.stages[eg.st.id] = had + 1;
-    kidAddStars(stars); sfx("right");
+    albumSolve(pl); kidAddStars(stars); sfx("right");
     if (had + 1 === needOf(eg.st)) setTimeout(() => celebrate("🏅", "trophy"), 1200);
     $("eDone").innerHTML = `<div class="big">${"⭐".repeat(stars)}</div>
-      <div class="row"><button class="btn big" type="button" id="eAgain" aria-label="Play again">↻</button>
+      <div class="row">${albumTake() ? aPackChip() : ""}<button class="btn big" type="button" id="eAgain" aria-label="Play again">↻</button>
       <button class="btn primary big" type="button" id="eNext" aria-label="Next">▶</button></div>`;
     $("eDone").hidden = false;
     $("eAgain").onclick = () => egStart(eg.st);
@@ -2586,13 +2577,6 @@ function kpResult(g) {
   return null;
 }
 
-/* ---- stickers ---- */
-function renderStickers() {
-  const pl = pzPlayers(), have = Math.floor((pl.stars || 0) / 10);
-  $("kStickers").innerHTML = `<div class="kstat"><span>⭐ <b>${pl.stars || 0}</b></span><span>🏆 <b>${pl.trophies || 0}</b></span></div>
-    <div class="stickers">${STICKERS.map((s, i) => `<div class="stk${i < have ? " got" : ""}">${i < have ? s : "?"}</div>`).join("")}</div>`;
-}
-
 /* ---- parent view ---- */
 const THEME_GROUPS = [
   ["Take a free piece", t => /hangingPiece/.test(t)], ["Save the queen", t => /saveQueen/.test(t)], ["Save a piece", t => /savePiece/.test(t)], ["Give check", t => /giveCheck/.test(t)],
@@ -2650,13 +2634,14 @@ function renderParents() {
       <label class="tiny"><input type="checkbox" id="uSchool" ${pl.schoolAll ? "checked" : ""}> Open every piece-school level</label>
       <div class="controls"><button class="btn" type="button" id="uRestart">Start the path over</button></div>
     </figure>
+    ${albumParents(pl)}
     ${window.GYM_KIDS_ONLY ? `<figure class="chart wide"><figcaption>Back up progress</figcaption>
       <p class="tiny">Progress on this site is saved only in this browser. Add the page to the Home Screen so Safari keeps it, and save a backup file now and then (it goes to Files). Restoring merges: nothing already earned here is lost.</p>
       <div class="controls"><button class="btn" type="button" id="uBackup">Save a backup file</button>
         <label class="btn">Restore from a file<input type="file" id="uRestore" accept="application/json,.json" hidden></label></div>
       <p class="tiny" id="uMsg"></p></figure>` : ""}
     </div>
-    <p class="tiny">Stars, trophies and stickers are earned in pictures-only mode. Ratings update after every puzzle (not after hinted ones).</p>`;
+    <p class="tiny">Stars are earned in pictures-only mode, sticker packs on the learning path. Ratings update after every puzzle (not after hinted ones).</p>`;
   wireTips($("kParents"));
   $("kParents").querySelectorAll("[data-ul]").forEach(b => b.onclick = () => {
     const i = +b.dataset.ul;
@@ -2666,10 +2651,11 @@ function renderParents() {
     save(); renderParents();
   });
   $("uSchool").onchange = ev => { pl.schoolAll = ev.target.checked; save(); };
-  // back to stage 1, every other stage locked; rating, bot record, piece school and stickers stay.
+  albumParentsWire(pl);
+  // back to stage 1, every other stage locked; rating, bot record, piece school and the sticker book stay.
   // pathReset makes the restart win over older copies in mergePlayer
   $("uRestart").onclick = () => {
-    if (!confirm(`Start the learning path over for ${pl.name}? All path stars and beaten bosses are cleared and only stage 1 stays open. Puzzle rating, bot games, piece school and stickers are kept.`)) return;
+    if (!confirm(`Start the learning path over for ${pl.name}? All path stars and beaten bosses are cleared and only stage 1 stays open. Puzzle rating, bot games, piece school and the sticker book are kept.`)) return;
     pl.stages = {}; pl.gateFree = {}; pl.gatesSeen = Object.fromEntries(STAGES.map(st => [st.id, 1])); pl.pathV = 2;
     pl.pathReset = Date.now();
     save(); renderParents();
@@ -2802,8 +2788,9 @@ function openKids(sub) {
   else if (kidTab === "end") { if (!eg || eg.st !== egSt) egStart(egSt); else egDraw(); }
   else if (kidTab === "play") openBots();
   else if (kidTab === "school") { if (!sc) schoolStart("R", firstOpenLevel("R")); else schoolDraw(); }
-  else if (kidTab === "stickers") renderStickers();
+  else if (kidTab === "stickers") renderAlbum();
   else renderParents();
+  aBadge(); aRenderTray();
 }
 
 
@@ -3060,8 +3047,7 @@ function botAfterMove() {
   pl.bots = pl.bots || {}; const r = pl.bots[bg.bot.id] = pl.bots[bg.bot.id] || { w: 0, l: 0, d: 0 };
   r[res === "win" ? "w" : res === "loss" ? "l" : "d"]++;
   if (res === "win") {
-    const had = pl.stars || 0; pl.stars = had + 3; sfx("trophy");
-    if (Math.floor(pl.stars / 10) > Math.floor(had / 10)) celebrate(STICKERS[(Math.floor(pl.stars / 10) - 1) % STICKERS.length], "sticker");
+    pl.stars = (pl.stars || 0) + 3; sfx("trophy");
     const gate = gateWin(pl, bg.bot.id, bg.gate); if (gate) bg.gate = gate;      // a boss gate on the learning path is beaten
   } else if (res === "loss") sfx("wrong"); else sfx("right");
   save();
@@ -3232,6 +3218,628 @@ function openBots() {
     $("bQuit").onclick = () => { bg = null; renderBots(); };
   }
   if (bg) { $("bPick").hidden = true; $("bGame").hidden = false; botDraw(); } else renderBots();
+}
+
+
+/* ================= sticker book: anime-style athletes drawn in SVG, a pack of 3 for every 5 clean path solves ================= */
+
+/* ---- drawing: one chibi athlete (pose, kit, head) on a team backdrop; a sticker is a line of settings ----
+   Figure coordinates: viewBox 0 -16 100 136 (head around 50,25, feet at y 107); the card is 120 x 158. */
+const A_OL = "#2a1a10", A_OUT = `stroke="${A_OL}" stroke-width="1.1"`;
+let aUid = 0;                 // clipPath ids must be unique in the page: the same sticker can be in the book, the tray and the zoom
+const aPts = pts => pts.map(p => p.map(v => +v.toFixed(1)).join(",")).join(" ");
+function aL(pts, col, w, ol = true) {
+  const line = (c, ww) => `<polyline points="${aPts(pts)}" fill="none" stroke="${c}" stroke-width="${ww}" stroke-linecap="round" stroke-linejoin="round"/>`;
+  return (ol ? line(A_OL, w + 2.2) : "") + line(col, w);
+}
+function aC(x, y, r, f, extra = "") { return `<circle cx="${+x.toFixed(1)}" cy="${+y.toFixed(1)}" r="${r}" fill="${f}" ${extra}/>`; }
+function aStar(x, y, r, f) {
+  return `<polygon points="${aPts([...Array(10)].map((_, i) => { const rr = i % 2 ? r * .42 : r, a = -Math.PI / 2 + i * Math.PI / 5; return [x + rr * Math.cos(a), y + rr * Math.sin(a)]; }))}" fill="${f}"/>`;
+}
+function aFootball(x, y, r) {
+  const pent = [0, 1, 2, 3, 4].map(i => { const a = -Math.PI / 2 + i * 2 * Math.PI / 5; return [x + r * .42 * Math.cos(a), y + r * .42 * Math.sin(a)]; });
+  return aC(x, y, r, "#fff", `stroke="${A_OL}" stroke-width="1.4"`) + `<polygon points="${aPts(pent)}" fill="${A_OL}"/>` +
+    pent.map(([px, py]) => aL([[px, py], [x + (px - x) * 2.35, y + (py - y) * 2.35]], A_OL, 1.1, false)).join("");
+}
+function aBasketball(x, y, r) {
+  return aC(x, y, r, "#f57c00", `stroke="${A_OL}" stroke-width="1.3"`) + aL([[x - r, y], [x + r, y]], "#5d2c00", 1.1, false) + aL([[x, y - r], [x, y + r]], "#5d2c00", 1.1, false) +
+    `<path d="M${x - r * .7},${y - r * .7} Q${x - r * .2},${y} ${x - r * .7},${y + r * .7} M${x + r * .7},${y - r * .7} Q${x + r * .2},${y} ${x + r * .7},${y + r * .7}" fill="none" stroke="#5d2c00" stroke-width="1.1"/>`;
+}
+// anime eye: white, big iris, pupil, two highlights, a thick upper lash (and a flick for long lashes)
+function aEye(cx, cy, iris, s = 1, lash = 0) {
+  return `<ellipse cx="${cx}" cy="${cy}" rx="${4 * s}" ry="${4.9 * s}" fill="#fff"/>` +
+    `<ellipse cx="${cx}" cy="${cy + .7 * s}" rx="${3.2 * s}" ry="${4.1 * s}" fill="${iris}"/>` +
+    `<ellipse cx="${cx}" cy="${cy + 1.7 * s}" rx="${2.4 * s}" ry="${2.2 * s}" fill="#fff" opacity=".18"/>` +
+    `<ellipse cx="${cx}" cy="${cy + .9 * s}" rx="${1.6 * s}" ry="${2.3 * s}" fill="#111"/>` +
+    aC(cx - 1.2 * s, cy - 1.3 * s, 1.35 * s, "#fff") + aC(cx + 1.3 * s, cy + 2.2 * s, .6 * s, "#fff") +
+    `<path d="M${cx - 4.7 * s},${cy - 2.6 * s} Q${cx},${cy - 7 * s} ${cx + 4.7 * s},${cy - 2.9 * s}" fill="none" stroke="#1a1a1a" stroke-width="${1.9 * s}" stroke-linecap="round"/>` +
+    (lash ? `<path d="M${cx + (cx < 50 ? -4.6 : 4.6) * s},${cy - 2.7 * s} l${(cx < 50 ? -2 : 2) * s},${-1.6 * s}" stroke="#1a1a1a" stroke-width="${1.3 * s}" stroke-linecap="round"/>` : "");
+}
+const aBlush = (y = 34.5, c = "#ff6f6f") => `<path d="M37.5,${y} l1.4,-1.6 M39.5,${y + .3} l1.4,-1.6 M59.1,${y + .3} l1.4,-1.6 M61.1,${y} l1.4,-1.6" stroke="${c}" stroke-width="1" stroke-linecap="round"/>`;
+const aWhiskers = y => `<path d="M38,${y} l-8,-1.5 M38,${y + 2.5} l-8,1 M62,${y} l8,-1.5 M62,${y + 2.5} l8,1" stroke="#555" stroke-width=".8" stroke-linecap="round"/>`;
+function aMouth(m) {
+  if (m === "shout") return `<ellipse cx="50" cy="37" rx="3" ry="3.4" fill="#c0392b" ${A_OUT}/><ellipse cx="50" cy="38.8" rx="1.8" ry="1.1" fill="#ff8a80"/>`;
+  return `<path d="M46.8,36 Q50,39.6 53.2,36Z" fill="#c0392b" stroke="${A_OL}" stroke-width=".9" stroke-linejoin="round"/>`;
+}
+
+/* heads: a child with a hair style, or an animal (A_ANIMALS gives the animal's limb colour) */
+const A_FACE = "M33.5,22 Q33.5,40 50,42 Q66.5,40 66.5,22 Q66.5,8 50,8 Q33.5,8 33.5,22Z";
+function aKidHead(o) {
+  const h = o.hair, st = o.hs || "spiky", s = [];
+  if (st === "spiky") s.push(`<polygon points="50,26 ${aPts([...Array(15)].map((_, i) => { const a = (-205 + i * 230 / 14) * Math.PI / 180, r = i % 2 ? 25 : 17.5; return [50 + r * Math.cos(a), 23 + r * Math.sin(a)]; }))}" fill="${h}" ${A_OUT} stroke-linejoin="round"/>`);
+  if (st === "pony") s.push(`<ellipse cx="69" cy="22" rx="6" ry="13" fill="${h}" ${A_OUT} transform="rotate(-28 69 22)"/>`);
+  if (st === "curly") s.push(...[...Array(12)].map((_, i) => { const a = (-200 + i * 20) * Math.PI / 180; return aC(50 + 15.5 * Math.cos(a), 21 + 15.5 * Math.sin(a), 5.6, h, A_OUT); }));
+  if (st === "neat" || st === "pony" || st === "curly") s.push(aC(50, 21, 17.6, h, st === "curly" ? "" : A_OUT));
+  s.push(aC(33.4, 27, 3.2, o.skin, A_OUT), aC(66.6, 27, 3.2, o.skin, A_OUT), `<path d="${A_FACE}" fill="${o.skin}" ${A_OUT}/>`);
+  if (st === "spiky") s.push(`<polygon points="32.5,25 34,11 50,5 66,11 67.5,25 63.5,17 60.5,22.5 56.5,14.5 53,21.5 49,14 45,21.5 41,15 37,23" fill="${h}" ${A_OUT} stroke-linejoin="round"/>`);
+  else if (st === "neat" || st === "pony") s.push(`<path d="M33,25 Q32,6 50,5 Q68,6 67,25 Q63,15 55,13.5 Q48,19.5 39,17.5 Q35.5,20.5 33,25Z" fill="${h}" ${A_OUT} stroke-linejoin="round"/>`);
+  else if (st === "buzz") s.push(`<path d="M34,21 Q34,7 50,7 Q66,7 66,21 Q62,13 50,13 Q38,13 34,21Z" fill="${h}" ${A_OUT}/>`);
+  else if (st === "curly") s.push(...[37.5, 42.5, 47.5, 52.5, 57.5, 62.5].map((x, i) => aC(x, 12.5 + (i % 2) * 1.6, 3.9, h, A_OUT)));
+  if (st === "pony") s.push(aC(64, 12, 2.4, o.band || "#e91e63", A_OUT));
+  if (st !== "buzz") s.push(`<path d="M41,10 Q50,6.5 59,10" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity=".35"/>`);
+  s.push(aEye(43.3, 28.5, o.eyes, 1, o.lash), aEye(56.7, 28.5, o.eyes, 1, o.lash), aBlush(), aMouth(o.mouth));
+  return s.join("");
+}
+const A_ANIMALS = {
+  dragon: { skin: "#43a047", head: () => `<polygon points="39,14 32,0 46,10" fill="#ffd54f" ${A_OUT}/><polygon points="61,14 68,0 54,10" fill="#ffd54f" ${A_OUT}/>` +
+    `<polygon points="45,10 50,2 55,10" fill="#e53935" ${A_OUT}/>` + aC(50, 24, 17, "#43a047", A_OUT) +
+    `<ellipse cx="50" cy="34" rx="10.5" ry="6.5" fill="#a5d6a7" ${A_OUT}/>` + aC(46.5, 32.5, 1.1, "#1b5e20") + aC(53.5, 32.5, 1.1, "#1b5e20") +
+    aEye(43, 22.5, "#e65100", 1.05) + aEye(57, 22.5, "#e65100", 1.05) +
+    `<path d="M45,37 Q50,40.5 55,37" fill="none" stroke="#1b5e20" stroke-width="1.4" stroke-linecap="round"/><polygon points="47,37.6 48.6,37.9 47.8,39.6" fill="#fff"/>`,
+    back: () => `<path d="M42,70 Q20,78 16,62 Q14,56 20,54" fill="none" stroke="${A_OL}" stroke-width="9" stroke-linecap="round"/><path d="M42,70 Q20,78 16,62 Q14,56 20,54" fill="none" stroke="#43a047" stroke-width="7" stroke-linecap="round"/><polygon points="16,49 23,58 11,58" fill="#e53935" ${A_OUT}/>` +
+      `<path d="M40,46 L14,30 L20,42 L9,44 L22,52 L16,59 L38,57Z" fill="#2e7d32" ${A_OUT} stroke-linejoin="round"/><path d="M60,46 L86,30 L80,42 L91,44 L78,52 L84,59 L62,57Z" fill="#2e7d32" ${A_OUT} stroke-linejoin="round"/>` },
+  panda: { skin: "#222", head: () => aC(37, 11, 6, "#222") + aC(63, 11, 6, "#222") + aC(50, 25, 17, "#fff", A_OUT) +
+    `<ellipse cx="43" cy="26" rx="5.6" ry="6.8" fill="#222" transform="rotate(20 43 26)"/><ellipse cx="57" cy="26" rx="5.6" ry="6.8" fill="#222" transform="rotate(-20 57 26)"/>` +
+    aEye(43.3, 26.5, "#5d4037", .9) + aEye(56.7, 26.5, "#5d4037", .9) + `<ellipse cx="50" cy="33" rx="2.4" ry="1.7" fill="#222"/>` +
+    `<path d="M47,35.5 Q50,38.5 53,35.5" fill="none" stroke="#222" stroke-width="1.3" stroke-linecap="round"/>` + aBlush(35, "#ff8f8f") },
+  lion: { skin: "#f4c542", head: () => [...Array(12)].map((_, i) => { const a = i * Math.PI / 6; return aC(50 + 16 * Math.cos(a), 25 + 16 * Math.sin(a), 7, "#d35400", A_OUT); }).join("") +
+    aC(50, 25, 16, "#d35400") + aC(38, 12, 4.2, "#f4c542", A_OUT) + aC(62, 12, 4.2, "#f4c542", A_OUT) + aC(50, 26, 13.5, "#f4c542", A_OUT) +
+    aEye(44.3, 24.5, "#8d6e00", .85) + aEye(55.7, 24.5, "#8d6e00", .85) + `<polygon points="47.5,30 52.5,30 50,33" fill="#5d4037"/>` +
+    `<path d="M50,33 L50,34.5 M46.5,35 Q48.5,37 50,34.5 Q51.5,37 53.5,35" fill="none" stroke="#5d4037" stroke-width="1.3" stroke-linecap="round"/>`,
+    back: () => `<path d="M42,72 Q24,80 20,66" fill="none" stroke="${A_OL}" stroke-width="5.2" stroke-linecap="round"/><path d="M42,72 Q24,80 20,66" fill="none" stroke="#f4c542" stroke-width="3" stroke-linecap="round"/>` + aC(19.5, 63.5, 4, "#d35400", A_OUT) },
+  tiger: { skin: "#f39c12", head: () => aTigerHead("#f39c12", "stripes"), back: () => aTail("#f39c12", "#222") },
+  jaguar: { skin: "#e8b04a", head: () => aTigerHead("#e8b04a", "spots"), back: () => aTail("#e8b04a") },
+  cat: { skin: "#f0a04b", head: () => `<polygon points="34,19 35,3 47,11" fill="#f0a04b" ${A_OUT} stroke-linejoin="round"/><polygon points="37,15 37.5,7.5 43,11" fill="#f8bbd0"/>` +
+    `<polygon points="66,19 65,3 53,11" fill="#f0a04b" ${A_OUT} stroke-linejoin="round"/><polygon points="63,15 62.5,7.5 57,11" fill="#f8bbd0"/>` +
+    `<ellipse cx="50" cy="26" rx="17" ry="15.5" fill="#f0a04b" ${A_OUT}/>` + aL([[47, 11.5], [47.5, 16]], "#c96d1c", 1.8, false) + aL([[50, 11], [50, 16]], "#c96d1c", 1.8, false) + aL([[53, 11.5], [52.5, 16]], "#c96d1c", 1.8, false) +
+    `<ellipse cx="50" cy="33" rx="7" ry="5" fill="#fff3e0"/>` + aEye(43, 25, "#43a047", .9) + aEye(57, 25, "#43a047", .9) +
+    `<polygon points="48.3,30.5 51.7,30.5 50,32.3" fill="#ec407a"/><path d="M50,32.3 L50,33.5 M47.2,34 Q48.6,35.6 50,33.5 Q51.4,35.6 52.8,34" fill="none" stroke="#5d4037" stroke-width="1" stroke-linecap="round"/>` + aWhiskers(31),
+    back: () => aTail("#f0a04b", "#c96d1c") },
+  wolf: { skin: "#78909c", head: () => `<polygon points="34,17 34,-2 47,9" fill="#78909c" ${A_OUT} stroke-linejoin="round"/><polygon points="37,13 37,4 43,9" fill="#cfd8dc"/>` +
+    `<polygon points="66,17 66,-2 53,9" fill="#78909c" ${A_OUT} stroke-linejoin="round"/><polygon points="63,13 63,4 57,9" fill="#cfd8dc"/>` +
+    `<path d="M33,18 Q33,7 50,7 Q67,7 67,18 L71,27 L65,29 Q60,40 50,41 Q40,40 35,29 L29,27Z" fill="#78909c" ${A_OUT} stroke-linejoin="round"/>` +
+    `<ellipse cx="50" cy="33" rx="8.5" ry="7.5" fill="#eceff1" ${A_OUT}/><ellipse cx="50" cy="29.5" rx="2.8" ry="1.9" fill="#222"/>` +
+    `<path d="M50,31.5 L50,33.5 M46.8,35 Q48.5,36.8 50,33.5 Q51.5,36.8 53.2,35" fill="none" stroke="#37474f" stroke-width="1" stroke-linecap="round"/>` +
+    aEye(43, 21.5, "#ffb300", .85) + aEye(57, 21.5, "#ffb300", .85),
+    back: () => `<path d="M42,72 Q22,78 18,62" fill="none" stroke="${A_OL}" stroke-width="10" stroke-linecap="round"/><path d="M42,72 Q22,78 18,62" fill="none" stroke="#78909c" stroke-width="8" stroke-linecap="round"/>` + aC(18.5, 62, 3.6, "#eceff1") },
+  mouse: { skin: "#b0b0b0", head: () => aC(33, 12, 9, "#b0b0b0", A_OUT) + aC(33, 12, 5.5, "#f8bbd0") + aC(67, 12, 9, "#b0b0b0", A_OUT) + aC(67, 12, 5.5, "#f8bbd0") +
+    `<ellipse cx="50" cy="27" rx="15" ry="14" fill="#b0b0b0" ${A_OUT}/>` + aEye(44, 25.5, "#3e2723", .85) + aEye(56, 25.5, "#3e2723", .85) +
+    aC(50, 32, 2, "#ec407a", A_OUT) + `<rect x="48.4" y="35" width="3.2" height="2.6" rx=".6" fill="#fff" ${A_OUT}/>` + aWhiskers(32),
+    back: () => `<path d="M42,72 Q26,82 18,70 Q12,60 22,58" fill="none" stroke="#f48fb1" stroke-width="2" stroke-linecap="round"/>` },
+  trex: { skin: "#7cb342", head: () => `<ellipse cx="50" cy="24" rx="18.5" ry="15.5" fill="#7cb342" ${A_OUT}/>` + aC(44, 11, 2, "#558b2f") + aC(50, 9.5, 2.2, "#558b2f") + aC(56, 11, 2, "#558b2f") +
+    `<ellipse cx="50" cy="33" rx="13.5" ry="6.5" fill="#dcedc8" ${A_OUT}/>` + `<path d="M38,32 Q50,38 62,32" fill="none" stroke="${A_OL}" stroke-width="1.2"/>` +
+    [41, 45, 49, 53, 57].map(x => `<polygon points="${x},${32.6 + Math.abs(x - 50) * -.12 + 1.6} ${x + 2.4},${33 + 1.8 - Math.abs(x - 50) * .1} ${x + 1.2},${36.2 - Math.abs(x - 50) * .1}" fill="#fff"/>`).join("") +
+    aC(46, 28.5, .9, "#33691e") + aC(54, 28.5, .9, "#33691e") + aEye(42, 20, "#ff7043", .85) + aEye(58, 20, "#ff7043", .85),
+    back: () => `<path d="M42,74 Q22,84 10,74" fill="none" stroke="${A_OL}" stroke-width="10" stroke-linecap="round"/><path d="M42,74 Q22,84 10,74" fill="none" stroke="#7cb342" stroke-width="8" stroke-linecap="round"/>` },
+  chick: { skin: "#ffd54f", head: () => aC(50, 25, 16, "#ffd54f", A_OUT) +
+    `<path d="M34,18 Q34,4 50,3 Q66,4 66,18 L62,13.5 L58,18.5 L54,13.5 L50,18.5 L46,13.5 L42,18.5 L38,13.5Z" fill="#fffde7" ${A_OUT} stroke-linejoin="round"/>` +
+    aEye(43.5, 25, "#3e2723", .85) + aEye(56.5, 25, "#3e2723", .85) + `<polygon points="46,31 54,31 50,36" fill="#ff9800" ${A_OUT} stroke-linejoin="round"/>` + aBlush(33.5) },
+  canary: { skin: "#ffe000", head: () => `<path d="M47,10 Q46,2 50,1 Q49,6 52,9 Q55,3 58,4 Q54,7 54,11" fill="#ffe000" ${A_OUT}/>` + aC(50, 25, 16, "#ffe000", A_OUT) +
+    aEye(43.5, 24, "#1b5e20", .85) + aEye(56.5, 24, "#1b5e20", .85) + `<polygon points="46,30.5 54,30.5 50,35.5" fill="#ff9800" ${A_OUT} stroke-linejoin="round"/>` + aBlush(33) },
+  eagle: { skin: "#6d4c41", head: () => `<polygon points="35,30 27,34 34,24" fill="#fff" ${A_OUT}/><polygon points="65,30 73,34 66,24" fill="#fff" ${A_OUT}/>` + aC(50, 24, 16.5, "#fff", A_OUT) +
+    aEye(43, 23, "#ffb300", .8) + aEye(57, 23, "#ffb300", .8) +
+    `<path d="M38,17 L47,20 M62,17 L53,20" stroke="${A_OL}" stroke-width="2" stroke-linecap="round"/>` +
+    `<path d="M44,28.5 Q50,26 56,28.5 Q58.5,34 51.5,39 Q51.5,34.5 44,31Z" fill="#ffb300" ${A_OUT} stroke-linejoin="round"/>` },
+  bull: { skin: "#8d6e63", head: () => `<path d="M37,15 Q24,15 22,2 Q29,9 41,9.5Z" fill="#fff3e0" ${A_OUT} stroke-linejoin="round"/><path d="M63,15 Q76,15 78,2 Q71,9 59,9.5Z" fill="#fff3e0" ${A_OUT} stroke-linejoin="round"/>` +
+    `<ellipse cx="31" cy="21" rx="6" ry="3" fill="#8d6e63" ${A_OUT} transform="rotate(20 31 21)"/><ellipse cx="69" cy="21" rx="6" ry="3" fill="#8d6e63" ${A_OUT} transform="rotate(-20 69 21)"/>` +
+    `<ellipse cx="50" cy="24" rx="16" ry="16.5" fill="#8d6e63" ${A_OUT}/>` + aC(47, 10, 3.2, "#5d4037") + aC(52, 9.5, 3.4, "#5d4037") +
+    `<ellipse cx="50" cy="34" rx="10.5" ry="6.5" fill="#f8bbd0" ${A_OUT}/><ellipse cx="46.5" cy="34" rx="1.6" ry="2.3" fill="#5d4037"/><ellipse cx="53.5" cy="34" rx="1.6" ry="2.3" fill="#5d4037"/>` +
+    aEye(43, 22.5, "#3e2723", .85) + aEye(57, 22.5, "#3e2723", .85) + `<circle cx="50" cy="40.5" r="2.6" fill="none" stroke="#ffc107" stroke-width="1.4"/>` },
+  fox: { skin: "#ef6c00", head: () => `<polygon points="33,18 33,0 47,9" fill="#ef6c00" ${A_OUT} stroke-linejoin="round"/><polygon points="33,6 33,0 38,3.3" fill="#3e2723"/>` +
+    `<polygon points="67,18 67,0 53,9" fill="#ef6c00" ${A_OUT} stroke-linejoin="round"/><polygon points="67,6 67,0 62,3.3" fill="#3e2723"/>` +
+    `<path d="M32,20 Q33,7 50,7 Q67,7 68,20 Q69,31 50,41 Q31,31 32,20Z" fill="#ef6c00" ${A_OUT}/>` +
+    `<path d="M32.5,24 Q42,27 50,40.5 Q58,27 67.5,24 Q66,33 50,41 Q34,33 32.5,24Z" fill="#fff"/>` +
+    `<ellipse cx="50" cy="36.5" rx="2.4" ry="1.7" fill="#222"/>` + aEye(43, 22, "#6d4c41", .85) + aEye(57, 22, "#6d4c41", .85),
+    back: () => `<path d="M42,72 Q20,80 16,60" fill="none" stroke="${A_OL}" stroke-width="12.5" stroke-linecap="round"/><path d="M42,72 Q20,80 16,60" fill="none" stroke="#ef6c00" stroke-width="10.5" stroke-linecap="round"/>` + aC(16.5, 60, 5, "#fff") },
+  penguin: { skin: "#263238", head: () => aC(50, 25, 16.5, "#263238", A_OUT) +
+    `<path d="M50,15 Q43,8 38,15 Q33,23 38,32 Q44,40 50,40 Q56,40 62,32 Q67,23 62,15 Q57,8 50,15Z" fill="#fff"/>` +
+    aEye(44, 24, "#263238", .85) + aEye(56, 24, "#263238", .85) + `<polygon points="46,30.5 54,30.5 50,35.5" fill="#ff9800" ${A_OUT} stroke-linejoin="round"/>` + aBlush(33.5) },
+  bear: { skin: "#8d6e63", head: () => aBearHead("#8d6e63", "#d7ccc8") },
+  polar: { skin: "#eceff1", head: () => aBearHead("#f5f5f5", "#e0e0e0") },
+  rabbit: { skin: "#f5f5f5", head: () => `<ellipse cx="42" cy="2" rx="4.8" ry="13" fill="#f5f5f5" ${A_OUT} transform="rotate(-10 42 2)"/><ellipse cx="42" cy="3" rx="2.2" ry="9" fill="#f8bbd0" transform="rotate(-10 42 3)"/>` +
+    `<ellipse cx="58" cy="2" rx="4.8" ry="13" fill="#f5f5f5" ${A_OUT} transform="rotate(10 58 2)"/><ellipse cx="58" cy="3" rx="2.2" ry="9" fill="#f8bbd0" transform="rotate(10 58 3)"/>` +
+    aC(50, 26, 15.5, "#f5f5f5", A_OUT) + aEye(44, 25, "#6d4c41", .85) + aEye(56, 25, "#6d4c41", .85) +
+    `<polygon points="48.3,31 51.7,31 50,33" fill="#ec407a"/><rect x="48.4" y="34.4" width="3.2" height="3.2" rx=".6" fill="#fff" ${A_OUT}/>` + aBlush(33.5, "#ff8f8f") },
+  monkey: { skin: "#795548", head: () => aC(33, 25, 6, "#795548", A_OUT) + aC(33, 25, 3.5, "#ffcc80") + aC(67, 25, 6, "#795548", A_OUT) + aC(67, 25, 3.5, "#ffcc80") +
+    aC(50, 24, 16.5, "#795548", A_OUT) + `<path d="M50,17 Q44,11.5 39,17 Q35,22 38,29 Q41,39 50,40 Q59,39 62,29 Q65,22 61,17 Q56,11.5 50,17Z" fill="#ffcc80" ${A_OUT}/>` +
+    aEye(44.3, 24, "#3e2723", .8) + aEye(55.7, 24, "#3e2723", .8) + aC(48.5, 31, .8, "#5d4037") + aC(51.5, 31, .8, "#5d4037") +
+    `<path d="M45,34 Q50,38.5 55,34" fill="none" stroke="#5d4037" stroke-width="1.3" stroke-linecap="round"/>`,
+    back: () => `<path d="M42,72 Q24,82 16,70 Q10,58 20,58 Q26,60 22,66" fill="none" stroke="${A_OL}" stroke-width="5.2" stroke-linecap="round"/><path d="M42,72 Q24,82 16,70 Q10,58 20,58 Q26,60 22,66" fill="none" stroke="#795548" stroke-width="3" stroke-linecap="round"/>` },
+  rooster: { skin: "#263238", head: () => aC(44, 7, 4.5, "#e53935", A_OUT) + aC(50, 4.5, 5, "#e53935", A_OUT) + aC(56, 7, 4.5, "#e53935", A_OUT) +
+    aC(50, 24, 16, "#263238", A_OUT) + aC(42, 33, 1.6, "#ffeb3b") + aC(58, 33, 1.6, "#29b6f6") + aC(45, 13, 1.4, "#e53935") + aC(55, 13, 1.4, "#29b6f6") +
+    aEye(43.5, 22.5, "#3e2723", .85) + aEye(56.5, 22.5, "#3e2723", .85) +
+    `<ellipse cx="50" cy="37" rx="2.6" ry="4" fill="#e53935" ${A_OUT}/><polygon points="45.5,28.5 54.5,28.5 50,33.5" fill="#ffc107" ${A_OUT} stroke-linejoin="round"/>`,
+    back: () => `<path d="M40,70 Q18,66 18,48 Q26,58 40,62Z" fill="#263238" ${A_OUT}/><path d="M40,66 Q22,60 26,42 Q30,56 41,60Z" fill="#e53935" ${A_OUT}/>` },
+};
+function aTigerHead(col, marks) {
+  return aC(36, 11, 5.5, col, A_OUT) + aC(36, 11, 2.8, "#fff") + aC(64, 11, 5.5, col, A_OUT) + aC(64, 11, 2.8, "#fff") +
+    `<ellipse cx="50" cy="25" rx="17" ry="16" fill="${col}" ${A_OUT}/>` +
+    (marks === "stripes" ? aL([[46, 10], [47, 15]], "#222", 2, false) + aL([[50, 9], [50, 15]], "#222", 2, false) + aL([[54, 10], [53, 15]], "#222", 2, false) +
+      aL([[33.5, 22], [39, 23]], "#222", 1.8, false) + aL([[33.5, 27], [39, 27]], "#222", 1.8, false) + aL([[66.5, 22], [61, 23]], "#222", 1.8, false) + aL([[66.5, 27], [61, 27]], "#222", 1.8, false)
+      : [[45, 12], [52, 11], [37, 21], [63, 21], [36, 29], [64, 29]].map(([x, y]) => aC(x, y, 1.7, "none", `stroke="#5d4037" stroke-width="1.2"`)).join("")) +
+    `<ellipse cx="50" cy="33" rx="9" ry="6.5" fill="#fff" ${A_OUT}/>` + aEye(43, 23, "#7cb342", .9) + aEye(57, 23, "#7cb342", .9) +
+    `<polygon points="47.5,29.5 52.5,29.5 50,32" fill="#ec407a"/><path d="M50,32 L50,33.5 M46.5,34.5 Q48.5,36.5 50,33.5 Q51.5,36.5 53.5,34.5" fill="none" stroke="#5d4037" stroke-width="1.1" stroke-linecap="round"/>`;
+}
+function aBearHead(col, light) {
+  return aC(36, 11, 5.5, col, A_OUT) + aC(36, 11, 3, light) + aC(64, 11, 5.5, col, A_OUT) + aC(64, 11, 3, light) + aC(50, 25, 16.5, col, A_OUT) +
+    `<ellipse cx="50" cy="32" rx="7.5" ry="5.5" fill="${light}" ${A_OUT}/><ellipse cx="50" cy="29.8" rx="2.6" ry="1.8" fill="#222"/>` +
+    `<path d="M50,31.6 L50,33.4 M47,34.6 Q48.6,36.2 50,33.4 Q51.4,36.2 53,34.6" fill="none" stroke="#3e2723" stroke-width="1" stroke-linecap="round"/>` +
+    aEye(43, 23.5, "#3e2723", .8) + aEye(57, 23.5, "#3e2723", .8);
+}
+function aTail(col, stripe) {
+  const d = "M42,72 Q22,80 18,64 Q16,56 22,54";
+  return `<path d="${d}" fill="none" stroke="${A_OL}" stroke-width="6.2" stroke-linecap="round"/><path d="${d}" fill="none" stroke="${col}" stroke-width="4" stroke-linecap="round"/>` +
+    (stripe ? `<path d="${d}" fill="none" stroke="${stripe}" stroke-width="4" stroke-dasharray="2.5 5"/>` : "");
+}
+function aCrown() {
+  return `<polygon points="39,3 37,-10 44,-4 50,-14 56,-4 63,-10 61,3" fill="#ffc107" ${A_OUT} stroke-linejoin="round"/>` + aC(50, -2, 1.8, "#e53935") + aC(43.5, -.5, 1.3, "#29b6f6") + aC(56.5, -.5, 1.3, "#29b6f6");
+}
+function aCup() {
+  return `<path d="M44,-12 Q38,-12 39,-7 Q40,-4 44.5,-4.5 M56,-12 Q62,-12 61,-7 Q60,-4 55.5,-4.5" fill="none" stroke="${A_OL}" stroke-width="3.2"/>` +
+    `<path d="M44,-12 Q38,-12 39,-7 Q40,-4 44.5,-4.5 M56,-12 Q62,-12 61,-7 Q60,-4 55.5,-4.5" fill="none" stroke="#ffc107" stroke-width="1.6"/>` +
+    `<path d="M43,-14 H57 Q57,-3 50,-1.5 Q43,-3 43,-14Z" fill="#ffc107" ${A_OUT}/><rect x="48.5" y="-2" width="3" height="4" fill="#ffb300" ${A_OUT}/>` +
+    `<rect x="45" y="1.5" width="10" height="3" rx="1" fill="#ffb300" ${A_OUT}/><path d="M46,-12 Q46,-6 49,-4" fill="none" stroke="#fff" stroke-width="1" opacity=".7"/>`;
+}
+
+/* poses: back arm, front arm, back leg, front leg ([shoulder or hip, elbow or knee, hand or foot]), boots [x, y, turn],
+   the ball (f = football, b = basketball), dy = a jump (moves the whole figure up), over = arms drawn over the head */
+const A_POSES = {
+  kick: { ba: [[39, 49], [30, 58], [34, 66]], fa: [[61, 49], [70, 53], [75, 45]], bl: [[45, 78], [43, 91], [42, 103]], bb: [40, 107, 0],
+    fl: [[55, 78], [64, 87], [72, 95]], fb: [75, 98, 40], ball: ["f", 87, 103, 8.5] },
+  run: { ba: [[39, 49], [31, 57], [25, 52]], fa: [[61, 49], [69, 43], [75, 48]], bl: [[45, 78], [37, 87], [28, 91]], bb: [25, 92, -25],
+    fl: [[55, 78], [60, 91], [58, 103]], fb: [61, 107, 0], ball: ["f", 77, 104, 8] },
+  header: { dy: -8, ba: [[39, 49], [29, 44], [23, 36]], fa: [[61, 49], [71, 44], [77, 36]], bl: [[45, 78], [40, 90], [44, 101]], bb: [45, 105, 20],
+    fl: [[55, 78], [62, 88], [58, 99]], fb: [61, 102, 20], ball: ["f", 71, 3, 7.5] },
+  keeper: { ba: [[39, 49], [28, 40], [21, 29]], fa: [[61, 49], [72, 40], [79, 29]], bl: [[45, 78], [38, 90], [35, 103]], bb: [33, 107, 0],
+    fl: [[55, 78], [62, 90], [65, 103]], fb: [67, 107, 0], ball: ["f", 86, 6, 7], gloves: 1 },
+  cheer: { ba: [[39, 49], [31, 38], [27, 26]], fa: [[61, 49], [69, 38], [73, 26]], bl: [[45, 78], [43, 91], [41, 103]], bb: [39, 107, 0],
+    fl: [[55, 78], [57, 91], [59, 103]], fb: [61, 107, 0], ball: ["f", 81, 104, 8], mouth: "shout" },
+  lift: { dy: 4, ba: [[39, 49], [28, 30], [44, -6]], fa: [[61, 49], [72, 30], [56, -6]], bl: [[45, 78], [43, 91], [41, 103]], bb: [39, 107, 0],
+    fl: [[55, 78], [57, 91], [59, 103]], fb: [61, 107, 0], over: 1, cup: 1, mouth: "shout" },
+  dribble: { bball: 1, ba: [[39, 49], [30, 43], [27, 33]], fa: [[61, 49], [69, 60], [73, 71]], bl: [[44, 80], [42, 92], [40, 103]], bb: [38, 107, 0],
+    fl: [[56, 80], [58, 92], [60, 103]], fb: [62, 107, 0], ball: ["b", 76, 97, 9.5] },
+  shoot: { bball: 1, dy: -6, ba: [[39, 49], [30, 42], [26, 50]], fa: [[61, 49], [71, 34], [68, 18]], bl: [[44, 80], [40, 92], [44, 102]], bb: [44, 105, 15],
+    fl: [[56, 80], [60, 92], [56, 102]], fb: [58, 105, 15], ball: ["b", 70, 8, 9.5], over: 1 },
+};
+
+function aFigure(o) {
+  if (o.pose === "kit") return aKit(o);
+  const P = A_POSES[o.pose], an = o.head && A_ANIMALS[o.head], skin = an ? an.skin : o.skin, s = [], top = [];
+  const hand = ([x, y]) => P.gloves || o.gloves ? aC(x, y, 5.6, o.gloves || "#ffeb3b", A_OUT) + aL([[x - 2.4, y - 1.2], [x + 2.4, y - 1.2]], A_OL, .8, false) : aC(x, y, 4.4, skin, A_OUT);
+  const boot = ([x, y, rot]) => `<ellipse cx="${x}" cy="${y}" rx="7.5" ry="4.2" fill="${o.boots || (P.bball ? "#fff" : "#222")}" ${A_OUT} transform="rotate(${rot} ${x} ${y})"/>`;
+  const leg = (pts, b) => { const [, k, f] = pts, m = [k[0] + (f[0] - k[0]) * .45, k[1] + (f[1] - k[1]) * .45]; return aL(pts, skin, 9) + aL([m, f], o.socks, 9, false) + boot(b); };
+  const arm = pts => aL(pts, skin, 7.5) + (P.bball ? "" : aL([pts[0], [pts[0][0] + (pts[1][0] - pts[0][0]) * .5, pts[0][1] + (pts[1][1] - pts[0][1]) * .5]], o.shirt, 8.5, false)) + hand(pts[2]);
+  if (an && an.back) s.push(an.back());
+  (P.over ? top : s).push(arm(P.ba));
+  s.push(leg(P.bl, P.bb), leg(P.fl, P.fb));
+  s.push(P.bball ? `<path d="M36,65 h28 v19 q0,3 -3,3 h-7 l-4,-6 l-4,6 h-7 q-3,0 -3,-3z" fill="${o.shorts}" ${A_OUT}/>` + aL([[37.6, 68], [37.6, 85]], o.trim, 2, false) + aL([[62.4, 68], [62.4, 85]], o.trim, 2, false)
+    : `<path d="M37,66 h26 v12 q0,4 -4,4 h-5 l-4,-5 l-4,5 h-5 q-4,0 -4,-4z" fill="${o.shorts}" ${A_OUT}/>`);
+  const id = "aclip" + (++aUid), torso = `x="36" y="41" width="28" height="29" rx="9"`;
+  s.push(`<clipPath id="${id}"><rect ${torso}/></clipPath><rect ${torso} fill="${o.shirt}"/>`,
+    `<g clip-path="url(#${id})">${o.stripes ? [41, 50, 59].map(x => `<rect x="${x - 2.6}" y="41" width="5.2" height="29" fill="${o.stripes}"/>`).join("") : ""}<path d="M57,41 Q54,56 58,70 H66 V41Z" fill="#000" opacity=".16"/></g>`,
+    `<rect ${torso} fill="none" ${A_OUT}/>`);
+  s.push(P.bball ? `<path d="M43,41.5 Q50,49 57,41.5" fill="none" stroke="${o.trim}" stroke-width="2.6"/>` : `<path d="M45,41.5 L50,47 L55,41.5" fill="none" stroke="${o.trim}" stroke-width="2.6" stroke-linejoin="round"/>`);
+  if (o.star) s.push(aStar(42, 49, 3.6, o.trim));
+  if (o.num !== undefined) s.push(`<text x="50" y="64" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="13" fill="${o.trim}" stroke="${o.numStroke || "none"}" stroke-width=".7" paint-order="stroke">${o.num}</text>`);
+  (P.over ? top : s).push(arm(P.fa));
+  if (P.ball && !P.over) s.push(P.ball[0] === "f" ? aFootball(...P.ball.slice(1)) : aBasketball(...P.ball.slice(1)));
+  s.push(an ? an.head() : aKidHead({ ...o, mouth: o.mouth || P.mouth }));
+  if (o.crown) s.push(aCrown());
+  if (P.cup) s.push(aCup());
+  s.push(...top);
+  if (P.ball && P.over) s.push(P.ball[0] === "f" ? aFootball(...P.ball.slice(1)) : aBasketball(...P.ball.slice(1)));
+  if (o.pose === "keeper") s.push(`<path d="M76,14 l-7,5 M79,17 l-6,4.5" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity=".9"/>`);
+  return `<g transform="translate(0 ${P.dy || 0})">${s.join("")}</g>`;
+}
+// the team's kit on its own (the first sticker of a team page, like the shiny badge in a football album)
+function aKit(o) {
+  const id = "aclip" + (++aUid), shirt = "M28,18 L42,12 Q50,19 58,12 L72,18 L88,38 L76,47 L70,40 L70,92 L30,92 L30,40 L24,47 L12,38Z";
+  return `<clipPath id="${id}"><path d="${shirt}"/></clipPath><path d="${shirt}" fill="${o.shirt}"/>` +
+    `<g clip-path="url(#${id})">${o.stripes ? [36, 50, 64].map(x => `<rect x="${x - 4.5}" y="0" width="9" height="100" fill="${o.stripes}"/>`).join("") : ""}<path d="M60,12 Q56,50 62,92 H90 V0Z" fill="#000" opacity=".14"/>` +
+    `<path d="M88,38 L76,47" stroke="${o.trim}" stroke-width="5"/><path d="M12,38 L24,47" stroke="${o.trim}" stroke-width="5"/></g>` +
+    `<path d="${shirt}" fill="none" stroke="${A_OL}" stroke-width="1.6" stroke-linejoin="round"/>` +
+    `<path d="M42,12.5 L50,23 L58,12.5" fill="none" stroke="${o.trim}" stroke-width="3.4" stroke-linejoin="round"/>` +
+    (o.star ? aStar(39, 35, 5, o.trim) : "") + (A_CREST[o.bd] ? aCrest(o.bd, 62, 34, .17) : "") +
+    `<text x="50" y="76" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="32" fill="${o.trim}" stroke="${o.numStroke || "none"}" stroke-width="1.2" paint-order="stroke">${o.num}</text>` +
+    aFootball(80, 100, 10);
+}
+
+/* the two clubs' crests, simplified drawings in the spirit of the real ones (the owner asked for them like the flags):
+   Benfica = the eagle over a red shield with SLB on a wheel, the motto ribbon below; Vitória SC = a white shield with
+   the knight (Afonso Henriques: helmet, sword, round shield) under a crown, VSC below. Centre (60, 79) like the flags */
+const A_CREST = {}; A_CREST.slb = `
+  <circle r="31" fill="#fff"/><circle r="31" fill="none" stroke="#ffc107" stroke-width="2.4"/><circle r="25" fill="none" stroke="#ffc107" stroke-width="1.2"/>
+  ${[...Array(16)].map((_, i) => { const a = i * Math.PI / 8; return `<line x1="${(9 * Math.cos(a)).toFixed(1)}" y1="${(9 * Math.sin(a)).toFixed(1)}" x2="${(25 * Math.cos(a)).toFixed(1)}" y2="${(25 * Math.sin(a)).toFixed(1)}" stroke="#bdbdbd" stroke-width="1.2"/>`; }).join("")}
+  <path d="M-16,-17 H16 V3 Q16,18 0,25 Q-16,18 -16,3Z" fill="#E30613" stroke="#ffc107" stroke-width="2"/><path d="M-16,-3 H16" stroke="#fff" stroke-width="2"/>
+  <text y="13" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="10" fill="#fff">SLB</text>
+  <path d="M0,-30 C-10,-42 -26,-40 -38,-50 C-32,-38 -22,-30 -8,-25Z M0,-30 C10,-42 26,-40 38,-50 C32,-38 22,-30 8,-25Z" fill="#ffc107" stroke="#7a5200" stroke-width="1" stroke-linejoin="round"/>
+  <path d="M-6,-24 Q0,-17 6,-24 L4,-34 Q0,-37 -4,-34Z" fill="#ffc107" stroke="#7a5200" stroke-width="1"/><circle cy="-38" r="5" fill="#ffc107" stroke="#7a5200" stroke-width="1"/>
+  <path d="M3,-39 L8,-37 L3,-35.5Z" fill="#ff8f00"/><circle cx="1" cy="-39.5" r=".9" fill="#222"/>
+  <path d="M-34,30 Q0,42 34,30 L36,39 Q0,52 -36,39Z" fill="#fff" stroke="#E30613" stroke-width="1.5"/>`;
+A_CREST.vsc = `
+  <polygon points="-16,-40 -16,-50 -8,-44 0,-53 8,-44 16,-50 16,-40" fill="#ffc107" stroke="#7a5200" stroke-width="1" stroke-linejoin="round"/>
+  <path d="M-27,-37 H27 V5 Q27,29 0,40 Q-27,29 -27,5Z" fill="#fff" stroke="#111" stroke-width="3.5"/>
+  <path d="M-23,-33 H23 V5 Q23,26 0,36 Q-23,26 -23,5Z" fill="none" stroke="#ffc107" stroke-width="1.4"/>
+  <path d="M-8,-12 Q-8,-27 0,-28 Q8,-27 8,-12Z" fill="#111"/><rect x="-6" y="-21" width="12" height="2.2" fill="#fff"/><path d="M0,-28 Q6,-36 12,-31 Q6,-31 2,-26Z" fill="#111"/>
+  <path d="M-10,-10 H10 L12,14 H-12Z" fill="#111"/><path d="M-6,14 L-7,24 M6,14 L7,24" stroke="#111" stroke-width="4" stroke-linecap="round"/>
+  <path d="M15,-26 V12" stroke="#111" stroke-width="2.4"/><path d="M10,-17 H20" stroke="#111" stroke-width="2.4"/>
+  <circle cx="-14" cy="2" r="7" fill="#fff" stroke="#111" stroke-width="2.4"/><path d="M-14,-4 V8 M-20,2 H-8" stroke="#111" stroke-width="1.6"/>
+  <text y="34" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="7" fill="#111">VSC</text>`;
+// a crest (drawn around 0,0, about 76 x 105) at x, y, scaled
+const aCrest = (team, x, y, sc) => `<g transform="translate(${x} ${y}) scale(${sc})">${A_CREST[team]}</g>`;
+/* backdrops (120 x 158): flags, the clubs' colours with their crests, a pitch, a court, the bosses' night sky */
+const A_BACK = {
+  pt: `<rect width="120" height="158" fill="#DA291C"/><rect width="46" height="158" fill="#046A38"/>`,
+  cn: `<rect width="120" height="158" fill="#DE2910"/>${aStar(96, 22, 11, "#FFDE00")}${aStar(78, 10, 3.5, "#FFDE00")}${aStar(112, 42, 3.5, "#FFDE00")}`,
+  br: `<rect width="120" height="158" fill="#009C3B"/><polygon points="60,16 114,79 60,142 6,79" fill="#FFDF00"/><circle cx="60" cy="79" r="29" fill="#002776"/>`,
+  en: `<rect width="120" height="158" fill="#fff"/><rect x="49" width="22" height="158" fill="#CE1124"/><rect y="68" width="120" height="22" fill="#CE1124"/>`,
+  no: `<rect width="120" height="158" fill="#BA0C2F"/><rect x="30" width="26" height="158" fill="#fff"/><rect y="66" width="120" height="26" fill="#fff"/><rect x="36" width="14" height="158" fill="#00205B"/><rect y="72" width="120" height="14" fill="#00205B"/>`,
+  jp: `<rect width="120" height="158" fill="#fff"/><circle cx="60" cy="79" r="34" fill="#BC002D"/>`,
+  es: `<rect width="120" height="158" fill="#AA151B"/><rect y="40" width="120" height="78" fill="#F1BF00"/>`,
+  ar: `<rect width="120" height="158" fill="#74ACDF"/><rect y="53" width="120" height="52" fill="#fff"/><circle cx="60" cy="79" r="11" fill="#F6B40E"/>`,
+  slb: `<rect width="120" height="158" fill="#E30613"/><rect y="124" width="120" height="34" fill="#fff"/><g opacity=".9">${aCrest("slb", 60, 74, 1.5)}</g>`,
+  vsc: `<rect width="120" height="158" fill="#fff"/><rect width="60" height="158" fill="#111"/><g opacity=".9">${aCrest("vsc", 60, 76, 1.45)}</g>`,
+  pitch: `<rect width="120" height="158" fill="#43a047"/>${[0, 2, 4, 6].map(i => `<rect x="${i * 17}" width="17" height="158" fill="#4caf50"/>`).join("")}<rect x="0" y="122" width="120" height="2.5" fill="#fff" opacity=".8"/><circle cx="60" cy="123" r="24" fill="none" stroke="#fff" stroke-width="2.5" opacity=".8"/>`,
+  court: `<rect width="120" height="158" fill="#dfa565"/>${[...Array(12)].map((_, i) => `<rect y="${i * 14}" width="120" height="1" fill="#c98b4a"/>`).join("")}<circle cx="60" cy="178" r="62" fill="none" stroke="#fff" stroke-width="2.5" opacity=".8"/>`,
+  boss: `<rect width="120" height="158" fill="#2a1450"/><circle cx="60" cy="72" r="70" fill="#4a2380"/><circle cx="60" cy="72" r="42" fill="#6a35a8"/>${[[14, 18], [104, 26], [22, 130], [100, 120], [92, 70], [18, 76]].map(([x, y]) => aStar(x, y, 3.2, "#ffe082")).join("")}`,
+};
+// action lines behind the figure (anime "focus lines")
+const A_RAYS = `<g opacity=".28">${[...Array(36)].map((_, i) => { const a = i * Math.PI / 18, b = a + .035; return `<polygon points="60,72 ${(60 + 130 * Math.cos(a)).toFixed(1)},${(72 + 130 * Math.sin(a)).toFixed(1)} ${(60 + 130 * Math.cos(b)).toFixed(1)},${(72 + 130 * Math.sin(b)).toFixed(1)}" fill="#fff"/>`; }).join("")}</g>`;
+const A_MINI_ALIGN = { cn: "xMaxYMin" };     // where a flag's emblem is when it's cut to a small landscape box
+const A_CLUB_BG = { slb: "#E30613", vsc: "#fff" };
+// a small landscape flag (60 x 40): a slice of the backdrop, or a club's colour with its whole crest
+function aMiniInner(key) {
+  return A_CREST[key] ? `<rect width="60" height="40" fill="${A_CLUB_BG[key]}"/>${key === "vsc" ? `<rect width="30" height="40" fill="#111"/>` : ""}${aCrest(key, 30, 20.5, .36)}`
+    : `<svg width="60" height="40" viewBox="0 0 120 158" preserveAspectRatio="${A_MINI_ALIGN[key] || "xMidYMid"} slice">${A_BACK[key]}</svg>`;
+}
+function aMiniFlag(key, w = 36, h = 24) { return `<svg class="aflag" viewBox="0 0 60 40" width="${w}" height="${h}">${aMiniInner(key)}</svg>`; }
+// the whole sticker picture (backdrop + figure), or just the figure as a grey silhouette for an empty slot
+function stickerSvg(st, ghost = false) {
+  const fig = `<g transform="translate(2 18.6) scale(1.16)" ${ghost ? "" : `filter="url(#aWhiteEdge)"`}>${aFigure(st)}</g>`;
+  if (ghost) return `<svg class="aghost" viewBox="0 0 120 158" aria-hidden="true">${fig}</svg>`;
+  return `<svg viewBox="0 0 120 158" aria-hidden="true">${A_BACK[st.bd]}${A_RAYS}${st.mini ? `<svg x="6" y="134" width="27" height="18" viewBox="0 0 60 40">${aMiniInner(st.mini)}</svg><rect x="6" y="134" width="27" height="18" fill="none" stroke="#fff" stroke-width="1.5"/>` : ""}${A_CREST[st.bd] && st.pose !== "kit" ? `<circle cx="19" cy="139" r="15" fill="#fff" opacity=".92"/>${aCrest(st.bd, 19, 139.5, .26)}` : ""}${fig}</svg>`;
+}
+// the white cut-out edge around the figure: one filter for the whole page
+function aDefs() {
+  if (document.getElementById("aDefs")) return;
+  const d = document.createElement("div"); d.id = "aDefs"; d.style.cssText = "position:absolute;width:0;height:0;overflow:hidden";
+  d.innerHTML = `<svg width="0" height="0"><filter id="aWhiteEdge" x="-10%" y="-10%" width="120%" height="120%"><feMorphology in="SourceAlpha" operator="dilate" radius="1.3" result="d"/>
+    <feFlood flood-color="#fff"/><feComposite in2="d" operator="in" result="edge"/><feMerge><feMergeNode in="edge"/><feMergeNode in="SourceGraphic"/></feMerge></filter></svg>`;
+  document.body.appendChild(d);
+}
+
+/* ---- the catalogue: 10 football team pages (the kit + 8 players, one the team's mascot), 2 basketball pages,
+   2 animal pages, the bosses' page. Ids are stable (page id + slot): progress is stored by id, numbers can move ---- */
+const A_SKIN = ["#f8dcc4", "#f2c29b", "#e0ac7e", "#b67a4b", "#8a5530", "#f5d6b4"];
+const A_HAIR = { black: "#1b1b1b", dark: "#3b2314", brown: "#6b3e1f", blond: "#e3b84f", light: "#f3dc8c", red: "#b5501f" };
+const A_EYES = { brown: "#6b3e1f", dark: "#3b2a1a", blue: "#3a7bd5", green: "#4a9a5a" };
+const A_TEAMS = {
+  pt: { kit: { shirt: "#DA291C", trim: "#0B8A4A", numStroke: "#fff", shorts: "#046A38", socks: "#DA291C" }, gk: { shirt: "#fdd835", trim: "#111", shorts: "#111", socks: "#fdd835" }, mascot: "rooster",
+    looks: "1 dark brown|2 black dark|1 brown brown|1 dark green|3 black dark|0 brown brown|2 dark brown" },
+  slb: { kit: { shirt: "#E30613", trim: "#fff", shorts: "#fff", socks: "#E30613" }, gk: { shirt: "#212121", trim: "#ffc107", shorts: "#212121", socks: "#212121" }, mascot: "eagle",
+    looks: "2 dark brown|1 brown green|4 black dark|1 dark brown|0 blond blue|2 black brown|1 brown brown" },
+  vsc: { kit: { shirt: "#fff", trim: "#111", shorts: "#111", socks: "#fff" }, gk: { shirt: "#ff9800", trim: "#111", shorts: "#ff9800", socks: "#ff9800" }, mascot: "penguin",
+    looks: "1 brown brown|1 black dark|2 dark brown|0 brown green|3 black dark|1 dark brown|0 blond blue" },
+  cn: { kit: { shirt: "#DE2910", trim: "#FFDE00", shorts: "#DE2910", socks: "#DE2910", star: 1 }, gk: { shirt: "#00897b", trim: "#fff", shorts: "#00897b", socks: "#00897b" }, mascot: "panda",
+    looks: "5 black dark|5 black dark|5 dark dark|5 black dark|5 black brown|5 dark dark|5 black dark" },
+  br: { kit: { shirt: "#FFDC02", trim: "#009C3B", shorts: "#002776", socks: "#fff" }, gk: { shirt: "#263238", trim: "#FFDC02", shorts: "#263238", socks: "#263238" }, mascot: "canary",
+    looks: "3 black dark|2 dark brown|4 black dark|1 dark brown|3 black dark|2 brown brown|4 black dark" },
+  es: { kit: { shirt: "#C60B1E", trim: "#FFC400", shorts: "#1D2A5C", socks: "#1D2A5C" }, gk: { shirt: "#7cb342", trim: "#111", shorts: "#7cb342", socks: "#7cb342" }, mascot: "bull",
+    looks: "1 dark brown|2 black dark|1 brown green|1 dark brown|3 black dark|0 brown brown|1 dark brown" },
+  ar: { kit: { shirt: "#fff", stripes: "#74ACDF", trim: "#111", numStroke: "#fff", shorts: "#111", socks: "#fff" }, gk: { shirt: "#6a1b9a", trim: "#fff", shorts: "#6a1b9a", socks: "#6a1b9a" }, mascot: "jaguar",
+    looks: "1 brown brown|1 dark brown|2 black dark|1 dark brown|0 brown green|1 black dark|2 dark brown" },
+  en: { kit: { shirt: "#fff", trim: "#1D2A5C", shorts: "#1D2A5C", socks: "#fff" }, gk: { shirt: "#fbc02d", trim: "#1D2A5C", shorts: "#fbc02d", socks: "#fbc02d" }, mascot: "lion",
+    looks: "0 blond blue|1 brown brown|4 black dark|0 red green|3 black dark|0 blond blue|1 dark brown" },
+  no: { kit: { shirt: "#BA0C2F", trim: "#fff", shorts: "#fff", socks: "#00205B" }, gk: { shirt: "#212121", trim: "#fff", shorts: "#212121", socks: "#212121" }, mascot: "polar",
+    looks: "0 light blue|0 blond blue|1 brown green|0 light blue|2 black dark|0 blond blue|0 red green" },
+  jp: { kit: { shirt: "#1B3A8C", trim: "#fff", shorts: "#fff", socks: "#1B3A8C" }, gk: { shirt: "#ef6c00", trim: "#111", shorts: "#ef6c00", socks: "#ef6c00" }, mascot: "fox",
+    looks: "5 black dark|5 black dark|5 dark brown|5 black dark|5 black dark|5 brown brown|5 black dark" },
+};
+// a team page: the kit, then eight players (two of them women: ponytail, long lashes), the last the team's mascot
+const A_SLOTS = [
+  { pose: "kit", num: 10 },
+  { pose: "kick", num: 9, hs: "spiky" }, { pose: "keeper", num: 1, hs: "neat", gk: 1 }, { pose: "header", num: 4, hs: "buzz" },
+  { pose: "run", num: 8, hs: "pony", lash: 1 }, { pose: "cheer", num: 10, hs: "spiky" }, { pose: "kick", num: 11, hs: "pony", lash: 1 },
+  { pose: "lift", num: 5, hs: "curly" }, { pose: "cheer", num: 12, mascot: 1 },
+];
+function aLook(team, i) {
+  const [sk, h, e] = A_TEAMS[team].looks.split("|")[i].split(" ");
+  return { skin: A_SKIN[+sk], hair: A_HAIR[h], eyes: A_EYES[e] };
+}
+const A_PAGES = [
+  ...["pt", "slb", "vsc", "cn", "br", "es", "ar", "en", "no", "jp"].map(t => ({ id: t, team: t })),
+  { id: "bba", icon: "🏀" }, { id: "bbb", icon: "🏀" }, { id: "ana", icon: "🐾⚽" }, { id: "anb", icon: "🐾🏀" }, { id: "boss", icon: "👑" },
+];
+const A_KIT = (shirt, trim, extra = {}) => ({ shirt, trim, shorts: shirt, socks: "#fff", ...extra });
+const A_BB = [      // basketball: [team, pose, look slot, number]
+  ["pt", "dribble", 0, 7], ["cn", "shoot", 1, 11], ["br", "dribble", 2, 10], ["es", "shoot", 3, 5], ["ar", "dribble", 4, 6], ["slb", "shoot", 5, 14], ["jp", "dribble", 6, 8], ["en", "shoot", 0, 23], ["no", "dribble", 1, 13],
+  ["vsc", "shoot", 2, 9], ["cn", "dribble", 3, 15], ["pt", "shoot", 4, 4], ["es", "dribble", 0, 9], ["br", "shoot", 5, 12], ["jp", "shoot", 1, 3], ["slb", "dribble", 3, 21], ["ar", "shoot", 6, 7], ["vsc", "dribble", 4, 10],
+];
+const A_ANIMAL_STK = [   // [animal, pose, kit]
+  ["tiger", "kick", A_KIT("#1e88e5", "#fff")], ["cat", "cheer", A_KIT("#8e24aa", "#ffeb3b")], ["wolf", "header", A_KIT("#2e7d32", "#fff")],
+  ["mouse", "run", A_KIT("#ec407a", "#fff")], ["rabbit", "keeper", A_KIT("#ff7043", "#fff")], ["monkey", "kick", A_KIT("#00acc1", "#ffeb3b")],
+  ["bear", "lift", A_KIT("#c62828", "#ffc107")], ["fox", "run", A_KIT("#3949ab", "#fff")], ["dragon", "kick", A_KIT("#1e88e5", "#fff")],
+  ["panda", "dribble", A_KIT("#552583", "#fdb927")], ["lion", "shoot", A_KIT("#00897b", "#fff")], ["trex", "dribble", A_KIT("#ff7043", "#fff")],
+  ["penguin", "shoot", A_KIT("#fdd835", "#111")], ["eagle", "dribble", A_KIT("#1565c0", "#fff")], ["bull", "shoot", A_KIT("#c62828", "#fff")],
+  ["chick", "dribble", A_KIT("#43a047", "#fff")], ["rooster", "shoot", A_KIT("#fff", "#c62828")], ["jaguar", "dribble", A_KIT("#6a1b9a", "#fff")],
+];
+// the bosses of the learning path: a crown, the bot's ring colour on a black kit; only beating that boss gives it
+const A_BOSSES = [["gate1", "cat", "kick", 2], ["gate2", "wolf", "header", 3], ["gate4", "chick", "cheer", 0], ["gate3", "tiger", "keeper", 4], ["gate5", "trex", "lift", 5], ["gate6", "dragon", "kick", 6]];
+const STK = (() => {
+  const out = [], add = (pg, o) => out.push({ ...o, id: pg.id + (out.filter(s => s.page === pg).length + 1), page: pg, n: out.length + 1 });
+  for (const pg of A_PAGES) {
+    if (pg.team) A_SLOTS.forEach((sl, i) => {
+      const T = A_TEAMS[pg.team], kit = sl.gk ? { ...T.gk, gloves: "#fff" } : T.kit;
+      add(pg, { bd: pg.team, ...kit, ...sl, ...(sl.mascot ? { head: T.mascot } : i ? aLook(pg.team, i - 1) : {}), gk: undefined, mascot: undefined });
+    });
+    else if (pg.id === "bba" || pg.id === "bbb") A_BB.slice(pg.id === "bba" ? 0 : 9, pg.id === "bba" ? 9 : 18).forEach(([t, pose, lk, num]) => {
+      const k = A_TEAMS[t].kit;
+      add(pg, { bd: "court", mini: t, pose, num, hs: ["spiky", "neat", "buzz", "pony", "spiky", "pony", "curly"][lk], lash: lk === 3 || lk === 5 ? 1 : 0,
+        ...aLook(t, lk), shirt: k.shirt, stripes: k.stripes, trim: k.trim, numStroke: k.numStroke, shorts: k.shirt, socks: "#fff" });
+    });
+    else if (pg.id === "ana" || pg.id === "anb") A_ANIMAL_STK.slice(pg.id === "ana" ? 0 : 9, pg.id === "ana" ? 9 : 18).forEach(([head, pose, kit]) =>
+      add(pg, { bd: A_POSES[pose].bball ? "court" : "pitch", head, pose, num: out.length % 23 + 1, ...kit }));
+    else A_BOSSES.forEach(([gate, head, pose, lvl]) =>
+      add(pg, { bd: "boss", head, pose, boss: gate, crown: 1, num: 1, shirt: "#212121", trim: lvl ? BOT_RING[lvl - 1] : "#fff", shorts: "#212121", socks: "#212121" }));
+  }
+  return out;
+})();
+
+/* ---- progress: pl.album = { c: clean path solves, b: extra packs (the old stickers, a parent's gift), o: packs opened,
+   s: { sticker id: copies } }. A pack for every PACK_EVERY clean solves; packs are drawn from a seed (the pack's number),
+   so two devices that open the same pack get the same stickers and mergePlayer can take the larger of each count ---- */
+const PACK_EVERY = 5, PACK_SIZE = 3, OLD_PACKS_MAX = 10;
+function albumOf(pl) {
+  // first time: one pack per sticker of the old "a sticker every 10 stars" row, at most OLD_PACKS_MAX
+  if (!pl.album) pl.album = { c: 0, b: Math.min(OLD_PACKS_MAX, Math.floor((pl.stars || 0) / 10)), o: 0, s: {} };
+  return pl.album;
+}
+// a boss's sticker: owned once that gate is beaten (also for gates beaten before the sticker book existed)
+function stkOwned(pl, st) { const n = albumOf(pl).s[st.id] || 0; return st.boss ? (n || stageStars(pl, st.boss) >= 1 ? 1 : 0) : n; }
+function stkTier(st, copies) { return st.boss ? 3 : copies >= 5 ? 3 : copies >= 3 ? 2 : copies >= 2 ? 1 : 0; }
+function packsWaiting(pl) { const a = albumOf(pl); return Math.max(0, Math.floor(a.c / PACK_EVERY) + a.b - a.o); }
+// a clean solve on the learning path (stageStar, an endgame win): every PACK_EVERY of them is a pack.
+// No pop-up, no sound (the owner: packs must never pull the child away from playing): the counters go up, and a small
+// pack shows beside the ▶ of that puzzle or endgame (albumTake); the packs are opened in the 📖 tab
+let albumJust = false;
+function albumSolve(pl) {
+  const a = albumOf(pl);
+  a.c++;
+  if (a.c % PACK_EVERY === 0) albumJust = true;
+  aBadge();
+}
+function albumTake() { const j = albumJust; albumJust = false; return j; }
+function aPackChip() { return `<span class="apchip" aria-label="A new sticker pack">${aPackSvg()}</span>`; }
+function aRand(seed) {      // mulberry32
+  let t = seed >>> 0;
+  return () => { t = (t + 0x6D2B79F5) >>> 0; let r = Math.imul(t ^ (t >>> 15), 1 | t); r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) ^ r; return ((r ^ (r >>> 14)) >>> 0) / 4294967296; };
+}
+// open the next pack: PACK_SIZE different stickers, one of them new while any is missing (bosses only come from bosses)
+function packOpen(pl) {
+  if (packsWaiting(pl) <= 0) return null;
+  const a = albumOf(pl), R = aRand(a.o * 7919 + 104729);
+  a.o++;
+  const pool = STK.filter(st => !st.boss), missing = pool.filter(st => !a.s[st.id]), pick = [];
+  if (missing.length) pick.push(missing[Math.floor(R() * missing.length)]);
+  while (pick.length < PACK_SIZE) { const st = pool[Math.floor(R() * pool.length)]; if (!pick.includes(st)) pick.push(st); }
+  for (let i = pick.length - 1; i > 0; i--) { const j = Math.floor(R() * (i + 1)); [pick[i], pick[j]] = [pick[j], pick[i]]; }
+  const got = pick.map(st => { const was = a.s[st.id] || 0; a.s[st.id] = was + 1; return { st, was }; });
+  save(); aBadge();
+  return got;
+}
+// a boss gate beaten (kids.js gateWin): its sticker goes into the book (no pop-up: the medal is enough there)
+function albumBoss(pl, gateId) {
+  const st = STK.find(x => x.boss === gateId); if (!st) return;
+  albumOf(pl).s[st.id] = 1;
+}
+
+/* ---- pictures: a sticker card (tier frame, number), the pack, the back of a sticker ---- */
+function stickerCard(st, copies, cls = "") {
+  const t = stkTier(st, copies);
+  return `<div class="stk t${t}${cls ? " " + cls : ""}" data-st="${st.id}"><div class="sin">${stickerSvg(st)}<span class="sno">${st.n}</span>${t ? `<span class="spip">${"◆".repeat(t)}</span>` : ""}</div></div>`;
+}
+const A_PACK_TOP = `<polygon points="4,14 4,6 10,2 16,6 22,2 28,6 34,2 40,6 46,2 52,6 58,2 64,6 70,2 76,6 76,14" fill="#0d47a1" stroke="#ffc107" stroke-width="1.5"/>`;
+function aPackSvg(part = "all") {
+  const body = `<rect x="4" y="13" width="72" height="90" rx="3" fill="#1565c0" stroke="#ffc107" stroke-width="2"/>
+    <polygon points="4,40 76,22 76,34 4,52" fill="#fff" opacity=".18"/><polygon points="4,96 76,78 76,82 4,100" fill="#fff" opacity=".12"/>
+    ${aStar(16, 26, 5, "#ffc107")}${aStar(64, 92, 5, "#ffc107")}<circle cx="40" cy="58" r="21" fill="#ffc107"/><circle cx="40" cy="58" r="18" fill="#0d47a1"/>
+    <g transform="translate(40 58) scale(1.6) translate(-40 -58)">${aFootball(40, 58, 9)}</g>${aBasketball(60, 76, 7)}
+    <polygon points="4,103 76,103 76,108 70,112 64,108 58,112 52,108 46,112 40,108 34,112 28,108 22,112 16,108 10,112 4,108" fill="#0d47a1" stroke="#ffc107" stroke-width="1.5"/>`;
+  return `<svg class="apacksvg" viewBox="0 0 80 114" aria-hidden="true">${part !== "top" ? body : ""}${part !== "body" ? A_PACK_TOP : ""}</svg>`;
+}
+const A_CARD_BACK = `<svg viewBox="0 0 120 158" aria-hidden="true"><rect width="120" height="158" fill="#1565c0"/>${[...Array(24)].map((_, i) => aStar(10 + (i % 4) * 33 + (Math.floor(i / 4) % 2) * 16, 12 + Math.floor(i / 4) * 27, 3.5, "#42a5f5")).join("")}
+  <circle cx="60" cy="79" r="30" fill="#ffc107"/><circle cx="60" cy="79" r="26" fill="#0d47a1"/><g transform="translate(60 79) scale(2) translate(-60 -79)">${aFootball(60, 79, 9)}</g></svg>`;
+function aPageIcon(pg, w = 40, h = 27) { return pg.team ? aMiniFlag(pg.team, w, h) : `<span class="aemo">${pg.icon}</span>`; }
+
+/* ---- the book (kids' 📖 tab): one page at a time, ◀ ▶ or a swipe to turn, the pages' pictures below to jump;
+   packs waiting at the top. Opening one: tap the pack (it tears by itself after a moment), three stickers turn over,
+   then wait in a tray at the bottom; tapping one turns to its page and it flies into its slot ---- */
+let albumPage = 0, albumTray = [], albumHold = {}, albumTrayPl = null, albumPreview = null;
+// copies to show: a sticker still in the tray shows its slot as before (albumHold) until it lands
+function aCopies(pl, st) {
+  if (albumPreview) return albumPreview[st.id] || 0;
+  return st.id in albumHold ? albumHold[st.id] : stkOwned(pl, st);
+}
+// packs waiting: the red count on the 📖 tab, and a small pack + count at the top right (kids' bar, kid puzzles)
+function aBadge() {
+  if (!$("kAlbumBadge") || !S.players) return;
+  const n = packsWaiting(pzPlayers());
+  $("kAlbumBadge").hidden = !n; $("kAlbumBadge").textContent = n;
+  for (const [id, show] of [["kPacksTop", true], ["pzPacks", typeof pzKid === "function" && pzKid()]]) {
+    const el = $(id); if (!el) continue;
+    const had = +(el.dataset.n || 0);
+    el.hidden = !n || !show; el.dataset.n = n; el.innerHTML = `${aPackSvg()}<b>${n}</b>`;
+    if (n > had && had >= 0 && el.dataset.seen) { el.classList.remove("bump"); void el.offsetWidth; el.classList.add("bump"); }
+    el.dataset.seen = 1;
+  }
+}
+function renderAlbum() {
+  const pl = pzPlayers();
+  aDefs();
+  if (albumTrayPl !== S.player) { albumTray = []; albumHold = {}; albumTrayPl = S.player; }
+  $("kStickers").innerHTML = `${albumPreview ? `<div class="apreview"><span>Preview of the whole book with made-up copies: nothing is saved.</span>
+      <button class="btn" type="button" id="aPrevOff">Close the preview</button></div>` : ""}
+    <div class="atop" id="aTop"></div>
+    <div class="abook"><button class="btn big apg" type="button" id="aPrev" aria-label="Previous page">◀</button>
+      <div class="apage" id="aPage"></div>
+      <button class="btn big apg" type="button" id="aNext" aria-label="Next page">▶</button></div>
+    <div class="anav" id="aNav" role="group" aria-label="Pages"></div>`;
+  if (!$("aTray")) { const t = document.createElement("div"); t.className = "atray"; t.id = "aTray"; $("kidsView").appendChild(t); }
+  if (albumPreview) $("aPrevOff").onclick = () => { albumPreview = null; renderAlbum(); };
+  $("aPrev").onclick = () => aTurn(albumPage - 1);
+  $("aNext").onclick = () => aTurn(albumPage + 1);
+  let down = null;
+  $("aPage").onpointerdown = ev => { down = { x: ev.clientX, y: ev.clientY }; };
+  $("aPage").onpointerup = ev => {
+    if (!down) return;
+    const dx = ev.clientX - down.x, dy = ev.clientY - down.y; down = null;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) return aTurn(albumPage + (dx < 0 ? 1 : -1));
+    const slot = ev.target.closest(".aslot.got");
+    if (slot && Math.abs(dx) < 12 && Math.abs(dy) < 12) aZoom(STK.find(st => st.id === slot.dataset.st));
+  };
+  aRenderTop(); aRenderPage(); aRenderTray();
+  const bar = document.querySelector(".kidbar");      // the book is sized for the screen below the tabs: bring them to the top
+  if (bar && bar.getBoundingClientRect().top > 8 && !window.GYM_KIDS_ONLY) bar.scrollIntoView({ block: "start", behavior: aReduced() ? "auto" : "smooth" });
+}
+function aRenderTop() {
+  const pl = pzPlayers(), a = albumOf(pl), n = albumPreview ? 0 : packsWaiting(pl), have = STK.filter(st => aCopies(pl, st)).length;
+  $("aTop").innerHTML = `${albumPreview ? "" : `<button type="button" class="apack ${n ? "ready" : "wait"}" id="aPack" aria-label="${n ? "Open a sticker pack" : "Next pack"}">${aPackSvg()}${n ? `<b>${n}</b>` : ""}</button>
+      ${n ? "" : `<span class="adots" aria-label="Clean solves towards the next pack">${[...Array(PACK_EVERY)].map((_, i) => `<i class="${i < a.c % PACK_EVERY ? "on" : ""}"></i>`).join("")}</span>`}`}
+    <span class="atotal">📖 <span class="abar"><i style="width:${100 * have / STK.length}%"></i></span> <b>${have}</b><small>/${STK.length}</small></span>`;
+  if ($("aPack")) $("aPack").onclick = () => { if (packsWaiting(pzPlayers())) aOpenPack(); else { $("aPack").classList.remove("nope"); void $("aPack").offsetWidth; $("aPack").classList.add("nope"); } };
+}
+function aRenderPage() {
+  const pl = pzPlayers(), pg = A_PAGES[albumPage], sts = STK.filter(st => st.page === pg), have = sts.filter(st => aCopies(pl, st)).length;
+  $("aPage").className = "apage" + (have === sts.length ? " full" : "");
+  $("aPage").innerHTML = `<div class="ahead">${aPageIcon(pg, 48, 32)}<span class="abar"><i style="width:${100 * have / sts.length}%"></i></span><b>${have}</b><small>/${sts.length}</small></div>
+    <div class="agrid">${sts.map(st => { const c = aCopies(pl, st);
+      return `<div class="aslot${c ? " got" : ""}" data-st="${st.id}">${c ? stickerCard(st, c) : `${stickerSvg(st, true)}<span class="anum">${st.n}</span>`}</div>`; }).join("")}</div>`;
+  $("aPrev").disabled = albumPage === 0; $("aNext").disabled = albumPage === A_PAGES.length - 1;
+  $("aNav").innerHTML = A_PAGES.map((p, i) => {
+    const s = STK.filter(st => st.page === p), h = s.filter(st => aCopies(pl, st)).length;
+    return `<button type="button" data-pg="${i}" aria-pressed="${i === albumPage}" class="${h === s.length ? "full" : ""}" aria-label="Page ${i + 1}">${aPageIcon(p, 30, 20)}<i><b style="width:${100 * h / s.length}%"></b></i></button>`;
+  }).join("");
+  $("aNav").querySelectorAll("[data-pg]").forEach(b => b.onclick = () => aTurn(+b.dataset.pg));
+}
+function aRenderTray() {
+  const t = $("aTray"); if (!t) return;
+  t.hidden = !albumTray.length || window.SECTION !== "kids" || kidTab !== "stickers";
+  t.innerHTML = albumTray.map((g, i) => `<button type="button" class="aitem" data-i="${i}" style="--i:${i}" aria-label="Stick it in">${stickerCard(g.st, g.was + 1)}</button>`).join("");
+  t.querySelectorAll("[data-i]").forEach(b => b.onclick = () => aStick(albumTray[+b.dataset.i], b));
+}
+const aReduced = () => window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+function aTurn(i, then) {
+  if (i < 0 || i >= A_PAGES.length || aTurn.busy) return;
+  if (i === albumPage) return then && then();
+  const el = $("aPage"), dir = i > albumPage ? "l" : "r";
+  if (aReduced()) { albumPage = i; aRenderPage(); return then && then(); }
+  aTurn.busy = true; sfx("flip");
+  el.classList.add("out-" + dir);
+  setTimeout(() => {
+    albumPage = i; aRenderPage(); el.classList.add("in-" + dir);
+    setTimeout(() => { el.classList.remove("in-" + dir); aTurn.busy = false; if (then) then(); }, 230);
+  }, 200);
+}
+function aOpenPack() {
+  const ov = $("aOverlay");
+  if (albumPreview || !ov.hidden) return;
+  const got = packOpen(pzPlayers()); if (!got) return;
+  for (const g of got) if (!(g.st.id in albumHold)) albumHold[g.st.id] = g.was;
+  aRenderTop();
+  ov.innerHTML = `<div class="apackbig" id="aTear"><span class="ptop">${aPackSvg("top")}</span><span class="pbody">${aPackSvg("body")}</span></div><div class="areveal" id="aReveal"></div>`;
+  ov.hidden = false;
+  let torn = false, done = false;
+  const toTray = () => {
+    if (done) return; done = true; clearTimeout(toTray.t);
+    ov.hidden = true; ov.onclick = null; ov.innerHTML = "";
+    albumTray.push(...got); aRenderTray();
+  };
+  const tear = () => {
+    if (torn) return; torn = true; clearTimeout(tear.t); sfx("tear");
+    $("aTear").classList.add("torn");
+    setTimeout(() => {
+      $("aTear").hidden = true;
+      $("aReveal").innerHTML = got.map((g, i) => {
+        const up = stkTier(g.st, g.was + 1) > stkTier(g.st, g.was), mark = !g.was ? "✨" : up ? ["", "🥈", "🥇", "🌈"][stkTier(g.st, g.was + 1)] : "";
+        return `<div class="aflip" style="--i:${i}"><div class="aback">${A_CARD_BACK}</div><div class="afront">${stickerCard(g.st, g.was + 1)}${mark ? `<span class="amark">${mark}</span>` : ""}</div></div>`;
+      }).join("");
+      got.forEach((g, i) => setTimeout(() => sfx(g.was ? "flip" : "sticker"), 350 + i * 450));
+      const shown = 350 + got.length * 450 + 300;
+      setTimeout(() => { if (!done) ov.onclick = toTray; }, shown);
+      toTray.t = setTimeout(toTray, shown + 1800);
+    }, 500);
+  };
+  ov.onclick = tear;
+  tear.t = setTimeout(tear, 2500);
+}
+// a sticker from the tray flies into its slot (turning to its page first)
+function aStick(g, el) {
+  if (!g || g.fly) return;
+  g.fly = true;
+  const land = () => {
+    const slot = $("aPage").querySelector(`.aslot[data-st="${g.st.id}"]`), from = el.getBoundingClientRect(), to = slot.getBoundingClientRect();
+    const f = document.createElement("div");
+    f.className = "afly"; f.style.cssText = `left:${from.left}px;top:${from.top}px;--cw:${from.width}px`;
+    f.innerHTML = stickerCard(g.st, g.was + 1);
+    document.body.appendChild(f); el.style.visibility = "hidden";
+    void f.offsetWidth;
+    f.style.transform = `translate(${to.left - from.left}px, ${to.top - from.top}px) scale(${to.width / from.width})`;
+    setTimeout(() => {
+      f.remove();
+      albumTray.splice(albumTray.indexOf(g), 1);
+      const more = albumTray.filter(x => x.st === g.st);        // the same sticker from a later pack still waiting
+      if (more.length) albumHold[g.st.id] = Math.min(...more.map(x => x.was)); else delete albumHold[g.st.id];
+      aRenderPage(); aRenderTop(); aRenderTray(); sfx("sticker");
+      const c = $("aPage").querySelector(`.aslot[data-st="${g.st.id}"] .stk`); if (c) c.classList.add("land");
+    }, aReduced() ? 50 : 700);
+  };
+  const pi = A_PAGES.indexOf(g.st.page);
+  if (pi === albumPage) land(); else if (!aTurn.busy) aTurn(pi, land); else g.fly = false;
+}
+// a sticker in the book, big, with its ladder: plain, silver, gold, holo (the ones reached lit)
+function aZoom(st) {
+  const ov = $("aOverlay"), c = aCopies(pzPlayers(), st), t = stkTier(st, c);
+  ov.innerHTML = `<div class="azoom">${stickerCard(st, c)}<div class="aladder">${[0, 1, 2, 3].map(k => `<i class="l${k}${k <= t ? " on" : ""}"></i>`).join("")}<b>×${c}</b></div></div>`;
+  ov.hidden = false; sfx("flip");
+  ov.onclick = () => { ov.hidden = true; ov.onclick = null; ov.innerHTML = ""; };
+}
+
+/* ---- parents: the numbers, a pack as a gift, a preview of the whole book; test buttons on a copy opened from disk ---- */
+function albumParents(pl) {
+  const a = albumOf(pl), have = STK.filter(st => stkOwned(pl, st)).length, local = location.protocol === "file:";
+  return `<figure class="chart wide"><figcaption>Sticker book</figcaption>
+    <p class="tiny">A pack of ${PACK_SIZE} stickers for every ${PACK_EVERY} clean solves on the learning path (puzzles, endgames and the review stop, replays too), and each boss's own sticker when it's beaten.
+      Every pack holds at least one sticker missing from the book until it's full. Copies turn a sticker silver (2), gold (3), then holo (5).</p>
+    <div class="tiles"><div class="tile"><span class="lbl">Stickers</span><b>${have}/${STK.length}</b></div>
+      <div class="tile"><span class="lbl">Packs opened</span><b>${a.o}</b></div><div class="tile"><span class="lbl">Packs waiting</span><b>${packsWaiting(pl)}</b></div>
+      <div class="tile"><span class="lbl">Next pack in</span><b>${PACK_EVERY - a.c % PACK_EVERY} solves</b></div></div>
+    <div class="controls"><button class="btn" type="button" id="aGift">Give a pack</button><button class="btn" type="button" id="aPrevBtn">Preview the whole book</button>
+      ${local ? `<button class="btn" type="button" id="aTest10">Test: +10 packs</button><button class="btn" type="button" id="aTestEmpty">Test: empty the book</button>` : ""}</div>
+    ${local ? `<p class="tiny">The test buttons only show on a copy opened from disk, whose progress stays in this browser.</p>` : ""}</figure>`;
+}
+function albumParentsWire(pl) {
+  const back = () => { save(); aBadge(); renderParents(); };
+  $("aGift").onclick = () => { if (confirm(`Give ${pl.name} a sticker pack?`)) { albumOf(pl).b++; back(); } };
+  $("aPrevBtn").onclick = () => {
+    const R = aRand(7);
+    albumPreview = Object.fromEntries(STK.map(st => [st.id, st.boss ? 1 : [1, 1, 1, 2, 2, 3, 4, 5][Math.floor(R() * 8)]]));
+    kidTab = "stickers"; openKids();
+  };
+  if ($("aTest10")) $("aTest10").onclick = () => { albumOf(pl).b += 10; back(); };
+  if ($("aTestEmpty")) $("aTestEmpty").onclick = () => {
+    if (!confirm("Empty the sticker book in this browser?")) return;
+    pl.album = { c: 0, b: 0, o: 0, s: {} }; albumTray = []; albumHold = {}; back();
+  };
 }
 
 /* ================= coach: your own games vs the repertoire, timed answers, playing out the plan ================= */

@@ -482,10 +482,123 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
 .sgoal .pc { width: 44px; height: 44px; display: inline-block; }
 .sgoal .st { color: #f2b600; } .sgoal b { font: 700 28px var(--display); color: var(--muted); }
 .sgoal small { flex-basis: 100%; text-align: center; font: 14px var(--body); color: var(--muted); }
-.stickers { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 10px; }
-.stk { aspect-ratio: 1; display: grid; place-items: center; font-size: 48px; border-radius: 16px; border: 2px dashed var(--line); color: var(--line); background: var(--surface-2); }
-.stk.got { border: 2px solid #e0a800; background: var(--surface); color: var(--ink); }
-.kstat { display: flex; gap: 24px; font-size: 32px; font-family: var(--display); justify-content: center; }
+/* sticker book (album.js): a sticker is --cw wide; its picture is one 120 x 158 SVG */
+.kidtabs button { position: relative; }
+.kbadge { position: absolute; top: -7px; right: -7px; min-width: 24px; padding: 0 6px; border-radius: 12px; background: #e53935; color: #fff; font: 700 15px/24px var(--body); }
+.kbadge[hidden] { display: none; }
+#kStickers { --cw: clamp(76px, min(calc((100vw - 270px) / 3.9), calc((100dvh - 340px) / 4.15)), 176px); display: grid; gap: 12px; justify-items: center; }
+.stk { width: var(--cw); padding: calc(var(--cw) * .035); border-radius: calc(var(--cw) * .09); background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.28); position: relative; box-sizing: border-box; }
+.stk .sin { position: relative; height: calc(var(--cw) * .93 * 158 / 120); border-radius: calc(var(--cw) * .06); overflow: hidden; }
+.stk .sin > svg { display: block; width: 100%; height: 100%; }
+.stk .sno { position: absolute; z-index: 3; top: 3%; left: 4%; width: calc(var(--cw) * .2); height: calc(var(--cw) * .2); border-radius: 50%; background: #fff; color: #222;
+  font: 800 calc(var(--cw) * .1)/calc(var(--cw) * .2) Arial, sans-serif; text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,.35); }
+.stk .spip { position: absolute; z-index: 3; top: calc(var(--cw) * .24); left: 5%; font-size: calc(var(--cw) * .075); line-height: 1; color: #fff; text-shadow: 0 0 2px #000, 0 0 2px #000; }
+.stk.t1 { background: linear-gradient(135deg, #8d9399, #f4f6f8 30%, #9aa1a8 50%, #fff 70%, #7d848b); }
+.stk.t2 { background: linear-gradient(135deg, #a8761c, #ffe58a 30%, #c8962a 50%, #fff3b8 70%, #9b6a12); }
+@property --aa { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+.stk.t3 { background: conic-gradient(from var(--aa), #ff5e5e, #ffd84d, #5eff8a, #4dd2ff, #b06bff, #ff5e5e); animation: aspin 3s linear infinite; }
+@keyframes aspin { to { --aa: 360deg; } }
+.stk.t1 .sin::after, .stk.t2 .sin::after, .stk.t3 .sin::after { content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none;
+  background: linear-gradient(115deg, transparent 35%, rgba(255,255,255,.55) 50%, transparent 65%) 0 0 / 300% 100%; animation: ashine 2.8s ease-in-out infinite; }
+.stk.t3 .sin::before { content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none; mix-blend-mode: overlay; opacity: .4;
+  background: linear-gradient(120deg, #ff7a7a, #ffe27a, #7affb2, #7ad8ff, #c58aff, #ff7a7a) 0 0 / 300% 300%; animation: aholo 4s linear infinite; }
+@keyframes ashine { 0% { background-position: 100% 0; } 60%, 100% { background-position: -50% 0; } }
+@keyframes aholo { to { background-position: 300% 300%; } }
+.stk.land { animation: aland .6s ease; }
+@keyframes aland { 0% { transform: scale(1.3); box-shadow: 0 0 0 10px #ffe082, 0 0 30px 10px #ffd54f; } 100% { transform: scale(1); } }
+.apreview { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: center; padding: 8px 14px; border-radius: 12px; background: #fff3cd; color: #5d4500; }
+.atop { display: flex; align-items: center; justify-content: center; gap: 22px; flex-wrap: wrap; }
+.apack { appearance: none; border: 0; background: none; padding: 0; cursor: pointer; position: relative; width: 62px; }
+.apack svg { width: 100%; display: block; filter: drop-shadow(0 3px 4px rgba(0,0,0,.3)); }
+.apack.ready { animation: awiggle 1.8s ease-in-out infinite; }
+.apack.wait { filter: grayscale(1); opacity: .45; }
+.apack.nope { animation: anope .4s ease; }
+.apack b { position: absolute; top: -8px; right: -12px; min-width: 28px; padding: 0 6px; border-radius: 14px; background: #e53935; color: #fff; font: 700 18px/28px var(--body); }
+@keyframes awiggle { 0%, 70%, 100% { transform: rotate(0); } 75% { transform: rotate(-8deg) scale(1.06); } 85% { transform: rotate(8deg) scale(1.06); } 92% { transform: rotate(-4deg); } }
+@keyframes anope { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+.adots { display: flex; gap: 6px; } .adots i { width: 16px; height: 16px; border-radius: 50%; background: var(--line); }
+.adots i.on { background: #ffb300; box-shadow: 0 0 6px #ffca28; }
+.atotal { display: flex; align-items: center; gap: 8px; font: 700 26px var(--display); }
+.atotal small, .apage .ahead small { font-size: .6em; color: var(--muted); }
+.abar { display: inline-block; width: 160px; height: 16px; border-radius: 8px; background: #e8dfcc; overflow: hidden; }
+.abar i { display: block; height: 100%; background: linear-gradient(90deg, #ffb300, #ff7043); }
+.abook { display: flex; align-items: center; justify-content: center; gap: 12px; max-width: 100%; }
+.apg:disabled { visibility: hidden; }
+.apage { background: #fffaf0; color: #3a2f1a; border-radius: 10px 22px 22px 10px; padding: calc(var(--cw) * .1) calc(var(--cw) * .14) calc(var(--cw) * .14);
+  box-shadow: inset 16px 0 18px -14px rgba(0,0,0,.35), 0 6px 18px rgba(0,0,0,.22); transform-origin: left center; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+.apage.full { box-shadow: inset 16px 0 18px -14px rgba(0,0,0,.35), 0 0 0 4px #ffc107, 0 6px 18px rgba(0,0,0,.22); }
+.apage .ahead { display: flex; align-items: center; gap: 10px; margin-bottom: calc(var(--cw) * .1); font: 700 24px var(--display); }
+.apage .ahead .abar { flex: 1; width: auto; }
+.aflag { display: block; border-radius: 4px; box-shadow: 0 0 0 1px rgba(0,0,0,.2); }
+.aemo { font-size: 28px; line-height: 1; white-space: nowrap; }
+.agrid { display: grid; grid-template-columns: repeat(3, var(--cw)); gap: calc(var(--cw) * .1) calc(var(--cw) * .14); }
+.aslot { width: var(--cw); height: calc(var(--cw) * (.07 + .93 * 158 / 120)); border-radius: calc(var(--cw) * .09); position: relative; box-sizing: border-box; }
+.aslot:not(.got) { border: 2px dashed #cdbf9f; background: #f6efdf; display: grid; place-items: center; }
+.aslot.got { cursor: zoom-in; }
+.aslot .aghost { position: absolute; inset: 4%; width: 92%; height: 92%; filter: brightness(0); opacity: .09; }
+.aslot .anum { position: relative; font: 900 calc(var(--cw) * .3) Arial, sans-serif; color: #b9a983; }
+.apage.out-l { animation: aoutl .2s ease-in forwards; } .apage.out-r { animation: aoutr .2s ease-in forwards; }
+.apage.in-l { animation: ainl .23s ease-out; } .apage.in-r { animation: ainr .23s ease-out; }
+@keyframes aoutl { to { transform: perspective(1400px) rotateY(-70deg); opacity: .2; } }
+@keyframes aoutr { to { transform: perspective(1400px) translateX(30px) rotateY(25deg); opacity: .2; } }
+@keyframes ainl { from { transform: translateX(30px); opacity: .3; } }
+@keyframes ainr { from { transform: perspective(1400px) rotateY(-70deg); opacity: .3; } }
+.anav { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; max-width: 780px; }
+.anav button { appearance: none; cursor: pointer; display: grid; justify-items: center; gap: 3px; padding: 4px 6px; border-radius: 10px; border: 2px solid var(--line); background: var(--surface); }
+.anav button[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
+.anav button.full { border-color: #ffc107; }
+.anav button .aemo { font-size: 16px; }
+.anav button .aflag { width: 27px; height: 18px; }
+.anav button i { display: block; width: 30px; height: 5px; border-radius: 3px; background: #e8dfcc; overflow: hidden; }
+.anav button i b { display: block; height: 100%; background: #ffb300; }
+.aoverlay { position: fixed; inset: 0; z-index: 55; display: grid; place-items: center; background: rgba(20, 10, 45, .62); cursor: pointer; }
+.aoverlay[hidden] { display: none; }
+.apackbig { position: relative; width: min(46vw, 250px, 40dvh); animation: ashake 1.1s ease-in-out infinite; }
+.apackbig .pbody svg, .apackbig .ptop svg { display: block; width: 100%; filter: drop-shadow(0 8px 14px rgba(0,0,0,.45)); }
+.apackbig .ptop { position: absolute; inset: 0; transition: transform .45s ease-in, opacity .45s ease-in; }
+.apackbig .pbody { display: block; transition: transform .4s ease .08s, opacity .4s ease .08s; }
+.apackbig.torn { animation: none; }
+.apackbig.torn .ptop { transform: translate(45%, -70%) rotate(28deg); opacity: 0; }
+.apackbig.torn .pbody { transform: scale(1.18); opacity: 0; }
+@keyframes ashake { 0%, 100% { transform: rotate(0); } 20% { transform: rotate(-4deg); } 40% { transform: rotate(4deg); } 60% { transform: rotate(-2deg); } 80% { transform: rotate(2deg); } }
+.areveal { display: flex; gap: 3vw; align-items: center; --cw: min(27vw, 210px, calc((100dvh - 140px) / 1.33)); }
+.areveal:empty { display: none; }
+.aflip { position: relative; width: var(--cw); height: calc(var(--cw) * (.07 + .93 * 158 / 120)); animation: arise .35s calc(var(--i) * .45s) both; }
+.aflip .aback, .aflip .afront { position: absolute; inset: 0; -webkit-backface-visibility: hidden; backface-visibility: hidden; }
+.aflip .aback { border-radius: calc(var(--cw) * .09); overflow: hidden; border: calc(var(--cw) * .035) solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.3); animation: aflipb .5s calc(.35s + var(--i) * .45s) forwards; }
+.aflip .aback svg { display: block; width: 100%; height: 100%; }
+.aflip .afront { transform: rotateY(-180deg); animation: aflipf .5s calc(.35s + var(--i) * .45s) forwards; }
+.aflip .amark { position: absolute; top: -14px; right: -14px; font-size: calc(var(--cw) * .26); line-height: 1; animation: pop2 .9s calc(.75s + var(--i) * .45s) both; }
+@keyframes arise { from { transform: translateY(40vh) scale(.6); opacity: 0; } }
+@keyframes aflipb { to { transform: rotateY(180deg); } }
+@keyframes aflipf { to { transform: rotateY(0); } }
+.atray { position: fixed; z-index: 40; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; gap: 14px; padding: 12px 16px; border-radius: 20px;
+  background: rgba(255, 250, 240, .95); box-shadow: 0 6px 22px rgba(0,0,0,.3); --cw: clamp(70px, 11vw, 104px); }
+.atray[hidden] { display: none; }
+@media (min-aspect-ratio: 1/1) {     /* landscape: the tray waits at the left, beside the book, not over its bottom row */
+  .atray { left: 12px; top: 50%; bottom: auto; transform: translateY(-50%); flex-direction: column; --cw: clamp(64px, 8.5vw, 100px); }
+}
+.atray .aitem { appearance: none; border: 0; background: none; padding: 0; cursor: pointer; animation: abob 1.4s calc(var(--i) * .2s) ease-in-out infinite; }
+@keyframes abob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+.afly { position: fixed; z-index: 70; transform-origin: 0 0; transition: transform .65s cubic-bezier(.3, .75, .3, 1); pointer-events: none; }
+.azoom { display: grid; justify-items: center; gap: 14px; --cw: min(62vw, calc((100dvh - 150px) / 1.33), 330px); }
+.aladder { display: flex; align-items: center; gap: 12px; padding: 8px 16px; border-radius: 30px; background: rgba(255,255,255,.92); }
+.aladder i { width: 30px; height: 30px; border-radius: 50%; opacity: .22; box-shadow: inset 0 0 0 2px rgba(0,0,0,.25); }
+.aladder i.on { opacity: 1; }
+.aladder .l0 { background: #fff; } .aladder .l1 { background: linear-gradient(135deg, #8d9399, #f4f6f8, #7d848b); }
+.aladder .l2 { background: linear-gradient(135deg, #a8761c, #ffe58a, #9b6a12); } .aladder .l3 { background: conic-gradient(#ff5e5e, #ffd84d, #5eff8a, #4dd2ff, #b06bff, #ff5e5e); }
+.aladder b { font: 700 22px var(--display); color: #333; }
+.kpacks { display: inline-flex; align-items: center; gap: 4px; } .kpacks[hidden] { display: none; }
+.kpacks svg { height: 30px; width: auto; }
+.apchip { display: inline-flex; align-items: center; vertical-align: middle; animation: apop .5s .8s ease both; }
+.apchip svg { height: 46px; width: auto; filter: drop-shadow(0 2px 3px rgba(0,0,0,.3)); }
+@keyframes apop { from { transform: scale(.3); opacity: 0; } }
+#puzzleView.kid #pzCard { position: relative; }
+#pzCard .apchip { position: absolute; right: 18px; bottom: 18px; }      /* in a corner: the card keeps its size, nothing moves */
+@media (prefers-reduced-motion: reduce) {
+  .stk.t3, .stk .sin::after, .stk .sin::before, .stk.land, .apack.ready, .apchip, .apackbig, .atray .aitem, .apage[class*="out-"], .apage[class*="in-"] { animation: none !important; }
+  .aflip, .aflip .amark { animation: none; } .aflip .aback { display: none; } .aflip .afront { transform: none; animation: none; }
+}
 .kidoverlay { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0, 0, 0, .35); z-index: 50; }
 .kidoverlay .burst { font-size: min(40vw, 260px); line-height: 1; }
 .kidoverlay.show .burst { animation: pop2 1.2s ease both; }
@@ -519,7 +632,7 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
 .kidsonly, .kidsonly body { touch-action: pan-x pan-y; }          /* no pinch or double-tap zoom on the iPad */
 .kidsonly header, .kidsonly .topnav, .kidsonly #kPlayers { display: none !important; }   /* the child's profile only */
 .kidsonly .wrap { gap: 10px; }
-.kidsonly #puzzleView.kid .pzbar > :not(#pzSound):not(#pzStars) { display: none; }   /* no player/level settings for the child */
+.kidsonly #puzzleView.kid .pzbar > :not(#pzSound):not(#pzStars):not(#pzPacks) { display: none; }   /* no player/level settings for the child */
 .kidsonly #puzzleView.kid { position: relative; }
 .kidsonly #puzzleView.kid .pzbar { position: absolute; top: 0; right: 0; }                 /* sound + stars beside the stage bar */
 .kidsonly #puzzleView.kid .boardcol { max-width: min(100%, calc(100dvh - 420px)); }
@@ -666,6 +779,7 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
   <p class="note" id="loadErr" hidden></p>
   <p class="note" id="problem" role="alert" hidden></p>
   <div class="kidoverlay" id="kidOverlay" hidden></div>
+  <div class="aoverlay" id="aOverlay" hidden></div>
 
   <div id="kidsView" class="section" hidden>
     <div class="kidbar">
@@ -674,11 +788,12 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
         <button type="button" data-kt="school" aria-label="Piece school"><span class="pc wN"></span><small>Pieces</small></button>
         <button type="button" data-kt="rated" aria-label="Puzzles for my rating">🧩<small>Puzzles</small></button>
         <button type="button" data-kt="play" aria-label="Play a bot">🤖<small>Play</small></button>
-        <button type="button" data-kt="stickers" aria-label="Stickers">⭐<small>Stickers</small></button>
+        <button type="button" data-kt="stickers" aria-label="Sticker book">📖<small>Stickers</small><span class="kbadge" id="kAlbumBadge" hidden></span></button>
         <button type="button" data-kt="parents" aria-label="For parents">👪<small>Parents</small></button>
       </div>
       <div class="seg players" id="kPlayers" role="group" aria-label="Who's playing"></div>
       <span class="kstars" id="kStarsTop"></span>
+      <span class="kstars kpacks" id="kPacksTop" hidden></span>
       <button class="btn" type="button" id="kSound" aria-label="Sound on or off"></button>
     </div>
     <section id="kPath" aria-label="Learning path"></section>
@@ -735,6 +850,7 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
       <label><input type="checkbox" id="pzKid"> Pictures only (for players who can't read yet)</label>
       <button class="btn" type="button" id="pzSound" aria-label="Sound on or off"></button>
       <span class="kstars" id="pzStars" hidden></span>
+      <span class="kstars kpacks" id="pzPacks" hidden></span>
     </div>
     <form class="pzform" id="pzRenameForm" hidden>
       <label for="pzRenameName">New name</label><input type="text" id="pzRenameName" autocomplete="off">
