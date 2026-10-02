@@ -3175,21 +3175,26 @@ function rpStep() {   // ▶: the next moment; after the last one, back to the g
   if (++bg.rp.k < bg.rp.list.length) return rpDraw();
   bg.rp = null; clearTimeout(rpDraw.t); botOverShow(); botDraw();
 }
+// a bot's card: its face in a ring of its strength's colour, paw prints for the level, its 🏆 wins. Pawn Wars bots sit
+// apart, below a row of pawns, with a white-and-black pawn badge instead of paws: a different game, not the ladder
+function botCard(b) {
+  const r = (pzPlayers().bots || {})[b.id] || { w: 0, l: 0, d: 0 };
+  return `<button type="button" class="bot${r.w ? " beaten" : ""}${b.pawns ? " pw" : ""}" data-bot="${b.id}" aria-label="${b.name}" style="--ring:${b.lvl ? BOT_RING[b.lvl - 1] : "var(--line)"};--lv:${b.lvl || 3}">
+    <span class="face">${b.face}</span>
+    ${b.lvl ? `<span class="paws" aria-hidden="true">${"🐾".repeat(b.lvl)}</span>` : `<span class="pawnbadge" aria-hidden="true"><span class="pc wP"></span><span class="pc bP"></span></span>`}
+    <span class="wins">${r.w ? "🏆".repeat(Math.min(r.w, 3)) : "&nbsp;"}</span></button>`;
+}
 function renderBots() {
-  const pl = pzPlayers(), rec = pl.bots || {};
+  const pl = pzPlayers();
   $("bPick").hidden = false; $("bGame").hidden = true;
   $("bPick").innerHTML = `<div class="botopts">
       <button type="button" class="opt" id="bColor" aria-label="Play as ${pl.botColor === "b" ? "Black" : "White"}"><span class="pc ${pl.botColor === "b" ? "b" : "w"}K"></span></button>
       <button type="button" class="opt" id="bDanger" aria-pressed="${pl.botDanger !== false}" aria-label="Show my pieces in danger">👁</button>
       <button type="button" class="opt" id="bNoQ" aria-pressed="${!!pl.botNoQueen}" aria-label="Bot plays without its queen"><span class="pc bQ"></span><b>✕</b></button>
     </div>
-    <div class="bots">${BOTS.map(b => {
-      const r = rec[b.id] || { w: 0, l: 0, d: 0 };
-      return `<button type="button" class="bot${r.w ? " beaten" : ""}" data-bot="${b.id}" aria-label="${b.name}" style="--ring:${b.lvl ? BOT_RING[b.lvl - 1] : "var(--line)"};--lv:${b.lvl || 3}">
-        <span class="face">${b.face}</span>${b.pawns ? `<span class="pc wP tag"></span>` : ""}
-        <span class="paws${b.lvl ? "" : " none"}" aria-hidden="true">${b.lvl ? "🐾".repeat(b.lvl) : ""}</span>
-        <span class="wins">${r.w ? "🏆".repeat(Math.min(r.w, 3)) : "&nbsp;"}</span></button>`;
-    }).join("")}</div>`;
+    <div class="bots">${BOTS.filter(b => !b.pawns).map(botCard).join("")}</div>
+    <div class="botsep" aria-hidden="true"><span class="pc wP"></span><span class="pc bP"></span></div>
+    <div class="bots pawnbots">${BOTS.filter(b => b.pawns).map(botCard).join("")}</div>`;
   $("bPick").querySelectorAll("[data-bot]").forEach(b => b.onclick = () => botStart(b.dataset.bot));
   $("bColor").onclick = () => { pl.botColor = pl.botColor === "b" ? "w" : "b"; save(); renderBots(); };
   $("bDanger").onclick = () => { pl.botDanger = pl.botDanger === false; save(); renderBots(); };
