@@ -3562,7 +3562,7 @@ function aMiniInner(key) {
 function aMiniFlag(key, w = 36, h = 24) { return `<svg class="aflag" viewBox="0 0 60 40" width="${w}" height="${h}">${aMiniInner(key)}</svg>`; }
 // the whole sticker picture (backdrop + figure), or just the figure as a grey silhouette for an empty slot
 function stickerSvg(st, ghost = false) {
-  if (st.scene || st.sp) return aSceneSvg(st, ghost);
+  if (st.scene || st.sp || st.fan) return aSceneSvg(st, ghost);
   const fig = `<g transform="translate(2 18.6) scale(1.16)" ${ghost ? "" : `filter="url(#aWhiteEdge)"`}>${aFigure(st)}</g>`;
   if (ghost) return `<svg class="aghost" viewBox="0 0 120 158" aria-hidden="true">${fig}</svg>`;
   return `<svg viewBox="0 0 120 158" aria-hidden="true">${A_BACK[st.bd]}${A_RAYS}${st.mini ? `<svg x="6" y="134" width="27" height="18" viewBox="0 0 60 40">${aMiniInner(st.mini)}</svg><rect x="6" y="134" width="27" height="18" fill="none" stroke="#fff" stroke-width="1.5"/>` : ""}${A_CREST[st.bd] && st.pose !== "kit" ? `<circle cx="19" cy="139" r="15" fill="#fff" opacity=".92"/>${aCrest(st.bd, 19, 139.5, .26)}` : ""}${fig}</svg>`;
@@ -3862,7 +3862,7 @@ const A_YSCENES = {
 const A_YPAGE = [{ scene: "land" }, { scene: "two", half: "l" }, { scene: "two", half: "r" }, { scene: "comic" }, { scene: "photo" }, { scene: "retro" },
   { scene: "night" }, { scene: "party" }, { scene: "live" }];
 function aSceneSvg(st, ghost) {
-  const [back, main, top = ""] = st.sp ? A_SPECIALS[st.sp]() : A_YSCENES[st.scene](st.team, st.half === "r"), w = st.half ? 133.5 : 120;
+  const [back, main, top = ""] = st.fan ? FAN[st.fan][st.fi][2]() : st.sp ? A_SPECIALS[st.sp]() : A_YSCENES[st.scene](st.team, st.half === "r"), w = st.half ? 133.5 : 120;
   const fl = st.scene === "land" ? aYFlag(st.team) : "";
   return `<svg${ghost ? ` class="aghost"` : ""} viewBox="0 0 ${w} 158" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${ghost ? main : back + main + top + fl}</svg>`;
 }
@@ -4047,9 +4047,17 @@ function aLook(team, i) {
 // the sections of the book (a flag each; Portugal's holds the two Portuguese clubs), every team = 3 pages (football, friends, pictures)
 // (Cape Verde beside Portugal, then Europe, South America, Asia)
 const A_SECTIONS = [["pt", "slb", "vsc"], ["cv"], ["es"], ["fr"], ["it"], ["de"], ["nl"], ["ch"], ["en"], ["no"], ["br"], ["ar"], ["cn"], ["jp"], ["kr"]];
+/* the theme pages after the teams (the owner, 2026-10-03: heroes, Octonauts, Peppa, Paw Patrol, Hot Wheels; faithful
+   versions, family use): page id, the drawings' key in FAN, icon, section (the two hero pages share one frame). The
+   drawings are js/fan/<key>.js (built after this file, drafted in lab/fan_ideas.html): FAN.<key> = 9 rows
+   [name, what, draw], draw() = [backdrop, character] like the picture pages; read only when a sticker is drawn */
+const FAN = {};
+const A_FAN = [["mv", "marvel", "🕷️", "hero"], ["dc", "dc", "🦇", "hero"], ["oct", "octonauts", "🐙", "oct"], ["pig", "peppa", "🐷", "pig"],
+  ["paw", "pawpatrol", "🐾", "paw"], ["hw", "hotwheels", "🏎️", "hw"]];
 const A_PAGES = [
   { id: "sp", icon: "🌟", sec: "sp" },
   ...A_SECTIONS.flatMap(ts => ts.flatMap(t => [{ id: t, team: t, sec: ts[0] }, { id: t + "x", team: t, sec: ts[0], friends: 1 }, { id: t + "y", team: t, sec: ts[0], pics: 1 }])),
+  ...A_FAN.map(([id, fan, icon, sec]) => ({ id, fan, icon, sec })),
   { id: "boss", icon: "👑", sec: "boss" },
 ];
 /* a team's friends page: 5 basketball players "b pose lookSlot number" (look slots 3 and 5 are the women) and 4 animal
@@ -4090,6 +4098,7 @@ const STK = (() => {
     });
     else if (pg.pics) A_YPAGE.forEach(o => add(pg, { ...o, team: pg.team }));
     else if (pg.id === "sp") A_SP_ORDER.forEach(k => add(pg, { sp: k }));
+    else if (pg.fan) for (let fi = 0; fi < 9; fi++) add(pg, { fan: pg.fan, fi });
     else if (pg.team) A_SLOTS.forEach((sl, i) => {
       const kit = sl.gk ? { ...T.gk, gloves: "#fff" } : T.kit;
       add(pg, { bd: pg.team, ...kit, ...sl, ...(sl.mascot ? { head: T.mascot } : i ? aLook(pg.team, i - 1) : {}), gk: undefined, mascot: undefined });
@@ -4400,6 +4409,2213 @@ function albumParentsWire(pl) {
     pl.album = { c: 0, b: 0, o: 0, s: {}, v: A_VER, c0: 0, p3: 0 }; albumTray = []; albumHold = {}; back();
   };
 }
+
+/* Sticker book theme page: Heroes 1 (Marvel), nine chibi superheroes in the album's anime style; sets FAN.marvel = [[name, what, draw], ...] */
+(() => {
+  "use strict";
+  /* ---------- small drawing helpers (card coordinates 120 x 158 unless said otherwise) ---------- */
+  const OL = A_OL;
+  const U = p => `fm${p}${++aUid}`;
+  const f1 = v => +(+v).toFixed(1);
+  const P = (d, f, w = 1.2, x = "") => `<path d="${d}" fill="${f}" stroke="${OL}" stroke-width="${w}" stroke-linejoin="round" stroke-linecap="round" ${x}/>`;
+  const Pn = (d, f, x = "") => `<path d="${d}" fill="${f}" ${x}/>`;
+  const E = (cx, cy, rx, ry, f, w = 1.2, x = "") => `<ellipse cx="${f1(cx)}" cy="${f1(cy)}" rx="${f1(rx)}" ry="${f1(ry)}" fill="${f}" stroke="${OL}" stroke-width="${w}" ${x}/>`;
+  const En = (cx, cy, rx, ry, f, x = "") => `<ellipse cx="${f1(cx)}" cy="${f1(cy)}" rx="${f1(rx)}" ry="${f1(ry)}" fill="${f}" ${x}/>`;
+  const C = (x, y, r, f, w = 1.2, ex = "") => aC(x, y, r, f, `stroke="${OL}" stroke-width="${w}" ${ex}`);
+  const S = (d, c, w, x = "") => `<path d="${d}" fill="none" stroke="${c}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" ${x}/>`;
+  const SO = (d, c, w) => S(d, OL, w + 2.2) + S(d, c, w);          // an outlined stroke
+  const back = (a, b) => { const id = U("bg"); return `<defs>${aVGrad(id, a, b)}</defs><rect width="120" height="158" fill="url(#${id})"/>`; };
+  const clip = (shape, inner) => { const id = U("c"); return `<defs><clipPath id="${id}">${shape}</clipPath></defs><g clip-path="url(#${id})">${inner}</g>`; };
+  const clipD = (d, inner) => clip(`<path d="${d}"/>`, inner);
+  const shadow = (x, y, rx, ry = 4.5) => En(x, y, rx, ry, "#000", `opacity=".22"`);
+  // a figure-coordinate head (centre 50,24, as aKidHead) placed on the card
+  const head = (svg, x = 60, y = 44, s = 1.45, rot = 0) => `<g transform="translate(${f1(x - 50 * s)} ${f1(y - 24 * s)}) scale(${s})${rot ? ` rotate(${rot} 50 24)` : ""}">${svg}</g>`;
+  // a limb: outlined polyline, the last segment in another colour (glove, boot), then a hand / foot
+  function limb(p, c, w, end, tip) {
+    let s = aL(p, c, w);
+    if (end) s += aL(p.slice(-2), end, w);
+    return s + (tip || "");
+  }
+  const fist = (x, y, r, c, rot = 0) => E(x, y, r, r * .9, c, 1.2, rot ? `transform="rotate(${rot} ${x} ${y})"` : "") + Pn(`M${f1(x - r * .5)},${f1(y - r * .5)} q${f1(r * .4)},${f1(-r * .3)} ${f1(r * .8)},0`, "none", `stroke="#fff" stroke-width=".8" opacity=".45" stroke-linecap="round"`);
+  const boot = (x, y, c, dir = 1, rx = 7, ry = 4.4) => E(x + dir * 1.5, y, rx, ry, c, 1.2) + En(x + dir * 1.5, y + ry * .55, rx * .85, ry * .35, "#000", `opacity=".18"`);
+  // a coloured glow around whatever is drawn inside (used behind a character or a fist)
+  function glow(svg, col, r = 2, blur = 3) {
+    const id = U("gl");
+    return `<defs><filter id="${id}" x="-40%" y="-40%" width="180%" height="180%"><feMorphology in="SourceAlpha" operator="dilate" radius="${r}" result="m"/><feGaussianBlur in="m" stdDeviation="${blur}" result="b"/><feFlood flood-color="${col}"/><feComposite in2="b" operator="in"/></filter></defs><g filter="url(#${id})">${svg}</g>`;
+  }
+  // a skyline of buildings standing on y = base
+  function city(seed, base, cols, win, hMin, hMax, wp = .5, op = 1) {
+    const R = aRand(seed); let x = -3, s = "";
+    while (x < 122) {
+      const w = 11 + Math.floor(R() * 12), h = hMin + R() * (hMax - hMin), c = cols[Math.floor(R() * cols.length)], top = base - h;
+      s += `<rect x="${x}" y="${f1(top)}" width="${w}" height="${f1(h + 2)}" fill="${c}"/>`;
+      for (let wy = top + 4; wy < base - 3; wy += 6) for (let wx = x + 2.5; wx < x + w - 3; wx += 4.5) if (R() < wp) s += `<rect x="${f1(wx)}" y="${f1(wy)}" width="2.2" height="3" fill="${win}"/>`;
+      x += w + 1;
+    }
+    return `<g opacity="${op}">${s}</g>`;
+  }
+  const stars = (seed, n, y0, y1, c = "#fff") => { const R = aRand(seed); return [...Array(n)].map(() => aC(R() * 120, y0 + R() * (y1 - y0), .4 + R() * .8, c, `opacity="${f1(.5 + R() * .5)}"`)).join(""); };
+  const cloud = (x, y, s, c, op = 1) => `<g opacity="${op}" fill="${c}">${[[0, 0, 9], [10, -4, 10], [21, 0, 8], [9, 4, 9]].map(([a, b, r]) => `<circle cx="${f1(x + a * s)}" cy="${f1(y + b * s)}" r="${f1(r * s)}"/>`).join("")}</g>`;
+  const bolt = (pts, w = 2.2) => S(aPtsD(pts), "#fff59d", w + 3, `opacity=".45"`) + S(aPtsD(pts), "#fffde7", w);
+  const aPtsD = pts => "M" + pts.map(p => p.map(f1).join(",")).join(" L");
+
+  /* ---------- spider pieces ---------- */
+  // a spider web (radial lines + sagging rings) centred at cx, cy
+  function web(cx, cy, col, w = .7, n = 12, rs = [5, 10, 15, 20, 26, 33, 41], a0 = .26) {
+    const pt = (a, r) => `${f1(cx + r * Math.cos(a))},${f1(cy + r * Math.sin(a))}`;
+    let d = "";
+    for (let i = 0; i < n; i++) d += `M${cx},${cy} L${pt(a0 + i * 2 * Math.PI / n, 60)} `;
+    rs.forEach(r => { for (let i = 0; i < n; i++) { const a = a0 + i * 2 * Math.PI / n, b = a + 2 * Math.PI / n; d += `M${pt(a, r)} Q${pt((a + b) / 2, r * .82)} ${pt(b, r)} `; } });
+    return `<path d="${d}" fill="none" stroke="${col}" stroke-width="${w}"/>`;
+  }
+  function spider(x, y, s, c, lw = .95) {
+    const L = [[[1.2, -1.6], [3.6, -4.8], [4.4, -9]], [[1.4, -.6], [5, -2.4], [7.6, -5.4]], [[1.4, .8], [5, 2.4], [7.6, 6]], [[1.2, 1.9], [3.6, 5.4], [4.4, 10]]];
+    let d = "";
+    [-1, 1].forEach(k => L.forEach(l => { d += "M" + l.map(([a, b]) => `${f1(x + k * a * s)},${f1(y + b * s)}`).join(" L") + " "; }));
+    return `<path d="${d}" fill="none" stroke="${c}" stroke-width="${f1(lw * s)}" stroke-linecap="round" stroke-linejoin="round"/>` + En(x, y + 1.6 * s, 1.6 * s, 3.2 * s, c) + aC(x, y - 2 * s, 1.25 * s, c);
+  }
+  // the mask: an egg head with web lines and the big white lenses (figure coordinates)
+  const SH = "M33,24 Q33,6 50,6 Q67,6 67,24 Q67,38 50,43 Q33,38 33,24Z";
+  const SEYE = "M48.3,33 Q40,34.5 37,28 Q34.8,21 39.3,19 Q44.5,17.6 47,23.5 Q48.9,28 48.3,33Z";
+  function spideyHead(fill, webc, shadeOp = .16) {
+    const eye = fl => `<g${fl ? ` transform="translate(100 0) scale(-1 1)"` : ""}>${P(SEYE, "#fff", 2.4)}${Pn("M44.6,24 Q46,27 46.4,30.6", "none", `stroke="#cfe3f1" stroke-width="1.6" stroke-linecap="round"`)}${Pn("M38.6,22.5 Q40.5,20 43.2,20.6", "none", `stroke="#fff" stroke-width="1" opacity=".9"`)}</g>`;
+    return Pn(SH, fill) + clipD(SH, web(50, 29.5, webc) + En(63, 27, 10, 20, "#000", `opacity="${shadeOp}"`) + Pn("M37,14 Q42,8 50,8", "none", `stroke="#fff" stroke-width="2" opacity=".35" stroke-linecap="round"`)) +
+      P(SH, "none", 1.3) + eye(0) + eye(1);
+  }
+  const TORSO = "M46,70 Q60,66 74,70 Q77,86 72,104 L48,104 Q43,86 46,70Z";
+  const shadeOn = (d, x0, op = .16) => clipD(d, `<rect x="${x0}" y="0" width="80" height="158" fill="#000" opacity="${op}"/>`);
+
+  /* ---------- 1 Spider-Man: shooting a web line ("thwip") while he swings over the skyscrapers ---------- */
+  // the web-shooter hand, drawn fingers up around 0,0 and turned by rot: index, pinky and thumb out, middle and ring
+  // fingers folded onto the palm (the trigger)
+  function thwip(x, y, rot, c, s = 1) {
+    const fing = (x0, y0, x1, y1, w) => SO(`M${x0},${y0} L${x1},${y1}`, c, w);
+    return `<g transform="translate(${x} ${y}) rotate(${rot}) scale(${s})">` +
+      fing(-3, -1.5, -4.6, -11.5, 3.2) + fing(3.3, -1.5, 5.4, -10, 2.8) + fing(-4, 2.4, -10.4, -.6, 3.2) +
+      E(0, .6, 5.6, 5.4, c, 1.2) +
+      E(-.9, -4.1, 1.9, 1.7, c, 1) + E(2.4, -4, 1.9, 1.7, c, 1) +
+      Pn("M-3,-1 Q-.4,.6 2.2,-.4", "none", `stroke="${OL}" stroke-width=".8" stroke-linecap="round"`) + `</g>`;
+  }
+  function spiderman() {
+    const R = "#d6222c", B = "#1e4bb0";
+    const bg = back("#49b8f5", "#d6f0ff") + A_RAYS + cloud(8, 40, .9, "#fff", .85) + cloud(60, 12, .7, "#fff", .7) +
+      city(7, 158, ["#6f8fb5", "#83a3c6", "#5f7fa6", "#90aecb"], "#d8ecff", 34, 96, .55) + aSpark(14, 120, 4) + aSpark(108, 116, 3);
+    const chestRed = "M47,70 Q60,66 73,70 L71,95 Q60,100 49,95Z";
+    // the web line he is shooting: from the hand up to the corner, a little splat where it sticks
+    const line = S("M94,33 L128,-14", "#fff", 2.4) + S("M94,33 L128,-14", "#90a4ae", .8, `opacity=".7"`);
+    const body =
+      // legs (blue, red boots) tucked up for the swing
+      limb([[67, 101], [80, 108], [78, 125]], B, 9.5, R, boot(79, 128, R, 1)) +
+      limb([[53, 101], [43, 114], [47, 132]], B, 9.5, R, boot(46, 135, R, -1)) +
+      // torso: blue sides, red chest with web lines, black spider, red belt
+      P(TORSO, B, 1.3) + clipD(chestRed, Pn(chestRed, R) + web(60, 84, "#3a0d10", .55, 12, [5, 10, 15, 20, 26])) +
+      P(chestRed, "none", 1) + P("M48.5,97 Q60,101 71.5,97 L71.8,102 Q60,106 48.2,102Z", R, 1) + spider(60, 82, 1.2, "#141414") + shadeOn(TORSO, 66) +
+      // the left arm out for balance (open hand), the right one up shooting the web
+      limb([[48, 75], [36, 86], [25, 92]], R, 8.5, null,
+        SO("M21,93 L14.5,96", R, 2.8) + SO("M20.5,90.5 L14,90", R, 2.8) + SO("M21,88.6 L16,85", R, 2.8) + SO("M23,96 L19.5,101", R, 2.8) + E(23, 92, 5.2, 5, R)) +
+      limb([[72, 75], [83, 62], [88, 48]], R, 8.5) + line + thwip(90, 41, 30, R, 1.35) +
+      head(spideyHead(R, "#3a0d10"), 57, 46, 1.55, -8);
+    return [bg, aEdge(`<g transform="translate(66 96) scale(1.1) translate(-60 -92)">${body}</g>`)];
+  }
+
+  /* ---------- 2 Miles Morales: crouched on a rooftop before a huge moon, night city ---------- */
+  function miles() {
+    const K = "#17171d", R = "#e3262d";
+    const bg = back("#2a1a6e", "#a2489e") + stars(21, 26, 0, 80) +
+      // a huge glowing moon right behind him, so the black suit stands out
+      C(60, 78, 56, "#ff8fd0", 0, `opacity=".22"`) + C(60, 78, 46, "#ffc4e6", 0, `opacity=".35"`) + C(60, 78, 38, "#fff0d6", 0) + C(74, 66, 6, "#f3dcc0", 0) + C(46, 96, 4.5, "#f3dcc0", 0) + C(70, 104, 3, "#f3dcc0", 0) +
+      city(3, 140, ["#3b2a78", "#4a3590", "#33246a"], "#ffd54f", 18, 46, .45) +
+      // Spider-Verse glitch squares
+      [[8, 60, "#ff2e88"], [104, 52, "#26e0ff"], [14, 72, "#26e0ff"], [99, 88, "#ff2e88"], [30, 42, "#ffeb3b"]].map(([x, y, c]) => `<rect x="${x}" y="${y}" width="5" height="5" fill="${c}" opacity=".75"/><rect x="${x + 6}" y="${y + 3}" width="2.5" height="2.5" fill="${c}" opacity=".6"/>`).join("") +
+      `<rect x="0" y="138" width="120" height="20" fill="#120d2a"/><rect x="0" y="138" width="120" height="2.5" fill="#3a2d6e"/>`;
+    const shoe = (x, y, dir) => E(x, y, 8, 4.6, K, 1.2) + Pn(`M${x - 7.5},${y + 1.5} Q${x},${y + 6} ${x + 7.5},${y + 1.5} L${x + 7.8},${y + 3} Q${x},${y + 7.4} ${x - 7.8},${y + 3}Z`, R) + S(`M${x - 2 * dir},${y - 3.6} l${4 * dir},1.6`, "#fff", 1);
+    const tor = "M47,78 Q60,74 73,78 Q76,92 71,108 L49,108 Q44,92 47,78Z";
+    const body =
+      // crouch: knees out wide, feet planted
+      limb([[54, 106], [34, 112], [30, 132]], K, 9.5, null, shoe(28, 135, -1)) +
+      limb([[66, 106], [86, 110], [92, 132]], K, 9.5, null, shoe(94, 135, 1)) +
+      // web lines on the legs
+      S("M38,111 L33,128 M86,112 L90,128", R, .6, `opacity=".9"`) +
+      P(tor, K, 1.3) + clipD(tor, web(60, 90, R, .6, 12, [5, 10, 15, 20, 26])) + spider(60, 91, 1.5, R, 1.1) + shadeOn(tor, 66, .2) +
+      // one hand down on the roof, one up behind with a web shooter
+      limb([[48, 82], [46, 104], [50, 130]], K, 8, null, E(50, 132, 6, 4, K) + S("M46,133 Q50,135 54,133", R, 1)) +
+      limb([[72, 82], [88, 74], [100, 60]], K, 8, null, fist(102, 57, 5.2, K) + S("M99,62 l3,-3", R, 1)) +
+      head(spideyHead(K, R, .28), 60, 50, 1.4, 6);
+    // bigger, with a cyan rim light around the black suit
+    const fig = `<g transform="translate(60 139) scale(1.13) translate(-60 -139)">${body}</g>`;
+    return [bg + aSpark(18, 44, 3, "#fff") + aSpark(112, 104, 2.5, "#26e0ff") + glow(fig, "#5ff3ff", 1.6, 1.6), aEdge(fig)];
+  }
+
+  /* ---------- 3 Iron Man: flying, a repulsor blast from the palm ---------- */
+  const IH = "M33,25 Q33,6 50,6 Q67,6 67,25 L66.5,34 Q60,42.5 50,44 Q40,42.5 33.5,34Z";
+  const IPLATE = "M37,21.5 Q50,16.5 63,21.5 L62.6,32.5 L57,39.6 Q50,41.6 43,39.6 L37.4,32.5Z";
+  function ironHead() {
+    const slit = fl => `<g${fl ? ` transform="translate(100 0) scale(-1 1)"` : ""}>${Pn("M38.8,25.4 L47.2,27.4 L46.6,30.1 L39.8,28.9Z", "#7ff6ff", `stroke="#7ff6ff" stroke-width="2.4" opacity=".45" stroke-linejoin="round"`)}${P("M38.8,25.4 L47.2,27.4 L46.6,30.1 L39.8,28.9Z", "#f2ffff", .7)}</g>`;
+    return Pn(IH, "#c8102e") + clipD(IH, En(64, 26, 9, 22, "#000", `opacity=".18"`) + Pn("M36,14 Q42,8 50,8", "none", `stroke="#fff" stroke-width="2" opacity=".4" stroke-linecap="round"`)) + P(IH, "none", 1.3) +
+      P(IPLATE, "#f4c22b", 1) + clipD(IPLATE, En(62, 30, 6, 14, "#b8860b", `opacity=".35"`)) +
+      S("M50,17.5 V22", "#c58f00", .7) + S("M44.5,36.4 H55.5", "#7a5a00", 1) + S("M41,38.4 L37.6,33 M59,38.4 L62.4,33", "#c58f00", .6) + slit(0) + slit(1) +
+      C(33.6, 27, 3, "#f4c22b", 1) + C(66.4, 27, 3, "#f4c22b", 1);
+  }
+  function blast(x, y, r) {
+    return C(x, y, r * 1.9, "#7ff6ff", 0, `opacity=".25"`) + C(x, y, r * 1.3, "#b8fbff", 0, `opacity=".55"`) + C(x, y, r * .8, "#fff", 0) +
+      [...Array(8)].map((_, i) => { const a = i * Math.PI / 4 + .2; return S(`M${f1(x + r * 1.1 * Math.cos(a))},${f1(y + r * 1.1 * Math.sin(a))} L${f1(x + r * 2.2 * Math.cos(a))},${f1(y + r * 2.2 * Math.sin(a))}`, "#e0ffff", 1.1, `opacity=".9"`); }).join("");
+  }
+  function ironman() {
+    const Rd = "#c8102e", G = "#f4c22b";
+    const bg = back("#ff8a3d", "#ffe0a3") + A_RAYS + cloud(4, 120, 1.3, "#fff", .8) + cloud(76, 132, 1.1, "#fff", .7) + cloud(70, 24, .7, "#ffd6b0", .8) +
+      [[6, 40, 30], [10, 56, 22], [4, 72, 26]].map(([x, y, l]) => S(`M${x},${y} h${l}`, "#fff", 1.6, `opacity=".75"`)).join("");
+    const jet = (x, y) => Pn(`M${x - 4.5},${y} Q${x},${y + 22} ${x + 4.5},${y}Z`, "#7ff6ff", `opacity=".55"`) + Pn(`M${x - 2.6},${y} Q${x},${y + 13} ${x + 2.6},${y}Z`, "#fff");
+    const tor = TORSO;
+    const body =
+      jet(41, 140) + jet(56, 139) +
+      limb([[54, 101], [48, 118], [42, 134]], G, 9, Rd, boot(42, 137, Rd, -1, 6, 4)) +
+      limb([[66, 101], [62, 118], [57, 133]], G, 9, Rd, boot(57, 136, Rd, 0, 6, 4)) +
+      P(tor, Rd, 1.3) + P("M48.5,90 L60,99 L71.5,90 L72,104 L48,104Z", G, 1) + S("M54,74 L60,86 L66,74", "#8e0b20", .9) + shadeOn(tor, 66) +
+      // arc reactor
+      C(60, 81, 9, "#7ff6ff", 0, `opacity=".35"`) + C(60, 81, 5.6, "#90a4ae", 1.1) + C(60, 81, 3.8, "#e8ffff", .6) + C(60, 81, 1.6, "#fff", 0) +
+      // shoulders
+      E(47, 74, 5.5, 4.5, G, 1.1) + E(73, 74, 5.5, 4.5, G, 1.1) +
+      limb([[48, 76], [39, 88], [31, 97]], Rd, 8, G, fist(30, 99, 5, Rd)) +
+      limb([[72, 76], [84, 68], [95, 61]], Rd, 8, G, fist(97, 60, 5.2, Rd)) +
+      head(ironHead(), 60, 44, 1.45, 4);
+    return [bg, `<g transform="translate(57 90) scale(1.15) rotate(14) translate(-60 -90)">` + aEdge(body) + blast(97, 60, 6) + blast(30, 100, 3.6) + `</g>`];
+  }
+
+  /* ---------- 4 Hulk: fists up, the ground cracking under his feet ---------- */
+  function hulk() {
+    const G = "#5fb532", Gd = "#3f8a1f", Pu = "#6b3fa6";
+    const bg = back("#ffb347", "#ffe8b0") + A_RAYS + city(15, 136, ["#d9905a", "#c97f4d", "#e2a06c"], "#ffe0a0", 20, 54, .3, .7) +
+      Pn("M0,132 L120,132 L120,158 L0,158Z", "#9b7653") + Pn("M0,132 L120,132 L120,136 L0,136Z", "#7d5a3c") +
+      S("M60,140 L46,148 L40,158 M60,140 L74,150 L78,158 M60,140 L60,158 M46,148 L30,150 M74,150 L94,147 L108,152 M30,150 L12,147", "#3e2a1a", 1.5) +
+      [[14, 118, 4, 20], [104, 114, 3.4, -30], [24, 104, 2.6, 40], [96, 98, 2.4, 10], [8, 136, 3, 0], [113, 134, 3.6, 0]].map(([x, y, r, a]) => P(`M${x - r},${y} L${x - r * .4},${y - r} L${x + r},${y - r * .6} L${x + r * .8},${y + r * .7} L${x - r * .2},${y + r}Z`, "#a9845f", 1, `transform="rotate(${a} ${x} ${y})"`)).join("");
+    const face = `<path d="${A_FACE}" fill="${G}" stroke="${OL}" stroke-width="1.1"/>`;
+    const hhead =
+      C(33.4, 27, 3.4, G, 1.1) + C(66.6, 27, 3.4, G, 1.1) + face + clipD(A_FACE, En(62, 28, 8, 18, "#000", `opacity=".14"`)) +
+      // messy black hair
+      P("M33,27 L31.5,15 L35,9 L33,4 L41,6 L45,1 L50,5 L56,0.5 L59,5.5 L66,3 L65.5,9 L69.5,13 L67,27 L64,19 L60.5,22 L58,15 L54,20 L50,13.5 L46.5,20 L42,15 L39.5,22 L36.5,18Z", "#141414", 1.1) +
+      aEye(43.3, 28.8, "#3a8f1e", .95) + aEye(56.7, 28.8, "#3a8f1e", .95) +
+      // angry brows
+      P("M37,22.5 L48.5,24.8 L48,27 L37.5,25.2Z", "#1d3a10", .6) + P("M63,22.5 L51.5,24.8 L52,27 L62.5,25.2Z", "#1d3a10", .6) +
+      // roaring mouth with teeth
+      P("M43.5,35 Q50,33.4 56.5,35 Q56,41.2 50,41.2 Q44,41.2 43.5,35Z", "#7a1d1d", 1) + Pn("M44.4,35.3 Q50,34 55.6,35.3 L55.3,36.9 Q50,36 44.7,36.9Z", "#fff") + En(50, 39.6, 3, 1.2, "#e57373");
+    const tor = "M30,66 Q60,57 90,66 Q95,86 84,106 L36,106 Q25,86 30,66Z";
+    const kn = (x, y) => S(`M${x - 4},${y - 3} q2,2 0,4 M${x},${y - 4} q2,2 0,4.5 M${x + 4},${y - 3} q2,2 0,4`, Gd, .8);
+    const body =
+      // legs, feet
+      limb([[47, 116], [43, 132]], G, 15, null, E(39, 138, 10, 5.4, G, 1.2) + S("M33,138 v2 M37,139 v2 M41,139 v2", Gd, .7)) +
+      limb([[73, 116], [77, 132]], G, 15, null, E(81, 138, 10, 5.4, G, 1.2) + S("M79,139 v2 M83,139 v2 M87,138 v2", Gd, .7)) +
+      // torso with muscles
+      P(tor, G, 1.4) + S("M44,77 Q52,85 60,78 Q68,85 76,77", Gd, 1.1) + S("M60,80 V102 M53,90 H67 M54,97 H66", Gd, .9) + shadeOn(tor, 68, .14) +
+      // torn purple shorts
+      P("M35,101 L85,101 L89,124 L82,120 L78,126 L72,119 L66,123 L62,113 L58,113 L54,123 L48,119 L42,126 L38,120 L31,124Z", Pu, 1.2) + S("M60,102 V112", "#47257a", .9) + S("M40,104 L80,104", "#8e63c8", .9, `opacity=".7"`) +
+      // huge arms flexed, fists up beside the head (clear of the number corner)
+      limb([[34, 71], [13, 72], [19, 56]], G, 15, null, C(20, 50, 10.5, G, 1.3) + kn(20, 46)) +
+      limb([[86, 71], [107, 72], [101, 56]], G, 15, null, C(100, 50, 10.5, G, 1.3) + kn(100, 46)) +
+      S("M18,68 q6,-6 13,-3 M102,68 q-6,-6 -13,-3", Gd, .9) +
+      head(hhead, 60, 38, 1.38);
+    return [bg + aSpark(98, 18, 3.4) + aSpark(8, 92, 2.6), aEdge(body)];
+  }
+
+  /* ---------- 5 Captain America: the round shield up ---------- */
+  function shield(x, y, r) {
+    const st = aStar(x, y, r * .3, "#fff").replace("/>", ` stroke="${OL}" stroke-width=".8" stroke-linejoin="round"/>`);
+    return `<g transform="rotate(-10 ${x} ${y})">` + E(x, y, r, r, "#d62b2b", 1.5) + E(x, y, r * .78, r * .78, "#f5f5f5", .9) + E(x, y, r * .57, r * .57, "#d62b2b", .9) + E(x, y, r * .37, r * .37, "#1f3f99", .9) + st +
+      Pn(`M${x - r * .7},${y - r * .5} A${r * .86},${r * .86} 0 0 1 ${x + r * .1},${y - r * .85}`, "none", `stroke="#fff" stroke-width="1.6" opacity=".55" stroke-linecap="round"`) + `</g>`;
+  }
+  function capHead() {
+    const BL = "#2347a8";
+    const cowl = "M32,24 Q32,4.5 50,4.5 Q68,4.5 68,24 Q68,33 65.5,39 Q63,33.5 58,34.3 L50,36.4 L42,34.3 Q37,33.5 34.5,39 Q32,33 32,24Z";
+    const wing = fl => `<g${fl ? ` transform="translate(100 0) scale(-1 1)"` : ""}>${P("M34,27 Q27,24 24,9 Q27,12.5 29,13.5 Q27,9 28,5 Q30.5,10 32.5,12 Q32,8.5 33.5,6.5 Q35,13 35,19Z", "#fff", .9) + S("M30,17 Q31.5,20 33.5,22 M31.5,13.5 Q33,17 34.2,18.5", "#b0bec5", .6)}</g>`;
+    return aKidHead({ skin: A_SKIN[1], hair: "#6b3e1f", hs: "buzz", eyes: "#3a7bd5", mouth: "smile" }) +
+      P(cowl, BL, 1.1) + clipD(cowl, En(63, 22, 7, 18, "#000", `opacity=".18"`)) +
+      E(43.3, 28.4, 5.4, 5.7, A_SKIN[1], .9) + E(56.7, 28.4, 5.4, 5.7, A_SKIN[1], .9) + aEye(43.3, 28.8, "#3a7bd5", .85) + aEye(56.7, 28.8, "#3a7bd5", .85) +
+      S("M46.6,15.5 L50,8.5 L53.4,15.5 M47.8,13 H52.2", OL, 3.6) + S("M46.6,15.5 L50,8.5 L53.4,15.5 M47.8,13 H52.2", "#fff", 1.7) + wing(0) + wing(1) +
+      Pn("M45.5,38.6 Q50,40.2 54.5,38.6", "none", `stroke="${OL}" stroke-width=".9" stroke-linecap="round"`);
+  }
+  function captain() {
+    const BL = "#2347a8", Rd = "#d62b2b";
+    const bg = back("#1d3b8f", "#7fb4ff") + A_RAYS + [[12, 20, 4], [104, 16, 3.4], [100, 96, 3], [18, 64, 2.6], [108, 54, 2.6], [10, 112, 3]].map(([x, y, r]) => aStar(x, y, r, "#fff")).join("") +
+      [0, 1, 2, 3, 4, 5].map(i => `<rect x="0" y="${134 + i * 4}" width="120" height="4" fill="${i % 2 ? "#fff" : "#d62b2b"}" opacity=".85"/>`).join("");
+    const tor = TORSO;
+    const body =
+      limb([[67, 101], [75, 118], [80, 132]], BL, 9, Rd, boot(81, 136, Rd, 1)) +
+      limb([[53, 101], [48, 119], [44, 133]], BL, 9, Rd, boot(43, 137, Rd, -1)) +
+      P(tor, BL, 1.3) + clipD(tor, [52, 56, 60, 64, 68].map((x, i) => `<rect x="${x}" y="88" width="4" height="14" fill="${i % 2 ? "#fff" : Rd}"/>`).join("")) +
+      S("M47.5,88 H72.5", OL, 1) + aStar(60, 79, 7.2, "#fff").replace("/>", ` stroke="${OL}" stroke-width=".9" stroke-linejoin="round"/>`) +
+      P("M48,100 Q60,103 72,100 L72.3,104.5 Q60,107 47.7,104.5Z", "#8d5a2b", 1) + shadeOn(tor, 66) +
+      limb([[72, 75], [85, 66], [91, 51]], BL, 8, Rd, fist(92, 48, 5.6, Rd)) +
+      limb([[48, 75], [37, 86], [33, 97]], BL, 8, Rd, fist(33, 99, 5, Rd)) +
+      shield(31, 100, 22) +
+      head(capHead(), 61, 44, 1.45, -3);
+    return [bg + aSpark(108, 40, 3.4) + aSpark(28, 146, 3, "#ffeb3b"), aEdge(`<g transform="translate(9 7)">${body}</g>`)];
+  }
+
+  /* ---------- 6 Black Panther: claws out, purple kinetic glow, Wakanda at night ---------- */
+  function pantherHead() {
+    const K = "#1d1d26", Si = "#c7ccd6";
+    const eye = fl => `<g${fl ? ` transform="translate(100 0) scale(-1 1)"` : ""}>${P("M36.6,23 L47.8,26.4 Q44.6,30.6 39,28.6Z", "#f4f7ff", 1)}${S("M35.5,21.4 L48.4,25", Si, .7)}</g>`;
+    const ear = fl => `<g${fl ? ` transform="translate(100 0) scale(-1 1)"` : ""}>${P("M34,15.5 L36,2.5 L45,8.6Z", K, 1.1)}${Pn("M36.5,12 L37.4,5.6 L42,9Z", Si, `opacity=".55"`)}</g>`;
+    return ear(0) + ear(1) + Pn(SH, K) + clipD(SH, En(62, 26, 9, 22, "#000", `opacity=".25"`) + Pn("M37,14 Q42,8 50,8", "none", `stroke="#fff" stroke-width="2" opacity=".25" stroke-linecap="round"`)) + P(SH, "none", 1.3) +
+      S("M50,7.5 V19 M50,19 L46,22.5 M50,19 L54,22.5 M37,31 Q43,38 50,39 Q57,38 63,31 M50,31 V36", Si, .75) + S("M42,12 L45.5,17 M58,12 L54.5,17", Si, .7) +
+      eye(0) + eye(1);
+  }
+  function panther() {
+    const K = "#1d1d26", Si = "#c7ccd6", Pu = "#b44dff";
+    const bg = back("#1b0b38", "#6a2fa3") + stars(9, 22, 0, 70, "#e6d0ff") + C(26, 28, 11, "#f3e5ff", 0, `opacity=".9"`) +
+      Pn("M0,118 L14,96 L26,110 L40,86 L56,108 L70,92 L84,110 L100,90 L120,108 L120,158 L0,158Z", "#3a1766") +
+      [[8, 92, 7, 46], [30, 104, 6, 36], [88, 98, 8, 42], [106, 108, 6, 30]].map(([x, y, w, h]) => Pn(`M${x},${y + h} V${y + 8} Q${x + w / 2},${y - 6} ${x + w},${y + 8} V${y + h}Z`, "#2a0f4d") + `<rect x="${x + w / 2 - .8}" y="${y + 6}" width="1.6" height="${h - 12}" fill="#c77dff" opacity=".7"/>`).join("") +
+      `<rect x="0" y="140" width="120" height="18" fill="#1a0a33"/>`;
+    // three bold white claws per hand, curving out and down
+    const claws = (x, y, dir) => [-5, 0, 5].map(d => P(`M${x + dir * 2.5},${y + d - 2.3} Q${x + dir * 11},${y + d * 1.25 - 3} ${x + dir * 15.5},${y + d * 1.5 + 2.6} Q${x + dir * 9.5},${y + d * 1.2 + 1.2} ${x + dir * 2.5},${y + d + 2.3}Z`, "#fff", 1.1)).join("");
+    const tor = TORSO;
+    // the silver fang necklace: a bold band and seven big fangs
+    const nk = t => [47 + 26 * t, 70.5 + 7 * Math.sin(Math.PI * t)];
+    const necklace = SO("M" + [...Array(9)].map((_, i) => nk(i / 8).map(f1).join(",")).join(" L"), Si, 1.6) +
+      [...Array(7)].map((_, i) => { const [x, y] = nk((i + .5) / 7); return P(`M${f1(x - 2.2)},${f1(y)} L${f1(x)},${f1(y + 6)} L${f1(x + 2.2)},${f1(y)}Z`, "#e9edf3", .8); }).join("");
+    const body =
+      limb([[53, 101], [42, 118], [37, 134]], K, 9, null, boot(35, 137, K, -1)) +
+      limb([[67, 101], [78, 118], [83, 134]], K, 9, null, boot(85, 137, K, 1)) +
+      S("M44,112 l-3,6 M76,112 l3,6", Pu, 1, `opacity=".9"`) +
+      P(tor, K, 1.3) + clipD(tor, S("M47,84 L60,96 L73,84 M50,92 L60,102 L70,92 M60,74 V96", Si, .55, `opacity=".55"`) + S("M45,80 L60,92 L75,80", Pu, 1.1, `opacity=".9"`)) + necklace + shadeOn(tor, 66, .2) +
+      S("M48,100 H72", Si, 1.4) +
+      limb([[48, 75], [35, 82], [22, 75]], K, 8, null, claws(20, 74, -1) + E(20, 74, 5, 4.6, K)) +
+      limb([[72, 75], [85, 82], [98, 75]], K, 8, null, claws(100, 74, 1) + E(100, 74, 5, 4.6, K)) +
+      S("M30,80 l6,-1 M90,80 l-6,-1", Pu, 1) +
+      head(pantherHead(), 60, 44, 1.45);
+    return [bg + aSpark(12, 56, 3, "#e1b3ff") + aSpark(108, 50, 3.4, "#e1b3ff") + aSpark(60, 150, 2.6, "#e1b3ff") + glow(body, Pu, 2.5, 3.2), aEdge(body)];
+  }
+
+  /* ---------- 7 Thor: Mjolnir raised, lightning, stormy sky ---------- */
+  function thor() {
+    const Ar = "#3a4250", Si = "#cfd8dc", Rc = "#c62828";
+    const bg = back("#1c2436", "#55678c") + cloud(-8, 22, 1.2, "#2a3348") + cloud(60, 14, 1.3, "#313b52") + cloud(30, 40, .9, "#3b4661", .9) +
+      bolt([[16, 48], [24, 64], [18, 68], [28, 90]], 1.6) + bolt([[108, 70], [100, 86], [106, 90], [96, 112]], 1.4) +
+      Pn("M0,140 L120,140 L120,158 L0,158Z", "#2b3245");
+    const hammer = (x, y) => SO(`M${x},${y + 30} V${y + 6}`, "#8d5a2b", 2.6) + S(`M${x - 1.6},${y + 26} l3.2,-2 M${x - 1.6},${y + 21} l3.2,-2 M${x - 1.6},${y + 16} l3.2,-2`, "#5d3a1a", .7) +
+      SO(`M${x},${y + 30} q-3,4 -1,7`, "#8d5a2b", .9) +
+      P(`M${x - 12},${y - 6} L${x + 12},${y - 6} L${x + 12},${y + 7} L${x - 12},${y + 7}Z`, "#9aa5ad", 1.3) + Pn(`M${x - 12},${y - 6} L${x + 12},${y - 6} L${x + 12},${y - 2} L${x - 12},${y - 2}Z`, "#fff", `opacity=".35"`) +
+      Pn(`M${x + 4},${y - 6} L${x + 12},${y - 6} L${x + 12},${y + 7} L${x + 4},${y + 7}Z`, "#000", `opacity=".15"`) + S(`M${x - 12},${y + .5} H${x + 12}`, "#6d777e", .7) + P(`M${x - 12},${y - 6} L${x + 12},${y - 6} L${x + 12},${y + 7} L${x - 12},${y + 7}Z`, "none", 1.3);
+    const hair = "M31,20 Q28,40 30,56 Q36,60 40,52 L42,42 L58,42 L60,52 Q64,60 70,56 Q72,40 69,20Z";
+    const thead = P(hair, "#f0c64a", 1.1) + S("M33,40 q-1,8 1,14 M67,40 q1,8 -1,14", "#c99a26", .8) +
+      aKidHead({ skin: A_SKIN[0], hair: "#f0c64a", hs: "neat", eyes: "#2f7fd8", mouth: "smile" }) +
+      // a short neat beard along the jaw line (MCU), well below a big happy grin
+      P("M35.2,30 Q36.5,41.5 50,43.8 Q63.5,41.5 64.8,30 Q63,37.6 57,40 Q50,41.8 43,40 Q37,37.6 35.2,30Z", "#d9aa38", .8) +
+      P("M44.6,35 Q50,35.8 55.4,35 Q54.6,39.6 50,39.8 Q45.4,39.6 44.6,35Z", "#b5332a", .9) + Pn("M45.3,35.5 Q50,36.2 54.7,35.5 L54.4,36.7 Q50,37.3 45.6,36.7Z", "#fff") + En(50, 38.8, 2.4, .9, "#ff8a80");
+    const tor = TORSO;
+    const cape = P("M47,72 Q30,96 10,140 Q26,134 36,142 Q46,134 56,140 L60,98Z", Rc, 1.3) + S("M28,112 Q30,124 34,138 M46,108 Q46,124 48,138", "#8e1b1b", 1) +
+      P("M73,72 Q86,96 98,136 Q88,132 80,138 L70,98Z", Rc, 1.3);
+    const body =
+      cape +
+      limb([[53, 101], [49, 119], [46, 133]], "#2b2f38", 9, "#141414", boot(45, 137, "#141414", -1)) +
+      limb([[67, 101], [73, 118], [76, 133]], "#2b2f38", 9, "#141414", boot(78, 137, "#141414", 1)) +
+      P(tor, Ar, 1.3) + [78, 87, 96].map(y => [54.5, 65.5].map(x => C(x, y, 3.4, Si, 1) + C(x, y, 1.6, "#9aa5ad", .6)).join("")).join("") + shadeOn(tor, 66) +
+      E(47, 74, 5.5, 4.6, Si, 1.1) + E(73, 74, 5.5, 4.6, Si, 1.1) +
+      limb([[48, 76], [38, 88], [42, 99]], A_SKIN[0], 7.5, Si, fist(43, 101, 5, A_SKIN[0])) +
+      head(thead, 58, 46, 1.42, -4) +
+      limb([[72, 76], [86, 66], [91, 50]], A_SKIN[0], 7.5, Si) + hammer(92, 22) + fist(92, 50, 5.4, A_SKIN[0]);
+    // the lightning Mjolnir calls down sits behind the hammer head
+    return [bg + bolt([[92, 14], [86, 6], [94, 3], [88, -4]], 1.8) + bolt([[100, 18], [110, 10], [106, 6], [118, 0]], 1.5) + bolt([[82, 18], [74, 10], [78, 6], [70, 0]], 1.3) +
+      aSpark(108, 30, 3, "#fffde7") + aSpark(76, 30, 2.4, "#fffde7"), aEdge(body)];
+  }
+
+  /* ---------- 8 Captain Marvel: flying up with glowing fists, space ---------- */
+  function marvel() {
+    const BL = "#1f3c94", Rd = "#d32f2f", Go = "#ffcc33";
+    const bg = back("#0e0b2e", "#4b2380") + stars(5, 40, 0, 158) + C(98, 128, 18, "#5c6bc0", 0) + clipD("M80,128 A18,18 0 0 0 116,128 A18,18 0 0 0 80,128Z", En(104, 122, 14, 16, "#8c9eff", `opacity=".5"`)) +
+      E(98, 128, 28, 5, "none", 0, `stroke="#ffcc80" stroke-width="1.5" opacity=".8" transform="rotate(-18 98 128)"`) +
+      C(60, 70, 46, Go, 0, `opacity=".12"`) + C(60, 70, 30, Go, 0, `opacity=".12"`);
+    const hairB = "M31,20 Q29,38 32,46 Q40,48 44,42 L56,42 Q60,48 68,46 Q71,38 69,20Z";
+    const mhead = P(hairB, "#f2cf5b", 1.1) + aKidHead({ skin: A_SKIN[0], hair: "#f2cf5b", hs: "neat", eyes: "#3a7bd5", mouth: "smile", lash: 1 });
+    const glowFist = (x, y) => C(x, y, 11, "#ffd54f", 0, `opacity=".35"`) + C(x, y, 7.5, "#ffe082", 0, `opacity=".6"`) + fist(x, y, 5.2, Rd) + aSpark(x, y, 9, "#fff8e1");
+    const tor = TORSO;
+    const top = "M46,70 Q60,66 74,70 L75,84 Q60,90 45,84Z";
+    const body =
+      limb([[54, 101], [50, 119], [46, 135]], BL, 9, Rd, boot(46, 138, Rd, -1, 6.4)) +
+      limb([[66, 101], [70, 115], [62, 128]], BL, 9, Rd, boot(61, 131, Rd, -1, 6.4)) +
+      S("M51,104 L47,121 M65,104 L68,114", Rd, 2.2) +
+      P(tor, BL, 1.3) + clipD(tor, Pn(top, Rd)) + S("M45.3,84 Q60,90 74.7,84", Go, 1.6) + S("M54,90 L60,104 L66,90", Go, 1.2) +
+      aStar(60, 79, 7.5, Go).replace("/>", ` stroke="${OL}" stroke-width=".9" stroke-linejoin="round"/>`) +
+      P("M48,99 Q60,102 72,99 L72.3,104 Q60,107 47.7,104Z", Go, 1) + shadeOn(tor, 66) +
+      limb([[48, 75], [38, 88], [30, 98]], BL, 8, Rd, glowFist(28, 100)) +
+      limb([[72, 75], [86, 62], [96, 44]], BL, 8, Rd, glowFist(98, 40)) +
+      head(mhead, 59, 45, 1.42, -6);
+    return [bg + S("M44,152 L48,142 M58,156 L60,146 M34,148 L40,138", "#ffe082", 1.6, `opacity=".8"`) + aSpark(16, 50, 3.4, "#fff") + aSpark(112, 70, 2.6, "#ffe082") +
+      `<g transform="translate(7 5) rotate(-8 60 90)">` + glow(body, Go, 2.5, 3.5) + `</g>`, `<g transform="translate(7 5) rotate(-8 60 90)">` + aEdge(body) + `</g>`];
+  }
+
+  /* ---------- 9 Ant-Man: tiny, riding a giant friendly ant through giant grass ---------- */
+  function antHelmet() {
+    const Si = "#c9d1d8", Rd = "#e8352a";
+    const AH = "M32,24 Q32,5 50,5 Q68,5 68,24 Q68,38 50,43 Q32,38 32,24Z";
+    const lens = x => E(x, 24.5, 6.4, 7.4, Rd, 1.2) + En(x - 1.8, 21.5, 2, 2.8, "#fff", `opacity=".8"`) + En(x + 1.6, 28, 1.6, 1.8, "#ffab91", `opacity=".8"`);
+    return SO("M38,9 L31,-3", Si, 1.4) + C(30.5, -4, 2, Si, 1) + SO("M62,9 L69,-3", Si, 1.4) + C(69.5, -4, 2, Si, 1) +
+      Pn(AH, Si) + clipD(AH, En(63, 25, 9, 22, "#000", `opacity=".16"`) + Pn("M37,14 Q42,8 50,8", "none", `stroke="#fff" stroke-width="2" opacity=".6" stroke-linecap="round"`) + Pn("M46,4 L54,4 L53,17 L47,17Z", "#2a2f36")) + P(AH, "none", 1.3) +
+      P("M38,15 Q50,11 62,15 L62,19 Q50,16 38,19Z", "#2a2f36", .9) +
+      lens(42.6) + lens(57.4) +
+      P("M42,33.5 Q50,30.5 58,33.5 Q57.5,41 50,42 Q42.5,41 42,33.5Z", "#7d8891", 1) + S("M46,34 V40 M50,33 V41 M54,34 V40", "#4c565e", .8);
+  }
+  function antman() {
+    const Rd = "#d62828", K = "#1c1c22", Si = "#c9d1d8", A = "#6b4430", Ad = "#3e2619", Al = "#8d5c40";
+    const blade = (x, h, lean, c, w = 7) => P(`M${x - w},158 Q${x - w * .3 + lean * .5},${158 - h * .6} ${x + lean},${158 - h} Q${x + w * .4 + lean * .5},${158 - h * .55} ${x + w},158Z`, c, 1);
+    // a dew drop as big as his head hanging from a blade of grass: everything around him is giant
+    const drop = (x, y, r) => P(`M${x},${y - r * 1.7} Q${x + r * .35},${y - r * .9} ${x + r},${y} A${r},${r} 0 0 1 ${x - r},${y} Q${x - r * .35},${y - r * .9} ${x},${y - r * 1.7}Z`, "#bfeaff", 1, `opacity=".95"`) +
+      En(x - r * .38, y - r * .15, r * .22, r * .38, "#fff") + En(x + r * .3, y + r * .45, r * .3, r * .14, "#fff", `opacity=".7"`);
+    const bg = back("#7fd4ff", "#e7f8ff") + A_RAYS + C(28, 50, 8, "#fff59d", 0) +
+      blade(6, 150, 10, "#58b04a", 8) + blade(30, 128, -14, "#6cc35a") + blade(106, 156, -22, "#4fa543", 9) + blade(118, 112, -10, "#6cc35a") +
+      blade(64, 92, 14, "#79c967", 6) + drop(85, 24, 7.5) + blade(-4, 74, 10, "#4c9c3e", 9) + blade(124, 64, -8, "#4c9c3e", 9) +
+      `<rect x="0" y="146" width="120" height="12" fill="#6d4c2f"/>` + [8, 30, 52, 74, 96, 114].map((x, i) => En(x, 149 + (i % 2) * 4, 3, 1.4, "#5a3d25")).join("") +
+      aSpark(12, 58, 3) + aSpark(110, 44, 2.6);
+    // the giant ant (facing right, smiling): six legs, abdomen, waist, thorax, a big round head
+    const legs = [[56, 116, 40, 128, 34, 148], [62, 118, 58, 132, 54, 149], [68, 117, 80, 130, 84, 149], [52, 114, 30, 122, 18, 146], [64, 119, 70, 134, 68, 150], [72, 114, 92, 126, 100, 146]];
+    const AB = "M2,110 A22,17 0 0 0 46,110 A22,17 0 0 0 2,110Z", HD = "M74,97 A20,18 0 0 0 114,97 A20,18 0 0 0 74,97Z";
+    const ant =
+      legs.map(([a, b, c, d, e, f]) => aL([[a, b], [c, d], [e, f]], Ad, 3)).join("") +
+      Pn(AB, A) + clipD(AB, En(26, 120, 22, 8, "#000", `opacity=".2"`) + S("M10,101 Q20,95 32,96", "#fff", 2.2, `opacity=".3"`) + S("M16,95 Q13,110 17,125 M28,93 Q26,110 28,127", Ad, 1.1)) + P(AB, "none", 1.4) +
+      E(49, 113, 5.5, 4.6, A, 1.2) + E(62, 110, 13, 10, A, 1.4) + En(60, 106, 7, 3, Al, `opacity=".7"`) +
+      SO("M86,82 Q82,64 74,54", Ad, 1.6) + C(73, 52.5, 3, Ad, 1) + SO("M100,81 Q106,62 114,56", Ad, 1.6) + C(115, 54.5, 3, Ad, 1) +
+      Pn(HD, A) + clipD(HD, En(100, 106, 18, 9, "#000", `opacity=".16"`) + S("M80,90 Q86,83 94,82", "#fff", 2, `opacity=".3"`)) + P(HD, "none", 1.4) +
+      aEye(87, 96, "#3b2a1a", 1.15) + aEye(102, 96, "#3b2a1a", 1.15) +
+      P("M88,105 Q94.5,112 101,105 Q94.5,107 88,105Z", "#c0392b", 1) +
+      S("M80,103 l1.6,-1.8 M82.4,103.4 l1.6,-1.8 M105.6,103.4 l1.6,-1.8 M108,103 l1.6,-1.8", "#ff8a80", 1);
+    // Ant-Man riding on the ant's back, waving: much smaller than the ant
+    const tor = "M50,72 Q60,69 70,72 Q72,84 69,96 L51,96 Q48,84 50,72Z";
+    const man =
+      limb([[56, 94], [48, 102], [47, 114]], Rd, 7.5, K, E(46, 116, 5, 3.4, K)) +
+      P(tor, Rd, 1.2) + clipD(tor, Pn("M50,72 L55,72 L54,96 L50,96Z", K) + Pn("M70,72 L65,72 L66,96 L70,96Z", K) + S("M60,72 V92", K, 2)) +
+      P("M50.5,90 Q60,93 69.5,90 L69.8,95 Q60,98 50.2,95Z", Si, .9) + C(60, 93.4, 2.6, "#ff5252", .8) + shadeOn(tor, 64) +
+      limb([[68, 76], [76, 86], [82, 96]], Rd, 6.5, K, fist(83, 98, 4, K)) +
+      limb([[52, 76], [42, 66], [38, 54]], Rd, 6.5, K, fist(37, 51, 4.6, K)) +
+      head(antHelmet(), 60, 52, 1.2, -6);
+    return [bg, aEdge(shadow(60, 148, 50, 2.6) + ant + `<g transform="translate(20 34) scale(.7)">${man}</g>`)];
+  }
+
+  FAN.marvel = [
+    ["Spider-Man", "red and blue suit, web lines, big white lenses; swinging over the skyscrapers, the web-shooter hand shooting a web", spiderman],
+    ["Miles Morales", "black suit with red web lines and red spider, a cyan rim light; crouched on a rooftop before a huge glowing moon", miles],
+    ["Iron Man", "red and gold armour, glowing arc reactor and eye slits; flying, repulsor blast", ironman],
+    ["Hulk", "huge and green, messy black hair, torn purple shorts; flexing both fists, the ground cracking", hulk],
+    ["Captain America", "winged helmet with the A, star and stripes; the round shield up", captain],
+    ["Black Panther", "cat-ear mask, bold silver fang necklace, white claws out; purple kinetic glow over Wakanda", panther],
+    ["Thor", "red cape, silver discs, blond hair, short beard and a big grin; Mjolnir raised with lightning, stormy sky", thor],
+    ["Captain Marvel", "red and blue suit, gold star; flying up with glowing fists in space", marvel],
+    ["Ant-Man", "silver helmet with antennae and red lenses; tiny, riding a giant friendly ant past a giant dew drop in giant grass", antman],
+  ];
+})();
+
+/* Sticker book theme page "Heroes 2 (DC)": nine chibi superheroes in the album's anime style (FAN.dc rows: name, what, draw) */
+(() => {
+  "use strict";
+  const OL = A_OL, O = A_OUT;
+  const U = p => `dc${p}${++aUid}`;
+  const P = (d, f, extra = "") => `<path d="${d}" fill="${f}" ${O} stroke-linejoin="round" ${extra}/>`;
+  const place = (svg, x, y, s, rot = "") => `<g transform="translate(${x} ${y}) scale(${s})${rot ? ` rotate(${rot})` : ""}">${svg}</g>`;
+  const shadow = (x = 60, y = 143, rx = 30) => `<ellipse cx="${x}" cy="${y}" rx="${rx}" ry="4.5" fill="#000" opacity=".22"/>`;
+  const sparks = (pts, c = "#fff") => pts.map(([x, y, r]) => aSpark(x, y, r, c)).join("");
+  const back = (id, a, b) => `<defs>${aVGrad(id, a, b)}</defs><rect width="120" height="158" fill="url(#${id})"/>`;
+  const lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+
+  /* ---------- body: a chibi hero in figure coordinates (as aFigure: head ~50,25, feet ~107) ---------- */
+  // o: pose {ba, fa, bl, fl: 3 points each, bb, fb: [x, y, rot] boots}, skin, suit, sleeve, legs, glove (+ gloveAt 0..1 from
+  // the elbow), boot (+ bootAt from the knee), cuff (bracelet), torso ("m"/"f"), shade, hips (svg), chest (svg), belt,
+  // capeBack (svg, drawn first), behind (svg after the cape), head (svg), top (svg), frontOver (front arm after the head),
+  // grip (svg drawn just before the front fist: a staff held in it)
+  function hero(o) {
+    const p = o.pose, s = [], skin = o.skin;
+    const arm = pts => {
+      let r = aL(pts, o.sleeve || o.suit, 7.6);
+      if (o.sleeveTo !== undefined) r += aL([pts[0], lerp(pts[0], pts[1], o.sleeveTo)], o.suit, 7.6, false);
+      if (o.glove) r += aL([lerp(pts[1], pts[2], o.gloveAt ?? .2), pts[2]], o.glove, 7.6, false);
+      if (o.cuff) { const a = lerp(pts[1], pts[2], .45), b = lerp(pts[1], pts[2], .8); r += aL([a, b], OL, 8.6, false) + aL([a, b], o.cuff, 6.8, false) + aL([a, b], "#fff", 1.4, false); }
+      return r;
+    };
+    const fist = (pts, grip = "") => grip + aC(pts[2][0], pts[2][1], 4.7, o.glove || skin, O) + aL([[pts[2][0] - 2.2, pts[2][1] - 1.4], [pts[2][0] + 2.2, pts[2][1] - 1.4]], OL, .7, false) +
+      (o.ring && pts === p.fa ? aC(pts[2][0] + 1.8, pts[2][1] + 1.4, 1.9, "#00e676", `stroke="#fff" stroke-width=".8"`) : "");
+    // o.bootShape: a shaped boot instead of the oval foot (heel, toe along +x before the foot's rotation b[2]), with a flared
+    // cuff at the boot's top that has a V notch in front (Superman, Supergirl)
+    const shoe = (b, c) => `<g transform="translate(${b[0]} ${b[1]}) rotate(${b[2]})">` +
+      P("M-5.4,-4.2 L3,-4.2 Q10.4,-3.8 11,.4 Q11.2,4 7.2,4 H-4.6 Q-7.4,4 -7.4,1.4 L-7,-1.4 Q-6.8,-4.2 -5.4,-4.2Z", c) +
+      `<path d="M-7.2,1.6 H-2.6 V4 M3,-3.6 Q8.6,-3 9.6,.2" fill="none" stroke="${OL}" stroke-width=".8" opacity=".55"/><path d="M-4,-2.6 H2.6" stroke="#fff" stroke-width="1.1" stroke-linecap="round" opacity=".35"/></g>`;
+    const cuffBand = (k, f, t, c) => {
+      const L = Math.hypot(f[0] - k[0], f[1] - k[1]), d = [(f[0] - k[0]) / L, (f[1] - k[1]) / L], n = [-d[1], d[0]], a = lerp(k, f, t);
+      const at = (u, v) => [a[0] + d[0] * u + n[0] * v, a[1] + d[1] * u + n[1] * v];
+      return `<polygon points="${aPts([at(-1.4, 6), at(3.4, 5), at(3.4, -5), at(-1.4, -6), at(.8, 0)])}" fill="${c}" ${O} stroke-linejoin="round"/>` +
+        `<path d="M${aPts([at(2.2, 4.2), at(2.2, -4.2)]).replace(" ", " L")}" stroke="#000" stroke-width="1.2" opacity=".15"/>`;
+    };
+    const leg = (pts, b) => { const [, k, f] = pts, ba = o.bootAt ?? .1;
+      let r = aL(pts, o.legs || o.suit, 9);
+      if (o.boot) r += aL([lerp(k, f, ba), f], o.boot, 9, false) + (o.bootTop ? `<polyline points="${aPts([lerp(k, f, ba + .02), lerp(k, f, ba + .13)])}" fill="none" stroke="${o.bootTop}" stroke-width="9"/>` : "");
+      if (o.bootShape) return r + shoe(b, o.boot) + aL([lerp(k, f, ba + .1), f], o.boot, 9, false) + cuffBand(k, f, ba, o.boot);
+      return r + `<ellipse cx="${b[0]}" cy="${b[1]}" rx="${b[3] || 6.4}" ry="3.9" fill="${o.boot || o.legs || o.suit}" ${O} transform="rotate(${b[2]} ${b[0]} ${b[1]})"/>`; };
+    if (o.capeBack) s.push(o.capeBack);
+    if (o.behind) s.push(o.behind);
+    s.push(arm(p.ba), fist(p.ba, o.gripBack || ""));
+    s.push(leg(p.bl, p.bb), leg(p.fl, p.fb));
+    s.push(o.hips || P("M38,64 h24 v8 q0,3 -3,3 h-6 l-3,-3 l-3,3 h-6 q-3,0 -3,-3z", o.trunks || o.suit));
+    const id = U("t"), torso = o.torso === "f" ? "M37.5,47 Q37.5,41 43,41 H57 Q62.5,41 62.5,47 Q59.5,56 60.5,68 H39.5 Q40.5,56 37.5,47Z" : "M36,47 Q36,41 42,41 H58 Q64,41 64,47 L62,68 H38Z";
+    s.push(`<clipPath id="${id}"><path d="${torso}"/></clipPath><path d="${torso}" fill="${o.suit}"/>`,
+      `<g clip-path="url(#${id})">${o.chestFill || ""}<path d="M56,41 Q53,55 57,70 H66 V41Z" fill="#000" opacity="${o.shade ?? .15}"/></g>`, `<path d="${torso}" fill="none" ${O}/>`);
+    if (o.belt) s.push(P("M38,63.5 H62 V68 H38Z", o.belt) + (o.buckle || ""));
+    if (o.chest) s.push(o.chest);
+    if (!o.frontOver) s.push(arm(p.fa), fist(p.fa, o.grip || ""));
+    s.push(o.head);
+    if (o.frontOver) s.push(arm(p.fa), fist(p.fa, o.grip || ""));
+    if (o.top) s.push(o.top);
+    return s.join("");
+  }
+
+  /* ---------- heads ---------- */
+  const face = skin => aC(33.4, 27, 3.2, skin, O) + aC(66.6, 27, 3.2, skin, O) + `<path d="${A_FACE}" fill="${skin}" ${O}/>`;
+  const eyes = (c, lash = 0, s = 1, y = 28.5) => aEye(43.3, y, c, s, lash) + aEye(56.7, y, c, s, lash);
+  const smile = (y = 36.2) => `<path d="M46.6,${y} Q50,${y + 3.8} 53.4,${y}Z" fill="#c0392b" stroke="${OL}" stroke-width=".9" stroke-linejoin="round"/>`;
+  const grin = (y = 36) => `<path d="M45.8,${y} Q50,${y + 4.6} 54.2,${y}Z" fill="#c0392b" stroke="${OL}" stroke-width=".9" stroke-linejoin="round"/><path d="M46.6,${y + .4} H53.4 L53,${y + 1.5} H47Z" fill="#fff"/>`;
+  const shine = (x = 50, y = 9) => `<path d="M${x - 8},${y + 2} Q${x},${y - 1.5} ${x + 8},${y + 2}" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity=".35"/>`;
+  // white mask lenses (Batman, Robin): canonical white, rounded below and only a slight slant: confident, not cross
+  const lenses = (y = 0, sc = 1) => `<g transform="translate(50 ${28 + y}) scale(${sc}) translate(-50 -28)">` +
+    P("M38,26.4 Q42.6,24.4 47.8,26.8 Q47.6,32 42.8,32 Q38.2,31.8 38,26.4Z", "#fff") + P("M62,26.4 Q57.4,24.4 52.2,26.8 Q52.4,32 57.2,32 Q61.8,31.8 62,26.4Z", "#fff") +
+    `<path d="M40,26.6 Q42.6,26 45,27" fill="none" stroke="#cfd8dc" stroke-width=".9" stroke-linecap="round"/><path d="M60,26.6 Q57.4,26 55,27" fill="none" stroke="#cfd8dc" stroke-width=".9" stroke-linecap="round"/></g>`;
+  // a confident lopsided grin (Batman, Robin)
+  const cocky = (y = 36.4) => `<g transform="rotate(-6 50 ${y})"><path d="M45.4,${y} Q50,${y + 4.8} 54.8,${y - .6} Q50,${y + 1.2} 45.4,${y}Z" fill="#c0392b" stroke="${OL}" stroke-width=".9" stroke-linejoin="round"/>` +
+    `<path d="M46.6,${y + .5} Q50,${y + 1.5} 53.8,${y - .1} L53.2,${y + 1.2} Q50,${y + 2.6} 47.2,${y + 1.4}Z" fill="#fff"/></g>`;
+  const neatHair = h => aC(50, 21, 17.6, h, O);
+  const fringe = h => P("M33,25 Q32,6 50,5 Q68,6 67,25 Q63,15 55,13.5 Q48,19.5 39,17.5 Q35.5,20.5 33,25Z", h);
+  // the bat cowl (Batman, Batgirl): covers the head down to the nose, pointed ears
+  const cowl = (c, ear = 1) => P(`M32.6,41 Q30.2,26 32.8,15.5 L${34.6 - ear},${-2 * ear + 1} L41,9.2 Q50,6.8 59,9.2 L${65.4 + ear},${-2 * ear + 1} L67.2,15.5 Q69.8,26 67.4,41 L62.4,40 Q63,34.6 61,32.2 Q56,31.4 50,34.6 Q44,31.4 39,32.2 Q37,34.6 37.6,40Z`, c) +
+    `<path d="M40,11.5 Q50,8.5 60,11.5" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity=".22"/>`;
+
+  /* ---------- emblems ---------- */
+  const BAT = "M-12,-1 Q-9,-4.2 -5,-4 Q-3.4,-2 -2,-4 L-1.3,-6 L-.6,-3.8 H.6 L1.3,-6 L2,-4 Q3.4,-2 5,-4 Q9,-4.2 12,-1 Q9.2,-.2 8.4,3 Q6.4,1 4.2,2.6 Q2.2,2 0,5.6 Q-2.2,2 -4.2,2.6 Q-6.4,1 -8.4,3 Q-9.2,-.2 -12,-1Z";
+  const bat = (x, y, s, c = "#111") => `<path d="${BAT}" fill="${c}" transform="translate(${x} ${y}) scale(${s})"/>`;
+  const batOval = (x, y, s = 1) => `<ellipse cx="${x}" cy="${y}" rx="${9 * s}" ry="${5.6 * s}" fill="#ffd600" stroke="${OL}" stroke-width="1"/>` + bat(x, y, .62 * s);
+  const sShield = (x, y, s = 1) => `<g transform="translate(${x} ${y}) scale(${s})"><path d="M-9.5,-6.5 H9.5 L13,-2 L0,11 L-13,-2Z" fill="#ffd600" stroke="#d50000" stroke-width="1.9" stroke-linejoin="round"/>` +
+    `<path d="M-9.5,-6.5 H9.5 L13,-2 L0,11 L-13,-2Z" fill="none" stroke="${OL}" stroke-width=".6" stroke-linejoin="round" transform="scale(1.1)"/>` +
+    `<path d="M6.6,-3.6 H-3.4 Q-7,-3.6 -6.4,-.8 Q-6,1 -2.6,1.2 H2.6 Q4.2,1.4 3,3 L-.2,6 L-2.4,3.8 H-5 L0,8.2 L5.4,3.4 Q8,.4 5,-1.2 H-1.4 Q-2.6,-1.4 -1.2,-2 H5.2Z" fill="#d50000"/></g>`;
+  const BOLT = "M2,-9 L-5,1 H-.5 L-3,9 L5,-1.6 H.4Z";
+  const flashEmblem = (x, y, s = 1) => `<g transform="translate(${x} ${y}) scale(${s})">${aC(0, 0, 8, "#fff", `stroke="#ffc107" stroke-width="1.8"`)}${aC(0, 0, 9.1, "none", `stroke="${OL}" stroke-width=".7"`)}<path d="${BOLT}" fill="#ffc107" stroke="${OL}" stroke-width=".6" stroke-linejoin="round" transform="scale(.95)"/></g>`;
+  const lanternSym = (x, y, s = 1, c = "#00c853") => `<g transform="translate(${x} ${y}) scale(${s})" fill="${c}">` +
+    `<circle r="4.6" fill="none" stroke="${c}" stroke-width="2.4"/><rect x="-6" y="-8.6" width="12" height="2.4"/><rect x="-6" y="6.2" width="12" height="2.4"/></g>`;
+
+  /* ---------- backdrops ---------- */
+  function city(seed, base, win, y0 = 112) {      // building silhouettes with lit windows
+    const R = aRand(seed), out = [];
+    for (let x = -4; x < 124;) { const w = 12 + R() * 14, h = 20 + R() * 46, top = y0 - h;
+      out.push(`<rect x="${x.toFixed(1)}" y="${top.toFixed(1)}" width="${w.toFixed(1)}" height="${(160 - top).toFixed(1)}" fill="${base}"/>`);
+      for (let wy = top + 4; wy < 154; wy += 6) for (let wx = x + 3; wx < x + w - 4; wx += 5) if (R() < .35) out.push(`<rect x="${wx.toFixed(1)}" y="${wy.toFixed(1)}" width="2.2" height="3" fill="${win}"/>`);
+      x += w + 1; }
+    return out.join("");
+  }
+  const stars = (seed, n, y1 = 158, c = "#fff") => { const R = aRand(seed); return [...Array(n)].map(() => aC(R() * 120, R() * y1, .4 + R() * .8, c, `opacity="${(.5 + R() * .5).toFixed(2)}"`)).join(""); };
+  const cloud = (x, y, s, c = "#fff", op = 1) => `<g transform="translate(${x} ${y}) scale(${s})" fill="${c}" opacity="${op}">${aC(0, 0, 8, c)}${aC(9, -3, 10, c)}${aC(19, 1, 7, c)}<rect x="-6" y="0" width="30" height="7" rx="3.5"/></g>`;
+
+  /* ---------- 1 Batman ---------- */
+  function batman() {
+    const g = U("g"), suit = "#8a96a3", dk = "#262a35";
+    const cape = P("M41,42 Q29,50 15,62 L9,104 Q17,97 24,106 Q31,98 38,108 Q44,100 50,108 Q56,100 62,108 Q69,98 76,106 Q83,97 91,104 L85,62 Q71,50 59,42Z", dk) +
+      `<path d="M50,46 V104 M30,56 L22,102 M70,56 L78,102" stroke="#3a4050" stroke-width="1.6" fill="none"/>`;
+    const fig = hero({
+      pose: { ba: [[39, 47], [28, 54], [19, 61]], fa: [[61, 47], [72, 54], [81, 61]], bl: [[45, 72], [41, 88], [39, 102]], bb: [36, 106, 0, 7], fl: [[55, 72], [59, 88], [61, 102]], fb: [64, 106, 0, 7] },
+      skin: A_SKIN[0], suit, legs: suit, glove: dk, gloveAt: 0, boot: dk, bootAt: .25, trunks: dk, capeBack: cape,
+      belt: "#ffc400", buckle: [41, 46, 54, 59].map(x => `<rect x="${x - 1.8}" y="64.2" width="3.6" height="3.2" rx=".6" fill="#e0a800" stroke="${OL}" stroke-width=".6"/>`).join(""),
+      chest: batOval(50, 51, 1.05) + `<path d="M36.5,45 Q40,43 41,42 M63.5,45 Q60,43 59,42" stroke="${dk}" stroke-width="3" fill="none"/>`,
+      head: face(A_SKIN[0]) + cowl(dk) + lenses(-1.4) + cocky(37) + `<path d="M47,34.6 Q50,35.6 53,34.6" fill="none" stroke="#c99a7a" stroke-width=".8"/>`,
+    });
+    return [back(g, "#0b1640", "#29407a") + stars(11, 30, 70) +
+      `<path d="M124,158 L84,26 L112,26 Z" fill="#fff59d" opacity=".16"/>` + aC(98, 24, 15, "#fff59d", `opacity=".35"`) + aC(98, 24, 12.5, "#ffee58", `stroke="#fff9c4" stroke-width="1.4"`) + bat(98, 24.5, .92) +
+      city(5, "#141c3a", "#ffd54f", 96) + shadow(60, 142, 34) + sparks([[16, 50, 2.6], [108, 48, 2]]),
+      aEdge(place(fig, 4, 19, 1.12))];
+  }
+
+  /* ---------- 2 Superman ---------- */
+  function superman() {
+    const g = U("g"), blue = "#1e5bd8", red = "#e01e2b";
+    const cape = P("M40,43 Q31,70 24,104 Q32,98 38,108 Q45,99 52,110 Q58,99 65,106 Q70,96 76,100 Q68,72 60,43Z", red) +
+      `<path d="M44,52 Q40,80 38,104 M56,52 Q60,80 64,102" stroke="#a5121c" stroke-width="1.6" fill="none"/>`;
+    const fig = hero({
+      pose: { ba: [[39, 47], [33, 58], [32, 68]], fa: [[61, 46], [70, 32], [75, 15]], bl: [[46, 72], [45, 87], [44, 98]], bb: [44, 103, 85], fl: [[54, 72], [58, 83], [57, 94]], fb: [57.6, 99, 75] },
+      skin: A_SKIN[1], suit: blue, legs: blue, boot: red, bootAt: .4, bootShape: 1, trunks: red, capeBack: cape, belt: "#ffd600", frontOver: 1,
+      chest: sShield(50, 51, .95) + P("M37,44 Q38,41 43,41 L41,47Z", red) + P("M63,44 Q62,41 57,41 L59,47Z", red),
+      head: `<g transform="rotate(-18 50 40)">` + neatHair("#141414") + face(A_SKIN[1]) + fringe("#141414") + `<path d="M48,13 q-4,3 -1,6 q3,2 0,5" fill="none" stroke="#141414" stroke-width="2.2" stroke-linecap="round"/>` + shine(46, 8) +
+        eyes("#2a6fdb") + aBlush() + grin() + `</g>` });
+    return [back(g, "#2f8ff0", "#bfe6ff") + aC(98, 22, 30, "#fff", `opacity=".25"`) +
+      cloud(6, 132, 1.4) + cloud(70, 142, 1.6) + cloud(84, 30, .9, "#fff", .9) + cloud(-4, 46, .8, "#fff", .8) +
+      [[10, 112], [16, 122], [6, 100], [24, 130]].map(([x, y], i) => `<path d="M${x},${y} l${-10 + i},${12 - i}" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".8"/>`).join("") +
+      sparks([[104, 70, 3.4], [40, 22, 2.6]]),
+      aEdge(place(fig, -6, 9, 1.25, "16 50 60"))];
+  }
+
+  /* ---------- 3 Wonder Woman ---------- */
+  function wonderWoman() {
+    const g = U("g"), red = "#d81e2c", blue = "#1d3fa0", gold = "#f6c21c", skin = A_SKIN[2];
+    const hair = P("M33,18 Q26,40 28,62 Q34,58 37,64 Q40,54 41,44 L59,44 Q60,54 63,64 Q66,58 72,62 Q74,40 67,18Z", "#1b1b2a");
+    const loop = `cx="58" cy="-3" rx="23" ry="7.4" fill="none"`;
+    const lasso = `<ellipse ${loop} stroke="#ffeb3b" stroke-width="6" opacity=".35"/>` +
+      `<ellipse ${loop} stroke="${OL}" stroke-width="3.6"/><ellipse ${loop} stroke="${gold}" stroke-width="2.2"/>` +
+      `<path d="M27,25 Q27,8 36.4,.6" fill="none" stroke="${OL}" stroke-width="3.6"/><path d="M27,25 Q27,8 36.4,.6" fill="none" stroke="${gold}" stroke-width="2.2"/>` +
+      `<path d="M27,28 Q14,44 18,70 Q20,86 12,100" fill="none" stroke="${OL}" stroke-width="3.6"/><path d="M27,28 Q14,44 18,70 Q20,86 12,100" fill="none" stroke="${gold}" stroke-width="2.2"/>` +
+      `<ellipse ${loop} stroke="#fff" stroke-width=".7" stroke-dasharray="2 3"/>`;
+    const skirt = P("M38.5,63 H61.5 L66,79 Q50,82 34,79Z", blue) + [[42, 70], [50, 74], [58, 70], [45, 77], [56, 77]].map(([x, y]) => aStar(x, y, 2.3, "#fff")).join("");
+    const fig = hero({
+      pose: { ba: [[39, 47], [31, 37], [27, 26]], fa: [[61, 47], [72, 50], [72, 38]], bl: [[45, 76], [40, 90], [37, 102]], bb: [35, 106, 0, 6.6], fl: [[55, 76], [60, 90], [63, 102]], fb: [65, 106, 0, 6.6] },
+      skin, suit: red, sleeve: skin, legs: skin, cuff: "#cfd8dc", boot: red, bootAt: 0, bootTop: "#fff", torso: "f", hips: skirt, frontOver: 1,
+      chestFill: `<rect x="30" y="38" width="40" height="5" fill="${skin}"/>`, behind: hair,
+      chest: P("M37.6,44.5 L42.4,52 L46,46.6 L50,52.6 L54,46.6 L57.6,52 L62.4,44.5 L59.4,45.2 L57.4,48.6 L54,43.6 L50,49.6 L46,43.6 L42.6,48.6 L40.6,45.2Z", gold) +
+        P("M38.5,62.6 H61.5 V66.2 H38.5Z", gold),
+      head: face(skin) + fringe("#1b1b2a") + P("M35,17 Q50,9.5 65,17 L64,19.6 Q50,13 36,19.6Z", gold) + aStar(50, 14.4, 3.6, red) + shine(42, 8) +
+        eyes("#3a7bd5", 1) + aBlush() + smile(),
+      gripBack: lasso });
+    return [back(g, "#ff9a5a", "#ffe0a3") + A_RAYS +
+      `<rect x="0" y="110" width="120" height="48" fill="#4fb3d9"/><path d="M0,112 Q15,108 30,112 T60,112 T90,112 T120,112" stroke="#fff" stroke-width="1.4" fill="none" opacity=".7"/>` +
+      [6, 102].map(x => `<rect x="${x}" y="40" width="12" height="76" fill="#fff8e7" ${O}/><rect x="${x - 3}" y="34" width="18" height="7" fill="#fff8e7" ${O}/><rect x="${x - 3}" y="112" width="18" height="6" fill="#fff8e7" ${O}/>` +
+        [3, 6, 9].map(d => `<path d="M${x + d},44 V110" stroke="#e5d6b8" stroke-width="1.1"/>`).join("")).join("") +
+      shadow(60, 143, 28) + sparks([[24, 46, 3, "#fffde7"], [106, 20, 2.4, "#fffde7"]]),
+      aEdge(place(fig, 6, 22, 1.12))];
+  }
+
+  /* ---------- 4 The Flash ---------- */
+  function flash() {
+    const g = U("g"), red = "#e3141e", gold = "#ffc107";
+    const ears = side => `<g transform="translate(50 0) scale(${side} 1) translate(-50 0)">` + P("M33.4,25 L21,17 L26,19 L19,10 L29,16.4 L28,12.6 L34,19.4Z", gold) + `</g>`;
+    const trail = aL([[34, 52], [14, 46], [6, 54], [-14, 44]], gold, 3.4) + aL([[30, 66], [10, 62], [2, 72], [-16, 66]], gold, 3.4) + aL([[24, 84], [8, 80], [0, 88], [-14, 84]], gold, 2.6);
+    const fig = hero({
+      pose: { ba: [[39, 47], [30, 55], [23, 49]], fa: [[61, 47], [69, 41], [76, 47]], bl: [[45, 72], [36, 82], [26, 85]], bb: [24, 87, -30, 7], fl: [[55, 72], [61, 86], [58, 100]], fb: [61, 104, 0, 7] },
+      skin: A_SKIN[0], suit: red, legs: red, glove: red, boot: gold, bootAt: .35, trunks: red, belt: gold, behind: trail,
+      buckle: `<path d="M48,63.8 L52,63.8 L49.6,66 H52.4 L48.4,69.4 L49.6,66.6 H47Z" fill="#fff59d"/>`,
+      chest: flashEmblem(50, 51, 1.05),
+      head: face(A_SKIN[0]) + P("M32.6,40 Q30.2,24 33.4,14 Q38,5 50,5 Q62,5 66.6,14 Q69.8,24 67.4,40 L62.6,39 Q63,35.4 61.4,33.6 Q56,33 50,35.4 Q44,33 38.6,33.6 Q37,35.4 37.4,39Z", red) +
+        shine(46, 8) + ears(1) + ears(-1) + eyes("#2a6fdb") + grin(36.6) });
+    const streaks = [[4, 30, 40], [0, 52, 30], [10, 92, 26], [0, 118, 44], [60, 134, 50], [70, 20, 40]].map(([x, y, w]) =>
+      `<path d="M${x},${y} h${w}" stroke="#fff" stroke-width="1.8" stroke-linecap="round" opacity=".55"/>`).join("");
+    const zig = (x, y, s, r) => `<path d="${BOLT}" fill="${gold}" stroke="#fff59d" stroke-width=".6" transform="translate(${x} ${y}) scale(${s}) rotate(${r})"/>`;
+    return [back(g, "#2a0d4a", "#7b1f3a") + `<g opacity=".25">${A_RAYS}</g>` + streaks + zig(104, 112, 1.4, 20) + zig(100, 22, 1.1, 10) +
+      `<rect x="0" y="136" width="120" height="22" fill="#3b1530"/><path d="M0,146 H120" stroke="#ffc107" stroke-width="1.6" stroke-dasharray="8 6"/>` +
+      sparks([[96, 70, 3, "#fff59d"]]),
+      aEdge(place(fig, 14, 20, 1.1, "10 50 60"))];
+  }
+
+  /* ---------- 5 Aquaman ---------- */
+  function aquaman() {
+    const g = U("g"), org = "#f39c12", grn = "#1e9e4a", gold = "#f6c21c", skin = A_SKIN[2], hair = "#e8b443";
+    const scales = [...Array(6)].map((_, r) => [...Array(7)].map((_, c) => `<path d="M${33 + c * 5 + (r % 2) * 2.5},${43 + r * 4.4} q2.5,3 5,0" fill="none" stroke="#c46a00" stroke-width=".8"/>`).join("")).join("");
+    const hairBack = P("M32,16 Q22,36 26,60 Q31,56 34,62 Q37,52 38,44 L62,44 Q63,52 66,62 Q69,56 74,60 Q78,36 68,16Z", hair);
+    const shaft = `<path d="M76,110 V2" stroke="${OL}" stroke-width="4.4" stroke-linecap="round"/><path d="M76,110 V2" stroke="${gold}" stroke-width="2.4" stroke-linecap="round"/>`;
+    const prongs = P("M66,-6 L66,5 Q66,9 70,9 H82 Q86,9 86,5 L86,-6 L83.6,-2 V5 H78.2 V-12 L76,-17 L73.8,-12 V5 H68.4 V-2Z", gold) + `<path d="M70,11 H82" stroke="${OL}" stroke-width="2"/>`;
+    const fig = hero({
+      pose: { ba: [[39, 47], [30, 39], [26, 29]], fa: [[61, 47], [70, 54], [76, 52]], bl: [[45, 72], [42, 88], [40, 102]], bb: [38, 106, 0, 7], fl: [[55, 72], [58, 88], [60, 102]], fb: [63, 106, 0, 7] },
+      skin, suit: org, sleeve: org, glove: grn, gloveAt: 0, legs: grn, boot: grn, trunks: grn, chestFill: scales, behind: hairBack + shaft,
+      belt: gold, buckle: P("M46.4,62.4 H53.6 V69 H46.4Z", gold) + `<path d="M48,68 L50,63.6 L52,68 M48.8,66.4 H51.2" stroke="${OL}" stroke-width=".9" fill="none"/>`,
+      head: neatHair(hair) + face(skin) +
+        P("M33.6,27 Q34,41 50,43.6 Q66,41 66.4,27 Q64,36 59,37 Q55,34.6 50,35.4 Q45,34.6 41,37 Q36,36 33.6,27Z", "#d9a032") +
+        fringe(hair) + shine(46, 8) + eyes("#1e88e5", 0, .95, 27.8) + `<path d="M46.4,37.4 Q50,40 53.6,37.4Z" fill="#c0392b" stroke="${OL}" stroke-width=".8"/>`,
+      top: prongs });
+    const fish = (x, y, s, c, flip = 1) => `<g transform="translate(${x} ${y}) scale(${s * flip} ${s})"><path d="M-7,0 Q0,-6 7,0 Q0,6 -7,0Z M7,0 L12,-4 L12,4Z" fill="${c}" ${O}/>${aC(-3.4, -.8, 1, "#111")}</g>`;
+    const R = aRand(55), bub = [...Array(12)].map(() => aC(R() * 120, 20 + R() * 120, .8 + R() * 1.8, "none", `stroke="#e0f7fa" stroke-width=".8" opacity=".8"`)).join("");
+    return [back(g, "#28c3d4", "#0b3d7a") + `<g opacity=".18">${[10, 40, 70, 100].map(x => `<polygon points="${x},0 ${x + 12},0 ${x + 30},158 ${x + 10},158" fill="#fff"/>`).join("")}</g>` +
+      `<path d="M0,8 Q10,4 20,8 T40,8 T60,8 T80,8 T100,8 T120,8 V0 H0Z" fill="#9be7f0" opacity=".7"/>` + bub +
+      fish(14, 52, 1, "#ff7043") + fish(104, 80, .9, "#ffd54f", -1) + fish(16, 92, .7, "#ffd54f") + fish(102, 40, .7, "#ff7043", -1) +
+      [8, 20, 96, 110].map((x, i) => `<path d="M${x},160 Q${x - 6},${140 - i * 3} ${x + 2},${128 - i * 4} Q${x + 8},${116 - i * 3} ${x},${104 + i * 2}" fill="none" stroke="#2e7d32" stroke-width="3" stroke-linecap="round"/>`).join("") +
+      `<path d="M0,150 Q30,140 60,148 T120,146 V158 H0Z" fill="#e8c27a"/>` +
+      shadow(60, 143, 28) + sparks([[28, 44, 2.4]]),
+      aEdge(place(fig, 4, 25, 1.1))];
+  }
+
+  /* ---------- 6 Robin ---------- */
+  function robin() {
+    const g = U("g"), red = "#e0202b", grn = "#2e9b3e", yel = "#ffcc00";
+    const cape = P("M42,42 Q28,56 10,88 Q20,86 24,94 Q30,86 36,92 Q40,80 46,64Z", yel) + P("M42,42 Q34,52 26,70 Q32,66 40,68 Q43,56 46,50Z", "#1b1b1b");
+    const staff = `<path d="M90,8 L50,76" stroke="${OL}" stroke-width="4.6" stroke-linecap="round"/><path d="M90,8 L50,76" stroke="#8d6e63" stroke-width="2.6" stroke-linecap="round"/>` +
+      `<path d="M88.4,10.8 L86,15 M52.4,72 L54.8,68" stroke="#cfd8dc" stroke-width="2.6"/>`;
+    const fig = hero({
+      pose: { ba: [[39, 47], [29, 52], [21, 46]], fa: [[61, 47], [71, 44], [74.5, 33]], bl: [[45, 72], [35, 79], [31, 92]], bb: [29, 96, 10, 6.6], fl: [[55, 72], [65, 81], [62, 94]], fb: [65, 98, 0, 6.6] },
+      skin: A_SKIN[1], suit: red, sleeve: grn, glove: grn, gloveAt: .1, legs: grn, boot: "#1b1b1b", bootAt: .3, trunks: grn, capeBack: cape, belt: yel,
+      buckle: [43, 50, 57].map(x => `<rect x="${x - 1.6}" y="64.3" width="3.2" height="3" rx=".5" fill="#ffe082" stroke="${OL}" stroke-width=".5"/>`).join(""),
+      chest: `<path d="M46,41.5 L50,46 L54,41.5" fill="none" stroke="#1b1b1b" stroke-width="1.6"/>` + aC(54.8, 52, 4.8, yel, O) +
+        `<text x="54.8" y="54.9" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="7.8" fill="#111">R</text>`,
+      grip: staff, frontOver: 0,
+      head: aKidHead({ skin: A_SKIN[1], hair: "#141414", hs: "spiky", eyes: "#333", mouth: "" }).split("<ellipse cx=\"43.3\"")[0] +
+        P("M33.6,26 Q37,22 44,24 Q50,25.6 56,24 Q63,22 66.4,26 Q66,33 59,33.4 Q53,33 50,30.6 Q47,33 41,33.4 Q34,33 33.6,26Z", "#141414") + lenses(-.4, .82) + aBlush() + cocky(36.6) });
+    return [back(g, "#ff8a3d", "#ffd27a") + aC(92, 34, 18, "#fff3c4", `opacity=".7"`) +
+      `<path d="M0,96 L20,90 L22,70 L36,70 L38,88 L60,84 L62,64 L74,58 L86,64 L88,90 L120,88 V158 H0Z" fill="#7e3f8f" opacity=".55"/>` +
+      `<rect x="0" y="126" width="120" height="32" fill="#4a2340"/><rect x="0" y="124" width="120" height="4" fill="#6d3a5f"/>` + cloud(4, 26, .8, "#ffe9b0", .8) +
+      shadow(56, 140, 26) + sparks([[14, 54, 2.6], [106, 74, 2.2]]),
+      aEdge(place(fig, 6, 26, 1.1))];
+  }
+
+  /* ---------- 7 Supergirl ---------- */
+  // flying to the left (Superman flies up to the right): the whole body tilted, fist ahead, cape and hair streaming behind
+  function supergirl() {
+    const g = U("g"), blue = "#2266e0", red = "#e01e2b", capeRed = "#c4141f", hair = "#f3cf5a", hairDk = "#c99a1e", skin = A_SKIN[0];
+    const cape = P("M41,43 Q30,64 30,88 Q30,102 22,114 Q31,111 35,118 Q41,109 48,116 Q52,106 59,110 Q63,99 70,99 Q64,86 63,70 Q62,55 59,43Z", capeRed) +
+      `<path d="M45,52 Q38,78 35,106 M55,52 Q59,76 60,100" stroke="#8e0d16" stroke-width="1.6" fill="none"/>`;
+    const hairBack = P("M33,18 Q24,40 30,62 Q30,76 38,86 Q40,78 44,80 Q42,68 44,56 Q48,62 52,74 Q54,64 56,58 Q60,66 66,72 Q68,60 64,48 Q72,36 67,18Z", hair) +
+      `<path d="M36,30 Q32,50 38,74 M44,36 Q42,52 47,66 M62,32 Q64,44 61,56" fill="none" stroke="${hairDk}" stroke-width="1.1" stroke-linecap="round"/>`;
+    const skirt = P("M38.5,63 H61.5 L65,76 Q50,79 35,76Z", red) + P("M38.5,62.4 H61.5 V65.6 H38.5Z", "#ffd600");
+    const fig = hero({
+      pose: { ba: [[39, 47], [28, 36], [21, 21]], fa: [[61, 46], [68, 56], [63, 64]], bl: [[46, 74], [45, 88], [44, 99]], bb: [44, 104, 88], fl: [[54, 74], [62, 84], [58, 95]], fb: [58.4, 100, 80] },
+      skin, suit: blue, sleeve: blue, legs: skin, boot: red, bootAt: .15, bootShape: 1, torso: "f", hips: skirt, capeBack: cape, behind: hairBack, frontOver: 1,
+      chest: sShield(50, 50, .82) + P("M37,44 Q38,41 43,41 L41,47Z", red) + P("M63,44 Q62,41 57,41 L59,47Z", red),
+      head: `<g transform="rotate(22 50 40)">` + face(skin) + P("M33,26 Q31,6 50,5 Q69,6 67,26 Q64,16 57,13.6 Q50,18 44,14.6 Q38,16 33,26Z", hair) + shine(46, 8) +
+        eyes("#3a7bd5", 1) + aBlush() + grin() + `</g>` });
+    const wind = [[66, 96, 30], [80, 110, 26], [58, 120, 22], [90, 84, 20]].map(([x, y, w]) =>
+      `<path d="M${x},${y} l${w * .8},${w * .6}" stroke="#fff" stroke-width="2.2" stroke-linecap="round" opacity=".75"/>`).join("");
+    return [back(g, "#7e57c2", "#ffb3a7") + stars(7, 14, 50) + aC(96, 120, 22, "#ffe082", `opacity=".8"`) + aC(96, 120, 16, "#fff3c4") +
+      cloud(-6, 136, 1.6, "#fff") + cloud(60, 142, 1.8, "#fff") + cloud(82, 40, .8, "#fff", .7) + wind + sparks([[50, 22, 3], [108, 62, 2.6], [12, 112, 2]]),
+      aEdge(place(fig, 13, 23, 1.08, "-45 50 60"))];
+  }
+
+  /* ---------- 8 Batgirl ---------- */
+  function batgirl() {
+    const g = U("g"), pur = "#6a3fb5", dk = "#241640", lining = "#4a2d80", yel = "#ffd600", hair = "#e2561f", skin = A_SKIN[0];
+    // the cape: dark, with scalloped bat-wing edges, flaring down to the left
+    const cape = P("M41,42 Q28,52 14,68 Q20,72 17,81 Q26,79 27,88 Q33,83 37,91 Q41,77 46,62Z", dk) +
+      `<path d="M40,46 Q30,58 21,72 M43,52 Q37,66 32,82" fill="none" stroke="${lining}" stroke-width="2.4" stroke-linecap="round"/>`;
+    // the hair: a long red ponytail-like flow from under the back of the cowl, with strands and a highlight
+    const hairBack = P("M38,23 Q27,22 21,30 Q16,38 8,42 Q13,45 9,51 Q17,51 21,47 Q19,56 13,63 Q25,62 29,52 Q32,45 40,39Z", hair) +
+      `<path d="M35,27 Q26,29 21,37 Q17,43 12,47 M37,33 Q30,37 27,45 Q24,53 18,59" fill="none" stroke="#a83a12" stroke-width="1.1" stroke-linecap="round"/>` +
+      `<path d="M34,24.6 Q27,25 23.4,30.4" fill="none" stroke="#ffb08a" stroke-width="1.8" stroke-linecap="round"/>`;
+    const batarang = `<path d="${BAT}" fill="${yel}" stroke="${OL}" stroke-width="1.4" stroke-linejoin="round" transform="translate(88 27) scale(.72) rotate(-20)"/>` +
+      `<path d="M74,30 l6,-3 M76,24 l5,-2.4" stroke="#fff" stroke-width="1.4" stroke-linecap="round" opacity=".8"/>`;
+    const fig = hero({
+      pose: { ba: [[39, 47], [30, 55], [24, 63]], fa: [[61, 47], [70, 41], [77, 35]], bl: [[45, 72], [37, 80], [30, 90]], bb: [27, 93, 30, 6.6], fl: [[55, 72], [62, 86], [60, 100]], fb: [63, 104, 0, 6.6] },
+      skin, suit: pur, legs: pur, glove: yel, gloveAt: .3, boot: yel, bootAt: .4, trunks: pur, torso: "f", capeBack: cape + hairBack, belt: yel,
+      chest: bat(50, 51, .8, yel) + `<path d="${BAT}" fill="none" stroke="${OL}" stroke-width="1" transform="translate(50 51) scale(.8)"/>`,
+      head: face(skin) + cowl(dk, .6) + P("M33.4,34 Q30,40 27.6,45 Q32.4,44.6 35,40Z", hair) + eyes("#2e8b57", 1, .92, 28.2) + aBlush(35.5) + smile(36.8),
+      top: batarang });
+    return [back(g, "#1a1040", "#5a2d82") + stars(21, 36, 90) + aC(64, 50, 34, "#fff8e1", `opacity=".25"`) + aC(64, 50, 28, "#fff3c4") + aC(54, 40, 4, "#f0e2a8") + aC(76, 62, 5, "#f0e2a8") +
+      city(9, "#120a2a", "#b39ddb", 112) + shadow(50, 138, 24) + sparks([[14, 46, 2.6], [108, 92, 2.2]]),
+      aEdge(place(fig, 10, 24, 1.1))];
+  }
+
+  /* ---------- 9 Green Lantern ---------- */
+  // the ring's construct: a giant glowing fist (back of the hand, four curled fingers with knuckles, the thumb across), pointing +x
+  function lanternFist(id) {
+    const hand = "M-15,-12 Q-15,-17 -10,-17 H5 Q10,-17 10,-12 V12 Q10,17 5,17 H-10 Q-15,17 -15,12Z",
+      wrist = "M-27,-9 H-13 V9 H-27Z",
+      fingers = [-17, -8.5, 0, 8.5].map(y => `M5,${y + 4.25} Q5,${y} 9,${y} H12.6 Q17,${y} 17,${y + 4.25} Q17,${y + 8.5} 12.6,${y + 8.5} H9 Q5,${y + 8.5} 5,${y + 4.25}Z`),
+      thumb = "M-6,-14 Q-4,-22 4,-21 L9,-20 Q13.6,-19 13,-15 Q12.4,-11.6 8.4,-12 L2,-12.4 Q-2,-12 -6,-14Z";
+    const all = [wrist, hand, ...fingers, thumb].map(d => `<path d="${d}"/>`).join("");
+    return `<defs><filter id="${id}" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="3"/></filter></defs>` +
+      `<g filter="url(#${id})" fill="#00e676" stroke="#00e676" stroke-width="6" opacity=".75">${all}</g>` +
+      `<g fill="#1de987" stroke="#e8fff1" stroke-width="1.3" stroke-linejoin="round">${all}</g>` +
+      `<path d="M-13,-5 H-27 M-13,4 H-27" stroke="#00b248" stroke-width="1"/>` +
+      [-17, -8.5, 0, 8.5].map(y => `<path d="M14.6,${y + 2} Q16,${y + 4.25} 14.6,${y + 6.5}" fill="none" stroke="#00a046" stroke-width="1.1" stroke-linecap="round"/>`).join("") +
+      `<path d="M-11,-9 Q-11,-13.6 -6,-14 M-11,-4 V7" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" opacity=".75"/><path d="M3,-18.4 H9" stroke="#fff" stroke-width="1.4" stroke-linecap="round" opacity=".8"/>`;
+  }
+  function greenLantern() {
+    const g = U("g"), grn = "#18b84a", dk = "#141a1c", glow = "#69f0ae";
+    const chestFill = `<path d="M30,38 H70 V47 Q60,49 56,52 Q53,47 50,47 Q47,47 44,52 Q40,49 30,47Z" fill="${dk}"/><rect x="30" y="38" width="9" height="34" fill="${dk}"/><rect x="61" y="38" width="9" height="34" fill="${dk}"/>`;
+    const fa = [[61, 47], [68, 40], [72, 32]], tx = -4, ty = 15, sc = 1.17;
+    const fig = hero({
+      pose: { ba: [[39, 47], [31, 56], [28, 66]], fa, bl: [[45, 72], [41, 88], [38, 102]], bb: [36, 106, 0, 7], fl: [[55, 72], [59, 88], [62, 102]], fb: [64, 106, 0, 7] },
+      skin: A_SKIN[1], suit: grn, sleeve: dk, glove: "#fff", gloveAt: .3, legs: dk, boot: grn, bootAt: .3, trunks: grn, chestFill, ring: 1, frontOver: 1,
+      chest: aC(50, 54, 6.6, "#fff", O) + lanternSym(50, 54, .62, grn),
+      head: aKidHead({ skin: A_SKIN[1], hair: "#5a3418", hs: "neat", eyes: "#6b3e1f", mouth: "" }).split("<ellipse cx=\"43.3\"")[0] +
+        P("M33.4,26 Q37,21.6 44,23.6 Q50,25.2 56,23.6 Q63,21.6 66.6,26 Q66.4,33 59,33.6 Q53,33.2 50,30.8 Q47,33.2 41,33.6 Q33.6,33 33.4,26Z", grn) +
+        eyes("#6b3e1f", 0, .82, 28.6) + aBlush(35.6) + grin(36.6),
+      top: aC(fa[2][0] + 1.8, fa[2][1] + 1.4, 7, glow, `opacity=".45"`) + aC(fa[2][0] + 1.8, fa[2][1] + 1.4, 3.6, "#e8fff1", `opacity=".85"`) });
+    const ring = [tx + sc * (fa[2][0] + 1.8), ty + sc * (fa[2][1] + 1.4)], fx = 99, fy = 23, ang = -70, fs = .98;
+    const wr = [fx + 24 * fs * Math.cos(ang * Math.PI / 180 + Math.PI), fy + 24 * fs * Math.sin(ang * Math.PI / 180 + Math.PI)];   // the fist's wrist end
+    const beam = `<path d="M${ring[0].toFixed(1)},${ring[1].toFixed(1)} L${wr[0].toFixed(1)},${wr[1].toFixed(1)}" stroke="${glow}" stroke-width="8" opacity=".35" stroke-linecap="round"/>` +
+      `<path d="M${ring[0].toFixed(1)},${ring[1].toFixed(1)} L${wr[0].toFixed(1)},${wr[1].toFixed(1)}" stroke="#e8fff1" stroke-width="2.4" opacity=".9" stroke-linecap="round"/>`;
+    return [back(g, "#06121a", "#0d3b2a") + stars(31, 50) + aC(18, 124, 13, "#3949ab", O) + `<path d="M5,122 Q18,116 31,122" stroke="#7986cb" stroke-width="2" fill="none"/>` +
+      aC(56, 74, 50, "#00e676", `opacity=".1"`) + sparks([[108, 70, 3, glow], [64, 8, 2.4, glow], [14, 50, 2.4]]),
+      aEdge(place(fig, tx, ty, sc)) + beam + `<g transform="translate(${fx} ${fy}) rotate(${ang}) scale(${fs})">${lanternFist(U("f"))}</g>`];
+  }
+
+  FAN.dc = [
+    ["Batman", "Grey suit, black cowl with pointed ears and white lenses, a confident grin, bat cape spread wide; Gotham at night with the bat-signal", batman],
+    ["Superman", "Big and flying up to the right, fist forward, red cape and red boots with cuffs, the S shield, the black curl", superman],
+    ["Wonder Woman", "Tiara with the red star, gold W eagle, starry skirt, silver bracelets, glowing golden lasso", wonderWoman],
+    ["The Flash", "All red with lightning ears, the bolt emblem, running in a burst of lightning", flash],
+    ["Aquaman", "Orange scale shirt, green gloves and legs, long blond hair and beard, golden trident under the sea", aquaman],
+    ["Robin", "Red tunic with the R, green sleeves, yellow cape, domino mask, a cheeky grin, bo staff, on a rooftop at sunset", robin],
+    ["Supergirl", "Flying to the left, fist ahead, cape and long blond hair streaming behind: blue top with the S shield, red skirt and boots", supergirl],
+    ["Batgirl", "Purple suit with the yellow bat, cowl with ears, a long red ponytail flowing over a dark cape, throwing a batarang under the moon", batgirl],
+    ["Green Lantern", "Green and black suit, mask, lantern emblem, the ring beams out a giant glowing green fist", greenLantern],
+  ];
+})();
+
+/* Sticker book theme page: Octonauts: the crew, Tunip and the Gup-A in the show's round, soft look on underwater backdrops; sets FAN.octonauts */
+(() => {
+  "use strict";
+  const U = p => p + (++aUid);
+  const OL = A_OL, NAVY = "#24366f", NAVY2 = "#1a2852", SUIT = "#4fc3f7";   // every crew uniform: navy, light-blue collar and belt, the badge
+  const f1 = v => +(+v).toFixed(1);
+
+  /* ---------- the sea ---------- */
+  const bubble = (x, y, r) => `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(r)}" fill="#fff" fill-opacity=".18" stroke="#fff" stroke-opacity=".75" stroke-width="${r > 2.5 ? .9 : .6}"/>` +
+    aC(x - r * .35, y - r * .35, Math.max(.4, f1(r * .28)), "#fff", `opacity=".9"`);
+  function bubbles(seed, n, x0 = 0, x1 = 120, y0 = 4, y1 = 120, rmax = 3.6) {
+    const R = aRand(seed); let s = "";
+    for (let i = 0; i < n; i++) s += bubble(x0 + R() * (x1 - x0), y0 + R() * (y1 - y0), 1 + R() * (rmax - 1));
+    return s;
+  }
+  function fish(x, y, sc, c, flip = false, stripe = "") {
+    return `<g transform="translate(${x} ${y}) scale(${flip ? -sc : sc} ${sc})"><path d="M-8,0 Q-2,-6 6,0 Q-2,6 -8,0Z" fill="${c}"/>` +
+      `<path d="M-7,0 L-12,-4 L-11,0 L-12,4Z" fill="${c}"/>${stripe ? `<path d="M-1,-4 Q-3,0 -1,4" stroke="${stripe}" stroke-width="1.4" fill="none"/>` : ""}` +
+      aC(2.6, -1, 1, "#fff") + aC(2.8, -1, .5, "#111") + `</g>`;
+  }
+  const kelp = (x, y, h, c = "#2e9e6a", sway = 5) => {
+    let d = `M${x},${y}`;
+    for (let i = 1; i <= 4; i++) d += ` Q${x + (i % 2 ? sway : -sway)},${y - h * (i - .5) / 4} ${x},${y - h * i / 4}`;
+    return `<path d="${d}" fill="none" stroke="${c}" stroke-width="4" stroke-linecap="round"/>` +
+      [...Array(4)].map((_, i) => `<ellipse cx="${x + (i % 2 ? 3.5 : -3.5)}" cy="${f1(y - h * (i + .6) / 4)}" rx="3.6" ry="1.6" fill="${c}" transform="rotate(${i % 2 ? -30 : 30} ${x + (i % 2 ? 3.5 : -3.5)} ${f1(y - h * (i + .6) / 4)})"/>`).join("");
+  };
+  function coral(x, y, s, c) {
+    const br = [[[0, 0], [0, -10], [-5, -16], [-6, -22]], [[0, -10], [5, -15], [6, -23]], [[0, -5], [-7, -9], [-10, -13]], [[0, -5], [7, -6], [10, -10]]];
+    return `<g transform="translate(${x} ${y}) scale(${s})">` + br.map(b => `<polyline points="${aPts(b)}" fill="none" stroke="${c}" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>`).join("") + `</g>`;
+  }
+  const fanCoral = (x, y, s, c) => `<g transform="translate(${x} ${y}) scale(${s})"><path d="M0,0 L-13,-10 Q-12,-22 0,-24 Q12,-22 13,-10Z" fill="${c}"/>` +
+    `<path d="M0,0 L-8,-20 M0,0 V-22 M0,0 L8,-20 M0,0 L-12,-13 M0,0 L12,-13 M-11,-16 Q0,-11 11,-16 M-7,-8 Q0,-4 7,-8" stroke="#fff" stroke-width=".9" opacity=".45" fill="none"/>` +
+    `<rect x="-1.2" y="-1" width="2.4" height="4" fill="${c}"/></g>`;
+  const starfish = (x, y, s, c = "#ff8a50") => `<g transform="translate(${x} ${y}) scale(${s} ${s * .7})"><polygon points="${aPts([...Array(10)].map((_, i) => { const r = i % 2 ? 2.4 : 6, a = -Math.PI / 2 + i * Math.PI / 5; return [r * Math.cos(a), r * Math.sin(a)]; }))}" fill="${c}" stroke-linejoin="round" stroke="${c}" stroke-width="1.4"/></g>`;
+  const rock = (x, y, w, h, c = "#7d8fa8") => `<ellipse cx="${x}" cy="${y}" rx="${w}" ry="${h}" fill="${c}"/>`;
+  // the Octopod, the crew's base: a round white HQ with an orange band of portholes, a glass dome on top with its mast,
+  // and curling tube legs like an octopus, each ending in a launch pod (local size about 64 x 62 at s = 1)
+  function octopod(x, y, s) {
+    const legs = [[-30, 30, -14], [-19, 34, -8], [-7, 36, -3], [7, 36, 3], [19, 34, 8], [30, 30, 14]];
+    const cp = U("opod");
+    return `<g transform="translate(${x} ${y}) scale(${s})">` +
+      legs.map(([px, py, sx]) => `<path d="M${sx},8 Q${f1(px * .8)},${py - 18} ${px},${py}" fill="none" stroke="${OL}" stroke-width="7.6" stroke-linecap="round"/>` +
+        `<path d="M${sx},8 Q${f1(px * .8)},${py - 18} ${px},${py}" fill="none" stroke="#dfe6ea" stroke-width="5.4" stroke-linecap="round"/>`).join("") +
+      legs.map(([px, py]) => `<ellipse cx="${px}" cy="${py + 1}" rx="6" ry="4.6" fill="#fafafa" ${A_OUT}/><path d="M${px - 5.6},${py + 1} Q${px},${py + 6} ${px + 5.6},${py + 1} Q${px + 5},${py + 5.6} ${px},${py + 5.6} Q${px - 5},${py + 5.6} ${px - 5.6},${py + 1}Z" fill="#f57c1f"/>` +
+        aC(px, py, 1.8, "#4fc3f7", `stroke="${OL}" stroke-width=".7"`)).join("") +
+      // the dome and its mast, then the round HQ over them
+      `<path d="M0,-30 V-40" stroke="${OL}" stroke-width="3"/><path d="M0,-30 V-40" stroke="#cfd8dc" stroke-width="1.6"/>` + aC(0, -41, 2.6, "#ff5a36", A_OUT) +
+      `<path d="M-13,-15 Q-13,-31 0,-31 Q13,-31 13,-15Z" fill="#8fe0ff" ${A_OUT}/><path d="M-8,-20 Q-7,-27 -1,-28" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round"/>` +
+      `<circle cx="0" cy="0" r="19" fill="#fafafa" ${A_OUT}/><defs><clipPath id="${cp}"><circle cx="0" cy="0" r="19"/></clipPath></defs>` +
+      `<g clip-path="url(#${cp})"><path d="M8,-20 Q24,0 6,22 L24,22 L24,-20Z" fill="#cfd8dc"/><rect x="-20" y="-5" width="40" height="11" fill="#f57c1f" stroke="${OL}" stroke-width="1"/>` +
+      `<path d="M-20,12 Q0,22 20,12 V22 H-20Z" fill="#b0bec5"/></g>` +
+      [-11, 0, 11].map(dx => aC(dx, .5, 3.4, "#8fe0ff", `stroke="${OL}" stroke-width="1"`) + aC(dx - 1, -.6, 1, "#fff")).join("") +
+      `<path d="M-13,-8 Q-11,-15 -4,-16" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round"/></g>`;
+  }
+  // backdrop: gradient water, light shafts, (Octopod), sea floor with coral and kelp, fish, bubbles
+  function sea(o = {}) {
+    const g = U("osea"), R = aRand(o.seed || 7);
+    const fy = o.floor || 140;
+    let s = `<defs>${aVGrad(g, o.top || "#5fd0f3", o.bot || "#0f4c9e")}</defs><rect width="120" height="158" fill="url(#${g})"/>`;
+    s += `<g opacity=".13" fill="#fff">` + [[6, -10], [40, 30], [78, 74], [104, 112]].map(([a, b]) => `<polygon points="${a},0 ${a + 12},0 ${b + 18},158 ${b},158"/>`).join("") + `</g>`;
+    if (o.fish !== false) {
+      const fc = o.fishCols || ["#ffd54f", "#ff8a65", "#80deea"];
+      for (let i = 0; i < (o.nFish || 3); i++) s += fish(8 + R() * 104, 12 + R() * 70, .5 + R() * .35, fc[i % fc.length], R() < .5, i % 2 ? "#fff" : "");
+    }
+    s += kelp(o.kelpL ?? 9, fy + 4, o.kelpH || 46, "#2b9a68") + kelp(o.kelpR ?? 112, fy + 4, (o.kelpH || 46) * .8, "#36ad79", 4);
+    s += `<path d="M0,${fy} Q20,${fy - 5} 42,${fy - 1} T84,${fy - 1} T120,${fy - 3} V158 H0Z" fill="${o.sand || "#f1d293"}"/>` +
+      `<path d="M0,${fy + 6} Q30,${fy + 2} 60,${fy + 7} T120,${fy + 5} V158 H0Z" fill="${o.sand2 || "#e3bd72"}"/>`;
+    const cx1 = 14 + R() * 10, cx2 = 96 + R() * 10;
+    s += coral(cx1, fy + 2, .7 + R() * .2, o.coralA || "#ff7f8e") + fanCoral(cx2, fy + 1, .65 + R() * .2, o.coralB || "#ba68c8") + rock(30, fy + 3, 6, 3) + rock(86, fy + 5, 5, 2.6, "#8c9db6") + starfish(o.starX ?? 50 + R() * 40, fy + 9, .9);
+    s += bubbles((o.seed || 7) * 13 + 1, o.nBub || 9, 2, 118, 6, fy - 6);
+    return s;
+  }
+  const shadow = (x = 60, y = 143, rx = 30) => `<ellipse cx="${x}" cy="${y}" rx="${rx}" ry="4" fill="#06204a" opacity=".3"/>`;
+
+  /* ---------- crew pieces ---------- */
+  // the octopus badge: a gold disc with a little orange octopus
+  function badge(x, y, r) {
+    const k = r / 6;
+    return `<g transform="translate(${x} ${y}) scale(${k})">` + aC(0, 0, 6, "#ffd23f", `stroke="${OL}" stroke-width="${f1(1 / k)}"`) +
+      `<path d="M-3.2,.6 Q-3.4,-4 0,-4.2 Q3.4,-4 3.2,.6Z" fill="#f26b21"/>` +
+      [-2.6, -.9, .9, 2.6].map(dx => `<path d="M${dx * .9},.4 Q${dx * 1.2},2.6 ${dx * 1.45},3.6" stroke="#f26b21" stroke-width="1.2" fill="none" stroke-linecap="round"/>`).join("") +
+      aC(-1.2, -1.6, .55, "#fff") + aC(1.2, -1.6, .55, "#fff") + `</g>`;
+  }
+  // small shiny eyes (the show's dot eyes) and a simple smile
+  const dotEye = (x, y, s = 1) => `<ellipse cx="${f1(x)}" cy="${f1(y)}" rx="${f1(2.5 * s)}" ry="${f1(3.4 * s)}" fill="#1b1b1b"/>` + aC(x - .7 * s, y - 1.3 * s, f1(.95 * s), "#fff");
+  const smile = (x, y, w, c = OL, sw = 1.3) => `<path d="M${x - w},${y} Q${x},${y + w * .9} ${x + w},${y}" fill="none" stroke="${c}" stroke-width="${sw}" stroke-linecap="round"/>`;
+  const openSmile = (x, y, w, h) => `<path d="M${x - w},${y} Q${x},${y + h * 2} ${x + w},${y}Z" fill="#b8323b" stroke="${OL}" stroke-width="1" stroke-linejoin="round"/>` +
+    `<path d="M${x - w * .45},${y + h * .9} Q${x},${y + h * .55} ${x + w * .45},${y + h * .9} Q${x},${y + h * 1.25} ${x - w * .45},${y + h * .9}Z" fill="#ff8a8a"/>`;
+  const cheek = (x, y, r = 3.2, c = "#ff9e9e") => `<ellipse cx="${x}" cy="${y}" rx="${r}" ry="${f1(r * .62)}" fill="${c}" opacity=".7"/>`;
+  // the uniform: a round navy body with a coloured collar, the badge, a belt; legs with boots
+  function suit(cx, y0, y1, w, accent = SUIT, o = {}) {
+    const top = y0, bot = y1, hw = w / 2, cp = U("osu");
+    let s = `<path d="M${cx - hw * .78},${top} Q${cx - hw * 1.08},${(top + bot) / 2} ${cx - hw},${bot - 4} Q${cx},${bot + 5} ${cx + hw},${bot - 4} Q${cx + hw * 1.08},${(top + bot) / 2} ${cx + hw * .78},${top}Z" fill="${o.col || NAVY}" ${A_OUT}/>`;
+    s += `<defs><clipPath id="${cp}"><path d="M${cx - hw * .78},${top} Q${cx - hw * 1.08},${(top + bot) / 2} ${cx - hw},${bot - 4} Q${cx},${bot + 5} ${cx + hw},${bot - 4} Q${cx + hw * 1.08},${(top + bot) / 2} ${cx + hw * .78},${top}Z"/></clipPath></defs>`;
+    s += `<g clip-path="url(#${cp})"><path d="M${cx + hw * .45},${top} Q${cx + hw * 1.1},${(top + bot) / 2} ${cx + hw * .7},${bot + 4} L${cx + hw * 1.3},${bot + 4} L${cx + hw * 1.3},${top}Z" fill="${o.shade || NAVY2}" opacity=".7"/>` +
+      (o.belly ? `<ellipse cx="${cx}" cy="${(top + bot) / 2 + 3}" rx="${hw * .55}" ry="${(bot - top) * .42}" fill="${o.belly}"/>` : "") +
+      (o.belt !== false ? `<rect x="${cx - hw * 1.2}" y="${bot - 9}" width="${w * 1.2}" height="3.4" fill="${o.beltCol || accent}" stroke="${OL}" stroke-width=".8"/>` : "") + `</g>`;
+    s += `<path d="M${cx - hw * .8},${top + .5} Q${cx},${top + 8} ${cx + hw * .8},${top + .5}" fill="none" stroke="${OL}" stroke-width="5.2" stroke-linecap="round"/>` +
+      `<path d="M${cx - hw * .8},${top + .5} Q${cx},${top + 8} ${cx + hw * .8},${top + .5}" fill="none" stroke="${accent}" stroke-width="3" stroke-linecap="round"/>`;
+    if (o.badge !== false) s += badge(o.bx ?? cx - hw * .38, o.by ?? top + 12, o.br || 4.6);
+    return s;
+  }
+  const boot = (x, y, c = "#1a1a1a", rot = 0) => `<ellipse cx="${x}" cy="${y}" rx="7" ry="4.2" fill="${c}" ${A_OUT} transform="rotate(${rot} ${x} ${y})"/><ellipse cx="${x - 2}" cy="${y - 1.6}" rx="2.6" ry="1" fill="#fff" opacity=".35" transform="rotate(${rot} ${x} ${y})"/>`;
+  const leg = (pts, c = NAVY, w = 7) => aL(pts, c, w);
+  const paw = (x, y, r, c, extra = "") => aC(x, y, r, c, `${A_OUT} ${extra}`);
+
+  /* ---------- 1 Captain Barnacles: polar bear, captain's hat, pointing ahead ---------- */
+  function barnacles() {
+    const W = "#fbfcfd", WS = "#dde6ee";
+    const body = leg([[50, 120], [47, 133]]) + leg([[67, 120], [70, 133]]) + boot(45, 136, "#1a1a1a", -6) + boot(72, 136, "#1a1a1a", 6) +
+      aL([[42, 88], [33, 100], [36, 112]], NAVY, 8) + paw(37, 113, 5.2, W) +              // arm on the hip side
+      suit(58, 80, 126, 40) +
+      aL([[74, 88], [90, 80], [104, 70]], NAVY, 8) + paw(106, 68.5, 5.6, W) +             // pointing arm
+      `<path d="M108,64.5 Q115,60 116.5,62.5 Q116,65.5 110,68" fill="${W}" ${A_OUT} stroke-linejoin="round"/>` +
+      `<path d="M101.5,69 q2,-2 4,-1" fill="none" stroke="${OL}" stroke-width=".8"/>`;
+    const head =
+      aC(33, 34, 8, W, A_OUT) + aC(33, 34, 4.4, "#e8d6d6") + aC(85, 34, 8, W, A_OUT) + aC(85, 34, 4.4, "#e8d6d6") +
+      `<ellipse cx="59" cy="54" rx="30" ry="27" fill="${W}" ${A_OUT}/>` +
+      `<path d="M78,34 Q92,48 84,70 Q76,79 62,81 Q82,70 78,34Z" fill="${WS}"/>` +
+      `<ellipse cx="59" cy="64" rx="13" ry="10" fill="#f1f4f7" stroke="${WS}" stroke-width="1"/>` +
+      `<ellipse cx="59" cy="58.6" rx="5.4" ry="3.7" fill="#1b1b1b"/><ellipse cx="57.6" cy="57.5" rx="1.6" ry=".9" fill="#fff" opacity=".7"/>` +
+      `<path d="M59,62.2 V65.5" stroke="${OL}" stroke-width="1"/>` + smile(59, 65.5, 5, OL, 1.3) +
+      dotEye(48.5, 51.5, 1.1) + dotEye(69.5, 51.5, 1.1) + `<path d="M44.5,44.5 Q48.5,42 52.5,44" stroke="${OL}" stroke-width="1.3" fill="none" stroke-linecap="round"/><path d="M65.5,44 Q69.5,42 73.5,44.5" stroke="${OL}" stroke-width="1.3" fill="none" stroke-linecap="round"/>` +
+      cheek(42, 60) + cheek(76, 60) +
+      // captain's hat: navy crown, white band, black peak, the badge in front
+      `<path d="M35,36 Q33,16 59,13 Q85,16 83,36 Q59,30 35,36Z" fill="${NAVY}" ${A_OUT}/>` +
+      `<path d="M70,15 Q83,18 83,36 Q78,33.5 73,33 Q76,22 70,15Z" fill="${NAVY2}"/>` +
+      `<path d="M35.5,33 Q59,26.5 82.5,33 L83,37 Q59,31 35,37Z" fill="#fff" stroke="${OL}" stroke-width=".9"/>` +
+      `<path d="M37,37 Q59,30.5 81,37 Q78,43 59,40.5 Q40,43 37,37Z" fill="#141414" ${A_OUT}/>` +
+      `<path d="M44,38 Q59,34.5 72,37.5" stroke="#fff" stroke-width=".9" opacity=".35" fill="none"/>` +
+      badge(59, 24, 5.8);
+    return [sea({ seed: 11, nFish: 2, starX: 92 }) + A_RAYS + shadow(60, 142, 30) + aSpark(108, 52, 4) + aSpark(14, 70, 3) + aSpark(104, 30, 3, "#fffde7"),
+      aEdge(body + head)];
+  }
+
+  /* ---------- 2 Kwazii: ginger pirate cat, eye patch, gold earring, ear tufts ---------- */
+  function kwazii() {
+    const O = "#f7931e", OD = "#d86a12", CR = "#ffe3b8";
+    const tail = `<path d="M74,118 Q98,124 102,104 Q105,88 96,82" fill="none" stroke="${OL}" stroke-width="9.4" stroke-linecap="round"/>` +
+      `<path d="M74,118 Q98,124 102,104 Q105,88 96,82" fill="none" stroke="${O}" stroke-width="7" stroke-linecap="round"/>` +
+      `<path d="M96.5,113 l4,2.5 M101.6,101 l4.2,.4 M100.5,90 l4,-1.6" stroke="${OD}" stroke-width="2.2" stroke-linecap="round"/>`;
+    const body = tail + leg([[51, 120], [44, 132]]) + leg([[66, 120], [72, 132]]) + boot(41, 135, "#1a1a1a", -14) + boot(76, 135, "#1a1a1a", 12) +
+      aL([[44, 90], [34, 99], [30, 108]], NAVY, 8) + paw(30, 110, 5, O) +
+      suit(58, 82, 126, 38) +
+      aL([[72, 89], [88, 84], [99, 72]], NAVY, 8) + paw(101, 69, 5.8, O) +              // fist punching up: "Yeow!"
+      `<path d="M97.5,66.5 q3,-2 6.5,0 M97.5,69.5 q3,-1.5 7,0" stroke="${OL}" stroke-width=".8" fill="none"/>`;
+    const ear = (pts, tuft, inner) => `<polygon points="${pts}" fill="${O}" ${A_OUT} stroke-linejoin="round"/><polygon points="${inner}" fill="#ffb38a"/>` +
+      `<path d="${tuft}" fill="${O}" ${A_OUT} stroke-linejoin="round"/>`;
+    const head =
+      ear("30,46 32,20 52,34", "M32,22 L29,13 L33.5,19 L34,11 L36,21Z", "34,40 34.5,26 46,34") +
+      ear("88,46 86,20 66,34", "M86,22 L89,13 L84.5,19 L84,11 L82,21Z", "84,40 83.5,26 72,34") +
+      `<ellipse cx="59" cy="56" rx="31" ry="26" fill="${O}" ${A_OUT}/>` +
+      `<path d="M47,31 Q52,24 55,31 Q58,22 62,30 Q66,24 70,31" fill="${O}" ${A_OUT} stroke-linejoin="round"/>` +    // head tuft
+      `<path d="M52,32 l1.2,7 M59,31 v8 M66,32 l-1.2,7" stroke="${OD}" stroke-width="2.4" stroke-linecap="round"/>` +
+      `<path d="M28.5,56 h6 M29,61 h5 M89.5,56 h-6 M89,61 h-5" stroke="${OD}" stroke-width="2.2" stroke-linecap="round"/>` +
+      `<path d="M80,36 Q93,52 86,70 Q78,80 62,82 Q84,68 80,36Z" fill="${OD}" opacity=".35"/>` +
+      `<ellipse cx="59" cy="66" rx="15" ry="10" fill="${CR}"/>` +
+      `<path d="M55.5,61 Q59,59.5 62.5,61 Q59,65 55.5,61Z" fill="#e8577a" stroke="${OL}" stroke-width=".9" stroke-linejoin="round"/>` +
+      `<path d="M59,63.5 V66 M52,67 Q55.5,70.5 59,66.5 Q62.5,70.5 66,67" fill="none" stroke="${OL}" stroke-width="1.2" stroke-linecap="round"/>` +
+      `<path d="M53,67.5 Q59,77 65,67.5Z" fill="#b8323b" stroke="${OL}" stroke-width=".9"/><path d="M55.5,68.5 l1.3,2.6 l1.1,-2.4Z" fill="#fff"/>` +
+      `<path d="M44,64 l-12,-2 M44,67 l-12,2 M74,64 l12,-2 M74,67 l12,2" stroke="${OL}" stroke-width=".7" stroke-linecap="round"/>` +
+      dotEye(47.5, 52, 1.15) + `<path d="M43,44.5 Q47,42 51.5,44.5" stroke="${OL}" stroke-width="1.5" fill="none" stroke-linecap="round"/>` +
+      // eye patch (his left eye) and its strap
+      `<path d="M33,40 Q60,36 87,48" fill="none" stroke="#141414" stroke-width="1.8"/>` +
+      `<ellipse cx="70.5" cy="52" rx="7" ry="6.2" fill="#141414" ${A_OUT}/><path d="M66.5,49 Q69,47 72,47.5" stroke="#fff" stroke-width="1" opacity=".35" fill="none"/>` +
+      // gold hoop earring in his right ear
+      `<circle cx="36" cy="44.5" r="3.6" fill="none" stroke="${OL}" stroke-width="2.6"/><circle cx="36" cy="44.5" r="3.6" fill="none" stroke="#ffcc33" stroke-width="1.6"/>` +
+      cheek(41, 63);
+    const chest = `<path d="M10,138 l4,-12 h22 l4,12Z" fill="#8d5524" ${A_OUT}/><path d="M12,126 q14,-9 26,0Z" fill="#a0652d" ${A_OUT}/><rect x="22" y="128" width="6" height="5" fill="#ffcc33" stroke="${OL}" stroke-width=".8"/>` +
+      aC(16, 124.5, 1.6, "#ffd54f") + aC(33, 124, 1.3, "#ffd54f") + aSpark(24, 120, 3, "#fff59d");
+    return [sea({ seed: 23, top: "#4fc3f7", bot: "#14569b", nFish: 3, kelpL: 7, kelpR: 113 }) + chest + shadow(60, 142, 28) + aSpark(104, 44, 4) + aSpark(18, 40, 3.2),
+      aEdge(body + head)];
+  }
+
+  /* ---------- 3 Peso: little penguin medic with his blue medical bag ---------- */
+  function peso() {
+    const BK = "#1f2430", BKS = "#3a4152";
+    const bag = `<path d="M81,103 Q81,94 91,94 Q101,94 101,103" fill="none" stroke="${OL}" stroke-width="3.4"/><path d="M81,103 Q81,94 91,94 Q101,94 101,103" fill="none" stroke="#1e64c8" stroke-width="1.8"/>` +
+      `<rect x="74" y="101" width="34" height="25" rx="6" fill="#3a8ee6" ${A_OUT}/><rect x="74" y="101" width="34" height="6" rx="3" fill="#1e64c8"/>` +
+      `<path d="M88,110 h6 v-4 h0 M88,110" fill="none"/><rect x="88.3" y="108" width="5.4" height="15" rx="1" fill="#fff"/><rect x="83.5" y="112.8" width="15" height="5.4" rx="1" fill="#fff"/>`;
+    const body = leg([[50, 122], [48, 132]], NAVY, 6.5) + leg([[66, 122], [68, 132]], NAVY, 6.5) +
+      `<ellipse cx="45" cy="136" rx="7.5" ry="3.6" fill="#ffa726" ${A_OUT}/><ellipse cx="71" cy="136" rx="7.5" ry="3.6" fill="#ffa726" ${A_OUT}/>` +
+      `<path d="M46,93 Q29,93 16,80 Q11,73 18,72 Q30,81 47,85Z" fill="${BK}" ${A_OUT} stroke-linejoin="round"/>` +       // flipper up: waving hello
+      `<path d="M20,75 Q30,84 40,87" stroke="${BKS}" stroke-width="1.6" fill="none" stroke-linecap="round"/>` +
+      suit(58, 84, 128, 40) +
+      `<path d="M74,92 Q84,98 84,108 Q80,110 76,104 Q74,100 72,98Z" fill="${BK}" ${A_OUT}/>` + bag;
+    const head =
+      `<ellipse cx="58" cy="55" rx="31" ry="30" fill="${BK}" ${A_OUT}/>` +
+      `<path d="M36,32 Q46,24 58,26" stroke="${BKS}" stroke-width="3" fill="none" stroke-linecap="round"/>` +
+      // the white face: two round lobes meeting in a point at the top (heart-shaped)
+      `<path d="M58,40 Q49,30 40,38 Q31,47 35,62 Q40,78 58,80 Q76,78 81,62 Q85,47 76,38 Q67,30 58,40Z" fill="#fff"/>` +
+      dotEye(48, 53, 1.1) + dotEye(68, 53, 1.1) +
+      `<path d="M43.5,44 Q48,41 52.5,43.5 M63.5,43.5 Q68,41 72.5,44" stroke="${OL}" stroke-width="1.3" fill="none" stroke-linecap="round"/>` +
+      `<path d="M51.5,60 Q58,56 64.5,60 Q58,67 51.5,60Z" fill="#ffb300" ${A_OUT} stroke-linejoin="round"/><path d="M52,60.2 Q58,62.5 64,60.2" stroke="${OL}" stroke-width=".8" fill="none"/>` +
+      openSmile(58, 69.5, 6, 3) +
+      cheek(42, 64, 3.6) + cheek(74, 64, 3.6) +
+      "";
+    const wave = `<path d="M8,74 Q6,82 10,88 M12,66 Q16,62 22,63" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" opacity=".9"/>`;
+    return [sea({ seed: 37, top: "#7fdcf5", bot: "#1565c0", nFish: 3, fishCols: ["#ffee58", "#f48fb1", "#a5d6a7"] }) + shadow(60, 142, 32) + wave +
+      aSpark(104, 30, 3.4, "#fffde7") + aSpark(100, 70, 2.8), aEdge(body + head)];
+  }
+
+  /* ---------- 4 Shellington: sea otter scientist with glasses and a magnifying glass ---------- */
+  function shellington() {
+    const B = "#9a6440", BD = "#6e4329", F = "#ecd2ab";
+    const glass = `<path d="M92,96 L101,118" stroke="${OL}" stroke-width="6.6" stroke-linecap="round"/><path d="M92,96 L101,118" stroke="#8d4f20" stroke-width="4.4" stroke-linecap="round"/>` +
+      `<circle cx="86" cy="82" r="14" fill="#d9f4ff" fill-opacity=".55" stroke="${OL}" stroke-width="5"/><circle cx="86" cy="82" r="14" fill="none" stroke="#bfc6cc" stroke-width="3"/>` +
+      // the starfish he is studying, seen big through the lens
+      `<g transform="translate(86 83) rotate(12)"><polygon points="${aPts([...Array(10)].map((_, i) => { const r = i % 2 ? 3.6 : 9, a = -Math.PI / 2 + i * Math.PI / 5; return [r * Math.cos(a), r * Math.sin(a)]; }))}" fill="#ff7043" stroke="${OL}" stroke-width=".9" stroke-linejoin="round"/>` +
+      aC(-2, -1, .8, "#fff") + aC(2, -1, .8, "#fff") + aC(0, 2.5, .7, "#ffd54f") + aC(-5, 1, .6, "#ffd54f") + aC(5, 1, .6, "#ffd54f") + `</g>` +
+      `<path d="M77,74 Q81,70 86,70" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" opacity=".85"/>`;
+    const tail = `<path d="M70,124 Q90,132 98,140 Q84,142 66,130Z" fill="${BD}" ${A_OUT} stroke-linejoin="round"/>`;
+    const body = tail + leg([[49, 122], [46, 133]]) + leg([[64, 122], [67, 133]]) +
+      boot(43, 136, "#1a1a1a", -6) + boot(70, 136, "#1a1a1a", 6) +
+      aL([[40, 92], [30, 104], [34, 113]], NAVY, 7.5) + paw(35, 114, 4.8, B) +
+      suit(56, 84, 128, 38) +
+      aL([[71, 92], [83, 103], [93, 105]], NAVY, 7.5) + glass + paw(95, 104.5, 5, B) + `<path d="M92.5,102.5 q3,-1.6 5.6,.4 M92.5,105.5 q3,-1.2 5.8,.6" stroke="${OL}" stroke-width=".8" fill="none"/>`;
+    const head =
+      aC(33, 40, 6, B, A_OUT) + aC(33, 40, 3, BD) + aC(81, 40, 6, B, A_OUT) + aC(81, 40, 3, BD) +
+      `<ellipse cx="57" cy="57" rx="28" ry="27" fill="${B}" ${A_OUT}/>` +
+      `<path d="M74,36 Q88,52 80,72 Q72,82 60,84 Q78,70 74,36Z" fill="${BD}" opacity=".4"/>` +
+      // pale face around the eyes and the muzzle
+      `<path d="M57,44 Q44,42 37,52 Q32,64 40,74 Q48,82 57,82 Q66,82 74,74 Q82,64 77,52 Q70,42 57,44Z" fill="${F}"/>` +
+      `<path d="M50,36 q7,-6 14,0" stroke="${BD}" stroke-width="2.2" fill="none" stroke-linecap="round"/>` +
+      `<ellipse cx="57" cy="67" rx="11" ry="7.5" fill="#f8e7cc"/>` +
+      `<ellipse cx="57" cy="62.4" rx="4.6" ry="3.1" fill="#3b2314"/><ellipse cx="55.8" cy="61.5" rx="1.4" ry=".8" fill="#fff" opacity=".6"/>` +
+      `<path d="M57,65.5 V68 M52,68.5 Q54.5,71 57,68 Q59.5,71 62,68.5" fill="none" stroke="${OL}" stroke-width="1.1" stroke-linecap="round"/>` +
+      aC(50, 70, .7, BD) + aC(48, 68.4, .7, BD) + aC(64, 70, .7, BD) + aC(66, 68.4, .7, BD) +
+      `<path d="M47,68 l-12,-2.5 M47,70.5 l-12,1 M67,68 l12,-2.5 M67,70.5 l12,1" stroke="${OL}" stroke-width=".7" stroke-linecap="round"/>` +
+      dotEye(47.5, 54, 1.05) + dotEye(66.5, 54, 1.05) +
+      // glasses: two round lenses and a bridge, a light glint
+      `<circle cx="47.5" cy="54" r="7" fill="#e3f6ff" fill-opacity=".25" stroke="#2b2b2b" stroke-width="1.6"/><circle cx="66.5" cy="54" r="7" fill="#e3f6ff" fill-opacity=".25" stroke="#2b2b2b" stroke-width="1.6"/>` +
+      `<path d="M54.5,53.5 Q57,51.5 59.5,53.5 M40.5,52.5 L35,50 M73.5,52.5 L79,50" stroke="#2b2b2b" stroke-width="1.5" fill="none"/>` +
+      `<path d="M43,50.5 l3,-2.6 M62,50.5 l3,-2.6" stroke="#fff" stroke-width="1.1" stroke-linecap="round" opacity=".8"/>` + cheek(40, 65, 2.8) + cheek(74, 65, 2.8);
+    return [sea({ seed: 51, top: "#6fd6e8", bot: "#0f6aa6", nFish: 2, coralA: "#ff8a65" }) + shadow(58, 142, 30) + aSpark(104, 56, 3.6) + aSpark(14, 48, 3),
+      aEdge(body + head)];
+  }
+
+  /* ---------- 5 Dashi: dachshund photographer, side view on all fours: long low body, long snout, floppy ear, camera ---------- */
+  function dashi() {
+    const T = "#cf9050", TD = "#a8692f", E = "#7a4520", M = "#f3d3a4", cp = U("oda");
+    const tail = `<path d="M24,100 Q10,94 11,72" fill="none" stroke="${OL}" stroke-width="7.6" stroke-linecap="round"/><path d="M24,100 Q10,94 11,72" fill="none" stroke="${T}" stroke-width="5.4" stroke-linecap="round"/>`;
+    const dboot = (x, y) => `<ellipse cx="${x}" cy="${y}" rx="6" ry="3.8" fill="#1a1a1a" ${A_OUT}/><ellipse cx="${x - 1.6}" cy="${y - 1.4}" rx="2.2" ry=".9" fill="#fff" opacity=".35"/>`;
+    const B = "M24,96 Q20,87 34,86 L78,84 Q101,83 101,102 Q101,122 83,122 L34,124 Q17,124 17,110 Q17,101 24,96Z";
+    const body = tail +
+      // far legs (darker), the neck, the long sausage body in the uniform, the near legs
+      leg([[42, 116], [43, 127]], NAVY2, 7) + dboot(46, 130) + leg([[92, 114], [93, 127]], NAVY2, 7) + dboot(97, 130) +
+      `<path d="M66,94 Q63,70 69,58 L88,58 Q92,78 99,96Z" fill="${T}" ${A_OUT}/>` +
+      `<path d="${B}" fill="${NAVY}" ${A_OUT}/><defs><clipPath id="${cp}"><path d="${B}"/></clipPath></defs>` +
+      `<g clip-path="url(#${cp})"><path d="M10,113 Q60,119 108,106 V130 H10Z" fill="${NAVY2}" opacity=".75"/>` +
+      `<path d="M37,82 Q33,104 37,128" stroke="${OL}" stroke-width="5.4" fill="none"/><path d="M37,82 Q33,104 37,128" stroke="${SUIT}" stroke-width="3.4" fill="none"/></g>` +
+      badge(84, 101, 5.2) +
+      `<path d="M66,85 Q82,92 99,88" fill="none" stroke="${OL}" stroke-width="5.4" stroke-linecap="round"/><path d="M66,85 Q82,92 99,88" fill="none" stroke="${SUIT}" stroke-width="3.2" stroke-linecap="round"/>` +
+      leg([[28, 118], [28, 129]], NAVY, 7.4) + dboot(31, 133) + leg([[79, 118], [79, 129]], NAVY, 7.4) + dboot(82, 133);
+    // the camera hanging from its strap on her chest, lens to the front
+    const cam = `<path d="M70,80 Q80,93 93,91" fill="none" stroke="${OL}" stroke-width="2.6"/><path d="M70,80 Q80,93 93,91" fill="none" stroke="#c77dff" stroke-width="1.4"/>` +
+      `<rect x="91" y="87" width="25" height="18" rx="3.5" fill="#3c4048" ${A_OUT}/><rect x="95" y="83.5" width="8" height="4.5" rx="1.2" fill="#3c4048" ${A_OUT}/>` +
+      `<rect x="91" y="91.5" width="25" height="2" fill="#b0bec5" opacity=".5"/><rect x="109" y="89" width="5" height="3" rx="1" fill="#fff59d" stroke="${OL}" stroke-width=".6"/>` +
+      aC(102.5, 97, 7, "#24272d", A_OUT) + aC(102.5, 97, 4.8, "#3a6ea8") + aC(102.5, 97, 2.4, "#0f2546") + aC(101, 95.4, 1.3, "#fff");
+    const head =
+      `<path d="M50,46 Q46,19 70,20 Q89,21 91,36 Q100,40 110,44 Q118,48 116,56 Q113,64 101,64 Q88,67 76,66 Q54,67 50,46Z" fill="${T}" ${A_OUT}/>` +
+      `<path d="M84,44 Q98,45 110,48 Q117,52 114,58 Q109,64 98,64 Q86,65 80,59 Q78,50 84,44Z" fill="${M}"/>` +
+      `<path d="M60,27 Q69,22 80,24" stroke="${TD}" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".7"/>` +
+      `<ellipse cx="112.4" cy="48.6" rx="4.4" ry="3.5" fill="#1b1b1b"/><ellipse cx="111.2" cy="47.4" rx="1.5" ry=".9" fill="#fff" opacity=".7"/>` +
+      `<path d="M111.5,52 Q111,55 107.5,57.5" fill="none" stroke="${OL}" stroke-width="1.1" stroke-linecap="round"/>` +
+      `<path d="M91,57 Q99,65 107.5,57.5 Q99,59.6 91,57Z" fill="#b8323b" stroke="${OL}" stroke-width=".9" stroke-linejoin="round"/><path d="M96,59.6 Q99,62.6 102,59.8Z" fill="#ff8a8a"/>` +
+      dotEye(79, 39, 1.35) + `<path d="M74,30 Q79.5,27 85,30" stroke="${OL}" stroke-width="1.4" fill="none" stroke-linecap="round"/>` + cheek(87, 52, 3.4) +
+      // the long floppy ear hanging over the back of the head
+      `<path d="M64,29 Q49,28 47,46 Q45,68 52,80 Q60,86 65,75 Q69,58 72,40 Q71,31 64,29Z" fill="${E}" ${A_OUT} stroke-linejoin="round"/>` +
+      `<path d="M62,38 Q55,52 57,72" stroke="#5e3416" stroke-width="1.6" fill="none" stroke-linecap="round" opacity=".7"/>`;
+    const flash = aC(111, 77, 5, "#fffde7", `opacity=".55"`) + aStar(111, 77, 9, "#fffde7") + aSpark(111, 77, 4.6, "#fff");
+    const wag = `<path d="M4,66 Q2,74 5,80 M8,60 Q12,56 17,58" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" opacity=".85"/>`;
+    return [sea({ seed: 67, top: "#82e0f0", bot: "#1a5fb4", nFish: 3, fishCols: ["#ff8a65", "#fff176", "#ce93d8"], coralA: "#ff6f91", coralB: "#ffb74d" }) +
+      shadow(60, 137, 44) + wag + flash + aSpark(40, 50, 3.2) + aSpark(100, 20, 2.6), aEdge(body + head + cam)];
+  }
+
+  /* ---------- 6 Tweak: white bunny engineer, green overalls, a big wrench ---------- */
+  function tweak() {
+    const W = "#fbfbfb", WS = "#dfe5ea", G = "#43a047", GD = "#2e7d32";
+    // the wrench held up high: open jaw at the top, a ring at the bottom (local coords, jaw at y -26)
+    const wrench = `<g transform="translate(25 68) rotate(-16)"><rect x="-3.5" y="-20" width="7" height="38" rx="3" fill="#b0bec5" ${A_OUT}/><rect x="-2" y="-18" width="2" height="34" rx="1" fill="#eceff1"/>` +
+      `<path d="M-8,-20 Q-8,-32 0,-34 L0,-26 L3.5,-26 L3.5,-34 Q11,-32 9,-20 Q4,-16 -4,-16Z" fill="#b0bec5" ${A_OUT} stroke-linejoin="round"/>` +
+      `<path d="M-7,16 Q-7,26 0,28 Q7,26 7,16 Q4,12 -4,12Z" fill="#b0bec5" ${A_OUT}/>` + aC(0, 20, 3, "#455a64") + `</g>`;
+    const body = leg([[50, 122], [48, 133]], G, 7) + leg([[66, 122], [68, 133]], G, 7) + boot(45, 136, "#1a1a1a", -6) + boot(71, 136, "#1a1a1a", 6) +
+      suit(58, 84, 128, 40, SUIT, { badge: false, belt: false }) +
+      // the green overalls: bib with two straps and a pocket, a tool belt
+      `<path d="M44,98 H72 L76,124 Q58,132 40,124Z" fill="${G}" ${A_OUT} stroke-linejoin="round"/>` +
+      `<path d="M66,98 H72 L76,124 Q70,127 64,128Z" fill="${GD}" opacity=".6"/>` +
+      `<path d="M45,99 L41,86 M71,99 L75,86" stroke="${OL}" stroke-width="4.6" stroke-linecap="round"/><path d="M45,99 L41,86 M71,99 L75,86" stroke="${G}" stroke-width="2.8" stroke-linecap="round"/>` +
+      aC(46, 100, 1.8, "#ffd54f", `stroke="${OL}" stroke-width=".6"`) + aC(70, 100, 1.8, "#ffd54f", `stroke="${OL}" stroke-width=".6"`) +
+      `<rect x="51" y="103" width="14" height="10" rx="2" fill="${GD}" stroke="${OL}" stroke-width=".8"/>` + badge(58, 108, 3.6) +
+      `<rect x="40" y="117" width="36" height="4" fill="#8d6e63" stroke="${OL}" stroke-width=".8"/><rect x="48" y="119" width="5" height="7" rx="1" fill="#6d4c41" stroke="${OL}" stroke-width=".7"/><rect x="63" y="119" width="5" height="7" rx="1" fill="#6d4c41" stroke="${OL}" stroke-width=".7"/>` +
+      aL([[74, 92], [86, 100], [96, 94]], NAVY, 7.5) + paw(97, 92, 5, W) +            // a thumbs-up
+      `<path d="M95,88 q0,-7 4,-7 q2,0 1.4,5" fill="${W}" ${A_OUT}/>` +
+      wrench + aL([[42, 92], [32, 86], [27, 74]], NAVY, 7.5) + paw(26, 71, 5, W);
+    const ear = (x, rot) => `<g transform="rotate(${rot} ${x} 40)"><ellipse cx="${x}" cy="24" rx="8.5" ry="19" fill="${W}" ${A_OUT}/><ellipse cx="${x}" cy="26" rx="4.4" ry="13.5" fill="#f8bbd0"/></g>`;
+    const head = ear(46, -12) + ear(71, 12) +
+      `<ellipse cx="58" cy="60" rx="27" ry="24" fill="${W}" ${A_OUT}/>` +
+      `<path d="M74,42 Q88,58 78,76 Q70,84 60,84 Q78,70 74,42Z" fill="${WS}"/>` +
+      `<path d="M45,40 Q50,30 56,38 Q58,30 63,38" fill="${W}" ${A_OUT} stroke-linejoin="round"/>` +
+      dotEye(48, 57, 1.1) + dotEye(68, 57, 1.1) + `<path d="M44,49.5 Q48,47 52,49 M64,49 Q68,47 72,49.5" stroke="${OL}" stroke-width="1.2" fill="none" stroke-linecap="round"/>` +
+      `<path d="M55,65 Q58,63.5 61,65 Q58,68.5 55,65Z" fill="#f06292" stroke="${OL}" stroke-width=".9" stroke-linejoin="round"/>` +
+      `<path d="M58,67.5 V69.5 M52,69.5 Q55,72.5 58,69.5 Q61,72.5 64,69.5" fill="none" stroke="${OL}" stroke-width="1.1" stroke-linecap="round"/>` +
+      `<rect x="55.6" y="70.6" width="4.8" height="4.4" rx="1" fill="#fff" ${A_OUT}/><path d="M58,70.8 V75" stroke="${OL}" stroke-width=".6"/>` +
+      `<path d="M46,67 l-12,-2 M46,70 l-12,1.5 M70,67 l12,-2 M70,70 l12,1.5" stroke="#8a8a8a" stroke-width=".7" stroke-linecap="round"/>` +
+      cheek(41, 66, 3.6, "#ff8fb1") + cheek(75, 66, 3.6, "#ff8fb1") +
+      // goggles pushed up on her forehead
+      `<path d="M36,46 Q58,38 80,46" stroke="#5d4037" stroke-width="3" fill="none"/>` +
+      aC(50, 43.5, 4.6, "#ffca28", A_OUT) + aC(50, 43.5, 2.8, "#80deea") + aC(66, 43.5, 4.6, "#ffca28", A_OUT) + aC(66, 43.5, 2.8, "#80deea") +
+      aC(49, 42.5, .9, "#fff") + aC(65, 42.5, .9, "#fff");
+    const gear = (x, y, r, c) => `<g transform="translate(${x} ${y})" opacity=".55">${[...Array(8)].map((_, i) => `<rect x="-1.6" y="${-r - 2}" width="3.2" height="4" fill="${c}" transform="rotate(${i * 45})"/>`).join("")}${aC(0, 0, r, c)}${aC(0, 0, r * .4, "#1b5e9a")}</g>`;
+    return [sea({ seed: 79, top: "#5fd3e6", bot: "#115b95", nFish: 2, coralA: "#ffb74d", coralB: "#f06292" }) +
+      gear(104, 30, 6, "#ffe082") + gear(106, 66, 4.5, "#b2dfdb") + shadow(58, 142, 30) + aSpark(14, 100, 3), aEdge(body + head)];
+  }
+
+  /* ---------- 7 Professor Inkling: Dumbo octopus, monocle, ear fins, a book ---------- */
+  function inkling() {
+    const P = "#f59a7d", PD = "#d9735a", PL = "#ffc2ad";
+    const arm = (d) => `<path d="${d}" fill="none" stroke="${OL}" stroke-width="9.6" stroke-linecap="round"/><path d="${d}" fill="none" stroke="${P}" stroke-width="7.4" stroke-linecap="round"/>`;
+    const tent = [
+      "M44,104 Q30,116 22,112 Q16,108 20,104", "M50,108 Q42,126 34,132", "M58,110 Q56,128 50,138", "M66,110 Q70,128 76,136", "M74,106 Q86,122 96,126",
+    ].map(arm).join("") + [[20, 104], [34, 132], [50, 138], [76, 136], [96, 126]].map(([x, y]) => aC(x, y, 1.3, PL)).join("");
+    const book = `<g transform="rotate(-8 62 104)"><path d="M38,94 Q50,90 62,95 Q74,90 86,94 L86,116 Q74,112 62,117 Q50,112 38,116Z" fill="#8e2a2a" ${A_OUT} stroke-linejoin="round"/>` +
+      `<path d="M40,92 Q51,88 62,93 L62,114 Q51,109 40,113Z" fill="#fffaf0" ${A_OUT}/><path d="M84,92 Q73,88 62,93 L62,114 Q73,109 84,113Z" fill="#fffaf0" ${A_OUT}/>` +
+      [97, 101, 105].map(y => `<path d="M44,${y - 1} Q51,${y - 3.5} 58,${y}" stroke="#90a4ae" stroke-width=".9" fill="none"/><path d="M66,${y} Q73,${y - 3.5} 80,${y - 1}" stroke="#90a4ae" stroke-width=".9" fill="none"/>`).join("") +
+      `<g transform="translate(73 106) scale(.5)">${fish(0, 0, 1, "#4fc3f7")}</g></g>`;
+    const body = tent +
+      // ear fins
+      `<path d="M28,52 Q8,38 10,58 Q12,72 30,68Z" fill="${P}" ${A_OUT} stroke-linejoin="round"/><path d="M26,56 Q14,48 15,59 Q16,66 27,64Z" fill="${PD}" opacity=".5"/>` +
+      `<path d="M92,52 Q112,38 110,58 Q108,72 90,68Z" fill="${P}" ${A_OUT} stroke-linejoin="round"/><path d="M94,56 Q106,48 105,59 Q104,66 93,64Z" fill="${PD}" opacity=".5"/>` +
+      `<path d="M60,14 Q96,14 96,58 Q96,90 78,104 Q60,114 42,104 Q24,90 24,58 Q24,14 60,14Z" fill="${P}" ${A_OUT}/>` +
+      `<path d="M80,22 Q100,48 88,86 Q80,102 64,108 Q86,84 80,22Z" fill="${PD}" opacity=".4"/>` +
+      aC(42, 30, 3, PL) + aC(52, 23, 2, PL) + aC(76, 32, 2.4, PL) + aC(36, 44, 1.8, PL) +
+      // bushy brows, eyes, the monocle on his left eye with its chain
+      `<path d="M37,58 Q44,51 52,56" stroke="${OL}" stroke-width="3.2" fill="none" stroke-linecap="round"/><path d="M68,56 Q76,51 83,58" stroke="${OL}" stroke-width="3.2" fill="none" stroke-linecap="round"/>` +
+      dotEye(45, 66, 1.2) + dotEye(75, 66, 1.2) +
+      `<circle cx="75" cy="66" r="8.4" fill="#e3f6ff" fill-opacity=".3" stroke="#f9c74f" stroke-width="2.2"/><circle cx="75" cy="66" r="9.6" fill="none" stroke="${OL}" stroke-width=".8"/>` +
+      `<path d="M71,61 l3,-2.4" stroke="#fff" stroke-width="1.2" stroke-linecap="round"/>` +
+      `<path d="M82,72 Q88,86 80,94" stroke="#f9c74f" stroke-width="1.2" fill="none" stroke-dasharray="1.6 1"/>` +
+      smile(60, 80, 6, OL, 1.5) + cheek(38, 76, 3.8, "#ff7f7f") + cheek(82, 78, 3.4, "#ff7f7f") + book;
+    const deep = sea({ seed: 91, top: "#3aa7d8", bot: "#0b2f6b", nFish: 2, fishCols: ["#80deea", "#ffd54f"], coralA: "#ff8a80", coralB: "#4db6ac" });
+    return [deep + shadow(60, 143, 28) + aSpark(104, 24, 3.4) + aSpark(14, 92, 3), `<g class="lv-bob">${aEdge(body)}</g>`];
+  }
+
+  /* ---------- 8 Tunip: a Vegimal, round and turnip-like with a leafy top ---------- */
+  function tunip() {
+    const C = "#fbf3dc", CS = "#ecdcb4", PU = "#c779c9";
+    const leaf = (rot, len, c) => `<g transform="rotate(${rot} 60 46)"><path d="M60,46 Q${60 - len * .38},${46 - len * .55} 60,${46 - len} Q${60 + len * .38},${46 - len * .55} 60,46Z" fill="${c}" ${A_OUT}/><path d="M60,44 V${46 - len * .8}" stroke="#1b5e20" stroke-width=".8" opacity=".6"/></g>`;
+    const g = U("otu");
+    const body =
+      leaf(-38, 30, "#66bb6a") + leaf(38, 30, "#66bb6a") + leaf(-12, 36, "#81c784") + leaf(14, 34, "#4caf50") +
+      // feet and arms
+      `<ellipse cx="47" cy="134" rx="8" ry="5" fill="${CS}" ${A_OUT}/><ellipse cx="73" cy="134" rx="8" ry="5" fill="${CS}" ${A_OUT}/>` +
+      aL([[34, 88], [22, 78], [19, 70]], C, 7.5) + aC(19, 67, 5.4, C, A_OUT) +
+      aL([[86, 88], [98, 78], [101, 70]], C, 7.5) + aC(101, 67, 5.4, C, A_OUT) +
+      // the turnip body: round, purple on top fading to cream, a little root tip
+      `<defs>${aVGrad(g, PU, C).replace(/<stop offset="1"/, '<stop offset=".42" stop-color="' + C + '"/><stop offset="1"')}</defs>`;
+    const shape = `M60,48 Q92,48 94,88 Q94,124 60,132 Q26,124 26,88 Q28,48 60,48Z`;
+    const b2 = `<path d="${shape}" fill="url(#${g})" ${A_OUT}/>` +
+      `<path d="M80,56 Q96,78 88,110 Q80,126 64,130 Q88,104 80,56Z" fill="${CS}" opacity=".55"/>` +
+      `<path d="M38,60 Q46,52 54,51" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" opacity=".6"/>` +
+      dotEye(49, 88, 1.25) + dotEye(71, 88, 1.25) + openSmile(60, 98, 9, 5) +
+      cheek(41, 99, 4.2, "#ff9aa2") + cheek(79, 99, 4.2, "#ff9aa2");
+    return [sea({ seed: 103, top: "#8be3f2", bot: "#1d6fc0", nFish: 3, fishCols: ["#ff8a65", "#fff176", "#ef5350"], kelpH: 56 }) +
+      shadow(60, 140, 30) + aSpark(16, 44, 3.6) + aSpark(106, 40, 3) + aSpark(108, 104, 3) + aSpark(22, 118, 2.4), `<g class="lv-bob">${aEdge(body + b2)}</g>`];
+  }
+
+  /* ---------- 9 Gup-A: the orange fish-shaped sub zooming up out of the Octopod, the Captain in its glass dome ---------- */
+  function gupA() {
+    const O = "#f57c1f", OL2 = "#ffa24d", OD = "#c85a10", cp = U("ogup");
+    // local coordinates: nose to the right, about 142 long
+    const hull = "M-54,2 Q-52,-17 -26,-21 Q2,-25 32,-19 Q62,-12 66,4 Q64,20 36,24 Q2,28 -28,22 Q-52,18 -54,2Z";
+    const captain = `<g transform="translate(28 -31) rotate(30) scale(.62)">` + aC(-14, -14, 6, "#fafafa", A_OUT) + aC(14, -14, 6, "#fafafa", A_OUT) +
+      `<ellipse cx="0" cy="0" rx="19" ry="17" fill="#fafafa" ${A_OUT}/><ellipse cx="0" cy="6" rx="8" ry="6" fill="#f1f4f7"/><ellipse cx="0" cy="3.5" rx="4.4" ry="3" fill="#1b1b1b"/>` +
+      dotEye(-7, -3, 1.3) + dotEye(7, -3, 1.3) + smile(0, 8, 3.6, OL, 1.4) + cheek(-11, 5, 3) + cheek(11, 5, 3) +
+      `<path d="M-15,-11 Q-15,-27 0,-28 Q15,-27 15,-11 Q0,-15 -15,-11Z" fill="${NAVY}" ${A_OUT}/><path d="M-16,-10 Q0,-15 16,-10 Q13,-6 0,-8 Q-13,-6 -16,-10Z" fill="#141414" ${A_OUT}/>` +
+      badge(0, -19, 4) + `</g>`;
+    const sub =
+      // tail (two lobes), top and bottom fins behind the hull
+      `<path d="M-48,0 Q-60,-8 -76,-28 Q-70,-4 -68,2 Q-70,8 -76,32 Q-60,12 -48,6Z" fill="${O}" ${A_OUT} stroke-linejoin="round"/>` +
+      `<path d="M-52,-2 L-68,-18 M-52,6 L-68,22" stroke="${OD}" stroke-width="1.6" stroke-linecap="round"/>` +
+      `<path d="M-34,-19 Q-30,-40 -6,-38 Q-14,-29 -10,-22Z" fill="${O}" ${A_OUT} stroke-linejoin="round"/><path d="M-27,-22 Q-24,-32 -12,-35" stroke="${OD}" stroke-width="1.4" fill="none"/>` +
+      `<path d="M-14,23 Q-18,42 2,43 Q3,33 2,24Z" fill="${O}" ${A_OUT} stroke-linejoin="round"/>` +
+      `<path d="${hull}" fill="${O}" ${A_OUT}/><defs><clipPath id="${cp}"><path d="${hull}"/></clipPath></defs>` +
+      `<g clip-path="url(#${cp})"><path d="M-80,10 Q0,20 80,0 V40 H-80Z" fill="${OD}" opacity=".45"/><path d="M-42,-12 Q-14,-20 6,-18" stroke="${OL2}" stroke-width="4.4" fill="none" stroke-linecap="round"/></g>` +
+      // portholes, the badge, the headlight, a side fin
+      [[-36, 0], [-20, -3]].map(([x, y]) => aC(x, y, 5.4, "#bfefff", `stroke="${OL}" stroke-width="2.4"`) + aC(x - 1.6, y - 1.6, 1.5, "#fff")).join("") +
+      badge(42, 6, 6.4) + aC(63, 3, 4.2, "#fff59d", A_OUT) + aC(62, 2, 1.4, "#fff") +
+      `<path d="M-6,8 Q-20,14 -24,24 Q-8,25 6,13Z" fill="${OL2}" ${A_OUT} stroke-linejoin="round"/><path d="M-8,13 Q-14,17 -17,21" stroke="${OD}" stroke-width="1.2" fill="none"/>` +
+      // the Captain in the big glass dome on top
+      `<path d="M2,-18 Q2,-52 29,-52 Q56,-50 57,-15 Q30,-10 2,-18Z" fill="#c4eefc"/>` + captain +
+      `<path d="M2,-18 Q2,-52 29,-52 Q56,-50 57,-15 Q30,-10 2,-18Z" fill="#9fe3ff" fill-opacity=".3" stroke="${OL}" stroke-width="1.6"/>` +
+      `<path d="M2,-18 Q30,-10 57,-15" stroke="#90a4ae" stroke-width="3" fill="none"/><path d="M2,-18 Q30,-10 57,-15" stroke="${OL}" stroke-width=".8" fill="none" transform="translate(0 1.6)"/>` +
+      `<path d="M9,-30 Q12,-45 26,-47" stroke="#fff" stroke-width="2.8" fill="none" stroke-linecap="round" opacity=".9"/><path d="M48,-42 Q52,-36 53,-30" stroke="#fff" stroke-width="1.6" fill="none" stroke-linecap="round" opacity=".7"/>`;
+    const T = "translate(68 80) rotate(-40) scale(.85)";
+    // behind: the Octopod it came from, a bubble trail and speed lines along its path
+    const trail = `<g transform="${T}">` + [[-84, 8, 4], [-94, -6, 3], [-100, 16, 2.6], [-108, 2, 3.4], [-90, 26, 2]].map(([x, y, r]) => bubble(x, y, r)).join("") +
+      [[-40, -46, 20], [-62, -30, 14]].map(([x, y, l]) => `<path d="M${x},${y} h${-l}" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".75"/>`).join("") + `</g>`;
+    return [sea({ seed: 131, top: "#4fc8f0", bot: "#0d3f8a", nFish: 2, fishCols: ["#ffee58", "#80cbc4"], nBub: 6, starX: 40 }) + octopod(99, 119, .76) + trail +
+      aSpark(104, 24, 3.6) + aSpark(46, 22, 2.8), `<g transform="${T}">${aEdge(sub)}</g>`];
+  }
+
+  FAN.octonauts = [
+    ["Captain Barnacles", "the polar-bear captain in his peaked cap, pointing the crew ahead", barnacles],
+    ["Kwazii", "the ginger pirate cat: eye patch, gold earring, ear tufts, fist up", kwazii],
+    ["Peso", "the little penguin medic waving hello, with his blue medical bag", peso],
+    ["Shellington", "the sea-otter scientist in glasses, studying a starfish through his magnifier", shellington],
+    ["Dashi", "the dachshund photographer on all fours: long low body, floppy ear, camera flashing", dashi],
+    ["Tweak", "the white bunny engineer in green overalls with her big wrench", tweak],
+    ["Professor Inkling", "the Dumbo octopus with his monocle and a book", inkling],
+    ["Tunip", "the little Vegimal: round, turnip-like, leafy top", tunip],
+    ["Gup-A", "the orange fish-shaped sub zooming up past the Octopod, the Captain in its glass dome", gupA],
+  ];
+})();
+
+/* Sticker book theme page "Peppa Pig": 9 stickers in the show's flat style (side-profile heads, dot eyes, stick limbs, green hills) */
+(() => {
+  "use strict";
+  const OL = A_OL, OUT = `stroke="${OL}" stroke-width="1.1" stroke-linejoin="round"`;
+  const uid = p => `pp${p}${++aUid}`;
+  const PINK = "#f9b3c8", SNOUT = "#f59ab8", CHEEK = "#ef6f98", MOUTH = "#c62a3a";
+
+  /* ---------- backdrop pieces (flat colours, no outlines, as in the show) ---------- */
+  function sky(top, bot) { const g = uid("sky"); return `<defs>${aVGrad(g, top, bot)}</defs><rect width="120" height="158" fill="url(#${g})"/>`; }
+  const cloud = (x, y, s = 1) => `<g transform="translate(${x} ${y}) scale(${s})" fill="#fff"><ellipse cx="0" cy="0" rx="9" ry="5.5"/><ellipse cx="8" cy="-3" rx="7" ry="6"/><ellipse cx="15" cy="1" rx="7" ry="4.5"/><rect x="-6" y="0" width="26" height="4.5" rx="2.2"/></g>`;
+  const hill = (d, c) => `<path d="${d}" fill="${c}"/>`;
+  const sun = (x, y, r) => `<g fill="#ffd23f">${[...Array(12)].map((_, i) => { const a = i * Math.PI / 6; return `<path d="M${(x + (r + 2) * Math.cos(a - .12)).toFixed(1)},${(y + (r + 2) * Math.sin(a - .12)).toFixed(1)} L${(x + (r + 7) * Math.cos(a)).toFixed(1)},${(y + (r + 7) * Math.sin(a)).toFixed(1)} L${(x + (r + 2) * Math.cos(a + .12)).toFixed(1)},${(y + (r + 2) * Math.sin(a + .12)).toFixed(1)}Z"/>`; }).join("")}</g>${aC(x, y, r, "#ffd23f")}${aC(x - r * .3, y - r * .3, r * .45, "#fff3a8", 'opacity=".7"')}`;
+  // Peppa's house: cream walls, red roof, chimney, two windows, door
+  const house = (x, y, s = 1, win = "#9fd8f6") => `<g transform="translate(${x} ${y}) scale(${s})">` +
+    `<rect x="-9" y="-11" width="3.5" height="7" fill="#c0392b"/><rect x="-10" y="-11" width="18" height="15" fill="#fbe7a1" stroke="#8a6d3b" stroke-width=".6"/>` +
+    `<path d="M-13,-10 L-1,-20 L11,-10Z" fill="#e2492f"/><rect x="-7.5" y="-7" width="4.5" height="4" fill="${win}" stroke="#8a6d3b" stroke-width=".5"/>` +
+    `<rect x="3" y="-7" width="4.5" height="4" fill="${win}" stroke="#8a6d3b" stroke-width=".5"/><rect x="-2.6" y="-2" width="4.2" height="6" fill="#c2662d"/></g>`;
+  const tree = (x, y, s = 1, c = "#3f9a2e") => `<g transform="translate(${x} ${y}) scale(${s})"><rect x="-1.4" y="-14" width="2.8" height="14" fill="#8d5a2b"/><ellipse cx="0" cy="-20" rx="7" ry="9" fill="${c}"/></g>`;
+  const flower = (x, y, c) => `<path d="M${x},${y} v5" stroke="#2e7d32" stroke-width=".9"/>` + [0, 1, 2, 3, 4].map(i => { const a = i * 1.2566; return aC(x + 1.9 * Math.cos(a), y + 1.9 * Math.sin(a), 1.4, c); }).join("") + aC(x, y, 1.1, "#ffe14d");
+  const grassTufts = (pts, c = "#3c8f2a") => pts.map(([x, y]) => `<path d="M${x - 2},${y} l1,-3 l1,3 l1,-3.5 l1,3.5" fill="none" stroke="${c}" stroke-width=".7"/>`).join("");
+  const shadow = (x, y, rx) => `<ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${rx * .16}" fill="#000" opacity=".18"/>`;
+
+  /* ---------- the characters ---------- */
+  // pig head, facing right, origin = middle of the head; o: skin, snout, lash, glasses, stubble, mouth ("smile"|"open"), eyes [[x,y],[x,y]], cap
+  function pigHead(o = {}) {
+    const sk = o.skin || PINK, sn = o.snout || SNOUT, s = [];
+    const E = o.eyes || [[9, -20.5], [17, -19]];
+    // ears (behind the head)
+    s.push(`<path d="M-15,-19 Q-17,-31 -11,-35 Q-7,-30 -6,-23Z" fill="${sk}" ${OUT}/>`, `<path d="M-6,-23 Q-6,-34 1,-37 Q3,-31 2,-24Z" fill="${sk}" ${OUT}/>`);
+    s.push(`<path d="M34,-17 C24,-19 12,-25 -2,-25 C-20,-25 -29,-12 -27,2 C-25,16 -12,22 0,21 C12,20 22,4 34,1Z" fill="${sk}" ${OUT}/>`);
+    s.push(`<ellipse cx="34" cy="-8" rx="4.4" ry="9.2" fill="${sn}" ${OUT}/>`, `<ellipse cx="33.4" cy="-11.5" rx="1.1" ry="2" fill="#a2385c"/><ellipse cx="34.6" cy="-4.5" rx="1.1" ry="2" fill="#a2385c"/>`);
+    s.push(aC(-5, 4, 5.6, CHEEK, 'opacity=".75"'));
+    if (o.stubble) s.push([[-2, 15], [2, 16.5], [6, 15.5], [10, 13.5], [0, 12], [4, 13], [8, 11]].map(([x, y]) => aC(x, y, .55, "#7a4a5a")).join(""));
+    if (o.mouth === "open") s.push(`<path d="M3,9 Q14,22 27,5 Q15,12 3,9Z" fill="${MOUTH}" ${OUT}/>`);
+    else s.push(`<path d="M3,9 Q14,17 26,5" fill="none" stroke="${OL}" stroke-width="1.2" stroke-linecap="round"/>`);
+    E.forEach(([x, y]) => {
+      s.push(aC(x, y, 3.4, "#fff", OUT), aC(x + .7, y, 1.7, "#111"));
+      if (o.lash) s.push(`<path d="M${x - 2.2},${y - 2.8} l-1,-2.4 M${x},${y - 3.4} v-2.6 M${x + 2.2},${y - 2.8} l1,-2.4" stroke="${OL}" stroke-width=".9" stroke-linecap="round"/>`);
+    });
+    if (o.glasses) {
+      const [[x1, y1], [x2, y2]] = E;
+      s.push(`<path d="M${x1 - 5},${y1 + 1} L-12,-12" stroke="${OL}" stroke-width="1.3" stroke-linecap="round"/>`,
+        aC(x1, y1, 5, "none", `stroke="${OL}" stroke-width="1.6"`), aC(x2, y2, 5, "none", `stroke="${OL}" stroke-width="1.6"`));
+    }
+    if (o.cap) s.push(o.cap);
+    return s.join("");
+  }
+  // a figure: neck at (0,0) facing right; limbs are point lists, body and head are drawn over the limbs
+  function fig(o) {
+    const sk = o.skin || PINK, s = [];
+    if (o.back) s.push(o.back);
+    (o.legs || []).forEach(L => { s.push(aL(L, sk, o.lw || 1.9)); const [x, y] = L[L.length - 1]; s.push(`<ellipse cx="${x + 2.4}" cy="${y + 1}" rx="4.3" ry="2.4" fill="${o.shoe || "#1d1d1d"}" ${OUT}/>`); });
+    (o.arms || []).forEach(A => { s.push(aL(A, sk, o.aw || 1.7)); const [x, y] = A[A.length - 1]; s.push(aC(x, y, 2.3, sk, OUT)); });
+    s.push(o.body || "", `<g transform="translate(${(o.head || [2, -20])[0]} ${(o.head || [2, -20])[1]}) scale(${o.hs || 1})">${o.headSvg}</g>`, o.front || "", o.hold != null ? aC(...o.arms[o.hold][o.arms[o.hold].length - 1], 2.3, sk, OUT) : "");
+    return `<g transform="translate(${o.x} ${o.y}) scale(${o.s * (o.flip ? -1 : 1)} ${o.s})">${s.join("")}</g>`;
+  }
+  // dress / top: narrow at the neck, flared, rounded hem, a soft shade on the back side
+  function dress(c, top = 8, bot = 22, h = 36, shade = "#000") {
+    return `<path d="M${-top},0 Q0,-2.5 ${top},0 L${bot},${h} Q0,${h + 4} ${-bot},${h}Z" fill="${c}" ${OUT}/>` +
+      `<path d="M${-top + 1},1 L${-bot + 1.2},${h - .6} Q${-bot + 7},${h + 1.5} ${-bot + 9},${h + 1.6} L${-top + 4},1Z" fill="${shade}" opacity=".12"/>`;
+  }
+  const curlTail = (x, y, c = PINK) => `<path d="M${x},${y} q-6,1 -6,-4 q0,-4 4,-3 q3,1 1,4" fill="none" stroke="${OL}" stroke-width="3.2" stroke-linecap="round"/><path d="M${x},${y} q-6,1 -6,-4 q0,-4 4,-3 q3,1 1,4" fill="none" stroke="${c}" stroke-width="1.4" stroke-linecap="round"/>`;
+
+  // sheep head (Suzy), as in the show: a fluffy cloud of white fleece (bumpy outline) round the back and top of the head,
+  // and a smaller pig-like face in front of it pointing right, with two eyes on the snout side
+  function cloudPath(cx, cy, rx, ry, n, a0 = 0) {
+    const P = [...Array(n)].map((_, i) => { const a = a0 + i * 2 * Math.PI / n, k = i % 2 ? .97 : 1.03; return [cx + rx * k * Math.cos(a), cy + ry * k * Math.sin(a)]; });
+    return "M" + P.map(([x, y], i) => { const [u, v] = P[(i + 1) % n], r = Math.hypot(u - x, v - y) * .56; return `${i ? "" : `${x.toFixed(1)},${y.toFixed(1)} `}A${r.toFixed(1)},${r.toFixed(1)} 0 0 1 ${u.toFixed(1)},${v.toFixed(1)}`; }).join(" ") + "Z";
+  }
+  function sheepHead(o = {}) {
+    const s = [];
+    s.push(`<path d="${cloudPath(-6, -8, 21, 20, 12, .2)}" fill="#fff" ${OUT} stroke-width="1.3"/>`);
+    s.push(`<path d="M-24,-2 Q-22,10 -10,12 Q-18,4 -17,-6 Q-21,-5 -24,-2Z" fill="#dfe6ee" opacity=".8"/>`);
+    s.push(`<path d="M-3,-9 C6,-17 19,-16 28,-9 C35,-4 34,7 26,9.5 C15,12.5 0,12 -4,5 C-6,1 -6,-5 -3,-9Z" fill="#fdf7f3" ${OUT}/>`);
+    s.push(aC(4, 3.5, 3.4, CHEEK, 'opacity=".55"'));
+    s.push(aC(30.5, -3, 1.1, "#7a5a5a"), aC(31.5, 2, 1.1, "#7a5a5a"));
+    s.push(o.mouth === "open" ? `<path d="M11,4 Q20,15 28,5 Q19,8 11,4Z" fill="${MOUTH}" ${OUT}/>` : `<path d="M12,5 Q20,10 28,5" fill="none" stroke="${OL}" stroke-width="1.1" stroke-linecap="round"/>`);
+    [[11, -8.5], [19, -6.5]].forEach(([x, y]) => s.push(aC(x, y, 3.2, "#fff", OUT), aC(x + .7, y, 1.6, "#111")));
+    return s.join("");
+  }
+  // rabbit head (Rebecca): long ears with pink insides, a short snout with a pink nose and two teeth
+  function rabbitHead(o = {}) {
+    const fur = o.fur || "#c8956a", s = [];
+    s.push(`<path d="M-13,-14 C-26,-30 -24,-56 -17,-58 C-10,-58 -6,-36 -5,-18Z" fill="${fur}" ${OUT}/><path d="M-12,-20 C-20,-32 -19,-50 -16,-52 C-12,-50 -9,-36 -8,-21Z" fill="#f4a9b8"/>`);
+    s.push(`<path d="M-4,-19 C-8,-38 -4,-60 3,-61 C10,-60 8,-38 4,-18Z" fill="${fur}" ${OUT}/><path d="M-2,-22 C-5,-38 -2,-54 3,-55 C7,-53 6,-38 2,-22Z" fill="#f4a9b8"/>`);
+    s.push(`<path d="M25,-10 C16,-20 4,-22 -6,-21 C-22,-20 -26,-2 -20,10 C-14,18 4,18 14,13 C20,9 27,3 28,-3 C28,-6 27,-8 25,-10Z" fill="${fur}" ${OUT}/>`);
+    s.push(`<path d="M-17,0 C-17,-12 -8,-17 0,-17 C-8,-12 -12,-6 -12,4Z" fill="#fff" opacity=".18"/>`);
+    s.push(`<ellipse cx="27.5" cy="-5" rx="2.6" ry="2.2" fill="#e8708a" ${OUT}/>`);
+    s.push(`<rect x="15" y="9.5" width="3.4" height="4" fill="#fff" ${OUT}/><rect x="18.4" y="9.5" width="3.4" height="4" fill="#fff" ${OUT}/>`);
+    s.push(`<path d="M8,7 Q16,12 26,4" fill="none" stroke="${OL}" stroke-width="1.1" stroke-linecap="round"/>`);
+    [[6, -14], [14, -12.5]].forEach(([x, y]) => s.push(aC(x, y, 3.2, "#fff", OUT), aC(x + .7, y, 1.6, "#111")));
+    return s.join("");
+  }
+  // dog head (Danny): round head, a longer muzzle with a black nose, floppy dark ears over the head
+  function dogHead(o = {}) {
+    const fur = o.fur || "#b9814f", ear = o.ear || "#6b3f1d", s = [];
+    s.push(`<path d="M33,-10 C24,-13 14,-24 -2,-24 C-20,-24 -27,-10 -25,4 C-22,18 -6,22 6,18 C16,14 24,6 33,3Z" fill="${fur}" ${OUT}/>`);
+    s.push(`<ellipse cx="33" cy="-4" rx="4.4" ry="5.4" fill="#1d1d1d" ${OUT}/>`, aC(32, -6.5, 1.2, "#fff", 'opacity=".6"'));
+    s.push(o.mouth === "open" ? `<path d="M8,9 Q19,20 30,5 Q19,12 8,9Z" fill="${MOUTH}" ${OUT}/>` : `<path d="M8,10 Q19,15 29,6" fill="none" stroke="${OL}" stroke-width="1.1" stroke-linecap="round"/>`);
+    [[7, -18], [15, -16]].forEach(([x, y]) => s.push(aC(x, y, 3.2, "#fff", OUT), aC(x + .7, y, 1.6, "#111")));
+    s.push(`<path d="M-17,-21 C-12,-24 -6,-22 -6,-17 C-6,-6 -10,8 -16,12 C-22,14 -25,8 -23,0 C-22,-8 -22,-16 -17,-21Z" fill="${ear}" ${OUT}/>`);
+    return s.join("");
+  }
+  // pony head (Pedro): long nose, a mane, small pointed ears, big round black glasses
+  function ponyHead(o = {}) {
+    const fur = o.fur || "#d2a06c", mane = o.mane || "#8a5528", s = [];
+    s.push(`<path d="M-14,-22 L-12,-36 L-5,-25Z" fill="${fur}" ${OUT}/><path d="M-5,-25 L-1,-38 L4,-25Z" fill="${fur}" ${OUT}/>`);
+    s.push(`<path d="M-24,-12 C-30,0 -28,10 -24,18 C-18,12 -14,4 -14,-4Z" fill="${mane}" ${OUT}/>`);
+    s.push(`<path d="M35,-5 C31,-13 20,-20 6,-24 C-10,-28 -24,-18 -24,-2 C-24,14 -8,20 6,15 C16,11 26,10 31,9 C37,7 38,1 35,-5Z" fill="${fur}" ${OUT}/>`);
+    s.push(`<path d="M-20,-14 C-18,-26 -8,-29 2,-26 C-2,-22 -6,-18 -8,-12 C-12,-16 -16,-14 -20,-14Z" fill="${mane}" ${OUT}/>`);
+    s.push(`<ellipse cx="33" cy="1" rx="1.4" ry="2.3" fill="#5a3418" transform="rotate(-20 33 1)"/>`);
+    s.push(`<path d="M14,9 Q23,13 31,8" fill="none" stroke="${OL}" stroke-width="1.1" stroke-linecap="round"/>`);
+    const E = [[9, -17], [19.5, -14]];
+    E.forEach(([x, y]) => s.push(aC(x, y, 3.2, "#fff", OUT), aC(x + .7, y, 1.6, "#111")));
+    s.push(`<path d="M${E[0][0] - 5.4},${E[0][1] + 1} L-12,-8" stroke="${OL}" stroke-width="1.4" stroke-linecap="round"/>`,
+      ...E.map(([x, y]) => aC(x, y, 5.3, "none", `stroke="${OL}" stroke-width="1.9"`)));
+    return s.join("");
+  }
+  // Mr Dinosaur: George's green toy, standing on George's hand at (0,0), facing right
+  const mrDino = () => `<g>` +
+    `<path d="M-14,-6 Q-24,-4 -28,2 Q-20,0 -12,-1Z" fill="#43a047" ${OUT}/>` +
+    `<path d="M-6,-1 l-1,7 l4,0 l0,-6 M5,-1 l1,7 l4,0 l-1,-6" fill="#43a047" ${OUT}/>` +
+    `<path d="M-15,-4 Q-14,-16 0,-16 Q8,-16 10,-22 L12,-30 Q14,-36 22,-35 Q28,-34 28,-29 Q28,-25 20,-24 Q16,-23 15,-18 Q14,-4 8,0 Q0,3 -8,1 Q-14,0 -15,-4Z" fill="#43a047" ${OUT}/>` +
+    `<path d="M-10,-14 l2,-5 l3,4 l2,-5 l3,4 l2,-5 l2,4" fill="#2e7d32" ${OUT}/>` +
+    `<path d="M-10,-4 Q0,0 9,-3" fill="none" stroke="#a5d6a7" stroke-width="1.6" stroke-linecap="round"/>` +
+    `<path d="M21,-29 Q26,-28 28,-29 Q27,-26 21,-27Z" fill="#c62828"/>` + aC(18, -31, 1.2, "#111") + `</g>`;
+
+  /* ---------- the nine stickers: each returns [backdrop, character] (the character part alone = the "find the shape" silhouette) ---------- */
+  // 1 Peppa jumping in a muddy puddle, the house on the hill behind
+  function peppa() {
+    const mud = "#8a5a2e", drops = [[22, 116, -30], [14, 128, -60], [96, 114, 30], [106, 126, 55], [32, 104, -15], [86, 102, 15], [58, 106, 0]];
+    const bg = sky("#43b3ef", "#9adcfb") + cloud(8, 22, .9) + cloud(70, 14, .8) +
+      hill("M60,92 Q88,48 120,58 V158 H60Z", "#8cd04f") + house(99, 60, 1.05) +
+      hill("M0,96 Q34,80 70,96 Q96,108 120,100 V158 H0Z", "#6cbf3d") + hill("M0,126 Q60,114 120,128 V158 H0Z", "#57ad30") +
+      grassTufts([[10, 136], [104, 140], [22, 150], [98, 152]]) +
+      `<ellipse cx="58" cy="138" rx="46" ry="11" fill="${mud}"/><ellipse cx="58" cy="136.5" rx="38" ry="7" fill="#a06d3a"/>` +
+      drops.map(([x, y, r]) => `<ellipse cx="${x}" cy="${y}" rx="2.6" ry="4.4" fill="${mud}" transform="rotate(${r} ${x} ${y})"/>`).join("") +
+      `<path d="M30,136 Q26,124 34,118 Q34,128 40,134 Q42,122 48,120 Q46,130 52,134Z M66,134 Q70,122 76,120 Q74,130 80,134 Q86,124 90,120 Q88,130 88,136Z" fill="${mud}"/>`;
+    return [bg, aEdge(fig({ x: 64, y: 70, s: 1.12, flip: true, headSvg: pigHead({ mouth: "open" }),
+      legs: [[[-6, 35], [-9, 43], [-7, 50]], [[6, 35], [9, 43], [8, 50]]],
+      arms: [[[-7, 6], [-18, 6], [-25, -3]], [[7, 6], [17, 9], [27, 4]]],
+      back: curlTail(-20, 29), body: dress("#e8262a") }))];
+  }
+  // 2 George holding Mr Dinosaur up: "Dine-saw!"
+  function george() {
+    const bg = sky("#3fb0ee", "#a7e1fb") + sun(100, 22, 9) + cloud(10, 30, .8) +
+      hill("M0,92 Q30,72 64,90 Q92,104 120,88 V158 H0Z", "#86cc4c") + tree(14, 96, 1) + tree(108, 98, .8, "#4aa636") +
+      hill("M0,118 Q56,104 120,118 V158 H0Z", "#5fb437") +
+      [[12, 128, "#ff6f91"], [26, 140, "#ffd23f"], [100, 130, "#ff6f91"], [110, 144, "#b388ff"], [92, 148, "#ffd23f"]].map(([x, y, c]) => flower(x, y, c)).join("") +
+      shadow(56, 136, 24);
+    return [bg, aEdge(fig({ x: 50, y: 80, s: 1.2, headSvg: pigHead({ mouth: "open" }), hs: .92, head: [2, -18], hold: 1,
+      legs: [[[-5, 26], [-6, 44]], [[5, 26], [6, 44]]],
+      arms: [[[-7, 5], [-17, 7], [-25, -2]], [[7, 5], [17, 13], [27, 16]]],
+      back: curlTail(-17, 22), body: dress("#2f6fd6", 7.5, 18, 27),
+      front: `<g transform="translate(29 19) scale(.8)">${mrDino()}</g>` }))];
+  }
+  // 3 Mummy Pig in her orange dress, in the garden
+  function mummy() {
+    const fence = [...Array(12)].map((_, i) => `<path d="M${i * 11 + 2},118 v-17 l3,-3 l3,3 v17Z" fill="#fff8e7" stroke="#c9b48a" stroke-width=".5"/>`).join("");
+    const bg = sky("#4ab6ee", "#bfe8fb") + cloud(6, 18, .9) + cloud(78, 30, .7) +
+      hill("M0,104 Q40,80 120,92 V158 H0Z", "#8cd04f") +
+      `<rect x="0" y="106" width="120" height="3" fill="#fff8e7"/><rect x="0" y="112" width="120" height="3" fill="#fff8e7"/>` + fence +
+      hill("M0,118 H120 V158 H0Z", "#5fb437") +
+      [[8, 128, "#ff5c8a"], [18, 136, "#ffd23f"], [104, 126, "#ff5c8a"], [112, 138, "#ffd23f"], [98, 146, "#b388ff"], [10, 148, "#b388ff"]].map(([x, y, c]) => flower(x, y, c)).join("") +
+      shadow(66, 145, 28);
+    return [bg, aEdge(fig({ x: 68, y: 74, s: 1.15, flip: true, headSvg: pigHead({ lash: 1 }), hs: 1.02,
+      legs: [[[-6, 40], [-7, 58]], [[6, 40], [7, 58]]],
+      arms: [[[-8, 6], [-19, 18], [-22, 28]], [[8, 6], [19, 16], [24, 24]]],
+      back: curlTail(-24, 34), body: dress("#f47b20", 8.5, 24, 42) }))];
+  }
+  // 4 Daddy Pig: glasses, stubble, big round tummy in a turquoise-green top, the red car behind
+  function daddy() {
+    const car = `<g transform="translate(16 104)"><path d="M-14,0 V-6 Q-14,-9 -10,-9 L-6,-9 L-3,-16 Q-2,-18 1,-18 L8,-18 Q11,-18 12,-15 L14,-9 Q17,-9 17,-6 V0Z" fill="#e53935"/><path d="M-1,-15.5 h4 v5.5 h-6Z M5,-15.5 h3 l2,5.5 h-5Z" fill="#bfe8fb"/>` +
+      aC(-8, 0, 3.4, "#222") + aC(11, 0, 3.4, "#222") + aC(-8, 0, 1.3, "#bbb") + aC(11, 0, 1.3, "#bbb") + `</g>`;
+    const bg = sky("#35a9ec", "#a9e0fb") + cloud(70, 16, .9) + cloud(4, 34, .7) +
+      hill("M0,88 Q50,66 120,82 V158 H0Z", "#8cd04f") + `<path d="M0,106 Q60,94 120,104 V114 Q60,104 0,116Z" fill="#9e9e9e"/>` + car +
+      hill("M0,116 Q60,104 120,114 V158 H0Z", "#5fb437") + grassTufts([[8, 140], [112, 136], [104, 150]]) +
+      shadow(60, 146, 32);
+    return [bg, aEdge(fig({ x: 56, y: 72, s: 1.06, headSvg: pigHead({ glasses: 1, stubble: 1, eyes: [[7, -20.5], [18, -18.8]] }), hs: 1.1, head: [3, -20],
+      legs: [[[-9, 58], [-10, 68]], [[9, 58], [10, 68]]],
+      arms: [[[-20, 10], [-36, 22], [-40, 34]], [[20, 10], [36, 20], [42, 30]]],
+      body: `<path d="M-10,0 Q0,-3 10,0 C30,8 36,30 30,46 C24,62 -24,62 -30,46 C-36,30 -30,8 -10,0Z" fill="#2aa198" ${OUT}/>` +
+        `<path d="M-26,14 C-34,30 -30,50 -16,56 C-24,46 -26,30 -22,16Z" fill="#000" opacity=".12"/><path d="M8,6 C20,10 26,20 26,28" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".25"/>`,
+      back: curlTail(-29, 46) }))];
+  }
+  // 5 Grandpa Pig (sailing cap, indigo shirt) and Granny Pig (magenta dress) face to face in their vegetable garden, big in the card
+  function grandparents() {
+    const cap = `<g transform="translate(0 -3)"><path d="M-14,-24 Q-14,-36 0,-36 Q14,-36 14,-24Z" fill="#1f2e6e" ${OUT}/><path d="M-15,-24 H15 V-21 H-15Z" fill="#fff" ${OUT}/><path d="M13,-23 Q24,-23 25,-20 Q18,-19 12,-21Z" fill="#111" ${OUT}/>` +
+      `<path d="M0,-33 v7 M-2.5,-31 h5 M-3.5,-28 Q0,-24.5 3.5,-28" fill="none" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/></g>`;
+    const veg = [[8, 124], [26, 128], [44, 124], [62, 128], [80, 124], [98, 128], [114, 124]].map(([x, y], i) => i % 2 ?
+      `<path d="M${x},${y} l-3,-6 M${x},${y} l0,-7 M${x},${y} l3,-6" stroke="#3c9a2a" stroke-width="1.6" stroke-linecap="round"/><path d="M${x - 2},${y} h4 l-2,3Z" fill="#f57c00"/>` :
+      `<ellipse cx="${x}" cy="${y - 2}" rx="6" ry="4.5" fill="#7cc243"/><ellipse cx="${x}" cy="${y - 3}" rx="3.4" ry="2.6" fill="#a5d66f"/>`).join("");
+    const bg = sky("#45b4ef", "#b5e5fb") + cloud(48, 12, .8) + sun(104, 18, 7) +
+      hill("M0,96 Q60,74 120,92 V158 H0Z", "#8cd04f") + tree(10, 100, .9) + tree(111, 98, .9, "#4aa636") +
+      hill("M0,112 Q60,104 120,112 V158 H0Z", "#5fb437") +
+      `<path d="M0,118 Q60,112 120,118 V132 Q60,126 0,132Z" fill="#8a5a2e"/>` + veg + grassTufts([[60, 150], [10, 152], [112, 150]]) +
+      shadow(29, 146, 22) + shadow(92, 146, 20);
+    const grandpa = fig({ x: 28, y: 84, s: .98, headSvg: pigHead({ cap, mouth: "open" }), hs: .9, head: [-3, -19],
+      legs: [[[-8, 46], [-9, 60]], [[8, 46], [9, 60]]],
+      arms: [[[-14, 8], [-26, 18], [-27, 30]], [[14, 8], [25, 16], [29, 26]]],
+      body: `<path d="M-9,0 Q0,-3 9,0 C24,8 28,28 22,42 C17,52 -17,52 -22,42 C-28,28 -24,8 -9,0Z" fill="#3949ab" ${OUT}/><path d="M-19,14 C-25,28 -22,42 -12,47 C-17,38 -19,26 -16,16Z" fill="#000" opacity=".14"/>`,
+      back: curlTail(-21, 38) });
+    const granny = fig({ x: 92, y: 88, s: .98, flip: true, headSvg: pigHead({ lash: 1 }), hs: .88, head: [-3, -19],
+      legs: [[[-6, 42], [-7, 58]], [[6, 42], [7, 58]]],
+      arms: [[[-8, 6], [-19, 18], [-21, 28]], [[8, 6], [19, 15], [23, 24]]],
+      back: curlTail(-23, 36), body: dress("#c2287e", 8.5, 23, 43) });
+    return [bg, aEdge(granny + grandpa)];
+  }
+  // 6 Suzy Sheep waving in her pink dress, a rainbow behind
+  function suzy() {
+    const bow = ["#ff4b4b", "#ff9a2e", "#ffe03a", "#5fd35f", "#3fa2ff", "#8f6bff"].map((c, i) => `<path d="M${-6 + i * 4},112 A${66 - i * 4},${66 - i * 4} 0 0 1 ${126 - i * 4},112" fill="none" stroke="${c}" stroke-width="4" opacity=".85"/>`).join("");
+    const bg = sky("#56bdf0", "#c4ebfc") + bow + cloud(-4, 104, 1.1) + cloud(102, 104, 1) +
+      hill("M0,104 Q30,90 60,100 Q90,110 120,98 V158 H0Z", "#86cc4c") + hill("M0,124 Q60,112 120,126 V158 H0Z", "#5fb437") +
+      [[10, 132, "#ff8fb1"], [22, 146, "#ffd23f"], [104, 136, "#ff8fb1"], [112, 148, "#ffffff"]].map(([x, y, c]) => flower(x, y, c)).join("") +
+      shadow(58, 145, 26);
+    return [bg, aEdge(fig({ x: 58, y: 76, s: 1.15, skin: "#fdf7f3", headSvg: sheepHead({ mouth: "open" }), hs: 1.1, head: [3, -18],
+      legs: [[[-6, 37], [-7, 58]], [[6, 37], [7, 58]]],
+      arms: [[[-7, 6], [-20, 4], [-28, -6]], [[7, 6], [17, 16], [22, 26]]],
+      body: dress("#ef5d9c", 8, 22, 38) }))];
+  }
+  // 7 Rebecca Rabbit with a carrot, her burrow door in the hill
+  function rebecca() {
+    const carrot = `<g transform="translate(23 22) rotate(-30)"><path d="M-3,0 Q0,-2 3,0 L0,18Z" fill="#ff8a1e" ${OUT}/><path d="M-1.5,5 h2.5 M-1,10 h2" stroke="#c45f0a" stroke-width=".8"/><path d="M0,0 l-4,-7 M0,0 l0,-8 M0,0 l4,-7" stroke="#3c9a2a" stroke-width="2" stroke-linecap="round"/></g>`;
+    const bg = sky("#3fb0ee", "#b0e3fb") + cloud(56, 12, .8) +
+      hill("M-10,158 V92 Q10,52 50,58 Q70,62 72,100 V158Z", "#7cc243") +
+      `<path d="M14,104 Q14,86 28,86 Q42,86 42,104Z" fill="#a0522d"/><path d="M28,86 V104" stroke="#7a3d20" stroke-width=".8"/>` + aC(36, 96, 1.2, "#ffd23f") +
+      `<rect x="8" y="76" width="7" height="5" rx="2.5" fill="#bfe8fb" stroke="#7a3d20" stroke-width=".8"/>` +
+      hill("M0,112 Q60,100 120,110 V158 H0Z", "#5fb437") + tree(108, 108, 1.1, "#4aa636") + grassTufts([[10, 140], [110, 140], [100, 152]]) +
+      shadow(62, 146, 24);
+    return [bg, aEdge(fig({ x: 64, y: 88, s: 1.06, flip: true, skin: "#c8956a", headSvg: rabbitHead(), hs: 1, head: [2, -16], hold: 1,
+      legs: [[[-6, 36], [-7, 52]], [[6, 36], [7, 52]]],
+      arms: [[[-7, 6], [-16, 16], [-24, 20]], [[7, 6], [18, 14], [23, 24]]],
+      back: aC(-21, 30, 4.2, "#fff", OUT), body: dress("#5cc4f0", 8, 21, 37), front: carrot }))];
+  }
+  // 8 Danny Dog at the seaside with a ball
+  function danny() {
+    const bg = sky("#2fa8ef", "#b8e7fc") + cloud(52, 12, .8) + sun(106, 18, 7) +
+      `<rect x="0" y="92" width="120" height="22" fill="#2b8fd8"/><path d="M0,96 q6,-2 12,0 t12,0 t12,0 t12,0 t12,0 t12,0 t12,0 t12,0 t12,0 t12,0" fill="none" stroke="#bfe8fb" stroke-width="1.2"/>` +
+      `<path d="M0,112 Q60,104 120,112 V158 H0Z" fill="#f6d78a"/>` +
+      `<g transform="translate(14 140)"><path d="M-6,0 L-4,-9 H4 L6,0Z" fill="#e53935"/><path d="M-7,-9 H7 V-11 H-7Z" fill="#e53935"/></g>` +
+      [[100, 128], [24, 124]].map(([x, y]) => `<path d="M${x},${y} l3,-2 l3,2 l-1,3 h-4Z" fill="#ff8a65"/>`).join("") +
+      shadow(56, 140, 24) + shadow(91, 128, 8);
+    return [bg, aEdge(fig({ x: 54, y: 72, s: 1.18, skin: "#b9814f", headSvg: dogHead({ mouth: "open" }), hs: 1, head: [2, -19],
+      legs: [[[-5, 27], [-6, 52]], [[5, 27], [6, 52]]],
+      arms: [[[-7, 5], [-18, 12], [-24, 4]], [[7, 5], [17, 12], [21, 22]]],
+      back: `<path d="M-15,22 q-8,-2 -10,-9" fill="none" stroke="${OL}" stroke-width="4.2" stroke-linecap="round"/><path d="M-15,22 q-8,-2 -10,-9" fill="none" stroke="#b9814f" stroke-width="2" stroke-linecap="round"/>`,
+      body: dress("#5b2d8e", 7.5, 18, 28) }) +
+      `<g transform="translate(91 118)">${aC(0, 0, 9, "#ffeb3b", OUT)}<path d="M-9,0 A9,9 0 0 0 9,0Z" fill="#e53935"/><path d="M-9,0 H9" stroke="${OL}" stroke-width=".9"/><path d="M0,-9 Q-5,0 0,9" fill="none" stroke="#1e88e5" stroke-width="1.4"/>${aC(0, 0, 9, "none", OUT)}</g>`)];
+  }
+  // 9 Pedro Pony with his glasses, on the hills at night under the moon
+  function pedro() {
+    const stars = [[10, 14], [28, 30], [46, 10], [70, 22], [16, 52], [104, 48], [84, 8], [54, 40]].map(([x, y], i) => aSpark(x, y, i % 3 ? 2.2 : 3, "#fff6c2")).join("");
+    const bg = sky("#1d2a6b", "#4a5fb0") + stars + aC(98, 22, 11, "#fff3b0") + aC(104, 18, 10, "#2c3b86") +
+      hill("M0,96 Q40,74 80,90 Q100,98 120,86 V158 H0Z", "#3c7d3a") + house(22, 86, .9, "#ffe680") +
+      hill("M0,118 Q60,106 120,118 V158 H0Z", "#2f6a2e") + grassTufts([[10, 140], [108, 136]], "#24562a") +
+      shadow(56, 140, 24);
+    return [bg, aEdge(fig({ x: 54, y: 74, s: 1.14, skin: "#d2a06c", headSvg: ponyHead(), hs: 1, head: [2, -18],
+      legs: [[[-5, 27], [-6, 52]], [[5, 27], [6, 52]]],
+      arms: [[[-7, 5], [-18, 14], [-22, 24]], [[7, 5], [18, 12], [23, 20]]],
+      back: `<path d="M-15,20 C-24,20 -28,28 -27,36 C-23,32 -19,28 -14,27Z" fill="#8a5528" ${OUT}/>`,
+      body: dress("#f7c51e", 7.5, 18, 28) }))];
+  }
+
+  FAN.peppa = [
+    ["Peppa Pig", "Red dress, jumping in a muddy puddle, her house on the hill", peppa],
+    ["George", "Blue top, holding up Mr Dinosaur", george],
+    ["Mummy Pig", "Orange dress, in the garden", mummy],
+    ["Daddy Pig", "Glasses, turquoise top, big round tummy, the red car", daddy],
+    ["Grandpa and Granny Pig", "Face to face in their vegetable garden: sailing cap and indigo shirt; magenta dress", grandparents],
+    ["Suzy Sheep", "Fluffy cloud of white fleece, pink dress, waving, a rainbow", suzy],
+    ["Rebecca Rabbit", "Sky-blue dress, a carrot, her burrow door", rebecca],
+    ["Danny Dog", "Floppy ears, purple top, at the seaside with a ball", danny],
+    ["Pedro Pony", "Glasses, yellow top, the hills at night", pedro],
+  ];
+})();
+
+/* Sticker book theme page: Paw Patrol (Ryder + 8 pups), drawn with album.js's pieces; sets FAN.pawpatrol = [[name, what, draw], ...];
+   draw() returns [backdrop, character] (character = the figure with its props and white cut-out edge, nothing card-wide) */
+(() => {
+  "use strict";
+  const U = p => `pp${p}${++aUid}`;
+  const P = (d, f, ex = "") => `<path d="${d}" fill="${f}" ${A_OUT} stroke-linejoin="round" ${ex}/>`;
+  const E = (cx, cy, rx, ry, f, ex = A_OUT) => `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${f}" ${ex}/>`;
+  const R = (x, y, w, h, rx, f, ex = A_OUT) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}" fill="${f}" ${ex}/>`;
+  const mir = s => s + `<g transform="scale(-1 1)">${s}</g>`;
+  const sky = (a, b) => { const g = U("sky"); return `<defs>${aVGrad(g, a, b)}</defs><rect width="120" height="158" fill="url(#${g})"/>`; };
+  const shadow = (x, y, rx) => `<ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${rx * .17}" fill="#000" opacity=".2"/>`;
+  const cloud = (x, y, s = 1, f = "#fff", op = 1) => `<g opacity="${op}" transform="translate(${x} ${y}) scale(${s})">${aC(0, 0, 6, f)}${aC(7, -3, 7.5, f)}${aC(15, 0, 6, f)}<rect x="-6" y="0" width="27" height="6" rx="3" fill="${f}"/></g>`;
+  const sparks = pts => pts.map(([x, y, r, c]) => aSpark(x, y, r, c || "#fff")).join("");
+  const shade = (pts, w) => `<polyline points="${aPts(pts)}" fill="none" stroke="#000" stroke-opacity=".2" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>`;
+
+  /* ---- collar tags: a gold-rimmed disc with the pup's job symbol (symbol drawn in a radius-10 box) ---- */
+  const SYM = {
+    police: ["#1565c0", () => `<path d="M0,-8 L6.5,-5 L6,2 Q5,6.5 0,9 Q-5,6.5 -6,2 L-6.5,-5Z" fill="#ffd54f" stroke="#8d6e00" stroke-width=".8"/>${aStar(0, 0, 3.6, "#1565c0")}`],
+    fire: ["#e53935", () => `<path d="M0,-8.5 Q6.5,-2 5.5,3 Q4.5,8 0,8 Q-4.5,8 -5.5,3 Q-6,-1.5 -2,-4.5 Q-2.2,-.5 .5,.5 Q1.8,-3.5 0,-8.5Z" fill="#ffd54f"/><path d="M0,0 Q3,3 2.4,5.2 Q1.6,7 0,7 Q-1.8,7 -2.4,5.2 Q-2.6,2.6 0,0Z" fill="#ff8f00"/>`],
+    prop: ["#ec407a", () => [0, 120, 240].map(a => `<ellipse cx="0" cy="-4.6" rx="2.6" ry="4.6" fill="#fff" transform="rotate(${a})"/>`).join("") + aC(0, 0, 2.2, "#ffd54f")],
+    shovel: ["#fdd835", () => `<path d="M-1,-8 H1 V1 H-1Z" fill="#6d4c41"/><path d="M-3,-9 H3 V-7.5 H-3Z" fill="#6d4c41"/><path d="M-4.5,1 H4.5 V5 Q4.5,8.5 0,9.5 Q-4.5,8.5 -4.5,5Z" fill="#607d8b" stroke="#37474f" stroke-width=".7"/>`],
+    recycle: ["#43a047", () => [0, 120, 240].map(a => `<g transform="rotate(${a})"><path d="M-4.2,-3.5 L1.6,-7 L3.6,-3.6" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round"/><polygon points="1.6,-2.4 6.2,-4.6 3.4,-7.4" fill="#fff"/></g>`).join("")],
+    anchor: ["#fb8c00", () => `<circle cx="0" cy="-6" r="2" fill="none" stroke="#fff" stroke-width="1.5"/><path d="M0,-4 V7.5 M-4,-1.5 H4 M-6.5,2.5 Q-6,7.5 0,7.8 Q6,7.5 6.5,2.5" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round"/><path d="M-6.5,2.5 l-1.3,1.6 M6.5,2.5 l1.3,1.6" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>`],
+    snow: ["#26c6da", () => [0, 60, 120].map(a => `<g transform="rotate(${a})"><path d="M0,-8 V8 M-2.4,-6.6 L0,-4.6 L2.4,-6.6 M-2.4,6.6 L0,4.6 L2.4,6.6" fill="none" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/></g>`).join("")],
+    compass: ["#689f38", () => `<circle r="7.5" fill="none" stroke="#fff" stroke-width="1"/><polygon points="0,-8 2,0 0,8 -2,0" fill="#fff"/><polygon points="0,-8 2,0 -2,0" fill="#e53935"/><polygon points="-8,0 0,-1.6 8,0 0,1.6" fill="#fff" opacity=".85"/>`],
+  };
+  const badge = (k, x, y, r) => `<g transform="translate(${x} ${y})">${aC(0, 0, r + 1.4, "#ffc107", `stroke="${A_OL}" stroke-width="1"`)}${aC(0, 0, r, SYM[k][0], `stroke="#b8860b" stroke-width=".5"`)}` +
+    `<g transform="scale(${(r / 10.5).toFixed(3)})">${SYM[k][1]()}</g><path d="M${-r * .6},${-r * .55} Q0,${-r * 1.05} ${r * .6},${-r * .55}" fill="none" stroke="#fff" stroke-width=".8" opacity=".55"/></g>`;
+  // the Paw Patrol shield: gold rim, red over blue, gold paw print (no lettering)
+  const pawPrint = (x, y, s, c) => `<g transform="translate(${x} ${y}) scale(${s})" fill="${c}"><ellipse cx="0" cy="2" rx="3.4" ry="2.8"/>${aC(-3.6, -1.8, 1.3, c)}${aC(-1.3, -3.6, 1.3, c)}${aC(1.3, -3.6, 1.3, c)}${aC(3.6, -1.8, 1.3, c)}</g>`;
+  const shield = (x, y, s) => { const c = U("sh");
+    return `<g transform="translate(${x} ${y}) scale(${s})"><defs><clipPath id="${c}"><path d="M-9,-10 H9 V0 Q9,8 0,12 Q-9,8 -9,0Z"/></clipPath></defs>` +
+      `<path d="M-10.5,-11.5 H10.5 V0 Q10.5,9.5 0,13.8 Q-10.5,9.5 -10.5,0Z" fill="#ffc107" ${A_OUT}/>` +
+      `<g clip-path="url(#${c})"><rect x="-10" y="-11" width="20" height="9" fill="#e53935"/><rect x="-10" y="-2" width="20" height="15" fill="#1565c0"/><rect x="-10" y="-3" width="20" height="1.6" fill="#fff"/></g>` +
+      pawPrint(0, 5.2, .95, "#ffc107") + aStar(0, -6.5, 2.4, "#fff") + `</g>`; };
+
+  /* ---- a pup: big front-facing head centred at 0,0 (head ~ ±25 x ±21, hat up to y -44) on one of four bodies (o.pose):
+       "sit"  front view, sitting (paws at y 68); o.raise {k: -1|1, pts} lifts one front leg; o.hind "hang" = hind legs dangling (flying)
+       "biped" front view, standing on the hind legs (feet at y 66); o.arms [{pts}] from the shoulders (±13,20), o.legPts, o.mid (between head and arms)
+       "quad" side view on four legs, body behind the head (dir 1 = facing right, the body to the left); o.legs = a QLEGS key;
+              o.pack is then drawn on the back (body coordinates, mirrored with it)
+     o: fur, light (muzzle/paws), eyes, uni, uniD (collar), badge, ears{back, front}, marks (head), hat, pack, tilt, mouth "open"|"grin",
+        headRx, brows, stripe, tail / tailCol / tailPts, front (drawn last) */
+  function head(o) {
+    const h = [], light = o.light || o.fur, rx = o.headRx || 25;
+    if (o.ears && o.ears.back) h.push(o.ears.back);
+    h.push(`<path d="M${-rx},2 Q${-rx},-21 0,-21 Q${rx},-21 ${rx},2 Q${rx - 1},18 ${rx - 9},20 Q0,25 ${9 - rx},20 Q${1 - rx},18 ${-rx},2Z" fill="${o.fur}" ${A_OUT}/>`);
+    h.push(`<path d="M${-rx + .5},8 l-3.2,2.4 l3.6,1.2 l-2.4,2.8 l4,.4 M${rx - .5},8 l3.2,2.4 l-3.6,1.2 l2.4,2.8 l-4,.4" fill="${o.fur}" stroke="${A_OL}" stroke-width="1" stroke-linejoin="round"/>`);
+    if (o.marks) h.push(o.marks);
+    h.push(`<path d="M-12.5,10 Q-12,1.5 0,2 Q12,1.5 12.5,10 Q12,19.5 0,20 Q-12,19.5 -12.5,10Z" fill="${light}"/>`);
+    h.push(`<path d="M-4.8,4.6 Q0,2.4 4.8,4.6 Q4.4,8.6 0,9.4 Q-4.4,8.6 -4.8,4.6Z" fill="#1a1a1a"/><ellipse cx="-1.4" cy="4.4" rx="1.7" ry=".8" fill="#fff" opacity=".7"/>`);
+    if ((o.mouth || "open") === "open") h.push(`<path d="M0,9.4 V11.2" stroke="${A_OL}" stroke-width="1"/><path d="M-6,11.2 Q0,22.5 6,11.2 Q0,13.2 -6,11.2Z" fill="#8e1b1b" stroke="${A_OL}" stroke-width=".9" stroke-linejoin="round"/><path d="M-3.4,17.4 Q0,14 3.4,17.4 Q2.6,19.6 0,19.8 Q-2.6,19.6 -3.4,17.4Z" fill="#ff7c8a"/>`);
+    else h.push(`<path d="M0,9.4 V11.6 M-6.2,11 Q-3,14.6 0,11.6 Q3,14.6 6.2,11" fill="none" stroke="${A_OL}" stroke-width="1.1" stroke-linecap="round"/>`);
+    h.push(aEye(-10, -3, o.eyes, 1.3), aEye(10, -3, o.eyes, 1.3));
+    h.push(`<ellipse cx="-16.5" cy="7" rx="2.4" ry="1.3" fill="#ff8a80" opacity=".55"/><ellipse cx="16.5" cy="7" rx="2.4" ry="1.3" fill="#ff8a80" opacity=".55"/>`);
+    if (o.brows) h.push(o.brows);
+    if (o.ears && o.ears.front) h.push(o.ears.front);
+    if (o.hat) h.push(o.hat);
+    return `<g transform="rotate(${o.tilt || 0} 0 12)">${h.join("")}</g>`;
+  }
+  const collar = o => P("M-15.5,14 Q0,23 15.5,14 L14.6,19.5 Q0,28 -14.6,19.5Z", o.uniD) + badge(o.badge, 0, 28, 6.8);
+  const paw = (x, y, r, light) => aC(x, y, r, light, A_OUT);
+
+  // side-view legs: [hip, knee, paw] (dir 1: front legs near x 0, hind legs near x -36)
+  const QLEGS = {
+    stand: { ff: [[-1, 38], [1, 52], [0, 63]], fn: [[7, 38], [9, 52], [9, 64]], hf: [[-30, 38], [-29, 52], [-31, 63]], hn: [[-39, 36], [-41, 50], [-38, 64]] },
+    run: { ff: [[0, 38], [9, 50], [16, 56]], fn: [[6, 36], [16, 43], [25, 41]], hf: [[-34, 38], [-42, 50], [-50, 55]], hn: [[-40, 34], [-49, 43], [-55, 40]] },
+    crouch: { ff: [[-1, 38], [5, 50], [3, 60]], fn: [[6, 38], [14, 50], [12, 60]], hf: [[-33, 38], [-40, 50], [-35, 60]], hn: [[-40, 36], [-48, 50], [-42, 60]] },
+  };
+  function quadBody(o) {
+    const fur = o.fur, light = o.light || fur, L = QLEGS[o.legs || "stand"], s = [];
+    const leg = (pts, far) => { const e = pts[2], f = E(e[0] + 1.8, e[1] + .3, 5.9, 3.9, light);
+      return aL(pts, fur, 7.6) + f + (far ? shade(pts, 7.6) + `<ellipse cx="${e[0] + 1.8}" cy="${e[1] + .3}" rx="5.9" ry="3.9" fill="#000" opacity=".2"/>` : ""); };
+    if (o.tail !== false) s.push(aL(o.tailPts || [[-46, 26], [-56, 16], [-55, 3]], o.tailCol || fur, 4.8));
+    s.push(leg(L.ff, 1), leg(L.hf, 1), leg(L.hn), leg(L.fn));
+    s.push(P("M8,16 Q15,26 12.5,38 Q11,46.5 0,47 L-34,46 Q-48,45 -48,32 Q-47,19 -34,18 L-8,15Z", fur));
+    s.push(`<path d="M11.5,41 Q9,46.4 0,46.8 L-30,46 Q-14,43.5 0,43.5 Q8,43 11.5,41Z" fill="${light}"/>`);
+    s.push(P("M9,17 Q15,26 13,36.5 Q-10,42 -31,38 Q-34,27 -31,17.4 L-8,15Z", o.uni),
+      `<path d="M13,31 Q-10,37 -32.4,33 L-31,38 Q-10,42 13,36.5Z" fill="#000" opacity=".13"/>`);
+    if (o.stripe) s.push(`<path d="M13.2,29 Q-10,35 -32.6,31 L-32.7,35 Q-10,39 13,33.4Z" fill="${o.stripe}" stroke="${A_OL}" stroke-width=".7"/>`);
+    s.push(E(-38.5, 33, 10.5, 11.5, fur, ""), `<path d="M-38,44 Q-30,42 -28.6,34" fill="none" stroke="#000" stroke-opacity=".12" stroke-width="3" stroke-linecap="round"/>`,
+      `<path d="M-29.5,27 Q-26.6,38 -32,43.4" fill="none" stroke="${A_OL}" stroke-width="1.1" stroke-linecap="round"/>`);
+    if (o.pack) s.push(o.pack);
+    return `<g transform="scale(${o.dir || 1} 1)">${s.join("")}</g>`;
+  }
+  // limbs of the biped: o.ow = outline width (default aL's 1.1), o.furShade = a soft shade along the lower right of white fur
+  const olw = o => o.ow ? `stroke="${A_OL}" stroke-width="${o.ow}"` : A_OUT;
+  const limb = (o, pts, w) => {
+    if (!o.ow && !o.furShade) return aL(pts, o.fur, w);
+    const ln = (q, c, ww, ex = "") => `<polyline points="${aPts(q)}" fill="none" stroke="${c}" stroke-width="${ww}" stroke-linecap="round" stroke-linejoin="round" ${ex}/>`;
+    return ln(pts, A_OL, w + 2 * (o.ow || 1.1)) + ln(pts, o.fur, w) +
+      (o.furShade ? ln(pts.map(([x, y]) => [x + w * .26, y + w * .14]), o.furShade, +(w * .36).toFixed(1), `opacity=".45"`) : ""); };
+  function pup(o) {
+    const s = [], pose = o.pose || "sit", light = o.light || o.fur;
+    if (pose === "quad") s.push(quadBody(o), collar(o), head(o));
+    else if (pose === "biped") {
+      if (o.pack) s.push(o.pack);
+      if (o.tail !== false) s.push(aL(o.tailPts || [[12, 46], [24, 40], [27, 28]], o.tailCol || o.fur, 4.6));
+      for (const [i, pts] of (o.legPts || [[[-8, 44], [-9, 56], [-10, 64]], [[8, 44], [9, 56], [10, 64]]]).entries()) {
+        const k = i ? 1 : -1, e = pts[pts.length - 1];
+        s.push(limb(o, pts, o.legW || 8.4), E(e[0] + k * 1.6, e[1] + 1.4, 7, 4.3, light, olw(o)),
+          `<path d="M${e[0] + k * 1.6 - 2.2},${e[1] - .4} v3.2 M${e[0] + k * 1.6 + 2.2},${e[1] - .4} v3.2" stroke="${A_OL}" stroke-width=".7" stroke-linecap="round"/>`);
+      }
+      s.push(`<path d="M-14,13 Q-20,32 -15,50 Q0,56 15,50 Q20,32 14,13Z" fill="${o.fur}" ${olw(o)} stroke-linejoin="round"/>`,
+        `<path d="M-9,52.5 Q0,55 9,52.5 Q8,47 0,46.5 Q-8,47 -9,52.5Z" fill="${light}"/>`,
+        `<path d="M-14.6,14 Q-19.8,30 -17.4,43 Q0,48.5 17.4,43 Q19.8,30 14.6,14Z" fill="${o.uni}" ${olw(o)} stroke-linejoin="round"/>`,
+        `<path d="M9.6,16 Q16.5,30 14.6,44.6 Q16.4,44 17.4,43 Q19.8,30 14.6,14Z" fill="#000" opacity=".13"/>`);
+      if (o.stripe) s.push(`<path d="M-18.6,37.6 Q0,43.2 18.6,37.6 L17.8,42 Q0,47.6 -17.8,42Z" fill="${o.stripe}" stroke="${A_OL}" stroke-width=".7"/>`);
+      s.push(collar(o), head(o));
+      if (o.mid) s.push(o.mid);
+      for (const a of o.arms || []) { const e = a.pts[a.pts.length - 1]; s.push(limb(o, a.pts, 7.4), aC(e[0], e[1], 5.2, light, olw(o))); }
+    } else {
+      if (o.pack) s.push(o.pack);
+      if (o.tail !== false) s.push(aL([[15, 56], [28, 50], [33, 38]], o.tailCol || o.fur, 4.6));
+      if ((o.hind || "sit") === "sit") for (const k of [-1, 1]) s.push(E(k * 18, 53, 10.5, 10, o.fur), E(k * 24, 64.5, 7.6, 4.3, light));
+      else for (const k of [-1, 1]) s.push(aL([[k * 12, 52], [k * 15, 66]], o.fur, 6.5), E(k * 15.5, 68, 5.4, 3.6, light));
+      s.push(P("M-14,13 Q-23,38 -19,61 Q0,67 19,61 Q23,38 14,13Z", o.uni),
+        `<path d="M9,16 Q18,38 15,62 Q18,61.5 19,61 Q23,38 14,13Z" fill="#000" opacity=".13"/>`);
+      if (o.stripe) s.push(`<path d="M-21,44 Q0,49 21,44 L21.3,49 Q0,54 -21.3,49Z" fill="${o.stripe}" stroke="${A_OL}" stroke-width=".7"/>`);
+      for (const k of [-1, 1]) if (!o.raise || o.raise.k !== k) s.push(aL([[k * 8.5, 36], [k * 9.2, 61]], o.fur, 7.6), E(k * 9.6, 64.3, 6.6, 4.4, light),
+        `<path d="M${k * 9.6 - 2},62.6 v3 M${k * 9.6 + 2},62.6 v3" stroke="${A_OL}" stroke-width=".7" stroke-linecap="round"/>`);
+      s.push(collar(o), head(o));
+      if (o.raise) { const r = o.raise, end = r.pts[r.pts.length - 1]; s.push(aL(r.pts, o.fur, 7.6), paw(end[0], end[1], 5.4, light), r.paw || ""); }
+    }
+    if (o.front) s.push(o.front);
+    return s.join("");
+  }
+  const tf = (x, y, sc, rot = 0) => `translate(${x} ${y}) scale(${sc}) rotate(${rot})`;
+  const place = (svg, x = 60, y = 58, sc = 1.25, rot = 0) => `<g transform="${tf(x, y, sc, rot)}">${svg}</g>`;
+
+  /* ---- ears (left one drawn, mirrored) ---- */
+  const earUp = (out, inn) => mir(`<path d="M-8,-17 Q-18,-31 -23,-38 Q-28,-21 -23.5,-4Z" fill="${out}" ${A_OUT} stroke-linejoin="round"/><path d="M-11,-14 Q-18,-26 -21.5,-31 Q-24,-19 -21,-8Z" fill="${inn}"/>`);
+  const earFlop = (c, tip) => mir(`<path d="M-14,-18 Q-29,-20 -32,-2 Q-34,13 -27,17 Q-20,15 -20.5,3 Q-20.5,-9 -12,-12Z" fill="${c}" ${A_OUT} stroke-linejoin="round"/>` +
+    (tip ? `<path d="M-32.6,4 Q-33.5,13 -27,17 Q-21,15 -20.6,6 Q-26,9 -32.6,4Z" fill="${tip}"/>` : ""));
+
+  /* ---- backdrops ---- */
+  const lookout = (x, y, s) => `<g transform="translate(${x} ${y}) scale(${s})">` +
+    P("M-9,0 L-5,-62 H5 L9,0Z", "#eceff1") + `<path d="M2,-62 H5 L9,0 H4Z" fill="#000" opacity=".1"/>` +
+    P("M-3,-55 H3 V-6 H-3Z", "#90caf9") + shield(0, -30, .45) +
+    P("M-14,0 L-12,-6 H12 L14,0Z", "#e53935") +
+    P("M-5,-62 L-8,-66 H8 L5,-62Z", "#b0bec5") +
+    P("M-11,-66 Q-14,-73 -11,-80 H11 Q14,-73 11,-66Z", "#4fc3f7") + `<path d="M-6,-66 V-80 M0,-66 V-80 M6,-66 V-80" stroke="#fff" stroke-width=".9" opacity=".8"/>` +
+    P("M-13,-80 Q0,-84 13,-80 L9,-86 Q0,-89 -9,-86Z", "#eceff1") + P("M-4,-87 Q0,-96 4,-87Z", "#e53935") +
+    `<path d="M0,-94 V-101" stroke="${A_OL}" stroke-width="1.2"/>${aC(0, -101.5, 1.5, "#ffd54f", A_OUT)}` +
+    `</g>`;
+  const bay = (lookX = 92) => sky("#5ec8f2", "#c9f0ff") + A_RAYS + cloud(8, 22, .9) + cloud(80, 14, .7) +
+    `<rect y="98" width="120" height="60" fill="#1e88e5"/><path d="M0,104 Q10,102 20,104 T40,104 T60,104 T80,104 T100,104 T120,104" fill="none" stroke="#bbdefb" stroke-width="1.2"/>` +
+    `<path d="M-5,112 Q20,90 45,104 Q70,92 95,100 Q112,94 125,98 V158 H-5Z" fill="#7cc142"/><path d="M-5,126 Q30,112 60,124 Q90,114 125,120 V158 H-5Z" fill="#5ea832"/>` +
+    lookout(lookX, 104, .95);
+
+  /* ---- 1 Ryder ---- */
+  function ryder() {
+    const skin = "#f8d3b4", sh = "#1e88e5";
+    const pad = `<g transform="translate(79 58) rotate(12)">${R(-8, -11, 16, 21, 3, "#cfd8dc")}${R(-6, -8.5, 12, 14, 1.5, "#263238", "")}` +
+      pawPrint(0, -1.5, .9, "#4fc3f7") + aC(0, 7.6, 1.2, "#90a4ae") + `</g>`;
+    const body = P("M38,74 L36.5,101 L48.5,101 L50,82 L51.5,101 L63.5,101 L62,74Z", "#283593") +
+      `<path d="M50,82 V100" stroke="${A_OL}" stroke-width=".8"/>` +
+      P("M34.5,104 Q35,98.5 42,99 Q49.5,99 49.5,104 Q42,106.5 34.5,104Z", "#fff") + P("M50.5,104 Q50.5,99 58,99 Q65,98.5 65.5,104 Q58,106.5 50.5,104Z", "#fff") +
+      `<path d="M36,103 H48.5 M51.5,103 H64" stroke="#ff8f00" stroke-width="1.1"/>` +
+      aL([[36, 49], [29.5, 62], [32, 73]], sh, 6.4) + aC(32.5, 75.5, 3.7, skin, A_OUT) +
+      P("M46,39 H54 V47 H46Z", skin) +
+      P("M34,49 Q38,44 46,44 L50,48 L54,44 Q62,44 66,49 L64.5,77 Q50,80 35.5,77Z", sh) +
+      P("M35,50 Q38,45.5 45.5,45 L48,64 L47,77.5 Q40,77.6 35.6,76.6Z", "#ff8f00") + P("M65,50 Q62,45.5 54.5,45 L52,64 L53,77.5 Q60,77.6 64.4,76.6Z", "#ff8f00") +
+      `<path d="M35.4,57 L46.6,55.6 L46.9,59.4 L35.6,61Z M64.6,57 L53.4,55.6 L53.1,59.4 L64.4,61Z" fill="#fff" stroke="${A_OL}" stroke-width=".7"/>` +
+      `<path d="M36,70 L47.4,70 M64,70 L52.6,70" stroke="#fff" stroke-width="2.2"/>` +
+      shield(41, 64, .38) +
+      aL([[64, 49], [72, 58], [76, 54]], sh, 6.4) + pad + aC(75, 54, 3.7, skin, A_OUT);
+    const hd = aKidHead({ skin, hair: "#8a5a32", hs: "spiky", eyes: "#7a5a46", mouth: "smile" });
+    const fig = `<g transform="translate(-4 13) scale(1.24)">${body}${hd}</g>`;
+    return [bay(98) + shadow(58, 144, 26) + sparks([[14, 46, 3.4], [106, 128, 3], [22, 136, 2.4, "#fff59d"]]), aEdge(fig)];
+  }
+
+  /* ---- 2 Chase: standing at attention, saluting; the megaphone pops out of his pup-pack ---- */
+  function chase() {
+    const fur = "#c27a3c", dark = "#6b3b1d", tan = "#f2c588";
+    const hat = P("M-19,-13 Q-23,-27 -15,-34 Q0,-40 15,-34 Q23,-27 19,-13 Q0,-17 -19,-13Z", "#1f5fc2") +
+      `<path d="M8,-36 Q19,-31 19,-14 Q15,-16 12,-15.5Q14,-26 8,-36Z" fill="#000" opacity=".15"/>` +
+      P("M-19.5,-13 Q0,-17 19.5,-13 L20,-18 Q0,-22 -20,-18Z", "#0d3b80") +
+      P("M-17,-13.5 Q0,-18 17,-13.5 Q12,-8.6 0,-8.3 Q-12,-8.6 -17,-13.5Z", "#1a1a1a") + `<path d="M-11,-12 Q0,-14.5 11,-12" stroke="#fff" stroke-width=".9" opacity=".35" fill="none"/>` +
+      `<g transform="translate(0 -27) scale(.6)"><path d="M0,-8 L6.5,-5 L6,2 Q5,6.5 0,9 Q-5,6.5 -6,2 L-6.5,-5Z" fill="#ffd54f" stroke="${A_OL}" stroke-width="1"/>${aStar(0, 0, 3.6, "#1565c0")}</g>`;
+    const marks = `<path d="M-24,0 Q-24,-20 0,-21 Q24,-20 24,0 Q17,-6 9,-11 Q0,-7 -9,-11 Q-17,-6 -24,0Z" fill="${dark}"/>` +
+      `<path d="M-23,3 Q-16,-4 -10,-8 Q-3,-4 0,2 Q3,-4 10,-8 Q16,-4 23,3 Q23,14 16,18 Q0,23 -16,18 Q-23,14 -23,3Z" fill="${fur}"/>`;
+    const brows = `<path d="M-15,-11.5 L-6,-9.5 M15,-11.5 L6,-9.5" stroke="${dark}" stroke-width="1.6" stroke-linecap="round"/>`;
+    // pup-pack: a blue pack behind the shoulders, a grey arm and a big white-and-blue megaphone over his left shoulder
+    const MEG = [27, -6, -38];
+    const meg = `<g transform="translate(${MEG[0]} ${MEG[1]}) rotate(${MEG[2]})">` + R(-6, -4, 6, 8, 1.5, "#0d3b80") +
+      P("M-1,-4 L14,-10.5 Q16.4,0 14,10.5 L-1,4Z", "#fff") + `<path d="M5,-6.4 L9,-8.1 Q10.4,0 9,8.1 L5,6.4 Q5.8,0 5,-6.4Z" fill="#1f5fc2"/>` +
+      `<path d="M-1,1.6 L14.6,6.5 Q14.2,9 14,10.5 L-1,4Z" fill="#000" opacity=".12"/>` +
+      E(14.2, 0, 3, 10.5, "#1565c0") + E(14.6, 0, 1.6, 7.6, "#0b2a5c", "") + `</g>`;
+    const pack = mir(R(-19, 12, 7, 14, 2.5, "#0d3b80")) + aL([[12, 14], [20, 6], [24, -2]], "#90a4ae", 3.4) + meg;
+    const p = pup({ pose: "biped", fur, light: tan, eyes: "#7b4a1e", uni: "#2060c8", uniD: "#0d3b80", badge: "police", tailCol: dark, hat, marks, brows, pack, mouth: "grin",
+      ears: { back: earUp(dark, "#f0b27a") }, tilt: -3, tailPts: [[-12, 46], [-24, 41], [-28, 30]],
+      arms: [{ pts: [[-13, 20], [-27, 12], [-21.5, -9]] }, { pts: [[13, 20], [17, 31], [16.5, 41]] }] });
+    const T = [60, 61, 1.2];
+    const sound = `<g transform="${tf(...T)}"><g transform="translate(${MEG[0]} ${MEG[1]}) rotate(${MEG[2]})" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round">` +
+      `<path d="M20,-8 Q23.5,0 20,8"/><path d="M25,-11 Q30,0 25,11" opacity=".75"/></g></g>`;
+    const town = [[0, 70, 14, "#f8bbd0"], [13, 60, 12, "#fff59d"], [86, 64, 14, "#c5e1a5"], [99, 54, 12, "#b3e5fc"], [110, 68, 12, "#ffccbc"]]
+      .map(([x, y, w, c]) => R(x, y, w, 120 - y, 1, c, `stroke="#1a3e7a" stroke-width=".8"`) + [0, 1, 2].map(i => R(x + 3, y + 6 + i * 11, w - 6, 5, .8, "#5c8ad6", "")).join("")).join("");
+    const cone = x => `<g transform="translate(${x} 132)">${P("M-5,8 L-1.5,-9 H1.5 L5,8Z", "#ff7043")}<path d="M-3.3,0 H3.3" stroke="#fff" stroke-width="2.2"/>${R(-7, 7, 14, 3, 1, "#e64a19")}</g>`;
+    return [sky("#1e5fbf", "#8fd3ff") + A_RAYS + town + `<rect y="118" width="120" height="40" fill="#78909c"/><path d="M0,138 H120" stroke="#fff" stroke-width="2" stroke-dasharray="8 6"/>` +
+            shadow(60, 143, 26) + cone(12) + cone(108) + sound + sparks([[16, 66, 3], [106, 98, 3.2]]), aEdge(place(p, ...T))];
+  }
+
+  /* ---- 3 Marshall: standing on his hind legs, both paws on the hose nozzle, the water arcing high onto a burning house ---- */
+  function marshall() {
+    const spot = (x, y, r) => aC(x, y, r, "#1a1a1a");
+    const marks = spot(-17, -12, 2.3) + spot(15, -15, 1.8) + spot(-20, 9, 1.6) + spot(19, 6, 2) + spot(-6, -17, 1.4) + spot(22, -4, 1.2);
+    const ears = { front: mir(`<path d="M-14,-18 Q-29,-20 -32,-2 Q-34,13 -27,17 Q-20,15 -20.5,3 Q-20.5,-9 -12,-12Z" fill="#fff" ${A_OUT} stroke-linejoin="round"/>`) +
+      aC(-28, 2, 2.3, "#1a1a1a") + aC(-25, 11, 1.7, "#1a1a1a") + aC(28.5, -4, 2, "#1a1a1a") + aC(26, 8, 2.4, "#1a1a1a") };
+    const hat = E(0, -13, 27, 5.2, "#c62828") + P("M-19,-13 Q-21,-36 0,-37 Q21,-36 19,-13Z", "#e53935") +
+      `<path d="M9,-35 Q19,-30 19,-14 L13,-14 Q14,-28 9,-35Z" fill="#000" opacity=".14"/><path d="M-12,-30 Q-6,-35 2,-35" stroke="#fff" stroke-width="1.6" fill="none" opacity=".5" stroke-linecap="round"/>` +
+      P("M-26,-12 Q0,-5 26,-12 Q24,-8.5 18,-8.6 Q0,-5 -18,-8.6 Q-24,-8.5 -26,-12Z", "#b71c1c") +
+      P("M-7,-17 L-8.5,-38 Q0,-44 8.5,-38 L7,-17 Q0,-14.5 -7,-17Z", "#ffd54f") + `<g transform="translate(0 -28) scale(.55)">${SYM.fire[1]().replace(/#ffd54f/g, "#e53935").replace(/#ff8f00/g, "#ffd54f")}</g>`;
+    // pup-pack: two red tanks with yellow caps behind the shoulders; a red hose from the right tank round his side to the nozzle
+    const pack = mir(R(-22, 9, 9, 18, 3, "#e53935", `stroke="${A_OL}" stroke-width="1.4"`) + R(-22.6, 8, 10.2, 4, 1.4, "#ffd54f"));
+    const NZ = [7, 50, -50];               // nozzle base and angle; the paws grip it 4 and 13 along
+    const at = t => [NZ[0] + t * Math.cos(NZ[2] * Math.PI / 180), NZ[1] + t * Math.sin(NZ[2] * Math.PI / 180)];
+    const nozzle = `<g transform="translate(${NZ[0]} ${NZ[1]}) rotate(${NZ[2]})">` + `<path d="M2,-4.6 L29,-2.8 L29,2.8 L2,4.6Z" fill="#ffc107" stroke="${A_OL}" stroke-width="1.4" stroke-linejoin="round"/>` +
+      `<path d="M4,-2 L28,-1.2" stroke="#fff" stroke-width="1" opacity=".6"/>` + R(-2, -4.6, 5, 9.2, 1.5, "#9e9e9e") + R(28, -4, 5.5, 8, 1.6, "#e53935", `stroke="${A_OL}" stroke-width="1.4"`) + `</g>`;
+    const hose = aL([[19, 22], [28, 38], [24, 56], [10, 58], [5, 53]], "#c62828", 3.8);
+    const spots = spot(-11, 58, 1.5) + spot(10.5, 60, 1.3) + spot(-13.6, 50, 1.2) + spot(-29, 33, 1.4);
+    const belly = `<path d="M7,44.6 Q15,43.6 18.6,41.6 Q18.6,48 15.6,50.8 Q9,53 4,53.4Z" fill="#9fb3c8" opacity=".5"/>`;
+    const p = pup({ pose: "biped", fur: "#fff", light: "#fff", furShade: "#8aa2bd", ow: 1.5, legW: 9.6, eyes: "#2f8ee0", uni: "#e53935", uniD: "#b71c1c", stripe: "#ffd54f",
+      badge: "fire", marks, ears, hat, pack, tilt: -4, tailPts: [[-12, 47], [-24, 42], [-30, 32]],
+      legPts: [[[-8, 44], [-10, 56], [-12, 64]], [[8, 44], [10, 56], [12, 64]]],
+      mid: belly + hose + nozzle + spots,
+      arms: [{ pts: [[-13, 21], [-9, 45], at(4)] }, { pts: [[13, 21], [24, 28], at(13)] }] });
+    // the water: from the nozzle tip high over the right side of his helmet down onto the fire
+    const tip = at(33), W = `M${tip[0].toFixed(1)},${tip[1].toFixed(1)} Q50,-26 56,2`;
+    const water = `<g fill="none" stroke-linecap="round"><path d="${W}" stroke="#0288d1" stroke-width="7.6"/><path d="${W}" stroke="#4fc3f7" stroke-width="5.6"/><path d="${W}" stroke="#e1f5fe" stroke-width="2"/></g>` +
+      [[56, 8, 2.6], [52, 11, 2], [60, 12, 1.8], [55, 16, 1.5]].map(([x, y, r]) => aC(x, y, r, "#b3e5fc", `stroke="#0288d1" stroke-width=".7"`)).join("");
+    const T = [47, 64, 1.18];
+    const flame = (x, y, s) => `<g transform="translate(${x} ${y}) scale(${s})"><path d="M-6,4 Q-12,-10 -4,-22 Q-3,-12 2,-10 Q2,-20 8,-26 Q16,-12 8,4Z" fill="#ff7043"/><path d="M-2,4 Q-4,-6 2,-13 Q6,-5 5,4Z" fill="#ffeb3b"/></g>`;
+    const house = `<g transform="translate(104 70)">${P("M-12,56 V12 L5,-5 L22,12 V56Z", "#ffe0b2")}${P("M-15,13 L5,-8 L25,13 L21,14 L5,-2 L-11,14Z", "#a1887f")}` +
+      R(-6, 22, 10, 11, 1, "#ff8f00") + `<path d="M-1,22 V33 M-6,27.5 H4" stroke="${A_OL}" stroke-width=".8"/>` + R(4, 38, 9, 18, 1, "#8d6e63") + flame(5, -6, 1) + flame(-1, 26, .55) + `</g>`;
+    return [sky("#ff8a50", "#ffe082") + A_RAYS + house + `<path d="M0,122 Q60,112 120,122 V158 H0Z" fill="#8d6e63"/><rect y="130" width="120" height="28" fill="#9e9e9e"/>` +
+            shadow(47, 142, 28) + sparks([[10, 52, 3], [16, 116, 2.6], [70, 18, 2.4]]),
+      aEdge(place(p + water, ...T))];
+  }
+
+  /* ---- 4 Skye: flying with her pup-pack wings ---- */
+  function skye() {
+    const fur = "#e6b980", light = "#fff3e0", brown = "#b07a4a";
+    const marks = `<path d="M-6,-21 Q0,-27 7,-21 Q4,-16 0,-15 Q-4,-16 -6,-21Z" fill="${brown}"/>`;
+    const ears = { front: earFlop(brown, "#8d5a32") };
+    const hat = P("M-21,-11 Q-23,-34 0,-35 Q23,-34 21,-11 Q0,-17 -21,-11Z", "#f06292") +
+      `<path d="M9,-33 Q20,-28 20,-12 L14,-13 Q15,-26 9,-33Z" fill="#000" opacity=".12"/>` +
+      `<path d="M-21,-19 Q0,-25 21,-19" stroke="#ad1457" stroke-width="2.4" fill="none"/>` +
+      mir(aC(-8, -21, 6.6, "#ad1457", A_OUT) + aC(-8, -21, 4.6, "#f8bbd0", A_OUT) + `<path d="M-10.5,-23 Q-8.5,-25 -6,-24" stroke="#fff" stroke-width="1.1" fill="none" stroke-linecap="round"/>`) +
+      `<path d="M-4,-36 Q0,-42 4,-36" fill="#fff59d" stroke="${A_OL}" stroke-width="1"/>`;
+    const wing = `<path d="M-14,18 L-56,2 Q-60,8 -55,12 L-50,14 Q-54,18 -48,20 L-15,30Z" fill="#f48fb1" ${A_OUT} stroke-linejoin="round"/>` +
+      `<path d="M-20,22 L-52,10 M-18,27 L-46,19" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>` +
+      R(-30, 22, 10, 7, 3, "#bdbdbd") + `<path d="M-29,29 L-26,37 L-23,29Z" fill="#ffb74d"/>`;
+    const p = pup({ fur, light, eyes: "#c2185b", uni: "#f06292", uniD: "#ad1457", badge: "prop", marks, ears, hat, pack: mir(wing), hind: "hang", tilt: 6, mouth: "open",
+      raise: { k: 1, pts: [[9, 34], [22, 26], [32, 16]] } });
+    return [sky("#4fb3f6", "#d6f1ff") + A_RAYS + cloud(4, 120, 1.3) + cloud(76, 132, 1.5) + cloud(86, 26, .8, "#fff", .85) + cloud(-4, 30, .7, "#fff", .8) +
+      `<path d="M8,96 Q18,92 28,96" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" opacity=".8"/><path d="M4,104 Q14,100 22,104" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" opacity=".8"/>` +
+      sparks([[104, 52, 3.4], [14, 64, 2.8], [100, 104, 2.6, "#fff59d"]]), aEdge(place(p, 62, 64, 1.12, -12))];
+  }
+
+  /* ---- 5 Rubble: standing, digging with his shovel ---- */
+  function rubble() {
+    const fur = "#d9a05b", light = "#fff8ec";
+    const marks = `<path d="M-4,-21 Q0,-22 4,-21 L6,4 H-6Z" fill="${light}"/>` + `<path d="M-22,10 Q-16,20 -6,21 M22,10 Q16,20 6,21" fill="none" stroke="#a86e32" stroke-width="1" opacity=".7"/>`;
+    const ears = { front: mir(`<path d="M-15,-17 Q-26,-22 -30,-12 Q-27,-6 -21,-8 Q-21,-13 -15,-12Z" fill="#a86e32" ${A_OUT} stroke-linejoin="round"/>`) };
+    const hat = P("M-20,-12 Q-21,-35 0,-36 Q21,-35 20,-12Z", "#fdd835") + `<path d="M9,-34 Q19,-29 19,-13 L13,-13 Q14,-27 9,-34Z" fill="#000" opacity=".12"/>` +
+      P("M-3.4,-35.6 Q0,-37.2 3.4,-35.6 L3.4,-13 H-3.4Z", "#fbc02d") +
+      P("M-25,-12 Q0,-18 25,-12 Q26,-7.5 20,-7.8 Q0,-12 -20,-7.8 Q-26,-7.5 -25,-12Z", "#f9a825") +
+      `<path d="M-14,-28 Q-9,-33 -4,-33.5" stroke="#fff" stroke-width="1.6" fill="none" opacity=".55" stroke-linecap="round"/>`;
+    // the shovel held across the body (both paws on the handle), the blade scooping dirt on the right
+    const A = [-24, 33], B = [30, 48], ang = Math.atan2(B[1] - A[1], B[0] - A[0]) * 180 / Math.PI;
+    const shovel = `<path d="M${A} L${B}" stroke="${A_OL}" stroke-width="5" stroke-linecap="round"/><path d="M${A} L${B}" stroke="#8d6e63" stroke-width="2.8" stroke-linecap="round"/>` +
+      `<g transform="translate(${A}) rotate(${ang.toFixed(1)})">${R(-2, -5, 4, 10, 1.5, "#ffca28")}</g>` +
+      `<g transform="translate(${B}) rotate(${ang.toFixed(1)})">${P("M-2,-6.5 H8 Q17,-6 19,0 Q17,6 8,6.5 H-2Z", "#90a4ae")}<path d="M1,-3.5 H12" stroke="#fff" stroke-width="1.2" opacity=".6"/>` +
+      `<path d="M3,-6 Q8,-11 14,-6 Q11,-3 3,-6Z" fill="#8d5a2b" stroke="${A_OL}" stroke-width=".8"/></g>`;
+    const pack = mir(R(-21, 11, 9, 15, 3, "#fbc02d"));
+    const p = pup({ pose: "biped", fur, light, eyes: "#7a4a1e", uni: "#fdd835", uniD: "#f9a825", badge: "shovel", marks, ears, hat, pack, headRx: 27, tail: false, mouth: "open", tilt: 4,
+      legPts: [[[-8, 44], [-13, 55], [-15, 64]], [[8, 44], [13, 55], [15, 64]]], mid: shovel,
+      arms: [{ pts: [[-13, 20], [-23, 26], [-18.6, 34]] }, { pts: [[13, 20], [21, 32], [20, 44]] }] });
+    const dirt = (x, y, w, c) => `<path d="M${x - w},${y} Q${x - w * .5},${y - w * .7} ${x},${y - w * .75} Q${x + w * .55},${y - w * .7} ${x + w},${y}Z" fill="${c}"/>`;
+    const crane = `<g opacity=".8"><path d="M18,120 V30 M14,120 V30 M14,30 H86 M18,40 L28,30 M22,30 L14,40" stroke="#ff8f00" stroke-width="2"/><path d="M80,30 V64" stroke="#555" stroke-width="1"/>${R(75, 64, 10, 7, 1, "#ffb300", "")}</g>`;
+    const clods = [[108, 96, 2.6], [102, 88, 2], [113, 86, 1.7], [97, 98, 1.6]].map(([x, y, r]) => aC(x, y, r, "#8d5a2b", `stroke="${A_OL}" stroke-width=".6"`)).join("");
+    return [sky("#ffb74d", "#fff3c4") + A_RAYS + crane + dirt(18, 128, 28, "#a1683a") + dirt(104, 130, 22, "#b97a45") +
+      `<rect y="124" width="120" height="34" fill="#c58b4f"/>` + `<path d="M0,124 H120" stroke="#8d5a2b" stroke-width="1.2"/>` + dirt(102, 134, 16, "#a1683a") +
+      shadow(56, 141, 28) + clods + sparks([[108, 54, 3.2], [12, 100, 2.8]]), aEdge(place(p, 54, 62, 1.18))];
+  }
+
+  /* ---- 6 Rocky: sitting, wrench up ---- */
+  function rocky() {
+    const fur = "#9aa5ad", light = "#f3f5f6", dark = "#6f7b84";
+    const marks = `<path d="M-24,0 Q-24,-20 -4,-21 Q-9,-12 -16,-6 Q-21,-3 -24,0Z" fill="${dark}" opacity=".6"/>` +
+      `<path d="M-6,-20 L-3,-27 L0,-20 L3,-28 L6,-20" fill="${fur}" stroke="${A_OL}" stroke-width="1" stroke-linejoin="round"/>`;
+    const ears = { back: `<path d="M-9,-17 Q-20,-30 -26,-34 Q-29,-20 -23.5,-5Z" fill="${dark}" ${A_OUT} stroke-linejoin="round"/>`,
+      front: `<path d="M14,-17 Q27,-24 33,-12 Q34,-2 29,4 Q26,-6 20,-10Z" fill="${dark}" ${A_OUT} stroke-linejoin="round"/>` };
+    const hat = P("M-19,-12 Q-21,-33 0,-34 Q21,-33 19,-12 Q0,-16 -19,-12Z", "#43a047") + `<path d="M9,-32 Q19,-27 19,-13 L13,-13 Q14,-26 9,-32Z" fill="#000" opacity=".12"/>` +
+      P("M-18,-12.5 Q0,-17 18,-12.5 Q13,-7.6 0,-7.4 Q-13,-7.6 -18,-12.5Z", "#2e7d32") + aC(0, -34, 2, "#2e7d32", A_OUT) +
+      `<g transform="translate(0 -24) scale(.5)">${aC(0, 0, 9, "#fff")}${SYM.recycle[1]().replace(/#fff/g, "#2e7d32")}</g>`;
+    const wrench = `<g transform="translate(-28 7) rotate(-22)">` + R(-2.6, -2, 5.2, 26, 2, "#b0bec5") +
+      P("M-7,-10 Q-7,-18 0,-19 L0,-13 L4,-13 L4,-19 Q8,-18 8,-10 Q6,-3 0,-3 Q-6,-3 -7,-10Z", "#b0bec5") + `<path d="M-1,4 V18" stroke="#fff" stroke-width="1" opacity=".7"/></g>` + paw(-26, 17, 5.4, light);
+    const pack = mir(R(-22, 10, 10, 15, 3, "#2e7d32"));
+    const p = pup({ fur, light, eyes: "#8a5a2e", uni: "#43a047", uniD: "#2e7d32", badge: "recycle", marks, ears, hat, pack, tilt: 6,
+      raise: { k: -1, pts: [[-9, 34], [-21, 28], [-26, 17]] } });
+    const bin = `<g transform="translate(100 112)">${P("M-11,-14 H11 L9,18 H-9Z", "#2e7d32")}${R(-13, -18, 26, 5, 1.5, "#1b5e20")}` +
+      `<g transform="translate(0 2) scale(.75)">${aC(0, 0, 9, "#fff")}${SYM.recycle[1]().replace(/#fff/g, "#2e7d32")}</g></g>`;
+    const gear = (x, y, r, c) => `<g transform="translate(${x} ${y})" fill="${c}">${[...Array(8)].map((_, i) => `<rect x="-1.6" y="${-r - 2.4}" width="3.2" height="4" transform="rotate(${i * 45})"/>`).join("")}${aC(0, 0, r, c)}${aC(0, 0, r * .4, "#c8e6c9")}</g>`;
+    return [sky("#8bd3f7", "#e3f7ff") + A_RAYS + gear(14, 26, 7, "#a5d6a7") + gear(104, 40, 5, "#a5d6a7") +
+      `<path d="M-5,112 Q30,96 60,108 Q90,98 125,108 V158 H-5Z" fill="#66bb6a"/><path d="M-5,130 Q40,120 70,128 Q100,120 125,126 V158 H-5Z" fill="#4caf50"/>` + bin +
+      shadow(58, 144, 30) + sparks([[18, 56, 3], [108, 74, 2.6], [12, 128, 2.4, "#fff59d"]]), aEdge(place(p + wrench, 58, 60, 1.2))];
+  }
+
+  /* ---- 7 Zuma: surfing a wave ---- */
+  function zuma() {
+    const fur = "#7a4a26", light = "#c99060";
+    const ears = { front: earFlop("#5a3218") };
+    const hat = P("M-20,-11 Q-22,-34 0,-35 Q22,-34 20,-11 Q0,-16 -20,-11Z", "#fb8c00") + `<path d="M9,-33 Q19,-28 19,-12 L13,-12 Q14,-26 9,-33Z" fill="#000" opacity=".12"/>` +
+      `<path d="M-20,-19 Q0,-25 20,-19" stroke="#e65100" stroke-width="2.2" fill="none"/>` +
+      mir(aC(-7.6, -22, 5.6, "#37474f", A_OUT) + aC(-7.6, -22, 3.8, "#4dd0e1", "") + `<path d="M-9.8,-23.6 Q-8,-25.2 -6,-24.6" stroke="#fff" stroke-width="1" fill="none"/>`) +
+      `<path d="M-2,-34.6 Q0,-38 2,-34.6" stroke="${A_OL}" stroke-width="1" fill="#ffeb3b"/>`;
+    // pup-pack (body coordinates): orange pack with two air tanks and a little propeller
+    const pack = R(-30, 3, 20, 11, 3.5, "#ef6c00") + R(-27, -1, 6, 8, 2.5, "#cfd8dc") + R(-19, -1, 6, 8, 2.5, "#cfd8dc") +
+      `<g transform="translate(-8 4)">${E(0, -4, 1.6, 4, "#90a4ae")}${E(0, 4, 1.6, 4, "#90a4ae")}${aC(0, 0, 1.6, "#455a64", "")}</g>`;
+    const p = pup({ pose: "quad", legs: "crouch", dir: -1, fur, light, eyes: "#8d5524", uni: "#fb8c00", uniD: "#e65100", badge: "anchor", ears, hat, pack, tilt: 6,
+      tailPts: [[-46, 26], [-55, 20], [-58, 10]] });
+    // surfboard under the paws (nose to the left)
+    const board = P("M-30,63 Q-26,58 -14,58.6 L56,60 Q64,61 64,64.5 Q63,68 55,68 L-14,67.4 Q-28,67 -30,63Z", "#ffca28") +
+      `<path d="M-24,62.8 L58,64.2" stroke="#e53935" stroke-width="2.4"/><path d="M-14,60 L50,61.2" stroke="#fff" stroke-width="1" opacity=".7"/>`;
+    const waves = (y, c, a) => `<path d="M-5,${y} ${[...Array(9)].map((_, i) => `Q${i * 16 + 3},${y - a} ${i * 16 + 11},${y}`).join(" ")} V158 H-5Z" fill="${c}"/>`;
+    const curl = `<path d="M60,158 Q72,92 112,62 Q130,56 128,90 Q120,74 108,82 Q86,100 92,158Z" fill="#0277bd"/>` +
+      `<path d="M112,62 Q130,56 128,90 Q122,80 112,82 Q104,74 112,62Z" fill="#e1f5fe" stroke="#0288d1" stroke-width=".8"/>` +
+      `<path d="M74,140 Q82,104 106,80" stroke="#4fc3f7" stroke-width="2" fill="none" opacity=".8"/>`;
+    const splash = [[96, 132, 3], [104, 124, 2.4], [110, 134, 2], [88, 128, 1.8], [20, 136, 2], [12, 128, 1.6]].map(([x, y, r]) => aC(x, y, r, "#e1f5fe", `stroke="#0288d1" stroke-width=".6"`)).join("");
+    const foam = `<path d="M14,140 Q30,132 50,138 Q70,132 90,138 Q104,132 116,138 L116,146 H14Z" fill="#e1f5fe" stroke="#81d4fa" stroke-width="1"/>`;
+    return [sky("#29b6f6", "#b3e5fc") + A_RAYS + `<circle cx="98" cy="22" r="10" fill="#fff59d"/>` + cloud(6, 52, .7) +
+      `<path d="M0,96 Q30,90 60,96 T120,96 V158 H0Z" fill="#039be5"/>` + curl + waves(132, "#0288d1", 5) + waves(146, "#29b6f6", 5) + foam + splash +
+      sparks([[14, 74, 3], [108, 36, 2.6]]), aEdge(place(board + p, 52, 70, 1.08, 5))];
+  }
+
+  /* ---- 8 Everest: snowboarding downhill ---- */
+  function everest() {
+    const fur = "#8796a3", light = "#ffffff";
+    const marks = `<path d="M-23,4 Q-22,-8 -15,-10 Q-10,-13 -4,-10 Q0,-6 0,-3 Q0,-6 4,-10 Q10,-13 15,-10 Q22,-8 23,4 Q23,14 16,18 Q0,23 -16,18 Q-23,14 -23,4Z" fill="#fff"/>` +
+      `<path d="M-3,-21 Q0,-12 3,-21Z" fill="#fff"/>` + aC(-9, -14, 1.6, "#fff") + aC(9, -14, 1.6, "#fff");
+    const ears = { back: earUp("#6b7a87", "#f8bbd0") };
+    const hat = P("M-20,-11 Q-22,-34 0,-35 Q22,-34 20,-11 Q0,-16 -20,-11Z", "#26c6da") + `<path d="M9,-33 Q19,-28 19,-12 L13,-12 Q14,-26 9,-33Z" fill="#000" opacity=".12"/>` +
+      `<path d="M-20,-19 Q0,-25 20,-19" stroke="#7b1fa2" stroke-width="2.4" fill="none"/>` +
+      mir(aC(-7.6, -22, 5.8, "#7b1fa2", A_OUT) + aC(-7.6, -22, 3.9, "#b3e5fc", "") + `<path d="M-9.8,-23.6 Q-8,-25.4 -6,-24.8" stroke="#fff" stroke-width="1" fill="none"/>`) +
+      `<path d="M-7,-34 Q-2,-41 2,-35 Q5,-40 8,-34" fill="#9c6ad6" stroke="${A_OL}" stroke-width="1" stroke-linejoin="round"/>`;
+    const pack = mir(R(-21, 11, 9, 15, 3, "#7b1fa2"));
+    const board = P("M-34,66 Q-38,66 -38,69.5 Q-37,73 -32,73 H32 Q37,73 38,69.5 Q38,66 34,66Z", "#7b1fa2") +
+      `<path d="M-30,69.6 H30" stroke="#26c6da" stroke-width="2.2"/>` + mir(R(-19, 64, 9, 4, 1.5, "#37474f", ""));
+    const p = pup({ pose: "biped", fur, light, eyes: "#6a5acd", uni: "#26c6da", uniD: "#7b1fa2", stripe: "#9c27b0", badge: "snow", marks, ears, hat, pack, tilt: -6, tailCol: "#6b7a87",
+      legPts: [[[-8, 44], [-13, 55], [-14, 63]], [[8, 44], [13, 55], [14, 63]]], tailPts: [[-12, 46], [-24, 42], [-28, 32]],
+      arms: [{ pts: [[-13, 20], [-26, 18], [-36, 10]] }, { pts: [[13, 20], [25, 25], [35, 22]] }] });
+    const flake = (x, y, r) => `<g transform="translate(${x} ${y}) scale(${r / 8})">${SYM.snow[1]()}</g>`;
+    const pine = (x, y, s) => `<g transform="translate(${x} ${y}) scale(${s})">${P("M0,-28 L10,-10 H5 L13,4 H-13 L-5,-10 H-10Z", "#2e7d5b")}<path d="M-6,-14 L0,-24 L6,-14 M-9,0 L0,-12 L9,0" fill="none" stroke="#fff" stroke-width="1.6" opacity=".8"/>${R(-2, 4, 4, 5, 0, "#6d4c41", "")}</g>`;
+    const spray = [[8, 118, 4], [14, 110, 3], [4, 106, 2.4], [20, 120, 3.4], [12, 126, 2.6]].map(([x, y, r]) => aC(x, y, r, "#fff", `stroke="#b3d9f0" stroke-width=".8"`)).join("");
+    return [sky("#5c6bc0", "#b3e5fc") + A_RAYS +
+      `<path d="M-10,96 L22,40 L38,64 L62,26 L92,72 L104,56 L130,96Z" fill="#cfd8dc"/><path d="M22,40 L30,52 L26,56 L20,50 L14,56Z M62,26 L72,42 L64,40 L58,46 L52,42Z" fill="#fff"/>` +
+      pine(10, 100, .8) + pine(110, 108, .9) + `<path d="M-5,96 Q40,98 125,128 V158 H-5Z" fill="#f5fbff"/><path d="M-5,118 Q50,120 125,148" stroke="#cfe8f5" stroke-width="2" fill="none"/>` +
+      `<ellipse cx="62" cy="142" rx="34" ry="5" fill="#90a4ae" opacity=".3" transform="rotate(13 62 142)"/>` + spray +
+      flake(12, 44, 4) + flake(104, 18, 5) + flake(108, 84, 3.4) + flake(48, 8, 2.6) + sparks([[110, 136, 2.6]]),
+      aEdge(place(p + board, 60, 60, 1.12, 13))];
+  }
+
+  /* ---- 9 Tracker: standing alert in the jungle, big ears up ---- */
+  function tracker() {
+    const fur = "#e2b47c", light = "#fff4e2", brown = "#a86b34";
+    const marks = `<path d="M-24,2 Q-24,-18 -8,-20 Q-4,-12 -10,-8 Q-18,-6 -24,2Z" fill="${brown}" opacity=".85"/>`;
+    const ear = side => `<g transform="scale(${side} 1)"><path d="M-12,-15 Q-24,-38 -36,-47 Q-44,-24 -23,-1Z" fill="${fur}" ${A_OUT} stroke-linejoin="round"/>` +
+      `<path d="M-15,-15 Q-25,-33 -34,-41 Q-39,-23 -23,-6Z" fill="#f8b4b4"/></g>`;
+    const ears = { back: ear(-1) + ear(1) };
+    const hat = E(0, -14, 26, 5.6, "#558b2f") + P("M-16,-14 Q-17,-34 0,-35 Q17,-34 16,-14Z", "#689f38") +
+      `<path d="M7,-33 Q15,-28 15,-14 L10,-14 Q11,-27 7,-33Z" fill="#000" opacity=".12"/>` +
+      P("M-16.5,-15 Q0,-19 16.5,-15 L16.4,-20 Q0,-24 -16.4,-20Z", "#33691e") +
+      P("M-26,-14 Q0,-7 26,-14 Q24,-10 18,-10 Q0,-6 -18,-10 Q-24,-10 -26,-14Z", "#4a7a24") + aC(0, -35, 1.8, "#33691e", A_OUT);
+    // pup-pack (body coordinates): green pack with a coiled grappling cable and a flashlight
+    const pack = R(-30, 4, 20, 11, 3.5, "#558b2f") + aC(-20, 9.5, 3.6, "none", `stroke="#cfd8dc" stroke-width="2"`) +
+      `<g transform="translate(-12 4) rotate(-30)">${R(-2, -9, 4, 9, 1.2, "#37474f")}${E(0, -9.4, 3.2, 1.6, "#fff59d")}</g>`;
+    const p = pup({ pose: "quad", legs: "stand", fur, light, eyes: "#6b3e1a", uni: "#7cb342", uniD: "#33691e", badge: "compass", marks, ears, hat, pack, tilt: -7, headRx: 23,
+      tailPts: [[-46, 26], [-54, 14], [-50, 2]] });
+    const leaf = (x, y, r, s, c) => `<g transform="translate(${x} ${y}) rotate(${r}) scale(${s})"><path d="M0,0 Q12,-12 30,0 Q12,12 0,0Z" fill="${c}" stroke="#1b5e20" stroke-width=".8"/><path d="M0,0 H28" stroke="#1b5e20" stroke-width=".7"/></g>`;
+    const vine = x => `<path d="M${x},-2 Q${x + 6},30 ${x - 2},60" stroke="#33691e" stroke-width="2" fill="none"/>` + leaf(x + 2, 20, 30, .35, "#7cb342") + leaf(x, 42, 150, .35, "#7cb342");
+    return [sky("#2e7d32", "#a5d6a7") + A_RAYS + vine(14) + vine(106) +
+      leaf(-6, 118, -30, 1.2, "#43a047") + leaf(126, 116, 210, 1.2, "#388e3c") + leaf(-4, 90, -10, .9, "#66bb6a") + leaf(124, 82, 190, .9, "#66bb6a") +
+      `<path d="M-5,128 Q60,118 125,128 V158 H-5Z" fill="#6d4c41"/>` + aC(98, 52, 4, "#ff7043") + aC(18, 104, 3.4, "#ec407a") +
+      shadow(56, 140, 34) + `<path d="M104,22 q4,-4 8,0 M106,16 q6,-6 12,0" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round"/>` + sparks([[12, 52, 3], [108, 132, 2.6]]),
+      aEdge(place(p, 74, 66, 1.12))];
+  }
+
+  FAN.pawpatrol = [
+    ["Ryder", "the boy leader in his orange vest with the Paw Patrol shield, pup-pad in hand, the Lookout behind", ryder],
+    ["Chase", "police pup standing at attention: blue cap and vest, police badge, saluting, megaphone popping out of his pup-pack, cones on the street", chase],
+    ["Marshall", "fire pup on his hind legs, both paws on the hose nozzle: Dalmatian spots, red helmet with gold badge, red vest and pup-pack, the water arcing high onto a burning house", marshall],
+    ["Skye", "flying pup: pink helmet with goggles, pink wings out of her pup-pack, in the clouds", skye],
+    ["Rubble", "construction bulldog standing and digging: yellow hard hat, shovel scooping dirt, crane behind", rubble],
+    ["Rocky", "recycling pup sitting: green cap and vest, recycle badge, holding up a wrench, recycling bin", rocky],
+    ["Zuma", "water-rescue Labrador surfing: orange helmet with goggles, anchor badge, crouched on a surfboard on a curling wave", zuma],
+    ["Everest", "snow husky snowboarding downhill: teal and purple gear, snowflake badge, paws out for balance, snowy mountains", everest],
+    ["Tracker", "jungle chihuahua standing alert on four legs: huge ears up, green jungle hat, compass badge, in the jungle", tracker],
+  ];
+})();
+
+/* Sticker book theme page: Hot Wheels (9 stickers: the flame logo, 6 classic castings, a loop and a jump), drawn with album.js's pieces.
+   Each draw() returns [backdrop, character]: the character (the car with its speed lines, in its aEdge cut-out) carries its own
+   gradient defs, since the book also shows it alone as a silhouette. */
+(() => {
+  "use strict";
+  /* ---- shared pieces. Cars are drawn side-on in "car coordinates": nose towards +x, ground (wheel bottoms) at y 0,
+     roughly x -62..66, then placed on the card rotated (up a ramp, round a loop) with place() ---- */
+  const U = p => `hw${p}${++aUid}`;
+  const st = (w = 1.3) => `stroke="${A_OL}" stroke-width="${w}" stroke-linejoin="round" stroke-linecap="round"`;
+  const P = (d, f, w = 1.3, x = "") => `<path d="${d}" fill="${f}" ${st(w)} ${x}/>`;
+  const Pn = (d, f, x = "") => `<path d="${d}" fill="${f}" ${x}/>`;
+  const place = (s, x, y, a, k, c = [0, 0]) => `<g transform="translate(${x} ${y}) rotate(${a}) scale(${k}) translate(${-c[0]} ${-c[1]})">${s}</g>`;
+  const grad = (id, stops, x2 = 0, y2 = 1) => `<linearGradient id="${id}" x1="0" y1="0" x2="${x2}" y2="${y2}">${stops.map(([o, c]) => `<stop offset="${o}" stop-color="${c}"/>`).join("")}</linearGradient>`;
+  // flat paint with one soft shade band (and a light top) for car bodies
+  const paint = (id, light, base, shade) => grad(id, [[0, light], [.28, base], [.6, base], [.6, shade], [1, shade]]);
+  const chrome = id => grad(id, [[0, "#ffffff"], [.42, "#c3ced6"], [.5, "#6f7f8a"], [.62, "#a9b6bf"], [1, "#f1f4f6"]]);
+  const chromeDark = id => grad(id, [[0, "#c9d3da"], [.42, "#8e9ba5"], [.5, "#4c5962"], [.62, "#7d8a94"], [1, "#b4bfc7"]]);
+  const glassG = id => grad(id, [[0, "#3f6aa6"], [.55, "#14243d"], [1, "#0b1424"]]);
+  const checks = (id, s = 4, a = "#fff", b = "#1a1a1a") => `<pattern id="${id}" patternUnits="userSpaceOnUse" width="${2 * s}" height="${2 * s}"><rect width="${2 * s}" height="${2 * s}" fill="${a}"/><rect width="${s}" height="${s}" fill="${b}"/><rect x="${s}" y="${s}" width="${s}" height="${s}" fill="${b}"/></pattern>`;
+  const shine = (d, w = 2.2, op = .8) => `<path d="${d}" fill="none" stroke="#fff" stroke-width="${w}" stroke-linecap="round" opacity="${op}"/>`;
+  const glint = (x, y, r = 3) => aSpark(x, y, r, "#fff");
+
+  // a chunky toy wheel: fat black tyre, the classic red line, a chrome 5-spoke rim, bold highlights (o.mono = monster-truck treads)
+  function wheel(x, y, r, ch, o = {}) {
+    const s = [], f = v => +v.toFixed(2);
+    if (o.mono) {
+      const n = 18;
+      s.push(`<polygon points="${aPts([...Array(n * 4)].map((_, i) => { const a = (i / (n * 4)) * 2 * Math.PI, rr = (i % 4 < 2) ? r : r - 2.4; return [x + rr * Math.cos(a), y + rr * Math.sin(a)]; }))}" fill="#222" ${st(1.3)}/>`);
+      s.push(aC(x, y, r - 4.5, "#2e2e2e"), `<circle cx="${x}" cy="${y}" r="${r - 4.5}" fill="none" stroke="#141414" stroke-width="1"/>`);
+    } else {
+      s.push(aC(x, y, r, "#1c1c1c", st(1.4)), `<circle cx="${x}" cy="${y}" r="${f(r - 1.5)}" fill="none" stroke="#3d3d3d" stroke-width="1.2"/>`);
+      if (o.red !== false) s.push(`<circle cx="${x}" cy="${y}" r="${f(r * .79)}" fill="none" stroke="#ff2a2a" stroke-width="${f(Math.max(1.5, r * .13))}"/>`);
+    }
+    const rr = r * (o.mono ? .5 : .6), rim = o.rim || `url(#${ch})`;
+    s.push(aC(x, y, rr, rim, st(1)));
+    for (let i = 0; i < 5; i++) {
+      const a = (o.rot || 0) + i * 2 * Math.PI / 5;
+      s.push(`<path d="M${x},${y} L${f(x + rr * .9 * Math.cos(a))},${f(y + rr * .9 * Math.sin(a))}" stroke="${o.spoke || "#5d6c77"}" stroke-width="${f(rr * .32)}" stroke-linecap="round"/>`);
+    }
+    s.push(aC(x, y, f(rr * .36), o.hub || "#eef2f4", st(.8)));
+    // shine on the tyre's shoulder and a glint on the rim
+    s.push(`<path d="M${f(x - r * .76)},${f(y - r * .44)} A${f(r * .88)},${f(r * .88)} 0 0 1 ${f(x - r * .14)},${f(y - r * .87)}" fill="none" stroke="#fff" stroke-width="${f(r * .1)}" stroke-linecap="round" opacity=".55"/>`);
+    s.push(aSpark(f(x - rr * .5), f(y - rr * .5), f(rr * .55), "#fff"));
+    return s.join("");
+  }
+  // a car body: painted path, things clipped to it (stripes, panels), dark wheel arches, then the outline on top
+  function body(d, fill, arches, inside = "") {
+    const id = U("cl");
+    return `<defs><clipPath id="${id}"><path d="${d}"/></clipPath></defs>` + Pn(d, fill) +
+      `<g clip-path="url(#${id})">${inside}${arches.map(([x, y, r]) => aC(x, y, r + 2.4, "#151515", st(1.3))).join("")}</g>` +
+      `<path d="${d}" fill="none" ${st(1.6)}/>`;
+  }
+  const glass = (d, gid, gl = "") => P(d, `url(#${gid})`, 1.2) + gl;
+  // speed lines behind the car (car coordinates)
+  const speed = (x, ys, col = "#fff", len = 22) => ys.map(([y, l = len, dx = 0]) =>
+    `<path d="M${x - dx - l},${y} H${x - dx}" stroke="${col}" stroke-width="2.4" stroke-linecap="round" opacity=".9"/>`).join("");
+  // the orange track in car coordinates: the floor behind the wheels and the near rail (both backdrop: the car rides on top)
+  function track(x0, x1, tg) {
+    const joints = [];
+    for (let x = x0 + 30; x < x1; x += 70) joints.push(`<rect x="${x}" y="1" width="7" height="5" rx="1" fill="#5e35b1" ${st(.8)}/>`);
+    return `<rect x="${x0}" y="-5" width="${x1 - x0}" height="5" fill="#ffb24a"/><path d="M${x0},-5 H${x1}" stroke="#d9600a" stroke-width="1"/>` +
+      `<rect x="${x0}" y="-1.6" width="${x1 - x0}" height="10" fill="url(#${tg})"/><path d="M${x0},-1.6 H${x1} M${x0},8.4 H${x1}" ${st(1.4)}/>` +
+      `<path d="M${x0},0 H${x1}" stroke="#fff" stroke-width="1" opacity=".55"/>` + joints.join("");
+  }
+  const trackG = id => grad(id, [[0, "#ffa23a"], [.45, "#ff7b00"], [1, "#d85a00"]]);
+  // a car on the orange track: [the track (backdrop), speed lines + car in the white cut-out (character)]
+  const onTrack = (car, sp, defs, [x, y, a, k, c], x0, x1, tg) =>
+    [place(track(x0, x1, tg), x, y, a, k, c), `<defs>${defs}</defs>` + place(sp, x, y, a, k, c) + aEdge(place(car, x, y, a, k, c))];
+  // a supercharger: ribbed chrome case on a black manifold, a tall flared bug-catcher scoop on top, its black mouth facing forward
+  function blower(x, y, k, g, gl = true) {
+    const f = `url(#${g})`;
+    return `<g transform="translate(${x} ${y}) scale(${k})">` +
+      P("M-1,-3 H23 V4 H-1Z", "#2b3035", 1.1) +
+      // the case with its ribs and the belt pulley at the front
+      P("M0,-16 Q0,-18 2,-18 H20 Q22,-18 22,-16 V-2 H0Z", f, 1.2) +
+      `<path d="M1.2,-14.5 H20.8 M1.2,-10.5 H20.8 M1.2,-6.5 H20.8" stroke="#3f4c56" stroke-width="1.5"/>` +
+      aC(23.5, -9, 3.6, "#2b3035", st(1)) + aC(23.5, -9, 1.4, "#cfd8dc") +
+      // the scoop: flares out towards the top, the mouth is a black slanted opening at the front
+      P("M3,-18 L-1,-36 Q-1,-38 1,-38 H22 Q25,-38 25,-35 L19,-18Z", f, 1.3) +
+      P("M14,-36.4 H22.4 Q23.8,-36.4 23.4,-34.6 L20.6,-24 Q20,-22.6 18.6,-23.4 L13.2,-27 Q12.4,-27.6 12.6,-28.6 Z", "#121212", .9) +
+      `<path d="M0.4,-35.6 H11" stroke="#fff" stroke-width="1.4" stroke-linecap="round" opacity=".9"/>` +
+      (gl ? shine("M4.2,-32 L6.4,-21.5", 2.4, .95) + shine("M2.8,-15.5 V-3.5", 1.6, .8) + glint(9, -30, 3.6) : "") + `</g>`;
+  }
+  // exhaust fire out of the back (car coordinates, from x0,y)
+  const fire = (x0, y, k = 1) => Pn(`M${x0},${y - 5 * k} Q${x0 - 12 * k},${y - 12 * k} ${x0 - 30 * k},${y - 4 * k} Q${x0 - 18 * k},${y - 1 * k} ${x0 - 27 * k},${y + 6 * k} Q${x0 - 12 * k},${y + 3 * k} ${x0},${y + 4 * k}Z`, "#ff6d00", st(1)) +
+    Pn(`M${x0},${y - 2.6 * k} Q${x0 - 10 * k},${y - 6 * k} ${x0 - 18 * k},${y - 1 * k} Q${x0 - 10 * k},${y + 1 * k} ${x0 - 15 * k},${y + 3.5 * k} Q${x0 - 7 * k},${y + 2 * k} ${x0},${y + 2 * k}Z`, "#ffe14d");
+  // a waving chequered flag on a pole (top-left corner of the cloth at x,y)
+  const flag = (x, y, w, h, pole, cid, left = false) => {
+    const dx = left ? -w : w;
+    return `<path d="M${x},${y - 2} V${y + pole}" stroke="${A_OL}" stroke-width="3.4" stroke-linecap="round"/><path d="M${x},${y - 2} V${y + pole}" stroke="#cfd8dc" stroke-width="1.8" stroke-linecap="round"/>` +
+      aC(x, y - 3, 2, "#ffd21f", st(.8)) +
+      P(`M${x},${y} Q${x + dx * .3},${y - 4} ${x + dx * .55},${y} T${x + dx},${y} V${y + h} Q${x + dx * .75},${y + h + 4} ${x + dx * .5},${y + h} T${x},${y + h}Z`, `url(#${cid})`, 1.1);
+  };
+  const cloud = (x, y, k = 1, op = .95) => `<g opacity="${op}" fill="#fff">${aC(x, y, 6 * k, "#fff")}${aC(x + 7 * k, y - 3 * k, 7 * k, "#fff")}${aC(x + 15 * k, y, 5.5 * k, "#fff")}<rect x="${x - 4 * k}" y="${y}" width="${22 * k}" height="${5 * k}" rx="${2.5 * k}"/></g>`;
+
+  /* ---- the Hot Wheels flame logo, centred on 0,0, about 108 x 62 ---- */
+  function hwLogo(rg) {
+    const F = "M-50,10 C-50,-9 -37,-20 -17,-20 L1,-20 Q9,-24 13,-35 Q15,-27 17,-21 Q25,-24 29,-32 Q31,-25 31,-19 Q39,-21 44,-29 Q46,-21 44,-15 Q51,-16 57,-22 Q54,-12 49,-3 Q46,15 28,20 L-28,21 C-43,21 -50,18 -50,10Z";
+    const gid = U("gl");
+    return `<defs><clipPath id="${gid}"><path d="${F}"/></clipPath></defs>` +
+      `<path d="${F}" fill="none" stroke="${A_OL}" stroke-width="10.5" stroke-linejoin="round"/><path d="${F}" fill="none" stroke="#ffb300" stroke-width="8" stroke-linejoin="round"/>` +
+      `<path d="${F}" fill="none" stroke="#ffe066" stroke-width="3.4" stroke-linejoin="round"/>` +
+      `<path d="${F}" fill="url(#${rg})" stroke="#9a0010" stroke-width="1"/>` +
+      `<g clip-path="url(#${gid})"><ellipse cx="-8" cy="-22" rx="62" ry="22" fill="#fff" opacity=".2"/></g>` +
+      `<text x="-1" y="7.5" transform="skewX(-12)" font-family="Arial Black, Arial, Helvetica, sans-serif" font-weight="900" font-size="18.5" text-anchor="middle" textLength="88" lengthAdjust="spacingAndGlyphs" fill="#fff" stroke="#6d000d" stroke-width="3" paint-order="stroke" stroke-linejoin="round">Hot Wheels</text>`;
+  }
+
+  // 1 the logo as a shiny badge
+  function hwBadge() {
+    const bg = U("bg"), rg = U("rg"), cg = U("cg"), ck = U("ck"), ring = U("ri"), cl = U("bc");
+    return [`<defs>${aVGrad(bg, "#ff9a1f", "#ff5a00")}${checks(ck, 5)}</defs>` +
+      `<rect width="120" height="158" fill="url(#${bg})"/>` + A_RAYS +
+      `<rect x="0" y="0" width="120" height="13" fill="url(#${ck})"/><rect x="0" y="145" width="120" height="13" fill="url(#${ck})"/>` +
+      `<path d="M0,13 H120 M0,145 H120" ${st(1.4)}/>` + aSpark(100, 34, 6) + aSpark(18, 124, 5) + aSpark(104, 120, 3.5) + aSpark(22, 36, 3),
+    `<defs>${grad(rg, [[0, "#ff2a2a"], [.55, "#e00018"], [1, "#a8000f"]])}` +
+      `<radialGradient id="${cg}" cx=".4" cy=".35" r=".75"><stop offset="0" stop-color="#3d8bff"/><stop offset=".7" stop-color="#0d47a1"/><stop offset="1" stop-color="#062466"/></radialGradient>` +
+      `${chrome(ring)}<clipPath id="${cl}"><circle cx="60" cy="80" r="44"/></clipPath></defs>` +
+      aEdge(aC(60, 80, 52, `url(#${ring})`, st(1.6)) + aC(60, 80, 44, `url(#${cg})`, st(1.4)) +
+        [...Array(8)].map((_, i) => { const a = i * Math.PI / 4 + Math.PI / 8; return aC(60 + 48 * Math.cos(a), 80 + 48 * Math.sin(a), 1.6, "#78909c", st(.6)); }).join("") +
+        `<g clip-path="url(#${cl})" opacity=".35">${[...Array(12)].map((_, i) => { const a = i * Math.PI / 6, b = a + .17; return `<polygon points="60,80 ${(60 + 60 * Math.cos(a)).toFixed(1)},${(80 + 60 * Math.sin(a)).toFixed(1)} ${(60 + 60 * Math.cos(b)).toFixed(1)},${(80 + 60 * Math.sin(b)).toFixed(1)}" fill="#7fb6ff"/>`; }).join("")}</g>` +
+        `<path d="M24,66 A40,40 0 0 1 72,38" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" opacity=".45"/>` +
+        place(hwLogo(rg), 61, 82, -10, 1.02))];
+  }
+
+  // 2 Twin Mill: low dark-blue body, two chrome blowers with intake scoops side by side out of the long hood, canopy far back
+  function twinMill() {
+    const bg = U("bg"), pg = U("pt"), ch = U("ch"), cd = U("cd"), gg = U("gs"), tg = U("tr");
+    const d = "M62,-8 Q66,-11 65,-17 Q63,-22 55,-23 L14,-26 L-4,-28 L-40,-35 Q-54,-36 -60,-31 L-62,-24 L-61,-13 Q-60,-8 -54,-8Z";
+    const car = body(d, `url(#${pg})`, [[-36, -17, 17], [42, -13, 13]],
+        Pn("M-62,-16 H66 V-8 H-62Z", "#0a1a45") + `<path d="M58,-18 L10,-20" stroke="#5c8cff" stroke-width="1.4" opacity=".8"/>`) +
+      glass("M-4,-28 Q-10,-40 -26,-42 Q-38,-42 -44,-34 L-40,-31 Z", gg, `<path d="M-10,-35 L-18,-39" stroke="#fff" stroke-width="1.8" stroke-linecap="round" opacity=".8"/>`) +
+      shine("M54,-21.5 L20,-24.5 M-44,-33.5 L-56,-33") +
+      // the far blower (darker chrome), then the near one, side by side
+      blower(26, -30, .9, cd, false) + blower(8, -25, .92, ch) +
+      // headers into the side pipe
+      aL([[16, -22], [14, -14], [10, -11]], "#cfd8dc", 2) + aL([[22, -22], [21, -14], [17, -11]], "#cfd8dc", 2) +
+      P("M-22,-13 H24 Q27,-13 27,-10.5 Q27,-8 24,-8 H-22 Q-25,-8 -25,-10.5 Q-25,-13 -22,-13Z", `url(#${ch})`, 1.1) +
+      [-14, -4, 6, 16].map(x => `<path d="M${x},-12.6 V-8.4" stroke="#55636d" stroke-width="1"/>`).join("") +
+      P("M-62,-29 h4 v4 h-4Z", "#ff3b30", .9) + P("M61,-19 h4 v3 h-4Z", "#fff59d", .8) +
+      wheel(-36, -17, 17, ch, { rot: .3 }) + wheel(42, -13, 13, ch, { rot: 1 });
+    const sp = speed(-66, [[-36, 26], [-26, 18, 6], [-16, 24]]);
+    const [trk, chr] = onTrack(car, sp, `${paint(pg, "#5c8cff", "#1c47c2", "#102a7a")}${chrome(ch)}${chromeDark(cd)}${glassG(gg)}`, [58, 86, -36, .88, [0, -26]], -120, 140, tg);
+    return [`<defs>${aVGrad(bg, "#0b1d4d", "#3a1d6e")}${trackG(tg)}</defs>` +
+      `<rect width="120" height="158" fill="url(#${bg})"/>` +
+      [[14, 44], [96, 22], [30, 128], [104, 140], [82, 60], [46, 16]].map(([x, y], i) => aSpark(x, y, 2 + (i % 3), "#fff")).join("") +
+      `<g opacity=".25">${[...Array(7)].map((_, i) => `<path d="M${-20 + i * 26},170 L${60 + i * 26},-20" stroke="#ff7b00" stroke-width="6"/>`).join("")}</g>` + trk, chr];
+  }
+
+  // 3 Bone Shaker: black hot rod, chopped cab at the back, chrome engine in the open, skull grille, big rear wheels
+  function boneShaker() {
+    const bg = U("bg"), pg = U("pt"), ch = U("ch"), gg = U("gs"), tg = U("tr");
+    const d = "M-60,-14 L-60,-30 Q-60,-36 -54,-36 L-50,-36 L-48,-55 Q-47,-59 -42,-59 L-18,-59 Q-14,-59 -13,-55 L-10,-36 L-4,-34 L-4,-14Z";
+    const skull = `<g transform="translate(38 -36) scale(1.15)">` +
+      P("M-12,-2 Q-12,-17 0,-17 Q12,-17 12,-2 Q12,6 8,8 L8,15 L-8,15 L-8,8 Q-12,6 -12,-2Z", "#f4efe2", 1.4) +
+      `<ellipse cx="-4.8" cy="-2" rx="3.6" ry="4.2" fill="#1a1a1a"/><ellipse cx="4.8" cy="-2" rx="3.6" ry="4.2" fill="#1a1a1a"/>` +
+      aC(-3.8, -3.5, 1.1, "#e53935") + aC(5.8, -3.5, 1.1, "#e53935") +
+      Pn("M0,3 L-2,7 H2Z", "#1a1a1a") + `<path d="M-6,10.5 H6 M-4,8.5 V14.5 M0,8.5 V14.5 M4,8.5 V14.5" stroke="#1a1a1a" stroke-width="1"/>` +
+      shine("M-8,-9 Q-4,-14 2,-14.5", 1.8, .9) + `</g>`;
+    const car = // chassis rail and dropped front axle
+      P("M-6,-17 H48 Q53,-17 53,-14 H-6Z", `url(#${ch})`, 1) +
+      body(d, `url(#${pg})`, [[-38, -18, 18]],
+        `<path d="M-60,-22 H-4" stroke="#d32f2f" stroke-width="2.4"/>`) +
+      glass("M-45,-54 L-44,-48 H-16 L-17,-54Z", gg, `<path d="M-38,-53 L-41,-49" stroke="#fff" stroke-width="1.6" opacity=".8"/>`) +
+      shine("M-44,-57.5 L-19,-57.5 M-58,-34 L-51,-34") +
+      // the engine: block, ribbed valve covers, round air cleaner, headers
+      P("M-4,-36 H24 V-18 H-4Z", `url(#${ch})`, 1.2) + P("M-2,-42 H22 V-36 H-2Z", "#d32f2f", 1.1) +
+      [2, 7, 12, 17].map(x => `<path d="M${x},-41.5 V-36.5" stroke="#7f0000" stroke-width="1"/>`).join("") +
+      P("M3,-50 Q3,-53 10,-53 Q17,-53 17,-50 V-45 Q17,-42 10,-42 Q3,-42 3,-45Z", `url(#${ch})`, 1.1) +
+      `<path d="M4,-47.5 H16" stroke="#55636d" stroke-width="1"/>` + glint(7, -49, 2.6) + shine("M-1,-33 V-21", 1.8, .8) +
+      [0, 6, 12, 18].map(x => aL([[x + 1, -27], [x - 3, -20], [x - 12, -16]], "#e0e6ea", 1.8)).join("") +
+      aL([[-12, -16], [-56, -10]], "#cfd8dc", 2.6) +
+      skull + aL([[38, -19], [48, -14], [52, -12]], "#cfd8dc", 2) +
+      P("M-62,-31 h3 v5 h-3Z", "#ff3b30", .9) +
+      wheel(-38, -18, 18, ch, { rot: .2 }) + wheel(52, -12, 12, ch, { rot: .9 });
+    const sp = speed(-66, [[-46, 24], [-32, 16, 6], [-20, 26]]);
+    const [trk, chr] = onTrack(car, sp, `${paint(pg, "#5d5d5d", "#232323", "#111")}${chrome(ch)}${glassG(gg)}`, [58, 84, -32, .86, [-2, -30]], -130, 140, tg);
+    return [`<defs>${aVGrad(bg, "#4a0d0d", "#c62828")}${trackG(tg)}</defs>` +
+      `<rect width="120" height="158" fill="url(#${bg})"/>` + A_RAYS +
+      // flames rising from the bottom
+      Pn("M0,158 L0,118 Q8,128 10,108 Q18,124 24,100 Q30,122 38,112 Q44,126 52,104 Q58,124 66,114 Q72,128 80,102 Q88,124 94,110 Q102,126 108,104 Q114,120 120,112 L120,158Z", "#ff6d00", st(1.2)) +
+      Pn("M0,158 L0,132 Q10,138 14,124 Q22,136 30,122 Q38,138 46,126 Q54,138 62,124 Q70,138 78,126 Q88,140 96,124 Q104,138 112,128 L120,134 L120,158Z", "#ffd21f") +
+      aSpark(98, 30, 5) + aSpark(18, 40, 3) + trk, chr];
+  }
+
+  // 4 Sharkruiser: a grey-blue shark on wheels: open jaws with teeth, gills, dorsal fin, tail fin, blower on its back
+  function sharkruiser() {
+    const bg = U("bg"), pg = U("pt"), ch = U("ch"), tg = U("tr");
+    const d = "M68,-33 Q56,-48 24,-50 L-20,-48 Q-42,-46 -56,-34 L-60,-30 L-60,-24 L-52,-12 Q-50,-9 -44,-9 L50,-9 Q58,-9 63,-17 L44,-25 Z";
+    const car = // tail fin and dorsal fin behind the body
+      P("M-52,-36 L-82,-66 Q-74,-46 -70,-30 Q-76,-22 -84,-12 L-54,-22Z", `url(#${pg})`, 1.4) +
+      P("M12,-48 Q8,-66 -12,-78 Q-6,-62 -18,-46Z", "#5f7f9e", 1.4) + shine("M7,-56 Q2,-66 -6,-72", 1.6, .6) +
+      // blower on its back
+      blower(-38, -45, .78, ch) +
+      body(d, `url(#${pg})`, [[-34, -14, 14], [38, -13, 13]],
+        Pn("M44,-25 Q20,-24 0,-25 Q-30,-26 -62,-27 L-62,0 L70,0 Z", "#eef3f6") +
+        `<path d="M44,-25 Q20,-24 0,-25 Q-30,-26 -62,-27" fill="none" stroke="#b9c7d2" stroke-width="1.4"/>`) +
+      // mouth: dark inside, teeth on both jaws
+      P("M68,-33 L44,-25 L63,-17 Q58,-25 68,-33Z", "#7a1020", 1.1) +
+      `<polygon points="${aPts([[64, -31.6], [62, -27], [60, -30.6], [58.5, -26], [56, -29.4], [54.5, -25.5], [52, -28.2], [50.5, -24.8], [48, -27]])}" fill="#fff" ${st(.7)}/>` +
+      `<polygon points="${aPts([[61, -18.6], [59, -23], [57.5, -19.8], [55.5, -23.6], [54, -21], [52, -24.6], [50, -22.2]])}" fill="#fff" ${st(.7)}/>` +
+      aC(52, -38.5, 2.8, "#111") + aC(51.2, -39.3, 1, "#fff") +
+      [30, 25, 20].map(x => `<path d="M${x},-43 Q${x - 3},-36 ${x},-29" fill="none" stroke="#2c4157" stroke-width="1.5" stroke-linecap="round"/>`).join("") +
+      shine("M60,-38 Q46,-47 24,-48 L-18,-46.5") + glint(40, -45, 3) +
+      // side exhaust stubs
+      [-46, -40, -34].map(x => P(`M${x},-23 h4 v-3 h-4Z`, `url(#${ch})`, .8)).join("") +
+      wheel(-34, -14, 14, ch, { rot: .5 }) + wheel(38, -13, 13, ch, { rot: 1.2 });
+    const sp = speed(-86, [[-54, 18], [-40, 24, 4], [-24, 16, 10]]);
+    const [trk, chr] = onTrack(car, sp, `${paint(pg, "#a9c4dc", "#6f8fae", "#4b6a88")}${chrome(ch)}`, [58, 82, -32, .84, [-8, -36]], -130, 140, tg);
+    return [`<defs>${aVGrad(bg, "#4fc3f7", "#01579b")}${trackG(tg)}</defs>` +
+      `<rect width="120" height="158" fill="url(#${bg})"/>` + A_RAYS +
+      // waves and bubbles
+      [118, 132, 146].map((y, i) => Pn(`M0,${y} ${[...Array(7)].map((_, k) => `Q${k * 20 + 10 - i * 4},${y - 6} ${k * 20 + 20 - i * 4},${y}`).join(" ")} V158 H0Z`, ["#29b6f6", "#0288d1", "#01579b"][i], `opacity=".85"`)).join("") +
+      [[20, 44, 3], [28, 36, 2], [98, 112, 2.6], [104, 100, 1.8], [90, 26, 2.2]].map(([x, y, r]) => aC(x, y, r, "none", `stroke="#fff" stroke-width="1" opacity=".8"`)).join("") +
+      aSpark(100, 46, 4) + trk, chr];
+  }
+
+  // a surfboard sticking out of the back: inner (pointed) end at 0,0, square tail at x -L, fin under the tail
+  function board(x, y, L, w, a, fill, band) {
+    const h = w / 2;
+    return `<g transform="translate(${x} ${y}) rotate(${a})">` +
+      P(`M${-L + 4},${h - 1} Q${-L + 6},${h + 6} ${-L + 10},${h + 7} L${-L + 12},${h - 1}Z`, "#263238", 1) +
+      P(`M8,0 C${-L * .2},${-h * 1.3} ${-L * .8},${-h * 1.1} ${-L},${-h * .55} Q${-L - 1.5},0 ${-L},${h * .55} C${-L * .8},${h * 1.1} ${-L * .2},${h * 1.3} 8,0Z`, fill, 1.3) +
+      `<path d="M${-L + 2},${-h * .6} V${h * .6} M${-L + 6},${-h * .8} V${h * .8}" stroke="${band}" stroke-width="2.4"/>` +
+      shine(`M${-L * .2},${-h * .6} L${-L * .7},${-h * .7}`, 1.4, .7) + `</g>`;
+  }
+
+  // 5 Deora II: smooth aqua surf wagon, silver sills, a long wrap-round windscreen, two surfboards out of the back
+  function deora() {
+    const bg = U("bg"), pg = U("pt"), ch = U("ch"), gg = U("gs"), tg = U("tr"), sg = U("sk");
+    const d = "M64,-10 Q68,-14 66,-20 Q62,-26 50,-28 Q30,-34 12,-48 Q4,-54 -10,-54 L-36,-53 Q-48,-52 -54,-44 L-58,-34 Q-60,-22 -60,-14 Q-58,-9 -52,-9 L56,-9 Q61,-9 64,-10Z";
+    const car = body(d, `url(#${pg})`, [[-38, -13, 13], [40, -13, 13]],
+        P("M-62,-20 H70 V0 H-62Z", `url(#${ch})`, 1.1) + `<path d="M-62,-24 H70" stroke="#0e7c86" stroke-width="1.3"/>`) +
+      // the boards slide into the back of the cabin: the windows hide their inner ends
+      board(-38, -44, 36, 9, 62, "#ffd21f", "#e53935") + board(-36, -40, 36, 9, 46, "#ff5a36", "#fff") +
+      glass("M50,-29 Q30,-35 12,-47 Q4,-52 -8,-52 L-36,-51 Q-46,-50 -51,-42 L-49,-38 L-6,-37 Q20,-33 50,-29Z", gg,
+        `<path d="M22,-38 L8,-47 M30,-35 L24,-39" stroke="#fff" stroke-width="1.8" stroke-linecap="round" opacity=".8"/>`) +
+      `<path d="M-30,-51.5 V-37.5" stroke="${A_OL}" stroke-width="1.3"/>` +
+      shine("M56,-27 Q36,-33 26,-40 M-14,-55 L-36,-54.5") + glint(-20, -55, 3.4) +
+      P("M60,-23 Q64,-22 65,-19 L60,-19Z", "#fff59d", .8) + P("M-60,-30 h3 v6 h-3Z", "#ff3b30", .8) +
+      wheel(-38, -13, 13, ch, { rot: .6 }) + wheel(40, -13, 13, ch, { rot: .1 });
+    const sp = speed(-84, [[-22, 18], [-14, 12, 4], [-6, 20]], "#fff");
+    const [trk, chr] = onTrack(car, sp, `${paint(pg, "#7fe8ea", "#19b3bd", "#0f8a93")}${chrome(ch)}${glassG(gg)}`, [60, 92, -24, .8, [-4, -30]], -130, 140, tg);
+    return [`<defs>${aVGrad(bg, "#ff8a65", "#ffd180")}${trackG(tg)}${aVGrad(sg, "#ffe0b2", "#ffcc80")}</defs>` +
+      `<rect width="120" height="158" fill="url(#${bg})"/>` +
+      aC(86, 56, 20, "#ffeb3b", `opacity=".9"`) +
+      Pn("M0,66 H120 V100 H0Z", "#26c6da") + `<path d="M40,72 h18 M76,70 h12 M96,82 h16 M8,88 h10 M50,94 h12" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity=".7"/>` +
+      Pn("M0,100 Q40,92 120,100 V158 H0Z", `url(#${sg})`) +
+      cloud(40, 24, 1) + cloud(92, 14, .7) + aSpark(106, 36, 4) + trk, chr];
+  }
+
+  // 6 Rodger Dodger: purple muscle car, orange stripe, a big blower through the hood, raked back
+  function rodgerDodger() {
+    const bg = U("bg"), pg = U("pt"), ch = U("ch"), gg = U("gs"), tg = U("tr"), ck = U("ck");
+    const d = "M64,-12 L65,-23 Q64,-28 58,-28 L14,-31 L-4,-31 Q-10,-42 -16,-45 L-30,-45 Q-46,-42 -56,-37 L-62,-36 L-63,-17 Q-62,-11 -56,-11 L58,-11 Q63,-11 64,-12Z";
+    const car = body(d, `url(#${pg})`, [[-38, -17, 17], [42, -13, 13]],
+        Pn("M66,-25 L-64,-30 L-64,-24 L66,-20Z", "#ff8f00") + Pn("M66,-23.6 L-64,-28 L-64,-27 L66,-22.8Z", "#ffd21f")) +
+      glass("M-5,-32 L-15,-43 L-29,-43 L-46,-38 L-40,-33Z", gg, `<path d="M-12,-38 L-17,-42" stroke="#fff" stroke-width="1.8" stroke-linecap="round" opacity=".8"/>`) +
+      `<path d="M-22,-43 V-33" stroke="${A_OL}" stroke-width="1.3"/>` +
+      shine("M56,-26.5 L14,-29.5 M-17,-44 L-29,-44") + glint(-8, -37, 3) +
+      // spoiler
+      P("M-58,-37 L-60,-43 L-50,-43 L-50,-39Z", "#2a1144", 1.1) + P("M-66,-46 H-46 V-43 H-66Z", "#ff8f00", 1.1) +
+      // the blower through the hood
+      blower(16, -33, 1, ch) +
+      // side pipes
+      P("M-20,-15 H22 Q25,-15 25,-12.5 Q25,-10 22,-10 H-20 Q-23,-10 -23,-12.5 Q-23,-15 -20,-15Z", `url(#${ch})`, 1.1) +
+      P("M60,-26 h4 v3 h-4Z", "#fff59d", .8) + P("M-64,-34 h3 v5 h-3Z", "#ff3b30", .8) +
+      wheel(-38, -17, 17, ch, { rot: .7 }) + wheel(42, -13, 13, ch, { rot: .2 });
+    const sp = speed(-70, [[-44, 22], [-30, 16, 6], [-18, 26]], "#fff");
+    const [trk, chr] = onTrack(car, sp, `${paint(pg, "#c48af5", "#7b2cbf", "#4c1582")}${chrome(ch)}${glassG(gg)}`, [58, 86, -32, .86, [0, -28]], -130, 140, tg);
+    return [`<defs>${aVGrad(bg, "#ffb300", "#ff6f00")}${trackG(tg)}${checks(ck, 6, "#fff", "#2a1a10")}</defs>` +
+      `<rect width="120" height="158" fill="url(#${bg})"/>` +
+      `<g transform="rotate(-24 60 79)" opacity=".9"><rect x="-40" y="22" width="200" height="24" fill="url(#${ck})"/><rect x="-40" y="120" width="200" height="24" fill="url(#${ck})"/></g>` +
+      A_RAYS + aSpark(100, 64, 4) + aSpark(16, 80, 3) + trk, chr];
+  }
+
+  // 7 Mega-Wrex: a green T-rex on a monster-truck chassis, jaws open, tiny arms, huge treaded tyres
+  function megaWrex() {
+    const bg = U("bg"), pg = U("pt"), ch = U("ch");
+    const torso = "M-46,-46 Q-50,-68 -24,-74 Q2,-80 22,-72 L30,-66 Q34,-54 26,-46 Q0,-40 -46,-46Z";
+    const spikes = [[-38, -70], [-26, -75], [-14, -78], [-2, -78], [10, -76], [20, -73]].map(([x, y]) => P(`M${x - 4},${y + 2} L${x},${y - 6} L${x + 4},${y + 1}Z`, "#ff8a00", 1)).join("");
+    const car = // tail, chassis, shocks
+      P("M-40,-64 Q-64,-70 -86,-82 Q-70,-62 -42,-50Z", `url(#${pg})`, 1.4) +
+      P("M-46,-34 H48 V-28 H-46Z", `url(#${ch})`, 1.1) +
+      [[-40, -21], [42, -21]].map(([x, y]) => aL([[x - 5, y], [x - 7, -33]], "#ff8a00", 3.2) + aL([[x + 5, y], [x + 7, -33]], "#ff8a00", 3.2)).join("") +
+      spikes +
+      P("M18,-70 Q28,-86 40,-86 L44,-60 Q32,-54 22,-50Z", `url(#${pg})`, 1.4) +
+      P(torso, `url(#${pg})`, 1.5) +
+      Pn("M-40,-50 Q-10,-46 24,-50 Q20,-44 -10,-43 Q-34,-44 -40,-50Z", "#c5e1a5") +
+      ["M-30,-72 Q-26,-62 -32,-54", "M-16,-76 Q-12,-64 -18,-56", "M-2,-77 Q2,-66 -4,-58"].map(s => `<path d="${s}" fill="none" stroke="#1b5e20" stroke-width="2.2" stroke-linecap="round"/>`).join("") +
+      shine("M-40,-66 Q-20,-75 4,-75") +
+      // the head: lower jaw, mouth, upper jaw with teeth, eye
+      P("M40,-64 L72,-62 Q72,-55 64,-52 Q48,-50 38,-56Z", `url(#${pg})`, 1.4) +
+      P("M40,-64 L72,-63 Q60,-68 44,-70Z", "#8b0d1a", 1) +
+      P("M28,-80 Q34,-96 56,-92 L76,-82 Q78,-74 74,-70 L42,-68 Q30,-70 28,-80Z", `url(#${pg})`, 1.5) +
+      `<polygon points="${aPts([[72, -70], [70, -64.5], [67, -69.6], [65, -64], [62, -69.2], [60, -64], [57, -68.8], [55, -63.6], [52, -68.6], [50, -63.6], [47, -68.4]])}" fill="#fff" ${st(.7)}/>` +
+      `<polygon points="${aPts([[70, -62.2], [68, -66.6], [66, -62.3], [63, -66.4], [61, -62.4], [58, -66.2], [56, -62.6], [53, -66], [51, -62.8]])}" fill="#fff" ${st(.7)}/>` +
+      `<ellipse cx="48" cy="-81" rx="4.4" ry="3.8" fill="#ffd21f" ${st(1)}/><ellipse cx="49" cy="-81" rx="1.3" ry="3" fill="#111"/>` +
+      `<path d="M41,-86 L55,-84" stroke="${A_OL}" stroke-width="2.4" stroke-linecap="round"/>` + aC(72, -80, 1, "#1b5e20") +
+      shine("M34,-86 Q42,-92 56,-90", 1.8, .65) +
+      // tiny arms
+      aL([[28, -56], [35, -54], [37, -49]], "#3fae49", 3) + aL([[37, -49], [39, -47]], "#fff", 1) +
+      wheel(-40, -21, 21, ch, { mono: 1, rot: .4 }) + wheel(42, -21, 21, ch, { mono: 1, rot: 1.1 });
+    return [`<defs>${aVGrad(bg, "#1a237e", "#7b1fa2")}</defs>` +
+      `<rect width="120" height="158" fill="url(#${bg})"/>` +
+      // stadium lights
+      `<g opacity=".35">${Pn("M8,8 L-10,120 L34,120Z", "#fff59d")}${Pn("M112,8 L86,120 L130,120Z", "#fff59d")}</g>` + aC(8, 8, 6, "#fff9c4", st(1)) + aC(112, 8, 6, "#fff9c4", st(1)) +
+      // dirt mound
+      Pn("M-4,158 L-4,130 Q30,112 70,118 Q100,122 124,112 L124,158Z", "#8d5524", st(1.3)) +
+      Pn("M0,144 Q40,132 120,136 V158 H0Z", "#6d3f17") +
+      [[18, 128], [40, 122], [96, 120], [80, 140], [30, 146]].map(([x, y]) => aC(x, y, 1.6, "#5d3412")).join("") +
+      [[8, 112], [14, 104], [4, 100]].map(([x, y]) => aC(x, y, 2.2, "#8d5524", st(.8))).join("") + aSpark(60, 24, 4) + aSpark(92, 40, 3),
+    `<defs>${paint(pg, "#8be36a", "#3fae49", "#237a31")}${chrome(ch)}</defs>` + aEdge(place(car, 56, 96, -12, .78, [2, -44]))];
+  }
+
+  // a generic Hot Wheels racer for the stunt stickers (any colour, with flames and a wing)
+  function racer(pg, ch, gg, wing = true) {
+    const d = "M62,-10 Q66,-16 62,-20 L40,-25 Q22,-29 8,-33 Q-4,-42 -20,-42 Q-34,-42 -44,-34 L-58,-32 L-62,-30 L-62,-14 Q-60,-9 -54,-9Z";
+    return (wing ? P("M-56,-31 L-60,-41 H-50 L-48,-32Z", "#222", 1.1) + P("M-70,-45 H-46 V-40.5 H-70Z", "#222", 1.1) : P("M-60,-32 L-62,-36 H-50 L-48,-33Z", "#222", 1.1)) +
+      body(d, `url(#${pg})`, [[-36, -14, 14], [38, -13, 13]],
+        Pn("M64,-18 Q44,-24 24,-24 L32,-20 L4,-21 L18,-16 L-8,-15 L12,-12 Q40,-10 62,-11Z", "#ffd21f", st(.9)) + Pn("M60,-16 Q46,-20 32,-20 L38,-17 L20,-16 L32,-13.5 Q48,-12 60,-12.5Z", "#ff7a00")) +
+      glass("M6,-33 Q-4,-40 -18,-40 Q-30,-40 -40,-33 Z", gg, `<path d="M-6,-37 L-12,-39" stroke="#fff" stroke-width="1.8" stroke-linecap="round" opacity=".8"/>`) +
+      `<path d="M-17,-40 V-33" stroke="${A_OL}" stroke-width="1.3"/>` +
+      shine("M58,-20 L40,-24 Q24,-28 10,-32 M-46,-33 L-58,-31") + glint(24, -27, 3.4) +
+      P("M60,-20 h3 v3 h-3Z", "#fff59d", .8) +
+      wheel(-36, -14, 14, ch, { rot: .5 }) + wheel(38, -13, 13, ch, { rot: 1.4 });
+  }
+
+  // 8 loop-the-loop: a big orange loop rising out of the straight, a red racer upside-down round the top, sparks
+  function loop() {
+    const bg = U("bg"), pg = U("pt"), ch = U("ch"), gg = U("gs"), tg = U("tr");
+    const cx = 60, cy = 72, R = 50, ring = (r, c, w, x = "") => `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${c}" stroke-width="${w}" ${x}/>`;
+    const k = .68, ri = R - 7.4, half = 37 * k, rc = Math.sqrt(ri * ri - half * half) + .6;   // wheels touch the inside of the ring
+    const phi = -68, rad = phi * Math.PI / 180, px = cx + rc * Math.cos(rad), py = cy + rc * Math.sin(rad);
+    const arc = (r, a0, a1) => `M${(cx + r * Math.cos(a0 * Math.PI / 180)).toFixed(1)},${(cy + r * Math.sin(a0 * Math.PI / 180)).toFixed(1)} A${r},${r} 0 0 1 ${(cx + r * Math.cos(a1 * Math.PI / 180)).toFixed(1)},${(cy + r * Math.sin(a1 * Math.PI / 180)).toFixed(1)}`;
+    // the wake: white swooshes behind the car, along the inside of the loop (it drives anticlockwise: up the right, over the top)
+    const wake = [[rc - 6, 30, 3], [rc - 13, 22, 2.6], [rc - 20, 14, 2.2]].map(([r, len, w]) => `<path d="${arc(r, phi + 18, phi + 18 + len)}" fill="none" stroke="#fff" stroke-width="${w}" stroke-linecap="round"/>`).join("");
+    const sparks = [[-42, 2, 7], [-53, -3, 5], [-50, 7, 4.4]].map(([x, y, r]) => aSpark(x, y, r, "#ffe14d")).join("") +
+      [[-40, 1, -58, 6], [-40, 1, -56, -5]].map(([a, b, c, e]) => `<path d="M${a},${b} L${c},${e}" stroke="#ffb300" stroke-width="1.6" stroke-linecap="round"/>`).join("");
+    const trk = ring(R, A_OL, 17) + ring(R, "#ff7b00", 14) + ring(R - 5.8, "#ffb24a", 2.6) + ring(R + 5.6, "#d35400", 2.4) +
+      ring(R, "#fff", 1.4, `stroke-dasharray="5 6" opacity=".7"`) +
+      `<path d="${arc(R + 3, 150, 205)}" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity=".6"/>` +
+      // the straight along the bottom: in from the left, out to the right
+      `<rect x="-4" y="${cy + R - 7}" width="128" height="14" fill="url(#${tg})" ${st(1.6)}/>` + `<path d="M-4,${cy + R - 5} H124" stroke="#fff" stroke-width="1.2" opacity=".6"/>` +
+      [6, 98].map(x => `<rect x="${x}" y="${cy + R - 1}" width="9" height="5.5" rx="1" fill="#5e35b1" ${st(.8)}/>`).join("") +
+      // arrows on the straight: in, round, out
+      [16, 86].map(x => P(`M${x},${cy + R - 4} l7,3 l-7,3Z`, "#fff", .8)).join("");
+    return [`<defs>${aVGrad(bg, "#29b6f6", "#b3e5fc")}${trackG(tg)}</defs>` +
+      `<rect width="120" height="158" fill="url(#${bg})"/>` + A_RAYS + cloud(82, 142, .8) + cloud(98, 8, .5, .8) +
+      Pn("M0,130 Q60,122 120,130 V158 H0Z", "#66bb6a", st(1.2)) + Pn("M0,144 Q60,138 120,144 V158 H0Z", "#43a047") +
+      trk + aSpark(16, 112, 3.4) + aSpark(104, 104, 3),
+    `<defs>${paint(pg, "#ff6b6b", "#e00018", "#9e0010")}${chrome(ch)}${glassG(gg)}</defs>` +
+      wake + aEdge(place(sparks + racer(pg, ch, gg, false), px.toFixed(1), py.toFixed(1), phi - 90, k))];
+  }
+
+  // 9 the big jump: off one orange ramp, over the canyon, flames out of the exhaust, the chequered flag at the landing
+  function jump() {
+    const bg = U("bg"), pg = U("pt"), ch = U("ch"), gg = U("gs"), tg = U("tr"), ck = U("ck");
+    const car = fire(-70, -22, 1.2) + racer(pg, ch, gg), sp = speed(-100, [[-46, 18], [-34, 12, 4], [-58, 14, 8]], "#fff");
+    const ramp = pts => P(pts, `url(#${tg})`, 1.4);
+    const at = [62, 66, -18, .8, [-2, -26]];
+    return [`<defs>${aVGrad(bg, "#3949ab", "#ff8a65")}${grad(tg, [[0, "#ffa23a"], [1, "#e86400"]])}${checks(ck, 3.2)}</defs>` +
+      `<rect width="120" height="158" fill="url(#${bg})"/>` +
+      aC(60, 136, 30, "#ffca28", `opacity=".85"`) +
+      // canyon
+      Pn("M0,124 L18,122 L30,132 L46,128 L60,136 L76,128 L92,132 L106,122 L120,126 V158 H0Z", "#6d3f17", st(1.2)) +
+      Pn("M30,158 L40,140 L52,146 L62,140 L74,146 L86,158Z", "#2b1608") +
+      // supports, then the ramps: take-off on the left, landing on the right
+      `<path d="M8,152 V158 M22,142 V158 M34,133 V158 M92,134 V158 M106,143 V158" stroke="${A_OL}" stroke-width="4" stroke-linecap="round"/>` +
+      `<path d="M8,152 V158 M22,142 V158 M34,133 V158 M92,134 V158 M106,143 V158" stroke="#b39ddb" stroke-width="2" stroke-linecap="round"/>` +
+      ramp("M-4,154 L38,124 L42,126 L42,132 L-4,160Z") + `<path d="M0,155 L38,127" stroke="#fff" stroke-width="1.2" opacity=".6"/>` +
+      ramp("M82,124 L124,150 L124,158 L82,130Z") + `<path d="M84,127 L124,152" stroke="#fff" stroke-width="1.2" opacity=".6"/>` +
+      // the dotted flight path
+      `<path d="M40,120 Q58,40 86,122" fill="none" stroke="#fff" stroke-width="1.8" stroke-dasharray="2 4" stroke-linecap="round" opacity=".85"/>` +
+      flag(110, 104, 14, 10, 34, ck, true) +
+      aSpark(104, 24, 5) + aSpark(88, 14, 3) + aSpark(14, 108, 3) + aStar(100, 90, 3, "#fff59d"),
+    `<defs>${paint(pg, "#6fa8ff", "#1e5fd6", "#123f99")}${chrome(ch)}${glassG(gg)}</defs>` + place(sp, ...at) + aEdge(place(car, ...at))];
+  }
+
+  FAN.hotwheels = [
+    ["Hot Wheels", "the red flame logo as a shiny chrome badge on chequered stripes", hwBadge],
+    ["Twin Mill", "dark-blue, two chrome blowers with intake scoops side by side on the long hood, racing up the orange track at night", twinMill],
+    ["Bone Shaker", "black hot rod with the skull grille, chrome engine and big red-line back wheels, over flames", boneShaker],
+    ["Sharkruiser", "the shark car: open jaws, teeth, gills, fin and tail, blower on its back, by the sea", sharkruiser],
+    ["Deora II", "the aqua surf wagon with two surfboards sliding out of the back, on the track by the beach", deora],
+    ["Rodger Dodger", "purple muscle car, orange stripe, a big chrome blower through the hood, chequered backdrop", rodgerDodger],
+    ["Mega-Wrex", "the T-rex monster truck: jaws open, tiny arms, huge tyres, in the arena", megaWrex],
+    ["Loop-the-loop", "a big red racer upside-down round the top of the orange loop, sparks flying", loop],
+    ["The big jump", "a big blue racer flying over the canyon between two ramps, fire from the exhaust", jump],
+  ];
+})();
 
 /* ================= coach: your own games vs the repertoire, timed answers, playing out the plan ================= */
 
