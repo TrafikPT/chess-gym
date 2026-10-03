@@ -7369,6 +7369,7 @@ function albumParentsWire(pl) {
   function plumber(o) {
     const t = [shadow(60, 148, 30)];
     t.push(E(46, 142, 10.5, 5.5, "#7a3f1c"), E(74, 142, 10.5, 5.5, "#7a3f1c"));
+    t.push(P("M52,84 Q60,88 68,84 L69,99 H51Z", SKIN, 1.2));                      // the neck, under the head and the shirt
     t.push(P("M42,98 Q60,90 78,98 L79,118 H41Z", o.shirt));
     t.push(o.up > 0 ? armUp(1, o.shirt) + armDown(-1, o.shirt) : armUp(-1, o.shirt) + armDown(1, o.shirt));
     t.push(P("M41,112 Q60,116 79,112 L78,138 H64 L60,126 L56,138 H42Z", OV));
@@ -8335,6 +8336,7 @@ function albumParentsWire(pl) {
       t.push(aL([[53, 116], [47, 134]], o.leg || o.fur, 4.2), aL([[67, 116], [73, 134]], o.leg || o.fur, 4.2));
       t.push(shoe(44, 140, o.shoe || "#e2231a", o.strap || "#fff", o.buckle), shoe(76, 140, o.shoe || "#e2231a", o.strap || "#fff", o.buckle));
     }
+    t.push(P("M52,82 Q60,86 68,82 L69,99 H51Z", o.neck || o.fur, 1.3));          // the neck, under the head and the body
     if (o.dress) t.push(P("M50,95 Q40,118 34,130 Q60,136 86,130 Q80,118 70,95Z", o.dress, 1.4), o.hem ? line("M36,127 Q60,133 84,127", 1.6, o.hem) : "");
     else { t.push(E(60, 107, 13, 14, o.fur)); if (o.belly) t.push(E(61.5, 110, 8.5, 10, o.belly, 1.1)); }
     if (o.chest) t.push(o.chest);
