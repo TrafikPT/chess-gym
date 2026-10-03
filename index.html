@@ -1746,6 +1746,10 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
 .botopts .opt b { color: #d62828; font-size: 22px; }
 .botopts .opt[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
 .botopts .opt[aria-pressed="false"] { opacity: .55; }
+.botopts .optseg { display: inline-flex; }   /* the colour: three buttons joined, the chosen one lit */
+.botopts .optseg .opt:not(:first-child) { margin-left: -2px; border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.botopts .optseg .opt:not(:last-child) { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.botopts .optseg .opt[aria-pressed="true"] { position: relative; z-index: 1; }
 .bots { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; max-width: 800px; margin: 0 auto; }
 .bot { appearance: none; cursor: pointer; display: grid; justify-items: center; gap: 4px; padding: 14px 8px; border-radius: 20px; border: 3px solid var(--line); background: var(--surface); box-shadow: var(--shadow); position: relative; color: var(--ink); }
 .bot .face { font-size: calc(48px + var(--lv, 3) * 6px); line-height: 1; width: 1.45em; height: 1.45em; display: grid; place-items: center; border-radius: 50%; border: 5px solid var(--ring); }   /* bigger and redder the stronger */
@@ -1762,6 +1766,7 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
 .bmat { font: 700 26px var(--display); min-width: 2.2em; text-align: center; border-radius: 10px; padding: 2px 8px; background: var(--surface-2); color: var(--muted); }
 .bmat.up { color: #fff; background: var(--pass); } .bmat.down { color: #fff; background: var(--fail); }
 .bothead { display: flex; align-items: center; gap: 12px; justify-content: center; margin-bottom: 8px; }
+.bothead .bcolors { margin: 0; }
 .bface { font-size: 56px; line-height: 1; display: inline-flex; align-items: center; gap: 6px; min-width: 120px; }
 .bface .thinking { font-size: 32px; color: var(--muted); animation: blink 1s steps(2) infinite; }
 @keyframes blink { 50% { opacity: .2; } }
@@ -1890,6 +1895,7 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
       <div id="bPick"></div>
       <div id="bGame" hidden>
         <div class="bothead"><span id="bFace" class="bface"></span>
+          <span id="bColors" class="botopts bcolors"></span>
           <button class="btn big" type="button" id="bRestart" aria-label="Start over">↻</button>
           <button class="btn big" type="button" id="bQuit" aria-label="Choose another bot">🤖</button></div>
         <div class="sboardwrap">

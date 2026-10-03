@@ -2999,9 +2999,10 @@ function pwBot(s) {
 }
 
 /* ---- playing a game ---- */
-function botStart(id, gate = null) {
-  const bot = BOTS.find(b => b.id === id), pl = pzPlayers();
-  const me = (pl.botColor || "w");
+// botColor: "w", "b" or "r" (a new coin toss every game; ↻ during a game keeps the colour it got)
+function botStart(id, gate = null, keepColor = null) {
+  const bot = BOTS.find(b => b.id === id), pl = pzPlayers(), c = pl.botColor || "w";
+  const me = keepColor || (c === "r" ? (Math.random() < 0.5 ? "w" : "b") : c);
   clearTimeout(botReply.t);   // a restart while the bot was thinking: that reply belongs to the old game
   bg = { bot, me, sel: null, last: [], over: null, log: [], rp: null, gate };
   if (bot.pawns) bg.pw = pwNew();
@@ -3010,6 +3011,7 @@ function botStart(id, gate = null) {
     if (pl.botNoQueen) bg.game.remove(me === "w" ? "d8" : "d1");
   }
   $("bPick").hidden = true; $("bGame").hidden = false; $("bOver").hidden = true;
+  $("bColors").innerHTML = botColorSeg(pl);
   botDraw();
   if (botTurn() !== me) botReply.t = setTimeout(botReply, bot.think);
 }
@@ -3043,6 +3045,7 @@ function botDraw() {
   $("bFace").innerHTML = `<span class="face">${bg.bot.face}</span>${botTurn() !== bg.me && !bg.over ? `<span class="thinking">…</span>` : ""}`
     + (mat === null ? "" : `<span class="bmat ${mat > 0 ? "up" : mat < 0 ? "down" : ""}" aria-label="Material">${mat > 0 ? "+" + mat : mat < 0 ? "−" + -mat : "="}</span>`);
   $("bRestart").hidden = !!bg.over;   // once it's over, the panel has its own ↻
+  $("bColors").hidden = !!bg.over || !!bg.moved;   // the colour can change until the child's first move
 }
 function botAfterMove() {
   const pl = pzPlayers();
@@ -3090,13 +3093,13 @@ function botUserMove(from, to) {
   if (!bg || bg.over || botTurn() !== bg.me || !myTargets(from).includes(to)) return false;
   if (bg.pw) bg.pw = pwPlay(bg.pw, pwMoves(bg.pw).find(m => m.from === from && m.to === to));
   else { const fen = bg.game.fen(); botLog(bg.game.move({ from, to, promotion: "q" }), true, fen); }
-  bg.sel = null; bg.last = [from, to]; sfx("move");
+  bg.sel = null; bg.last = [from, to]; bg.moved = true; sfx("move");
   if (!botAfterMove()) { botDraw(); botReply.t = setTimeout(botReply, bg.bot.think); }
   return true;
 }
 // ↻ during a game: start over against the same bot (same gate, colour and no-queen setting); no take-backs in bot
 // games, and no question first (no pop-ups)
-function botRestart() { if (bg && !bg.rp) botStart(bg.bot.id, bg.gate); }
+function botRestart() { if (bg && !bg.rp) botStart(bg.bot.id, bg.gate, bg.me); }
 function botLog(m, me, fen = bg.game.fen()) { bg.log.push({ fen, from: m.from, to: m.to, me, piece: m.piece, captured: m.captured }); }
 
 /* ---- after a game, "what did you miss?": pieces you left hanging that the bot took, free pieces you didn't take ---- */
@@ -3188,11 +3191,17 @@ function botCard(b) {
     ${b.lvl ? `<span class="paws" aria-hidden="true">${"🐾".repeat(b.lvl)}</span>` : `<span class="pawnbadge" aria-hidden="true"><span class="pc wP"></span><span class="pc bP"></span></span>`}
     <span class="wins">${r.w ? "🏆".repeat(Math.min(r.w, 3)) : "&nbsp;"}</span></button>`;
 }
+// your colour, ♔ / ♚ / 🎲: above the bot cards, and in the game's top bar until your first move (a boss game from the path
+// starts at once, so that's where it can be changed there); a tap there starts the game over in the new colour
+function botColorSeg(pl) {
+  return `<span class="optseg" role="group" aria-label="My colour">${[["w", "White", `<span class="pc wK"></span>`], ["b", "Black", `<span class="pc bK"></span>`], ["r", "Either, by chance", "🎲"]]
+    .map(([c, name, pic]) => `<button type="button" class="opt" data-color="${c}" aria-pressed="${(pl.botColor || "w") === c}" aria-label="Play as ${name}">${pic}</button>`).join("")}</span>`;
+}
 function renderBots() {
   const pl = pzPlayers();
   $("bPick").hidden = false; $("bGame").hidden = true;
   $("bPick").innerHTML = `<div class="botopts">
-      <button type="button" class="opt" id="bColor" aria-label="Play as ${pl.botColor === "b" ? "Black" : "White"}"><span class="pc ${pl.botColor === "b" ? "b" : "w"}K"></span></button>
+      ${botColorSeg(pl)}
       <button type="button" class="opt" id="bDanger" aria-pressed="${pl.botDanger !== false}" aria-label="Show my pieces in danger">👁</button>
       <button type="button" class="opt" id="bNoQ" aria-pressed="${!!pl.botNoQueen}" aria-label="Bot plays without its queen"><span class="pc bQ"></span><b>✕</b></button>
     </div>
@@ -3200,7 +3209,7 @@ function renderBots() {
     <div class="botsep" aria-hidden="true"><span class="pc wP"></span><span class="pc bP"></span></div>
     <div class="bots pawnbots">${BOTS.filter(b => b.pawns).map(botCard).join("")}</div>`;
   $("bPick").querySelectorAll("[data-bot]").forEach(b => b.onclick = () => botStart(b.dataset.bot));
-  $("bColor").onclick = () => { pl.botColor = pl.botColor === "b" ? "w" : "b"; save(); renderBots(); };
+  $("bPick").querySelectorAll("[data-color]").forEach(b => b.onclick = () => { pl.botColor = b.dataset.color; save(); renderBots(); });
   $("bDanger").onclick = () => { pl.botDanger = pl.botDanger === false; save(); renderBots(); };
   $("bNoQ").onclick = () => { pl.botNoQueen = !pl.botNoQueen; save(); renderBots(); };
 }
@@ -3217,6 +3226,11 @@ function openBots() {
       bg.sel = p && colorOf(p) === bg.me ? sq : null; botDraw();
     });
     $("bRestart").onclick = botRestart;
+    $("bColors").onclick = ev => {
+      const b = ev.target.closest("[data-color]");
+      if (!b || !bg || bg.over || bg.moved || bg.rp) return;
+      pzPlayers().botColor = b.dataset.color; save(); botStart(bg.bot.id, bg.gate);
+    };
     $("bQuit").onclick = () => { bg = null; renderBots(); };
   }
   if (bg) { $("bPick").hidden = true; $("bGame").hidden = false; botDraw(); } else renderBots();
