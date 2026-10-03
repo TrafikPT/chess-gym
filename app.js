@@ -7000,10 +7000,10 @@ function albumParentsWire(pl) {
     Pn(`M0,${y} Q30,${y - 12} 62,${y - 4} T120,${y - 6} V158 H0Z`, g1) + Pn(`M0,${y + 14} Q40,${y + 4} 80,${y + 12} T120,${y + 10} V158 H0Z`, g2);
 
   /* ---------------- 1 Pikachu / Raichu ---------------- */
-  function pikachu() {
+  function pikachu(o = {}) {
     const Y = "#ffd726", t = [];
     // tail: a lightning bolt behind, brown at the base
-    t.push(tipped("M70,122 L90,108 L84,102 L102,86 L95,80 L113,56 L86,78 L92,84 L76,98 L82,104 L66,114Z", Y, aR(60, 106, 22, 22, "#a8642a", 'stroke="none"')));
+    t.push(aWrap(o.tail, tipped("M70,122 L90,108 L84,102 L102,86 L95,80 L113,56 L86,78 L92,84 L76,98 L82,104 L66,114Z", Y, aR(60, 106, 22, 22, "#a8642a", 'stroke="none"')), "70px 118px"));
     // ears with black tips
     const ear = tipped("M42,60 Q28,42 21,20 Q37,30 52,54Z", Y, aC(20, 18, 13, "#1b1b1b"));
     t.push(ear, mir(ear));
@@ -7042,8 +7042,9 @@ function albumParentsWire(pl) {
     return t.join("");
   }
   const claws = (x, y, k = 1) => [-3.4, 0, 3.4].map(dx => P(`M${x + dx * k - 1.4 * k},${y} L${x + dx * k},${y + 3 * k} L${x + dx * k + 1.4 * k},${y}Z`, "#fff", .8)).join("");
-  function bulbasaur() {
+  function bulbasaur(o = {}) {
     const t = [];
+    if (o.vines) t.push(o.vines);
     // the bulb on its back
     t.push(P("M60,22 C64,28 82,34 86,52 C89,66 74,74 60,74 C46,74 31,66 34,52 C38,34 56,28 60,22Z", "#5fbf5a"));
     t.push(Pn("M60,26 C66,34 78,40 80,52 C76,46 68,40 60,38Z", "#8be07a"), line("M60,24 Q55,48 60,72", 1.1, "#2f7d2c"), line("M50,32 Q41,50 47,71", 1.1, "#2f7d2c"), line("M70,32 Q79,50 73,71", 1.1, "#2f7d2c"));
@@ -7059,11 +7060,11 @@ function albumParentsWire(pl) {
 
   /* ---------------- 3 Charmander / Charizard ---------------- */
   const OR = "#f8963a", CR = "#fde5a0";
-  function charmander() {
+  function charmander(o = {}) {
     const t = [];
     // tail curling up on the right, the flame on its tip
-    t.push(P("M70,120 C88,124 98,116 98,104 C98,96 94,90 96,84 L101,85 C100,92 105,98 104,106 C103,122 88,131 70,128Z", OR));
-    t.push(flame(99, 76, 1.25));
+    t.push(aWrap(o.tail, P("M70,120 C88,124 98,116 98,104 C98,96 94,90 96,84 L101,85 C100,92 105,98 104,106 C103,122 88,131 70,128Z", OR) +
+      aWrap(o.flare, aWrap(o.flame, flame(99, 76, 1.25), "99px 86px"), "99px 86px"), "72px 124px"));
     // body
     t.push(P("M46,86 C38,96 38,120 46,130 H74 C82,120 82,96 74,86Z", OR));
     t.push(Pn("M50,96 C46,106 47,120 52,127 H68 C73,120 74,106 70,96Z", CR));
@@ -7087,10 +7088,10 @@ function albumParentsWire(pl) {
 
   /* ---------------- 4 Squirtle / Blastoise ---------------- */
   const BL = "#8ccfec", SH = "#b8642a", BY = "#f5d98a";
-  function squirtle() {
+  function squirtle(o = {}) {
     const t = [];
     // curly tail on the left
-    t.push(P("M44,118 C30,122 18,118 18,108 C18,100 26,96 32,100 C36,103 34,110 28,108 C30,112 38,112 42,110Z", BL, 1.3));
+    t.push(aWrap(o.tail, P("M44,118 C30,122 18,118 18,108 C18,100 26,96 32,100 C36,103 34,110 28,108 C30,112 38,112 42,110Z", BL, 1.3), "43px 114px"));
     // shell rim around the body, then the belly plates
     t.push(P("M40,84 C30,96 30,122 42,132 H78 C90,122 90,96 80,84Z", SH));
     t.push(P("M46,88 C40,100 40,120 48,128 H72 C80,120 80,100 74,88Z", BY, 1.2), line("M47,100 H73 M46,112 H74 M60,88 V128", 1, "#c9a14a"));
@@ -7111,15 +7112,15 @@ function albumParentsWire(pl) {
   }
 
   /* ---------------- 5 Eevee / Sylveon ---------------- */
-  function eevee() {
+  function eevee(o = {}) {
     const t = [], Bn = "#bd8148", D = "#6d4524", Cm = "#fbecc4";
     // fluffy tail up on the right with a cream tip
-    t.push(tipped("M72,122 C92,124 104,110 102,94 C100,82 108,74 106,66 C96,70 88,80 86,92 C84,104 78,112 70,114Z", Bn, aC(108, 66, 14, Cm)));
+    t.push(aWrap(o.tail, tipped("M72,122 C92,124 104,110 102,94 C100,82 108,74 106,66 C96,70 88,80 86,92 C84,104 78,112 70,114Z", Bn, aC(108, 66, 14, Cm)), "72px 118px"));
     // body sitting
     t.push(P("M44,96 C36,108 38,126 46,134 H74 C82,126 84,108 76,96Z", Bn));
     t.push(E(48, 135, 8, 4, Bn), E(72, 135, 8, 4, Bn));
     // long ears with dark insides
-    const ear = P("M42,52 C32,40 26,22 26,8 C38,16 48,30 54,44Z", Bn) + Pn("M42,47 C35,38 31,26 31,16 C39,23 45,32 49,42Z", D);
+    const ear = aWrap(o.ear, P("M42,52 C32,40 26,22 26,8 C38,16 48,30 54,44Z", Bn) + Pn("M42,47 C35,38 31,26 31,16 C39,23 45,32 49,42Z", D), "48px 48px");
     t.push(ear, mir(ear));
     // fluffy cream collar
     t.push(P("M36,86 L42,92 L40,98 L48,98 L50,104 L56,100 L60,106 L64,100 L70,104 L72,98 L80,98 L78,92 L84,86 L60,90Z", Cm, 1.2));
@@ -7137,7 +7138,7 @@ function albumParentsWire(pl) {
 
   /* ---------------- 6 Jigglypuff / Wigglytuff ---------------- */
   const PK = "#fcb6cf";
-  function jiggly(cx, cy, r, big) {
+  function jiggly(cx, cy, r, big, o = {}) {
     const t = [];
     const ear = P(`M${cx - r * .62},${cy - r * .66} L${cx - r * .66},${cy - r * 1.08} L${cx - r * .24},${cy - r * .9}Z`, PK, 1.3) + Pn(`M${cx - r * .6},${cy - r * .8} L${cx - r * .64},${cy - r * 1.02} L${cx - r * .42},${cy - r * .92}Z`, "#2b2b2b");
     t.push(ear, mir(ear));
@@ -7152,22 +7153,22 @@ function albumParentsWire(pl) {
       aC(x - r * .06, cy - r * .1, +(r * .07).toFixed(2), "#fff") + aC(x + r * .06, cy + r * .1, +(r * .03).toFixed(2), "#fff");
     t.push(eb(cx - r * .34), eb(cx + r * .34));
     t.push(blush(cx - r * .62, cy + r * .3, r * .1), blush(cx + r * .62, cy + r * .3, r * .1));
-    t.push(P(`M${cx - r * .1},${cy + r * .36} Q${cx},${cy + r * .5} ${cx + r * .1},${cy + r * .36}Z`, "#c2283b", 1));
+    t.push(aWrap(o.mouth, P(`M${cx - r * .1},${cy + r * .36} Q${cx},${cy + r * .5} ${cx + r * .1},${cy + r * .36}Z`, "#c2283b", 1), `${cx}px ${cy + r * .38}px`));
     // arms
     t.push(E(cx - r * .98, cy + r * .2, r * .16, r * .1, PK, 1.2, `transform="rotate(-30 ${cx - r * .98} ${cy + r * .2})"`), E(cx + r * .98, cy + r * .2, r * .16, r * .1, PK, 1.2, `transform="rotate(30 ${cx + r * .98} ${cy + r * .2})"`));
     return t.join("");
   }
-  function jigglypuff() {
+  function jigglypuff(o = {}) {
     // the microphone (its marker) in the right hand
     const mic = at(P("M-2,0 L-3,24 H3 L2,0Z", "#2f2f2f", 1.1) + aC(0, -3, 5, "#4a4a4a", st(1.2)) + `<path d="M-3,-5 A4,4 0 0 1 1,-7" fill="none" stroke="#fff" stroke-width="1.1" opacity=".7"/>`, 96, 84, 1, 20);
-    const bg = radial("#b39ddb", "#311b92", ".3") + `<polygon points="44,0 76,0 104,158 16,158" fill="#fff9c4" opacity=".28"/>` +
+    const bg = radial("#b39ddb", "#311b92", ".3") + aWrap(o.spot, `<polygon points="44,0 76,0 104,158 16,158" fill="#fff9c4" opacity=".28"/>`, "60px 0px") +
       Pn("M0,132 H120 V158 H0Z", "#6a1b9a") + line("M0,132 H120", 1.4) +
       note(16, 40, 1.1) + note(102, 34, 1, "#ffd54f") + note(14, 100, .9, "#80deea") + note(106, 108, 1.1, "#f8bbd0") + sparks([[30, 20, 3], [90, 60, 2.6], [26, 70, 2.2]], "#fff59d");
-    return [bg, aEdge(jiggly(60, 88, 34) + mic)];
+    return [bg, aEdge(jiggly(60, 88, 34, false, o) + mic)];
   }
 
   /* ---------------- 7 Psyduck / Golduck ---------------- */
-  function psyduck() {
+  function psyduck(o = {}) {
     const t = [], Y = "#fcd94e", Bk = "#f6e7b8";
     // body
     t.push(P("M42,90 C32,102 34,126 46,134 H74 C86,126 88,102 78,90Z", Y));
@@ -7184,7 +7185,7 @@ function albumParentsWire(pl) {
     // the wide flat bill
     t.push(P("M44,68 C44,62 52,60 60,60 C68,60 76,62 76,68 C76,76 68,79 60,79 C52,79 44,76 44,68Z", Bk), line("M47,70 Q60,73 73,70", 1), aC(56, 64, .8, OL), aC(64, 64, .8, OL));
     // a "?" style puzzlement: three little sweat drops
-    t.push(P("M88,38 C86,42 86,44 88,45 C90,44 90,42 88,38Z", "#8fd3ff", .8), P("M94,46 C92,49 92,51 94,52 C96,51 96,49 94,46Z", "#8fd3ff", .8));
+    t.push(aWrap(o.drops, P("M88,38 C86,42 86,44 88,45 C90,44 90,42 88,38Z", "#8fd3ff", .8) + P("M94,46 C92,49 92,51 94,52 C96,51 96,49 94,46Z", "#8fd3ff", .8)));
     const bg = sky("#a5dcff", "#e8f7ff") + aCloud(76, 14, .8) + Pn("M0,96 Q60,84 120,96 V158 H0Z", "#7cc95a") +
       E(60, 132, 58, 18, "#4fb3e8", 1.2) + Pn("M10,128 Q30,124 44,128 M70,138 Q86,134 104,138", "none", 'stroke="#c6ecff" stroke-width="1.4" stroke-linecap="round"') +
       E(16, 138, 8, 3.4, "#5fbf5a", 1) + E(102, 128, 7, 3, "#5fbf5a", 1) + aC(104, 127, 1.8, "#ff8fb1") +
@@ -7195,7 +7196,7 @@ function albumParentsWire(pl) {
   /* ---------------- 8 Togepi / Togekiss ---------------- */
   const triPat = (cx, cy) => [[-12, 8, "#e53950"], [8, 4, "#3f7fe0"], [-2, 20, "#3f7fe0"], [14, 18, "#e53950"], [-20, 22, "#e53950"]]
     .map(([dx, dy, c]) => P(`M${cx + dx - 4},${cy + dy + 3} L${cx + dx},${cy + dy - 4} L${cx + dx + 4},${cy + dy + 3}Z`, c, .9)).join("");
-  function togepi() {
+  function togepi(o = {}) {
     const t = [], Cr = "#fdf1c0";
     // the head's crown of five spikes
     t.push(P("M38,64 L34,46 L44,54 L46,36 L54,50 L60,30 L66,50 L74,36 L76,54 L86,46 L82,64Z", Cr));
@@ -7203,7 +7204,7 @@ function albumParentsWire(pl) {
     t.push(eye(50, 64, 3.6, 4.6), eye(70, 64, 3.6, 4.6));
     t.push(P("M54,72 Q60,80 66,72Z", "#c2283b", 1), blush(42, 72), blush(78, 72));
     // tiny arms up
-    t.push(E(30, 90, 4.4, 6, Cr, 1.2, 'transform="rotate(-40 30 90)"'), E(90, 90, 4.4, 6, Cr, 1.2, 'transform="rotate(40 90 90)"'));
+    t.push(aWrap(o.armL, E(30, 90, 4.4, 6, Cr, 1.2, 'transform="rotate(-40 30 90)"'), "35px 94px"), aWrap(o.armR, E(90, 90, 4.4, 6, Cr, 1.2, 'transform="rotate(40 90 90)"'), "85px 94px"));
     // the eggshell body with its triangle pattern, zig-zag top
     t.push(tipped("M32,90 L38,84 L44,90 L50,84 L56,90 L62,84 L68,90 L74,84 L80,90 L88,86 C92,104 86,128 60,132 C34,128 28,104 32,90Z", "#fffdf6", triPat(60, 98)));
     t.push(E(48, 134, 7, 3.6, Cr), E(72, 134, 7, 3.6, Cr));
@@ -7214,7 +7215,7 @@ function albumParentsWire(pl) {
   }
 
   /* ---------------- 9 Magikarp / Gyarados ---------------- */
-  function magikarp() {
+  function magikarp(o = {}) {
     const t = [], R = "#f2552c", Cm = "#fbe8b0", Fn = "#f7d774";
     // tail fin on the right, crown-like dorsal fin on top
     t.push(P("M92,86 L114,64 L110,86 L116,110 Z", Fn), line("M96,86 L110,72 M98,88 L112,102", 1, "#d4a43a"));
@@ -7234,19 +7235,83 @@ function albumParentsWire(pl) {
     const bg = sky("#8fd3ff", "#e6f7ff") + aCloud(8, 14, .8) + aCloud(84, 24, .7) +
       Pn("M0,106 Q30,98 60,104 T120,100 V158 H0Z", "#2f9be0") + Pn("M0,124 Q30,116 60,122 T120,118 V158 H0Z", "#1f7fc4") +
       Pn("M30,132 Q40,124 50,132 Q60,124 70,132 Q80,124 90,132", "none", 'stroke="#d6f2ff" stroke-width="2" stroke-linecap="round"');
-    return [bg, aEdge(at(t.join(""), 60, 82, 1, -12) .replace(`translate(60 82) rotate(-12) scale(1)`, `rotate(-12 60 82)`)) + drops];
+    const fish = aEdge(at(t.join(""), 60, 82, 1, -12) .replace(`translate(60 82) rotate(-12) scale(1)`, `rotate(-12 60 82)`));
+    if (o.parts) return { bg, fish, drops };
+    return [bg, fish + drops];
   }
 
+  /* ---------------- own animations (played at holo, stkAnim; CSS an-pk-* in template.html) ---------------- */
+  const G = (cls, svg, origin) => aWrap(cls, svg, origin);
+  // a part with an animation delay (seconds, earlier start) and an optional transform-origin
+  const D = (cls, svg, d, origin) => `<g class="${cls}" style="${origin ? `transform-origin:${origin};` : ""}animation-delay:-${(+d).toFixed(2)}s">${svg}</g>`;
+  // a jagged lightning bolt from the sky (outline, yellow, white core)
+  const zap = d => `<path d="${d}" fill="none" stroke="${OL}" stroke-width="5.4" stroke-linejoin="round" stroke-linecap="round"/>` +
+    `<path d="${d}" fill="none" stroke="#ffe600" stroke-width="3.4" stroke-linejoin="round" stroke-linecap="round"/><path d="${d}" fill="none" stroke="#fff" stroke-width="1.1" stroke-linejoin="round"/>`;
+  const vine = `<path d="M42,64 C28,52 16,60 9,48 C4,39 10,30 17,35" fill="none" stroke="${OL}" stroke-width="4.8" stroke-linecap="round"/><path d="M42,64 C28,52 16,60 9,48 C4,39 10,30 17,35" fill="none" stroke="#5fbf5a" stroke-width="3" stroke-linecap="round"/>` +
+    P("M17,35 C20,30 26,30 28,33 C25,37 20,38 17,35Z", "#8be07a", .9);
+  const leaf = (x, y) => P(`M${x - 6},${y} Q${x},${y - 6} ${x + 6},${y} Q${x},${y + 6} ${x - 6},${y}Z`, "#6fd35f", .9) + line(`M${x - 5},${y} H${x + 5}`, .6, "#2f7d2c");
+  const drop = (x, y, r) => P(`M${x},${y - r * 1.6} C${x - r},${y} ${x - r},${y + r} ${x},${y + r} C${x + r},${y + r} ${x + r},${y} ${x},${y - r * 1.6}Z`, "#bfe9ff", .8);
+  const star = (x, y, r, c = "#ffe14d") => `<polygon points="${[...Array(10)].map((_, i) => { const rr = i % 2 ? r * .45 : r, a = -Math.PI / 2 + i * Math.PI / 5; return `${+(x + rr * Math.cos(a)).toFixed(2)},${+(y + rr * Math.sin(a)).toFixed(2)}`; }).join(" ")}" fill="${c}" ${st(.8)}/>`;
+  const jet = "M62,77 C84,70 102,72 116,96";
+  const anim = {
+    // Pikachu crouches and lets out a thunderbolt: bolts crackle down from the sky, the card flashes, a ring of
+    // electricity bursts out; its tail wags and the cheeks keep sparking
+    pikachu: () => { const [bg, ch] = pikachu({ tail: "an-pk-wag" });
+      const bolts = G("an-pk-zap", zap("M18,-4 L30,16 L21,19 L33,38 L26,41 L36,58") + zap("M102,-4 L90,16 L99,19 L87,38 L94,41 L84,58")) +
+        G("an-pk-zap2", zap("M6,40 L20,52 L12,58 L28,70") + zap("M114,40 L100,52 L108,58 L92,70") + zap("M60,-4 L54,12 L64,16 L57,34"));
+      return [bg + `<circle cx="60" cy="86" r="44" fill="none" stroke="#fff36b" stroke-width="5" class="an-pk-ring" style="transform-origin:60px 86px"/>`,
+        G("an-pk-charge", ch, "60px 138px") + bolts, `<rect width="120" height="158" fill="#fffbd0" class="an-pk-flash"/>`]; },
+    // Bulbasaur's Vine Whip: two vines shoot out of the bulb and crack, leaves spin up out of the bulb
+    bulbasaur: () => { const vines = G("an-pk-vine", vine + G("an-pk-snap", aSpark(13, 36, 4, "#fff59d")), "42px 64px");
+      const [bg, ch] = bulbasaur({ vines: vines + mir(vines) });
+      const leaves = [[-50, 0], [-15, .8], [30, 1.6]].map(([a, d]) => `<g transform="rotate(${a} 60 30)">${D("an-pk-leaf", leaf(60, 30), d, "60px 30px")}</g>`).join("");
+      return [bg, G("an-pk-whip", ch, "60px 134px") + leaves]; },
+    // Charmander's tail flame flickers; it swings its tail, the flame flares up big and throws puffs of fire into the sky
+    charmander: () => { const [bg, ch] = charmander({ flame: "an-pk-flicker", flare: "an-pk-flare", tail: "an-pk-swing" });
+      const puffs = [[0, -6], [.16, 8], [.32, -2]].map(([d, a]) => `<g transform="translate(99 62) rotate(${a})">${D("an-pk-ember", flame(0, 0, .9), d, "0px 0px")}</g>`).join("");
+      return [bg, G("an-pk-rear", ch, "60px 134px") + puffs]; },
+    // Squirtle's Water Gun: a jet of water arcs from its mouth into the sea and splashes; its tail wags
+    squirtle: () => { const [bg, ch] = squirtle({ tail: "an-pk-wag" });
+      const water = `<path d="${jet}" fill="none" stroke="${OL}" stroke-width="8" stroke-linecap="round"/><path d="${jet}" fill="none" stroke="#4fc3f7" stroke-width="6" stroke-linecap="round"/>` +
+        `<path d="M64,75 C84,68 100,70 112,88" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity=".8"/>`;
+      const spray = [-50, -20, 10, 40].map((a, i) => `<g transform="rotate(${a} 114 94)">${D("an-pk-spray", drop(114, 94, 2.4), i * .1, "114px 94px")}</g>`).join("");
+      return [bg, G("an-pk-recoil", ch, "60px 136px") + G("an-pk-jet", G("an-pk-gush", water, "62px 77px"), "62px 77px") + G("an-pk-jeton", spray)]; },
+    // Eevee hops happily, ears flopping and the fluffy tail wagging, little hearts floating up
+    eevee: () => { const [bg, ch] = eevee({ tail: "an-pk-wag2", ear: "an-pk-ears" });
+      const hearts = [[88, 40, 0], [30, 46, 1.2]].map(([x, y, d]) => D("an-pk-heart", heart(x, y, 1.1), d, `${x}px ${y}px`)).join("");
+      return [bg, G("an-pk-hop", ch, "60px 138px") + hearts]; },
+    // Jigglypuff sings into its microphone: it sways, the mouth opens wide, notes float up and the spotlight sweeps
+    jigglypuff: () => { const [bg, ch] = jigglypuff({ spot: "an-pk-spot", mouth: "an-pk-sing" });
+      const notes = [["an-pk-noteL", 46, 112, "#fff", 0], ["an-pk-noteR", 74, 112, "#ffd54f", .6], ["an-pk-noteL", 44, 110, "#80deea", 1.2], ["an-pk-noteR", 76, 110, "#f8bbd0", 1.8]]
+        .map(([c, x, y, col, d]) => D(c, note(x, y, 1.1, col), d, `${x}px ${y}px`)).join("");
+      return [bg, G("an-pk-sway", ch, "60px 124px") + notes]; },
+    // Psyduck's headache: it wobbles holding its head, dizzy stars circle above it, psychic rings pulse out behind
+    psyduck: () => { const [bg, ch] = psyduck({ drops: "an-pk-drip" });
+      const rings = [0, 1.2].map(d => D("an-pk-psy", `<circle cx="60" cy="56" r="34" fill="none" stroke="#b388ff" stroke-width="4"/><circle cx="60" cy="56" r="34" fill="none" stroke="#fff" stroke-width="1.2"/>`, d, "60px 56px")).join("");
+      const stars = `<g transform="translate(60 22) scale(1 .32)">${[0, 1, 2].map(i => D("an-pk-orbit", `<g transform="translate(28 0)">${D("an-pk-unspin", `<g transform="scale(1 3.125)">${star(0, 0, 4.4)}</g>`, i * .6, "0px 0px")}</g>`, i * .6, "0px 0px")).join("")}</g>`;
+      return [bg + rings, G("an-pk-dizzy", ch + stars, "60px 136px")]; },
+    // Togepi uses Metronome: it rocks and wags its little arms side to side, then sparkles burst out around it
+    togepi: () => { const [bg, ch] = togepi({ armL: "an-pk-tick", armR: "an-pk-tick" });
+      const burst = G("an-pk-burst", [[20, 54, "#ffe14d"], [100, 54, "#ff6fa8"], [12, 100, "#4fc3f7"], [108, 100, "#ab47bc"], [60, 18, "#ffe14d"], [32, 26, "#66bb6a"], [88, 26, "#ffa726"]]
+        .map(([x, y, c], i) => i % 2 ? star(x, y, 6.5, c) : aSpark(x, y, 7, c) + aC(x, y, 1.6, "#fff")).join(""), "60px 84px");
+      return [bg, G("an-pk-rock", ch, "60px 136px") + burst]; },
+    // Magikarp uses Splash: it flops up out of the river, twists in the air and falls back with a splash
+    magikarp: () => { const m = magikarp({ parts: 1 });
+      const ripple = D("an-pk-ripple", `<ellipse cx="60" cy="116" rx="30" ry="5" fill="none" stroke="#fff" stroke-width="2"/>`, 0, "60px 116px");
+      const crown = G("an-pk-crown", [[34, 108, 2.4], [45, 100, 2.8], [60, 96, 3], [75, 100, 2.8], [86, 108, 2.4]].map(([x, y, r]) => drop(x, y, r)).join(""), "60px 116px");
+      return [m.bg + ripple, G("an-pk-flop", m.fish, "60px 96px") + G("an-pk-dropfly", m.drops) + crown]; },
+  };
+
   FAN.pokemon = [
-    ["Pikachu", "The electric mouse with red cheeks and a lightning-bolt tail; its cheeks crackle", pikachu],
-    ["Bulbasaur", "The teal seed Pokémon with a green bulb on its back", bulbasaur],
-    ["Charmander", "The little fire lizard, a flame on its tail, in a sunset canyon", charmander],
-    ["Squirtle", "The little blue turtle on the beach", squirtle],
-    ["Eevee", "Brown fox with a fluffy cream collar and tail", eevee],
-    ["Jigglypuff", "The round pink singer with its microphone on a stage", jigglypuff],
-    ["Psyduck", "The puzzled yellow duck holding its head by a pond", psyduck],
-    ["Togepi", "The baby in an eggshell under a rainbow", togepi],
-    ["Magikarp", "The splashing orange fish", magikarp],
+    ["Pikachu", "The electric mouse with red cheeks and a lightning-bolt tail; its cheeks crackle", pikachu, anim.pikachu],
+    ["Bulbasaur", "The teal seed Pokémon with a green bulb on its back", bulbasaur, anim.bulbasaur],
+    ["Charmander", "The little fire lizard, a flame on its tail, in a sunset canyon", charmander, anim.charmander],
+    ["Squirtle", "The little blue turtle on the beach", squirtle, anim.squirtle],
+    ["Eevee", "Brown fox with a fluffy cream collar and tail", eevee, anim.eevee],
+    ["Jigglypuff", "The round pink singer with its microphone on a stage", jigglypuff, anim.jigglypuff],
+    ["Psyduck", "The puzzled yellow duck holding its head by a pond", psyduck, anim.psyduck],
+    ["Togepi", "The baby in an eggshell under a rainbow", togepi, anim.togepi],
+    ["Magikarp", "The splashing orange fish", magikarp, anim.magikarp],
   ];
 })();
 
@@ -7320,17 +7385,17 @@ function albumParentsWire(pl) {
     t.push(P("M54,88 Q60,96 66,88Z", "#c62828", .9));
     t.push(P(o.stache, BR, 1));
     t.push(E(61, 80.5, 6.5, 5, SKIN, 1.2), aC(58.8, 78.6, 1.5, "#fff", 'opacity=".7"'));
-    return t.join("");
+    return aWrap(o.shadow, t[0], "60px 148px") + aWrap(o.body, t.slice(1).join(""), "60px 147px");
   }
-  function mario() {
+  function mario(o = {}) {
     const bg = overworld() + qblock(88, 22) + qblock(104, 22) + coin(96, 6) + coin(14, 50) + pipe(96, 112, 22, 34);
-    return [bg, aEdge(plumber({ cap: "#e52521", shirt: "#e52521", up: 1, letter: "M56.5,51.5 V44.5 L60,48.5 L63.5,44.5 V51.5",
-      stache: "M45,86 Q49,80 55,83.5 Q60,81.5 65,83.5 Q71,80 75,86 Q72,90 67.5,88 Q64,91 61,88.5 Q57,91 53.5,88 Q48,90 45,86Z" }))];
+    return [bg, aEdge(plumber(Object.assign({ cap: "#e52521", shirt: "#e52521", up: 1, letter: "M56.5,51.5 V44.5 L60,48.5 L63.5,44.5 V51.5",
+      stache: "M45,86 Q49,80 55,83.5 Q60,81.5 65,83.5 Q71,80 75,86 Q72,90 67.5,88 Q64,91 61,88.5 Q57,91 53.5,88 Q48,90 45,86Z" }, o)))];
   }
-  function luigi() {
-    const bg = overworld({ sky1: "#5cc0ff", sky2: "#d6f4ff" }) + pipe(2, 104, 22, 42) + qblock(100, 22) + coin(84, 14) + coin(96, 46);
-    return [bg, aEdge(plumber({ cap: "#2fa83a", shirt: "#2fa83a", up: -1, letter: "M58,44.5 V51.5 H63",
-      stache: "M46,84 Q48,88 53,87.5 Q57,86 60,84.5 Q63,86 67,87.5 Q72,88 74,84 Q76,88 72,90 Q66,91 60,88 Q54,91 48,90 Q44,88 46,84Z" }))];
+  function luigi(o = {}) {
+    const bg = overworld({ sky1: "#5cc0ff", sky2: "#d6f4ff" }) + (o.inPipe || "") + pipe(2, 104, 22, 42) + qblock(100, 22) + coin(84, 14) + coin(96, 46);
+    return [bg, aEdge(plumber(Object.assign({ cap: "#2fa83a", shirt: "#2fa83a", up: -1, letter: "M58,44.5 V51.5 H63",
+      stache: "M46,84 Q48,88 53,87.5 Q57,86 60,84.5 Q63,86 67,87.5 Q72,88 74,84 Q76,88 72,90 Q66,91 60,88 Q54,91 48,90 Q44,88 46,84Z" }, o)))];
   }
 
   /* ---------------- 3 Princess Peach ---------------- */
@@ -7384,7 +7449,7 @@ function albumParentsWire(pl) {
   }
 
   /* ---------------- 5 Toad ---------------- */
-  function toad() {
+  function toad(o = {}) {
     const bg = aSky("#86d8ff", "#e9fbff") + aCloud(80, 12, .7) + hill(-12, 146, 40, 36, "#4cc35a") + hill(88, 146, 40, 30, "#6bd673") +
       mushroom(12, 128, 1.1, "#e53935") + mushroom(106, 134, .9, "#3d8bff") + mushroom(98, 104, .7, "#2fa83a") + bricks(148, "#d98a3c");
     const sk = "#ffd9b8", t = [shadow(60, 148, 26)];
@@ -7394,13 +7459,13 @@ function albumParentsWire(pl) {
     t.push(P("M45,103 Q50,101 54,102 L56,126 H43Z", "#2f5fd0"), P("M75,103 Q70,101 66,102 L64,126 H77Z", "#2f5fd0"));
     t.push(line("M54,102 L56,126", 1.6, "#ffd54a"), line("M66,102 L64,126", 1.6, "#ffd54a"));
     t.push(aL([[46, 108], [38, 118]], sk, 4.5), aC(37, 120, 4.6, sk, st(1)));
-    t.push(aL([[74, 108], [84, 98]], sk, 4.5), aC(86, 96, 4.8, sk, st(1)));
+    t.push(aWrap(o.wave, aL([[74, 108], [84, 98]], sk, 4.5) + aC(86, 96, 4.8, sk, st(1)), "74px 108px"));
     t.push(E(60, 90, 17, 14, sk, 1.5));
     const cap = "M17,80 C11,28 109,28 103,80 Q60,92 17,80Z";
     t.push(tipped(cap, "#fff", aC(60, 44, 11, "#e53935") + aC(24, 64, 10, "#e53935") + aC(96, 64, 10, "#e53935") + aC(42, 76, 5, "#e53935") + aC(78, 76, 5, "#e53935"), 1.7));
     t.push(En(54, 90, 2.8, 5, "#111"), En(66, 90, 2.8, 5, "#111"), aC(53.3, 88, 1, "#fff"), aC(65.3, 88, 1, "#fff"));
     t.push(P("M55,96 Q60,103 65,96Z", "#c62828", .9), blush(47, 96), blush(73, 96));
-    return [bg, aEdge(t.join(""))];
+    return [bg, aEdge(aWrap(o.shadow, t[0], "60px 148px") + aWrap(o.body, t.slice(1).join(""), "60px 149px"))];
   }
 
   /* ---------------- 6 Bowser ---------------- */
@@ -7434,7 +7499,7 @@ function albumParentsWire(pl) {
   /* ---------------- 7 Donkey Kong ---------------- */
   const barrel = (x, y, k = 1) => at(P("M-9,-11 Q-12,0 -9,11 H9 Q12,0 9,-11Z", "#a8662a", 1.2) + line("M-10.5,-6 H10.5 M-10.5,6 H10.5", 1.6, "#4a4a4a") + line("M-3,-11 Q-4,0 -3,11 M3,-11 Q4,0 3,11", .6, "#6b3a10"), x, y, k);
   const banana = (x, y, k = 1, a = 0) => at(P("M-8,-2 Q0,8 9,-4 Q2,2 -6,-4Z", "#ffe14d", 1) + aC(-7, -3, .9, "#5a3a10"), x, y, k, a);
-  function dk() {
+  function dk(o = {}) {
     const bg = aSky("#7ed6a0", "#e8ffd8") + Pn("M0,0 H120 V30 Q100,42 86,26 Q70,44 52,28 Q36,46 22,28 Q10,40 0,30Z", "#2e8b3c") +
       Pn("M0,0 H120 V16 Q104,26 92,14 Q74,28 58,14 Q40,30 24,14 Q10,24 0,16Z", "#1f6b2a") +
       aR(8, 30, 6, 116, "#7a4a24") + aR(104, 26, 7, 120, "#7a4a24") + P("M0,144 Q60,136 120,144 V158 H0Z", "#8c5a2b", 1.1) +
@@ -7443,8 +7508,9 @@ function albumParentsWire(pl) {
     t.push(E(46, 138, 10, 8, F), E(74, 138, 10, 8, F), E(44, 145, 9, 4, S, 1.2), E(76, 145, 9, 4, S, 1.2));
     t.push(E(60, 112, 25, 23, F, 1.6));
     t.push(P("M46,100 Q60,96 74,100 Q77,118 60,122 Q43,118 46,100Z", S, 1.2));
-    t.push(aL([[38, 102], [26, 118], [28, 130]], F, 10), E(29, 134, 8.5, 7, S, 1.3));
-    t.push(aL([[82, 102], [97, 96], [97, 82]], F, 10), aC(97, 76, 8, S, st(1.3)), line("M92,74 h9 M92,78 h9", .7));
+    const armL = aL([[38, 102], [26, 118], [28, 130]], F, 10) + E(29, 134, 8.5, 7, S, 1.3), armR = aL([[82, 102], [97, 96], [97, 82]], F, 10) + aC(97, 76, 8, S, st(1.3)) + line("M92,74 h9 M92,78 h9", .7);
+    t.push(aWrap(o.rest, armL + armR));
+    if (o.pound) t.push(o.pound(F, S, armR));
     t.push(P("M53.5,99 H66.5 L64,106 L68.5,125 L60,132 L51.5,125 L56,106Z", "#e0261f", 1.2), P("M54,99 H66 L63.5,106 H56.5Z", "#b71c1c", 1),
       aC(60, 116, 3, "#ffd54a", st(.7)));
     t.push(E(35.5, 64, 5, 6, S, 1.3), E(84.5, 64, 5, 6, S, 1.3));
@@ -7459,7 +7525,7 @@ function albumParentsWire(pl) {
   }
 
   /* ---------------- 8 Rosalina (with a Luma) ---------------- */
-  function rosalina() {
+  function rosalina(o = {}) {
     const R = aRand(808), g = uid("rs");
     const bg = `<defs><radialGradient id="${g}" cx=".5" cy=".3" r=".9"><stop offset="0" stop-color="#3b3f9e"/><stop offset="1" stop-color="#0b0c2e"/></radialGradient></defs><rect width="120" height="158" fill="url(#${g})"/>` +
       [...Array(26)].map(() => aC(R() * 120, R() * 150, r1(.4 + R() * .9), "#fff", `opacity="${r1(.5 + R() * .5)}"`)).join("") +
@@ -7471,7 +7537,7 @@ function albumParentsWire(pl) {
     t.push(P("M49,84 Q60,89 71,84 L73,99 H47Z", D));
     t.push(aL([[48, 88], [40, 104], [50, 110]], D, 5), aC(52, 110, 3.6, sk, st(1)));
     t.push(aL([[72, 88], [82, 98]], D, 5), aC(84, 98, 3.6, sk, st(1)));
-    t.push(line("M84,98 L92,74", 1.8, "#d9d9d9"), star5(93, 70, 6, "#ffd84a"));
+    t.push(aWrap(o.wand, line("M84,98 L92,74", 1.8, "#d9d9d9") + star5(93, 70, 6, "#ffd84a"), "84px 98px"));
     t.push(star5(60, 92, 3.6, "#ffd84a", .8));
     t.push(E(60, 66, 18.5, 19, sk, 1.6));
     t.push(aC(42.5, 76, 2.2, "#ffd84a", st(.8)));
@@ -7482,12 +7548,12 @@ function albumParentsWire(pl) {
     t.push(blush(50, 76, 3), P("M56,79 Q59,81.5 62,79Z", "#e5537a", .8));
     // the Luma
     const luma = star5(0, 0, 11, "#ffd84a", 1.3) + En(-2.6, -.5, 1.1, 2, "#111") + En(2.6, -.5, 1.1, 2, "#111") + aC(-2.9, -1.3, .45, "#fff") + aC(2.3, -1.3, .45, "#fff") + blush(-5, 2.5, 1.8) + blush(5, 2.5, 1.8);
-    t.push(at(luma, 30, 34, 1, -10));
+    t.push(at(aWrap(o.luma, luma, "0px 0px"), 30, 34, 1, -10));
     return [bg, aEdge(t.join(""))];
   }
 
   /* ---------------- 9 Boo (living: floats) ---------------- */
-  function boo() {
+  function boo(o = {}) {
     const R = aRand(909);
     const bg = aSky("#2c1b4f", "#7b5ea7") + aC(96, 22, 11, "#fff6c9") + aC(92, 19, 9, "#463170") +
       [...Array(14)].map(() => aC(R() * 120, R() * 60, r1(.4 + R() * .6), "#fff", 'opacity=".8"')).join("") +
@@ -7496,25 +7562,82 @@ function albumParentsWire(pl) {
       Pn("M0,146 Q60,138 120,146 V158 H0Z", "#1d1433");
     const t = [];
     t.push(P("M60,46 C88,46 98,68 96,90 C94,112 82,124 63,124 C52,124 44,128 32,136 C37,124 33,118 29,110 C22,92 30,46 60,46Z", "#fff", 1.7));
-    t.push(P("M30,92 Q20,94 22,102 Q28,100 32,100Z", "#fff", 1.3), P("M95,96 Q105,100 102,108 Q96,104 93,104Z", "#fff", 1.3));
-    t.push(En(48, 76, 3.2, 5.6, "#111"), En(72, 76, 3.2, 5.6, "#111"), aC(47.2, 73.6, 1.1, "#fff"), aC(71.2, 73.6, 1.1, "#fff"));
-    t.push(line("M43,66 L52,69 M77,66 L68,69", 1.4));
-    t.push(P("M40,88 Q60,122 82,88 Q60,96 40,88Z", "#6b0f2b", 1.3));
-    t.push(P("M52,103 Q58,124 72,104 Q62,108 52,103Z", "#ff6f8e", 1), P("M46,90.5 L49,97 L51.5,91.5Z M76,90.5 L73,97 L70.5,91.5Z", "#fff", .8));
+    t.push(aWrap(o.open, P("M30,92 Q20,94 22,102 Q28,100 32,100Z", "#fff", 1.3) + P("M95,96 Q105,100 102,108 Q96,104 93,104Z", "#fff", 1.3) +
+      En(48, 76, 3.2, 5.6, "#111") + En(72, 76, 3.2, 5.6, "#111") + aC(47.2, 73.6, 1.1, "#fff") + aC(71.2, 73.6, 1.1, "#fff") +
+      line("M43,66 L52,69 M77,66 L68,69", 1.4) +
+      P("M40,88 Q60,122 82,88 Q60,96 40,88Z", "#6b0f2b", 1.3) +
+      P("M52,103 Q58,124 72,104 Q62,108 52,103Z", "#ff6f8e", 1) + P("M46,90.5 L49,97 L51.5,91.5Z M76,90.5 L73,97 L70.5,91.5Z", "#fff", .8)));
     t.push(blush(40, 82, 3.6), blush(80, 82, 3.6));
+    if (o.shy) t.push(o.shy);
     return [bg, aEdge(`<g class="lv-float">${t.join("")}</g>`)];
   }
 
+  /* ---------------- own animations (played at holo, stkAnim; CSS an-mo-* in template.html) ---------------- */
+  const G = (cls, svg, origin) => aWrap(cls, svg, origin);
+  // a part with an animation delay (seconds, earlier start) and an optional transform-origin
+  const D = (cls, svg, d, origin) => `<g class="${cls}" style="${origin ? `transform-origin:${origin};` : ""}animation-delay:-${(+d).toFixed(2)}s">${svg}</g>`;
+  const stroke2 = (d, w, c) => `<path d="${d}" fill="none" stroke="${OL}" stroke-width="${w + 1.8}" stroke-linecap="round"/><path d="${d}" fill="none" stroke="${c}" stroke-width="${w}" stroke-linecap="round"/>`;
+  // the Piranha Plant in Luigi's pipe (drawn up; it hides inside the pipe when moved 36 down), its jaws hinged on the left
+  const piranha = () => stroke2("M13,86 V108", 3, "#2fa53a") + P("M13,100 Q5,92 2,99 Q7,104 13,100Z", "#4cc23f", 1) + P("M13,104 Q21,96 24,103 Q19,108 13,104Z", "#4cc23f", 1) +
+    E(13, 80, 8, 6, "#5a0d0d", 1) +
+    G("an-mo-jawU", P("M4,80 A9,9 0 0 1 22,80Z", "#e53935", 1.2) + aC(9, 75.5, 1.4, "#fff") + aC(15.5, 73.5, 1.6, "#fff") + aC(19.5, 77.5, 1.1, "#fff") + P("M9,80 l2,2.6 l2,-2.6Z M15,80 l2,2.6 l2,-2.6Z", "#fff", .6), "4px 80px") +
+    G("an-mo-jawL", P("M4,80 A9,8 0 0 0 22,80Z", "#e53935", 1.2) + aC(12, 85, 1.2, "#fff") + P("M12,80 l2,-2.6 l2,2.6Z M18,80 l2,-2.6 l2,2.6Z", "#fff", .6), "4px 80px");
+  const apple = aC(106, 30, 6, "#e53935", st(1.1)) + P("M106,24 Q107,20 110,19 Q109,23 106,24Z", "#4cc23f", .8) + aC(103.8, 27.8, 1.5, "#fff", 'opacity=".75"');
+  const fireball = E(0, 0, 9, 6.5, "#ff7a1a", 1.1) + En(2, 0, 5, 3.6, "#ffe14d") + aC(4, -1, 1.6, "#fff9c4");
+  const heartM = (x, y) => P(`M${x},${y + 4} C${x - 6},${y} ${x - 7},${y - 4} ${x - 4},${y - 6} C${x - 2},${y - 7} ${x - 1},${y - 6} ${x},${y - 4} C${x + 1},${y - 6} ${x + 2},${y - 7} ${x + 4},${y - 6} C${x + 7},${y - 4} ${x + 6},${y} ${x},${y + 4}Z`, "#ff6fa8", .9);
+  // Donkey Kong's chest-pound poses: his left fist on the chest with the right arm up, then the other way round
+  const pounds = (F, S, armR) => { const fist = aL([[38, 102], [30, 116], [44, 112]], F, 10) + aC(46, 110, 7.5, S, st(1.3)) + line("M34,100 l-6,-4 M32,110 h-7 M34,120 l-6,4", 1.8, "#ffe14d");
+    return G("an-mo-poseA", fist + armR) + G("an-mo-poseB", mir(fist + armR)); };
+  const anim = {
+    // Mario jumps and punches the ? block above him: it bumps and a coin pops out, spinning. Drawn mirrored (fist up
+    // on the right: on the left the block would sit under the card's number badge); the blocks moved down a little
+    mario: () => { const ch = mario({ body: "an-mo-jump", shadow: "an-mo-jshadow" })[1];
+      const bg = overworld() + qblock(104, 30) + coin(14, 50) + pipe(96, 112, 22, 34) + G("an-mo-coin", G("an-mo-spin", coin(88, 30, 5.5), "88px 30px")) + G("an-mo-bump", qblock(88, 30));
+      return [bg, mir(ch)]; },
+    // a Piranha Plant pops out of the pipe snapping its jaws, and Luigi jumps with fright and shivers
+    luigi: () => { const [bg, ch] = luigi({ body: "an-mo-fright", shadow: "an-mo-fshadow", inPipe: G("an-mo-plant", piranha()) });
+      const sweat = G("an-mo-fright", G("an-mo-sweat", P("M90,50 C87,55 87,58 90,59 C93,58 93,55 90,50Z", "#8fd3ff", .8) + P("M96,58 C94,61 94,63 96,64 C98,63 98,61 96,58Z", "#8fd3ff", .8)), "60px 147px");
+      return [bg, ch + sweat]; },
+    // Peach twirls round in her gown with a little hop, sparkles and a heart floating up around her
+    peach: () => { const [bg, ch] = peach();
+      const glits = [[22, 60, 0], [98, 54, .3], [16, 112, .6], [104, 110, .9], [60, 18, 1.2]].map(([x, y, d]) => D("an-mo-glit", aSpark(x, y, 6, "#ffd54f") + aC(x, y, 1.6, "#fff"), d, `${x}px ${y}px`)).join("");
+      return [bg, G("an-mo-twirl", ch, "60px 148px") + glits + D("an-mo-heart", heartM(84, 40), 0, "84px 40px")]; },
+    // Yoshi's tongue shoots out and grabs the apple, gulp, and out pops a spotted egg; a new apple appears
+    yoshi: () => { const [bg, ch] = yoshi();
+      const tongue = G("an-mo-tongue", stroke2("M96,82 L106,37", 3.4, "#ff6f91") + aC(106, 36, 3.4, "#ff6f91", st(1)), "96px 82px");
+      return [bg + G("an-mo-apple", apple, "106px 30px"), tongue + G("an-mo-gulp", ch, "62px 148px") + G("an-mo-egg", egg(26, 138, .85), "26px 146px")]; },
+    // Toad waves hello and hops over a Super Mushroom sliding along the bricks
+    toad: () => { const [bg, ch] = toad({ body: "an-mo-hop", shadow: "an-mo-hshadow", wave: "an-mo-wave" });
+      return [bg + G("an-mo-roll", mushroom(60, 139, .9, "#e53935")), ch]; },
+    // Bowser rears back, roars and breathes a blast of fireballs; embers rise from the lava
+    bowser: () => { const [bg, ch] = bowser();
+      const fire = `<g transform="translate(66 84)">${[0, .1, .2, .3, .4].map(d => D("an-mo-fire", fireball, d, "0px 0px")).join("")}</g>`;
+      const embers = [[20, 140, 0], [56, 142, .9], [92, 140, 1.7]].map(([x, y, d]) => D("an-mo-ember", aC(x, y, 1.8, "#ffcc33"), d)).join("");
+      return [bg + embers, G("an-mo-roar", ch, "60px 148px") + fire]; },
+    // Donkey Kong pounds his chest, left, right, left, right
+    dk: () => { const [bg, ch] = dk({ rest: "an-mo-rest", pound: pounds });
+      return [bg, G("an-mo-thump", ch, "60px 148px")]; },
+    // Rosalina waves her star wand, star bits sparkling out of it, while the Luma does a happy spin
+    rosalina: () => { const [bg, ch] = rosalina({ wand: "an-mo-wand", luma: "an-mo-luma" });
+      const bits = [-70, -30, 10, 50, 90].map((a, i) => `<g transform="rotate(${a} 93 70)">${D("an-mo-bit", star5(93, 70, 3.6, i % 2 ? "#ffe14d" : "#fff59d", .6), i * .36, "93px 70px")}</g>`).join("");
+      return [bg, ch + bits]; },
+    // Boo creeps closer with his tongue out... then gets shy and hides his face behind his hands
+    boo: () => { const arm = P("M30,100 Q30,84 44,70 Q55,68 57,77 Q56,86 46,88 Q38,92 34,102Z", "#fff", 1.3) + line("M49,72 Q53,75 52,80 M45,74 Q49,77 48,83", .8, "#cfc6e0");
+      const shy = G("an-mo-shy", blush(38, 90, 4.6) + blush(82, 90, 4.6) + En(60, 98, 3.2, 2.4, "#6b0f2b") + arm + mir(arm));
+      const [bg, ch] = boo({ open: "an-mo-open", shy });
+      return [bg, G("an-mo-creep", ch, "60px 92px")]; },
+  };
+
   FAN.mario = [
-    ["Mario", "the red plumber jumping with a fist up, ? blocks and a green pipe", mario],
-    ["Luigi", "Mario's brother in green, waving beside a pipe", luigi],
-    ["Princess Peach", "pink gown and golden crown in front of her castle", peach],
-    ["Yoshi", "the green dinosaur with his red saddle and spotted eggs", yoshi],
-    ["Toad", "the mushroom friend with a red-spotted cap", toad],
-    ["Bowser", "the spiky king of the Koopas in front of his lava castle", bowser],
-    ["Donkey Kong", "the big ape with his red tie, barrels and bananas", dk],
-    ["Rosalina", "the star princess with her wand and a little Luma in space", rosalina],
-    ["Boo", "the shy ghost floating by a haunted house (he floats)", boo],
+    ["Mario", "the red plumber jumping with a fist up, ? blocks and a green pipe", mario, anim.mario],
+    ["Luigi", "Mario's brother in green, waving beside a pipe", luigi, anim.luigi],
+    ["Princess Peach", "pink gown and golden crown in front of her castle", peach, anim.peach],
+    ["Yoshi", "the green dinosaur with his red saddle and spotted eggs", yoshi, anim.yoshi],
+    ["Toad", "the mushroom friend with a red-spotted cap", toad, anim.toad],
+    ["Bowser", "the spiky king of the Koopas in front of his lava castle", bowser, anim.bowser],
+    ["Donkey Kong", "the big ape with his red tie, barrels and bananas", dk, anim.dk],
+    ["Rosalina", "the star princess with her wand and a little Luma in space", rosalina, anim.rosalina],
+    ["Boo", "the shy ghost floating by a haunted house (he floats)", boo, anim.boo],
   ];
 })();
 
@@ -7593,15 +7716,16 @@ function albumParentsWire(pl) {
     const t = [], U = 4, HU = 4.8, dx = o.dx || 0, bx = 44 + dx, by = 57, aw = o.armW || 4;
     const wear = (main, alt, s) => (i, j) => hsh(i, j, s) < .2 ? alt : main;
     const legFn = (i, j) => j >= 6 ? o.shoes : wear(o.pants, o.pantsD, 3)(i, j);
-    t.push(pixF(bx, 85, 4, 8, U, legFn), pixF(bx + 16, 85, 4, 8, U, legFn));
+    t.push(aWrap(o.legL, pixF(bx, 85, 4, 8, U, legFn), `${bx + 8}px 86px`), aWrap(o.legR, pixF(bx + 16, 85, 4, 8, U, legFn), `${bx + 24}px 86px`));
     const armFn = s => (i, j) => j < o.sleeve ? wear(o.shirt, o.shirtD, s)(i, j) : (hsh(i, j, s) < .2 ? o.skinD : o.skin);
     if (o.forward) {
       const fw = (i, j) => i < 3 ? wear(o.shirt, o.shirtD, 4)(i, j) : (hsh(i, j, 6) < .2 ? o.skinD : o.skin);
-      t.push(pixF(bx + 18, by + 1, 9, 4, U, fw));
+      t.push(aWrap(o.armF1, pixF(bx + 18, by + 1, 9, 4, U, fw), `${bx + 20}px ${by + 3}px`));
       t.push(pixF(bx, by, 8, 7, U, wear(o.shirt, o.shirtD, 2)));
-      t.push(pixF(bx + 22, by + 10, 9, 4, U, fw));
+      t.push(aWrap(o.armF2, pixF(bx + 22, by + 10, 9, 4, U, fw), `${bx + 24}px ${by + 12}px`));
     } else {
-      t.push(pixF(bx - aw * U, by, aw, 7, U, armFn(4)), pixF(bx + 32, by, aw, 7, U, armFn(5)));
+      t.push(aWrap(o.armL, pixF(bx - aw * U, by, aw, 7, U, armFn(4)), `${bx - aw * 2}px ${by + 2}px`),
+        aWrap(o.armR, (o.tool || "") + pixF(bx + 32, by, aw, 7, U, armFn(5)), `${bx + 32 + aw * 2}px ${by + 2}px`));
       t.push(pixF(bx, by, 8, 7, U, wear(o.shirt, o.shirtD, 2)));
     }
     if (o.extra) t.push(o.extra(bx, by));
@@ -7610,32 +7734,33 @@ function albumParentsWire(pl) {
   }
 
   /* ---------------- 1 Steve ---------------- */
+  const STEVE = {
+    face: ["HHHHHHHH", "HHHHHHHH", "HSSSSSSH", "SSSSSSSS", "SWBSSBWS", "SSSNNSSS", "SsMMMMsS", "SSSssSSS"],
+    pal: { H: "#3b2a1a", S: "#c69c6d", s: "#b5895c", W: "#fff", B: "#4a3dbe", N: "#8d5a3b", M: "#6b3e26" },
+    shirt: "#2ab0b0", shirtD: "#219a9a", sleeve: 3, skin: "#c69c6d", skinD: "#b5895c", pants: "#3b3fa0", pantsD: "#33368c", shoes: "#5a5a5a",
+  };
   function steve() {
-    const ch = person({
-      face: ["HHHHHHHH", "HHHHHHHH", "HSSSSSSH", "SSSSSSSS", "SWBSSBWS", "SSSNNSSS", "SsMMMMsS", "SSSssSSS"],
-      pal: { H: "#3b2a1a", S: "#c69c6d", s: "#b5895c", W: "#fff", B: "#4a3dbe", N: "#8d5a3b", M: "#6b3e26" },
-      shirt: "#2ab0b0", shirtD: "#219a9a", sleeve: 3, skin: "#c69c6d", skinD: "#b5895c", pants: "#3b3fa0", pantsD: "#33368c", shoes: "#5a5a5a",
-    });
+    const ch = person(STEVE);
     return [daySky() + tree(14, 118) + flowerPx(100, 118, "#e53935") + ground(118), aEdge(ch)];
   }
 
   /* ---------------- 2 Alex (in the Nether) ---------------- */
-  function alex() {
+  function alex(a = {}) {
     const O = "#e2832b", Od = "#c86a1e";
-    const ch = person({
+    const ch = person({ ...a,
       face: ["OOOOOOOO", "OOoOOOOO", "OSSSSSOO", "SSSSSSSO", "SWGSSGWS", "SSSSSSSS", "SSSPPSSS", "SSSSSSSS"],
       pal: { O, o: Od, S: "#f2c49b", W: "#fff", G: "#3f9a4a", P: "#d98a7a" }, armW: 3,
       shirt: "#6fbf5a", shirtD: "#5ea94b", sleeve: 2, skin: "#f2c49b", skinD: "#e3b287", pants: "#6b4a2b", pantsD: "#5c3f24", shoes: "#4a3020",
       extra: () => pixF(69.6, 50, 2, 5, 4.8, (i, j) => (i + j) % 3 ? O : Od),
     });
-    const back = aSky("#3a0b0b", "#c4471c") + tex(94, 0, 12, 118, 4, PAL.lava, 4) + edge(94, 0, 12, 118) +
+    const back = aSky("#3a0b0b", "#c4471c") + (a.lava || tex(94, 0, 12, 118, 4, PAL.lava, 4)) + edge(94, 0, 12, 118) +
       blk(0, 22, 18, "glow", 2) + blk(18, 22, 18, "nether", 3) + blk(0, 40, 18, "nether", 4) + ground(118, "nether", "nether") +
       Rn(0, 112, 120, 6, "#ff9a3c", 'opacity=".35"');
     return [back, aEdge(ch)];
   }
 
   /* ---------------- 3 Creeper (living: it swells) ---------------- */
-  function creeper() {
+  function creeper(o = {}) {
     const G = ["#5fc040", "#4aa832", "#7ed957", "#3b8f2a", "#a8e88a"], u = 5.5, t = [];
     const face = ["........", "........", ".KK..KK.", ".KK..KK.", "...KK...", "..KKKK..", "..KKKK..", "..K..K.."];
     const legFn = s => (i, j) => pick(G, i, j, s);
@@ -7644,27 +7769,30 @@ function albumParentsWire(pl) {
     t.push(pixF(38, 19, 8, 8, u, (i, j) => face[j][i] === "K" ? (j >= 5 && (i === 3 || i === 4) ? "#1e1e1e" : "#111") : pick(G, i, j, 1)));
     const back = aSky("#8cc4ff", "#e2f1ff") + cloud(76, 20, 30) + cloud(6, 36, 22) + tree(104, 118) +
       flowerPx(12, 118, "#ffe14d") + flowerPx(24, 118, "#e53935") + ground(118);
+    if (o.swell) return [back, aEdge(aWrap(o.swell, t.join("") + aWrap(o.flash, Rn(43.5, 96, 16.5, 22, "#fff") + Rn(60, 96, 16.5, 22, "#fff") +
+      Rn(43.5, 63, 33, 33, "#fff") + Rn(38, 19, 44, 44, "#fff")), "60px 118px"))];
     return [back, aEdge(`<g class="lv-pulse">${t.join("")}</g>`)];
   }
 
   /* ---------------- 4 Pig ---------------- */
-  function pig() {
+  function pig(o = {}) {
     const Pk = ["#f2a7a2", "#eb9b96", "#f6b4af"], u = 5, t = [];
     const face = ["PPPPPPPP", "PPPPPPPP", "PPPPPPPP", "PWKPPKWP", "PPSSSSPP", "PPNSSNPP", "PPSSSSPP", "PPPPPPPP"];
     const leg = s => (i, j) => j === 3 ? "#c97f7a" : pick(Pk, i, j, s);
-    t.push(pixF(14, 96, 2, 4, u, leg(5)), pixF(34, 96, 2, 4, u, leg(6)));
+    t.push(aWrap(o.legA, pixF(14, 96, 2, 4, u, leg(5)), "19px 97px"), aWrap(o.legB, pixF(34, 96, 2, 4, u, leg(6)), "39px 97px"));
     t.push(pixF(10, 62, 11, 7, u, (i, j) => pick(Pk, i, j, 2)));
-    t.push(pixF(62, 96, 2, 4, u, leg(7)), pixF(86, 96, 2, 4, u, leg(8)));
+    t.push(aWrap(o.legA, pixF(62, 96, 2, 4, u, leg(7)), "67px 97px"), aWrap(o.legB, pixF(86, 96, 2, 4, u, leg(8)), "91px 97px"));
     t.push(pix(face, 56, 52, u, { P: Pk[0], W: "#fff", K: "#111", S: "#f7c5c0", N: "#8e4a4a" }));
     t.push(pixF(66, 72, 4, 3, u, (i, j) => (j === 1 && (i === 0 || i === 3)) ? "#8e4a4a" : "#f7c5c0"));
-    t.push(pixF(4, 64, 1, 2, 3, () => "#eb9b96"));
+    t.push(aWrap(o.tail, pixF(4, 64, 1, 2, 3, () => "#eb9b96"), "7px 66px"));
     const fence = [6, 50, 94].map(x => tex(x, 84, 8, 34, 4, PAL.planks, x) + edge(x, 84, 8, 34)).join("") +
       tex(0, 90, 120, 5, 5, PAL.planks, 2) + edge(0, 90, 120, 5) + tex(0, 102, 120, 5, 5, PAL.planks, 3) + edge(0, 102, 120, 5);
+    if (o.legA) return t.join("");
     return [daySky() + fence + ground(118), aEdge(t.join(""))];
   }
 
   /* ---------------- 5 Enderman (in the End) ---------------- */
-  function enderman() {
+  function enderman(o = {}) {
     const K = ["#2c2c33", "#34343c", "#26262c"], u = 4, t = [];
     const face = ["kkkkkkkk", "kkkkkkkk", "kkkkkkkk", "kkkkkkkk", "kkkkkkkk", "pPpkkpPp", "kkkkkkkk", "kkkkkkkk"];
     const dk = s => (i, j) => pick(K, i, j, s);
@@ -7678,12 +7806,13 @@ function albumParentsWire(pl) {
     const stars = [[8, 10], [30, 22], [96, 8], [110, 30], [78, 18], [20, 50], [100, 64]].map(([x, y]) => Rn(x, y, 1.6, 1.6, "#e9d6ff")).join("");
     const back = aSky("#0c0717", "#3a2358") + stars + tex(4, 46, 14, 82, 3.5, PAL.obsidian, 2) + edge(4, 46, 14, 82) + Rn(6, 40, 10, 6, "#f0e0ff", 'opacity=".6"') +
       tex(98, 62, 16, 66, 4, PAL.obsidian, 3) + edge(98, 62, 16, 66) + ground(128, "end", "end");
+    if (o.parts) return { back, ch: t.join("") };
     return [back, aEdge(t.join(""))];
   }
 
   /* ---------------- 6 Zombie (at night) ---------------- */
-  function zombie() {
-    const ch = person({
+  function zombie(a = {}) {
+    const ch = person({ ...a,
       dx: -10, forward: 1,
       face: ["DDDDDDDD", "DDDDDDDD", "DZZZZZZD", "ZZZZZZZZ", "ZKKZZKKZ", "ZZZNNZZZ", "ZZMMMMZZ", "ZzZZZZzZ"],
       pal: { D: "#2e5c22", Z: "#5a9e44", z: "#4c8a39", K: "#1d2b1a", N: "#3d7a2e", M: "#2c4a22" },
@@ -7691,16 +7820,16 @@ function albumParentsWire(pl) {
     });
     const stars = [[8, 12], [40, 8], [64, 28], [12, 44], [104, 50], [50, 46]].map(([x, y]) => Rn(x, y, 1.6, 1.6, "#fff")).join("");
     const back = aSky("#0d1433", "#2b3a6b") + stars + Rn(86, 10, 18, 18, "#f4f1d0") + Rn(90, 14, 4, 4, "#d8d4b0") + Rn(97, 20, 3, 3, "#d8d4b0") +
-      tree(106, 118) + ground(118) + dark(0, .3);
+      (a.scroll ? a.scroll(tree(106, 118) + ground(118)) : tree(106, 118) + ground(118)) + dark(0, .3);
     return [back, aEdge(ch)];
   }
 
   /* ---------------- 7 Axolotl ---------------- */
-  function axolotl() {
+  function axolotl(o = {}) {
     const A = ["#f7a1c4", "#f39abd", "#fbb0cf"], u = 5.5, t = [];
     const gill = (x, y, cw, ch) => pixF(x, y, cw, ch, u, (i, j) => (j === 0 && ch > 1) || (i === 0 && cw > 1) ? "#f07aa8" : "#d6457d");
-    t.push(gill(74, 50, 1, 3), gill(85, 47, 1, 3), gill(58, 62, 3, 1));
-    t.push(pixF(6, 82, 5, 3, u, (i, j) => j === 0 ? (i < 4 ? "#fbc9dd" : null) : pick(A, i, j, 3)));
+    t.push(aWrap(o.gill, gill(74, 50, 1, 3), "77px 66px"), aWrap(o.gill2, gill(85, 47, 1, 3), "88px 64px"), aWrap(o.gill, gill(58, 62, 3, 1), "74px 65px"));
+    t.push(aWrap(o.tail, pixF(6, 82, 5, 3, u, (i, j) => j === 0 ? (i < 4 ? "#fbc9dd" : null) : pick(A, i, j, 3)), "34px 90px"));
     t.push(pixF(30, 76, 8, 4, u, (i, j) => j === 3 ? "#fcc4dc" : pick(A, i, j, 2)));
     t.push(pixF(38, 98, 1, 2, u, () => "#e98bb2"), pixF(60, 98, 1, 2, u, () => "#e98bb2"));
     t.push(pixF(66, 64, 8, 7, u, (i, j) => j === 6 ? "#fcc4dc" : pick(A, i, j, 1)));
@@ -7715,23 +7844,23 @@ function albumParentsWire(pl) {
   }
 
   /* ---------------- 8 Iron Golem ---------------- */
-  function golem() {
+  function golem(o = {}) {
     const I = ["#dcd6cc", "#cfc8bc", "#e6e1d8"], V = "#4f8a2b", u = 4.4, t = [];
     const iron = (s, vine = 0) => (i, j) => hsh(i, j, s + 40) < vine ? V : pick(I, i, j, s);
     t.push(pixF(46.8, 88, 3, 6, u, iron(3, .15)), pixF(60, 88, 3, 6, u, iron(4)));
     t.push(pixF(46.8, 75, 6, 3, u, iron(5, .2)));
     t.push(pixF(38, 48.8, 10, 6, u, iron(2, .14)));
-    t.push(pixF(24.8, 50, 3, 14, u, iron(6, .1)), pixF(82, 50, 3, 14, u, iron(7, .1)));
-    t.push(pix(["llllll", "llllll", "kkkkkk", "lrnnrl", "llnnll", "llnnll", "llnnll"], 46.8, 18, u, { l: "#dcd6cc", k: "#6e675e", r: "#c0281f", n: "#b3aa9c" }));
-    t.push(pixF(55.6, 48.8, 2, 2, u, () => "#b3aa9c"));
-    t.push(Rn(87.4, 98, 2, 16, "#3e8e2a") + pixF(84.2, 92, 2, 2, 4, () => "#e53935") + Rn(87.2, 95.2, 2.4, 2.4, "#3b2a1a"));
+    t.push(pixF(24.8, 50, 3, 14, u, iron(6, .1)), aWrap(o.arm, pixF(82, 50, 3, 14, u, iron(7, .1)), "88.6px 52px"));
+    t.push(aWrap(o.head, pix(["llllll", "llllll", "kkkkkk", "lrnnrl", "llnnll", "llnnll", "llnnll"], 46.8, 18, u, { l: "#dcd6cc", k: "#6e675e", r: "#c0281f", n: "#b3aa9c" }) +
+      pixF(55.6, 48.8, 2, 2, u, () => "#b3aa9c"), "60px 50px"));
+    t.push(aWrap(o.arm, aWrap(o.poppy, Rn(87.4, 98, 2, 16, "#3e8e2a") + pixF(84.2, 92, 2, 2, 4, () => "#e53935") + Rn(87.2, 95.2, 2.4, 2.4, "#3b2a1a"), "88.4px 104px"), "88.6px 52px"));
     const house = tex(70, 70, 50, 48, 5, PAL.planks, 2) + edge(70, 70, 50, 48) + tex(70, 106, 50, 12, 4, PAL.cobble, 3) +
       tex(66, 62, 54, 8, 4, PAL.log, 4) + edge(66, 62, 54, 8) + Rn(104, 80, 12, 12, "#9fd3ff", 'stroke="#5a4127" stroke-width="2"');
     return [daySky() + house + ground(118), aEdge(t.join(""))];
   }
 
   /* ---------------- 9 Diamond pickaxe + sword ---------------- */
-  function tools() {
+  function tools(o = {}) {
     const L = "#b4fff4", D = "#3fe8cb", d = "#1fa596", K = "#0f5e57", Br = "#7a5530", br = "#56391d";
     const pk = {};
     const A = [[11, 4], [10, 3], [9, 2], [8, 1], [7, 1], [6, 1], [5, 2]], Ai = [[10, 4], [9, 3], [8, 2], [7, 2], [6, 2]];
@@ -7747,25 +7876,102 @@ function albumParentsWire(pl) {
     [[4, 11], [3, 12], [2, 13]].forEach(p => { sw[p] = Br; });
     sw[[1, 14]] = K;
     const g = 4, grid = (m, x0, y0) => pixF(x0, y0, 16, 16, g, (i, j) => m[[i, j]] || null);
-    const ch = grid(sw, -6, 70) + `<g transform="matrix(-1 0 0 1 120 0)">${grid(pk, -4, 16)}</g>`;
+    const ch = aWrap(o.sw, grid(sw, -6, 70), "6px 132px") + aWrap(o.pk, `<g transform="matrix(-1 0 0 1 120 0)">${grid(pk, -4, 16)}</g>`, "116px 72px");
     const wall = tex(0, 0, 120, 130, 8, PAL.stone, 2) +
       [[8, 8, "#4aedd9"], [92, 16, "#4aedd9"], [12, 96, "#ffd54f"], [96, 92, "#e53935"], [52, 2, "#d8c7b4"]].map(([x, y, c], k) => blk(x, y, 18, "ore:" + c, k + 1)).join("");
     const torch = Rn(104, 52, 3, 14, "#7a5530") + Rn(103, 48, 5, 5, "#ffd54f") + Rn(104, 49, 3, 3, "#fff6c0") + aC(105.5, 50, 9, "#fff2a0", 'opacity=".25"');
     const back = wall + torch + aC(60, 72, 46, "#fffbe0", 'opacity=".28"') + aC(60, 72, 30, "#fff", 'opacity=".25"') +
-      [[24, 30], [98, 66], [30, 112], [84, 22]].map(([x, y]) => aSpark(x, y, 4, "#fff")).join("") + ground(130, "stone", "stone");
+      [[24, 30], [98, 66], [30, 112], [84, 22]].map(([x, y], i) => aSpark(x, y, 4, "#fff", o.tw || "", o.tw ? `animation-delay:-${i * .45}s` : "")).join("") + ground(130, "stone", "stone");
     return [back, aEdge(ch)];
   }
 
+  /* ---------------- own animations (holo; CSS an-mc-* in template.html) ---------------- */
+  const W = aWrap;
+  // a layer repeated n times every dx px (a scrolling strip: animate it by exactly dx)
+  const rep = (tile, dx, n = 2, dy = 0) => tile + [...Array(n - 1)].map((_, i) => `<g transform="translate(${dx ? dx * (i + 1) : 0} ${dy * (i + 1)})">${tile}</g>`).join("");
+  const later = (cls, d, svg) => `<g class="${cls}" style="animation-delay:-${d}s">${svg}</g>`;
+  const anim = {
+    // Steve swings his diamond pickaxe at a diamond ore block: it cracks more at each hit and breaks on the 4th, dropping a diamond
+    steve: () => {
+      const pick = Rn(81.6, 74, 4.8, 32, OL) + Rn(82.8, 75, 2.4, 30, "#7a5530") +
+        pixF(70.5, 101, 9, 2, 3, (i, j) => j === 0 ? (i === 0 || i === 8 ? "#1fa596" : null) : (i % 3 ? "#3fe8cb" : "#b4fff4"));
+      const cr = "#1b1b1b", crack = [
+        Rn(99, 101, 1.6, 6, cr) + Rn(100.6, 105.4, 4, 1.6, cr),
+        Rn(108, 99.5, 1.6, 6, cr) + Rn(105.6, 104.6, 3, 1.6, cr) + Rn(96, 110, 5, 1.6, cr) + Rn(103.6, 106, 1.6, 4, cr),
+        Rn(103, 109, 1.6, 6, cr) + Rn(104.6, 113.4, 5, 1.6, cr) + Rn(110, 108, 1.6, 5, cr) + Rn(97, 113, 1.6, 4, cr) + Rn(111, 101, 2, 1.6, cr)];
+      const block = blk(94, 98, 20, "ore:#4aedd9", 5) + Rn(94, 98, 20, 20, "none", `stroke="${OL}" stroke-width="1.2"`) +
+        crack.map((c, i) => W(`an-mc-crack${i + 1}`, c)).join("");
+      const bits = [1, 2, 3].map(i => W(`an-mc-bit${i}`, Rn(101, 105, 5, 5, ["#8a8a8a", "#4aedd9", "#6f6f6f"][i - 1], `stroke="${OL}" stroke-width=".8"`))).join("");
+      const gem = W("an-mc-drop", pix([".L.", "LDL", ".d."], 100.4, 108, 2.4, { L: "#b4fff4", D: "#3fe8cb", d: "#1fa596" }, .8));
+      return [daySky() + tree(14, 118) + ground(118), W("an-mc-block", block, "104px 108px") + bits + gem + aEdge(person({ ...STEVE, armR: "an-mc-mine", tool: pick }))];
+    },
+    // Alex jumps for joy, arms up, while the lava pours down the lavafall and embers rise
+    alex: () => {
+      const lt = tex(94, 0, 12, 40, 4, PAL.lava, 4);
+      const lava = W("an-mc-lava", `<g transform="translate(0 -40)">${lt}</g>` + rep(lt, 0, 3, 40));
+      const embers = [[30, 110, 0], [70, 112, .8], [100, 104, 1.6], [50, 114, 1.2], [86, 108, 2]].map(([x, y, d]) => later("an-mc-ember", d, Rn(x, y, 2.4, 2.4, "#ffb347"))).join("");
+      const [bg, ch] = alex({ lava, armL: "an-mc-upL", armR: "an-mc-upR" });
+      return [bg + embers, W("an-mc-jump", ch, "60px 118px")];
+    },
+    // the Creeper swells, flashes white faster and faster, then goes "pop" in a puff of smoke; a new one appears
+    creeper: () => {
+      const [bg, ch] = creeper({ swell: "an-mc-swell", flash: "an-mc-flash" });
+      const puff = [[-20, -18, 14, "#e8e8e8"], [8, -26, 12, "#cfcfcf"], [16, 2, 16, "#f4f4f4"], [-18, 8, 14, "#bdbdbd"], [-6, -8, 18, "#fff"],
+        [-2, 20, 12, "#d9d9d9"], [-30, 24, 10, "#a9a9a9"], [26, -10, 10, "#bdbdbd"], [-30, -6, 8, "#d9d9d9"], [24, 22, 9, "#e8e8e8"]]
+        .map(([x, y, w, c]) => Rn(60 + x - w / 2, 66 + y - w / 2, w, w, c, `stroke="${OL}" stroke-width=".8"`)).join("");
+      return [bg, ch + W("an-mc-boom", aC(60, 66, 40, "#fff7c0", 'opacity=".7"') + puff, "60px 66px")];
+    },
+    // the pig trots along the fence: legs stepping, a little bob, the farm going by
+    pig: () => {
+      const tile = [6, 46, 86].map(x => tex(x, 84, 8, 34, 4, PAL.planks, x) + edge(x, 84, 8, 34)).join("") +
+        tex(0, 90, 120, 5, 5, PAL.planks, 2) + tex(0, 102, 120, 5, 5, PAL.planks, 3) + ground(118);
+      const rails = Rn(-1, 90, 122, 5, "none", 'stroke="#000" stroke-opacity=".3" stroke-width=".6"') + Rn(-1, 102, 122, 5, "none", 'stroke="#000" stroke-opacity=".3" stroke-width=".6"');
+      return [daySky() + W("an-mc-farm", rep(tile, 120)) + rails,
+        W("an-mc-trot", aEdge(pig({ legA: "an-mc-legA", legB: "an-mc-legB", tail: "an-mc-wag" })))];
+    },
+    // the Enderman teleports: a puff of purple specks, gone, and he pops up a few blocks away (and back)
+    enderman: () => {
+      const p = enderman({ parts: 1 }), R = aRand(77);
+      const specks = n => [...Array(n)].map(() => Rn(r2(-14 + R() * 28), r2(-40 + R() * 84), 2.4, 2.4, R() < .5 ? "#cc33ff" : "#f2b3ff")).join("");
+      const burst = (cls, x) => W(cls, `<g transform="translate(${x} 82)">${specks(14)}</g>`, `${x}px 82px`);
+      const motes = [[44, 60, 0], [76, 80, .7], [52, 100, 1.4], [70, 50, 2.1]].map(([x, y, d]) => later("an-mc-mote", d, Rn(x, y, 2, 2, "#d36bff"))).join("");
+      return [p.back, W("an-mc-tp", aEdge(p.ch) + motes, "60px 126px") + burst("an-mc-burstA", 60) + burst("an-mc-burstB", 32)];
+    },
+    // the Zombie shambles through the night: legs swinging, arms bobbing, swaying, the trees going by
+    zombie: () => {
+      const [bg, ch] = zombie({ legL: "an-mc-shufL", legR: "an-mc-shufR", armF1: "an-mc-reach", armF2: "an-mc-reach2", scroll: t => W("an-mc-night", rep(t, 120)) });
+      return [bg, W("an-mc-sway", ch, "48px 118px")];
+    },
+    // the axolotl swims up and down, tail sweeping, gills fluttering, bubbles rising
+    axolotl: () => {
+      const [bg, ch] = axolotl({ tail: "an-mc-sweep", gill: "an-mc-gill", gill2: "an-mc-gill2" });
+      const bub = [[104, 0], [110, .8], [100, 1.6]].map(([x, d]) => later("an-mc-bub", d, Rn(x, 80, 3.4, 3.4, "none", 'stroke="#e8f8ff" stroke-width="1"'))).join("");
+      return [bg, W("an-mc-swim", ch, "60px 88px") + bub];
+    },
+    // the Iron Golem lifts its poppy out to you (it stays upright), a little heart rises, and it nods
+    golem: () => {
+      const [bg, ch] = golem({ arm: "an-mc-offer", poppy: "an-mc-upright", head: "an-mc-nod" });
+      const heart = W("an-mc-heart", pix([".R.R.", "RRRRR", ".RRR.", "..R.."], 101, 80, 2.4, { R: "#ff4d6d" }, .8), "107px 84px");
+      return [bg, ch + heart];
+    },
+    // the diamond sword and the diamond pickaxe swing at each other and clash with a spark
+    tools: () => {
+      const [bg, ch] = tools({ sw: "an-mc-swing", pk: "an-mc-swing2", tw: "lv-tw" });
+      const spark = W("an-mc-clash", aC(67, 76, 9, "#fffbe0", 'opacity=".7"') + aSpark(67, 76, 13, "#fff59d") + aSpark(67, 76, 7, "#fff"), "67px 76px");
+      return [bg, ch + spark];
+    },
+  };
+
   FAN.minecraft = [
-    ["Steve", "The miner and builder with the blue shirt", steve],
-    ["Alex", "The adventurer with orange hair, here in the Nether", alex],
-    ["Creeper", "The green one that sneaks up and goes boom: sssss!", creeper],
-    ["Pig", "The pink farm pig with the big snout", pig],
-    ["Enderman", "The tall one from the End with glowing purple eyes, carrying a block", enderman],
-    ["Zombie", "The green zombie who walks with his arms out at night", zombie],
-    ["Axolotl", "The pink water friend with frilly gills", axolotl],
-    ["Iron Golem", "The big iron guardian of the village, holding a poppy", golem],
-    ["Diamond tools", "A diamond pickaxe and a diamond sword", tools],
+    ["Steve", "The miner and builder with the blue shirt", steve, anim.steve],
+    ["Alex", "The adventurer with orange hair, here in the Nether", alex, anim.alex],
+    ["Creeper", "The green one that sneaks up and goes boom: sssss!", creeper, anim.creeper],
+    ["Pig", "The pink farm pig with the big snout", pig, anim.pig],
+    ["Enderman", "The tall one from the End with glowing purple eyes, carrying a block", enderman, anim.enderman],
+    ["Zombie", "The green zombie who walks with his arms out at night", zombie, anim.zombie],
+    ["Axolotl", "The pink water friend with frilly gills", axolotl, anim.axolotl],
+    ["Iron Golem", "The big iron guardian of the village, holding a poppy", golem, anim.golem],
+    ["Diamond tools", "A diamond pickaxe and a diamond sword", tools, anim.tools],
   ];
 })();
 
@@ -8123,16 +8329,20 @@ function albumParentsWire(pl) {
     return t.join("");
   }
   function hogBody(o) {
-    const t = [shadow(60, 148, 28)];
-    t.push(aL([[53, 116], [47, 134]], o.leg || o.fur, 4.2), aL([[67, 116], [73, 134]], o.leg || o.fur, 4.2));
-    t.push(shoe(44, 140, o.shoe || "#e2231a", o.strap || "#fff", o.buckle), shoe(76, 140, o.shoe || "#e2231a", o.strap || "#fff", o.buckle));
+    const t = [o.noShadow ? "" : shadow(60, 148, 28)];
+    if (o.legs) t.push(o.legs);
+    else {
+      t.push(aL([[53, 116], [47, 134]], o.leg || o.fur, 4.2), aL([[67, 116], [73, 134]], o.leg || o.fur, 4.2));
+      t.push(shoe(44, 140, o.shoe || "#e2231a", o.strap || "#fff", o.buckle), shoe(76, 140, o.shoe || "#e2231a", o.strap || "#fff", o.buckle));
+    }
     if (o.dress) t.push(P("M50,95 Q40,118 34,130 Q60,136 86,130 Q80,118 70,95Z", o.dress, 1.4), o.hem ? line("M36,127 Q60,133 84,127", 1.6, o.hem) : "");
     else { t.push(E(60, 107, 13, 14, o.fur)); if (o.belly) t.push(E(61.5, 110, 8.5, 10, o.belly, 1.1)); }
     if (o.chest) t.push(o.chest);
     const gr = o.gloveR || 5.5, gc = o.glove || "#fff";
-    t.push(aL([[49, 99], [39, 108], [34, 117]], o.arm || SK, 3.2), glove(33, 120, gr, gc));
+    t.push(aL([[49, 99], [39, 108], [34, 117]], o.arm || SK, 3.2), aWrap(o.gL, glove(33, 120, gr, gc), "33px 120px"));
     if (o.thumb) t.push(aL([[71, 99], [81, 93]], o.arm || SK, 3.2), glove(85, 91, gr, gc), E(83.5, 85, 1.9, 3.2, gc, 1));
-    else if (!o.noRight) t.push(aL([[71, 99], [81, 108], [86, 117]], o.arm || SK, 3.2), glove(87, 120, gr, gc));
+    else if (o.armR) t.push(o.armR);
+    else if (!o.noRight) t.push(aL([[71, 99], [81, 108], [86, 117]], o.arm || SK, 3.2), aWrap(o.gR, glove(87, 120, gr, gc), "87px 120px"));
     if (o.cuffs) t.push(E(36.5, 114, 3.6, 2, o.cuffs, .8), o.thumb ? E(80.5, 94, 2, 3.4, o.cuffs, .8) : E(83.5, 114, 3.6, 2, o.cuffs, .8));
     return t.join("");
   }
@@ -8158,13 +8368,14 @@ function albumParentsWire(pl) {
   }
 
   /* ---------------- 2 Tails ---------------- */
-  function tails() {
+  function tails(o = {}) {
     const bg = greenHill({ sky1: "#4aa3f5", palms: [[14, 126, 50, 1]], rings: [[100, 12, 3.5], [112, 20, 3.5]] }) +
-      at(P("M-14,0 H14 L10,4 H-10Z", "#3d6fe0", 1) + P("M-4,-4 H6 L4,0 H-6Z", "#e53935", 1) + line("M-12,2 v-6 M12,2 v-6", .8), 104, 58, .9, -8);
+      aWrap(o.plane, at(P("M-14,0 H14 L10,4 H-10Z", "#3d6fe0", 1) + P("M-4,-4 H6 L4,0 H-6Z", "#e53935", 1) + line("M-12,2 v-6 M12,2 v-6", .8), 104, 58, .9, -8));
     const F = "#f7a21b", t = [];
-    t.push(tipped("M48,118 C26,128 4,118 6,96 C16,110 34,112 50,108Z", F, aC(6, 100, 12, "#fff")));
-    t.push(tipped("M50,110 C30,100 22,82 28,66 C34,84 44,96 56,102Z", F, aC(28, 64, 10, "#fff")));
-    t.push(hogBody({ fur: F, belly: "#fff", arm: F, thumb: 1 }));
+    if (o.prop) t.push(aC(52, 110, 44, "#ffd9a0", 'opacity=".28"'));
+    t.push(aWrap(o.prop, tipped("M48,118 C26,128 4,118 6,96 C16,110 34,112 50,108Z", F, aC(6, 100, 12, "#fff")) +
+      tipped("M50,110 C30,100 22,82 28,66 C34,84 44,96 56,102Z", F, aC(28, 64, 10, "#fff")), "52px 110px"));
+    t.push(hogBody({ fur: F, belly: "#fff", arm: F, thumb: 1, noShadow: o.prop ? 1 : 0 }));
     t.push(P("M42,52 L30,26 L56,42Z", F), Pn("M42,47 L34,32 L51,42Z", "#fff"), P("M64,42 L88,24 L80,52Z", F), Pn("M67,42 L84,30 L78,47Z", "#fff"));
     t.push(P("M40,68 L25,72 L37,78 L28,86 L44,84Z", F), P("M80,68 L95,72 L83,78 L92,86 L76,84Z", F));
     t.push(aC(60, 65, 22.5, F, st(1.6)));
@@ -8172,11 +8383,12 @@ function albumParentsWire(pl) {
     t.push(P(MUZ, "#fff", 1.3), eyes("#3a8bdc"));
     t.push(E(71, 74, 3.2, 2.4, "#111", .8), aC(70, 73, .8, "#fff"));
     t.push(P("M58,80 Q66,88 74,79 Q66,83 58,80Z", "#c62828", 1));
+    if (o.prop) return [bg, aWrap(o.shadow, shadow(60, 148, 28), "60px 148px") + aWrap(o.hover, aEdge(t.join("")))];
     return [bg, aEdge(t.join(""))];
   }
 
   /* ---------------- 3 Knuckles ---------------- */
-  function knuckles() {
+  function knuckles(a = {}) {
     const bg = aSky("#5fb4f5", "#d9f1ff") + aCloud(6, 18, .8) + aCloud(84, 10, .6) +
       P("M70,60 Q96,52 122,58 L118,74 Q100,92 84,74Z", "#4cbf4a", 1.1) + Pn("M84,74 Q100,92 118,74 L106,98 Q98,104 92,96Z", "#8a5a2b") +
       greenHill({ noSky: 1, noClouds: 1, far: "#3aa84a", water: "#3fa7e0" }) +
@@ -8186,24 +8398,23 @@ function albumParentsWire(pl) {
     t.push(P(dreads, F, 1.5), mir(P(dreads, F, 1.5)));
     const chest = P("M51,99 Q60,108 69,99 Q66,110 60,111 Q54,110 51,99Z", "#fff", 1);
     const o = { fur: F, iris: "#8e3fbf", noEars: 1, quills: "M60,40 Z", brow: 1, shoe: "#2e9e48", strap: "#ffd21f", buckle: "#c0c0c0",
-      chest, gloveR: 7.5, arm: F, mouth: P("M57,81 Q67,88 76,79 Q66,84 57,81Z", "#fff", 1) };
+      chest, gloveR: 7.5, arm: F, gL: a.gL, gR: a.gR, mouth: P("M57,81 Q67,88 76,79 Q66,84 57,81Z", "#fff", 1) };
     t.push(hogBody(o));
-    [[33, 120], [87, 120]].forEach(([x, y]) => t.push(P(`M${x - 4},${y - 6} l1.5,-4.5 l2.5,4 M${x + 1},${y - 6.8} l2,-4.4 l2,4.4`, "#fff", .9)));
+    [[33, 120, a.gL], [87, 120, a.gR]].forEach(([x, y, c]) => t.push(aWrap(c, P(`M${x - 4},${y - 6} l1.5,-4.5 l2.5,4 M${x + 1},${y - 6.8} l2,-4.4 l2,4.4`, "#fff", .9), `${x}px ${y}px`)));
     t.push(hogHead(o));
     return [bg, aEdge(t.join(""))];
   }
 
   /* ---------------- 4 Amy Rose ---------------- */
   const heart = (x, y, k = 1, c = "#ff6fa8") => at(P("M0,4 C-6,0 -7,-4 -4,-6 C-2,-7 -1,-6 0,-4 C1,-6 2,-7 4,-6 C7,-4 6,0 0,4Z", c, .9), x, y, k);
-  function amy() {
+  function amy(o = {}) {
     const bg = greenHill({ sky1: "#ff9fcf", sky2: "#ffe6f2", far: "#6cc46a", palms: [[108, 124, 40, .9]] }) + heart(16, 24, 1.3) + heart(100, 20, 1) + heart(92, 46, .8, "#ff3d7f");
     const F = "#ff7fb2", t = [];
     t.push(P("M40,58 L22,86 L44,78 L36,104 L56,86 Z", F, 1.5));
     t.push(hogBody({ fur: F, dress: "#e8282d", hem: "#fff", leg: F, shoe: "#e8282d", strap: "#fff", noRight: 1, cuffs: "#ffd21f" }));
     // the Piko Piko hammer held up
-    t.push(aL([[71, 99], [82, 98]], SK, 3.2), line("M84,104 L96,62", 3.4, OL), line("M84,104 L96,62", 2, "#ffd21f"));
-    t.push(at(aR(-11, -8, 22, 16, "#e8282d", 'rx="2.5"') + aR(-11, -8, 4, 16, "#ffd21f") + aR(7, -8, 4, 16, "#ffd21f"), 97, 56, 1, 16));
-    t.push(glove(84, 98, 5.5));
+    t.push(aWrap(o.ham, aL([[71, 99], [82, 98]], SK, 3.2) + line("M84,104 L96,62", 3.4, OL) + line("M84,104 L96,62", 2, "#ffd21f") +
+      at(aR(-11, -8, 22, 16, "#e8282d", 'rx="2.5"') + aR(-11, -8, 4, 16, "#ffd21f") + aR(7, -8, 4, 16, "#ffd21f"), 97, 56, 1, 16) + glove(84, 98, 5.5), "72px 99px"));
     t.push(P("M44,50 L37,30 L55,42Z", F), Pn("M44.5,46 L40.5,35 L51,43Z", SK), P("M65,42 L80,29 L79,50Z", F), Pn("M68,42 L77.5,34 L77,47Z", SK));
     t.push(aC(60, 64, 24, F, st(1.6)));
     t.push(`<path d="M38,58 Q58,32 82,52" fill="none" stroke="${OL}" stroke-width="5" stroke-linecap="round"/><path d="M38,58 Q58,32 82,52" fill="none" stroke="#e8282d" stroke-width="3" stroke-linecap="round"/>`);
@@ -8214,50 +8425,53 @@ function albumParentsWire(pl) {
   }
 
   /* ---------------- 5 Shadow ---------------- */
-  function shadowHog() {
+  const JET = P("M35,137 Q22,145 12,153 Q26,151 37,145Z", "#ff8a1f", 1) + Pn("M34,139.5 Q25,145 19,150 Q28,148.5 35,144Z", "#ffe14d");
+  function shadowHog(a = {}) {
     const R = aRand(505);
     const bg = greenHill({ sky1: "#0f1640", sky2: "#5b4a8a", far: "#2e5a3a", water: "#284a8a", noClouds: 1, palms: [[106, 124, 44, .9]] }) +
       aC(22, 24, 10, "#fff6c9") + [...Array(16)].map(() => aC(R() * 120, R() * 70, r1(.4 + R() * .6), "#fff", 'opacity=".8"')).join("");
     const o = { fur: "#26262b", stripe: "#e53935", quills: Q_UP, iris: "#d32f2f", brow: 1, arm: "#26262b", shoe: "#fff", strap: "#e53935", buckle: "#ffd21f",
       chest: P("M52,98 L56,104 L60,98 L64,104 L68,98 L66,108 Q60,112 54,108Z", "#fff", 1), cuffs: "#ffd21f", thumb: 0,
       mouth: line("M60,82 Q67,84 74,80", 1.3) };
-    const t = [hogBody(o)];
+    const t = [a.jet ? aWrap(a.jet, JET, "34px 141px") + mir(aWrap(a.jet, JET, "34px 141px")) : "", hogBody(o)];
     t.push(line("M52,118 L48,128 M68,118 L72,128", 1.4, "#e53935"));
     t.push(hogHead(o));
     return [bg, aEdge(t.join(""))];
   }
 
   /* ---------------- 6 Dr. Eggman (in the Egg Mobile) ---------------- */
-  function eggman() {
+  function eggman(o = {}) {
     const bg = aSky("#262a52", "#6f5aa0") + aR(-1, 120, 122, 40, "#4a4f63") + line("M0,128 H120 M0,140 H120 M0,152 H120", .8, "#2c3040") +
       aR(4, 30, 12, 90, "#5b6178") + aR(104, 20, 12, 100, "#5b6178") + line("M4,46 h12 M4,70 h12 M104,40 h12 M104,64 h12", 1, "#2c3040") +
-      aC(10, 92, 3, "#ffcc33") + aC(110, 84, 3, "#ff4d4d") + [[30, 16], [62, 10], [92, 18]].map(([x, y]) => aC(x, y, 1, "#fff", 'opacity=".7"')).join("");
+      aWrap(o.blink, aC(10, 92, 3, "#ffcc33")) + aWrap(o.blink2, aC(110, 84, 3, "#ff4d4d")) + [[30, 16], [62, 10], [92, 18]].map(([x, y]) => aC(x, y, 1, "#fff", 'opacity=".7"')).join("");
     const t = [];
-    t.push(P("M52,138 Q60,158 68,138Z", "#ff8a1f", 1), Pn("M56,139 Q60,151 64,139Z", "#ffe14d"));
-    t.push(P("M30,112 C26,86 40,76 60,76 C80,76 94,86 90,112Z", "#e2312b", 1.6));
-    t.push(line("M60,80 V112", 1), aC(57, 90, 1.3, "#ffd21f"), aC(57, 100, 1.3, "#ffd21f"));
-    t.push(aL([[34, 94], [28, 106], [32, 112]], "#e2312b", 6), aL([[86, 94], [92, 106], [88, 112]], "#e2312b", 6));
+    t.push(aWrap(o.flame, P("M52,138 Q60,158 68,138Z", "#ff8a1f", 1) + Pn("M56,139 Q60,151 64,139Z", "#ffe14d"), "60px 138px"));
+    t.push(aWrap(o.laugh, P("M30,112 C26,86 40,76 60,76 C80,76 94,86 90,112Z", "#e2312b", 1.6) +
+      line("M60,80 V112", 1) + aC(57, 90, 1.3, "#ffd21f") + aC(57, 100, 1.3, "#ffd21f") +
+      aL([[34, 94], [28, 106], [32, 112]], "#e2312b", 6) + aL([[86, 94], [92, 106], [88, 112]], "#e2312b", 6), "60px 112px"));
     t.push(P("M18,112 Q60,121 102,112 L95,135 Q60,146 25,135Z", "#d5dae2", 1.6));
     t.push(P("M20,119 Q60,129 100,119 L99,124 Q60,134 21,124Z", "#2b2b33", 1), aC(36, 130, 2.4, "#ffd21f", st(.8)), aC(84, 130, 2.4, "#ffd21f", st(.8)), aC(60, 134, 2.4, "#ff4d4d", st(.8)));
-    t.push(glove(32, 113, 6), glove(88, 113, 6));
-    t.push(E(60, 58, 20, 22, "#f7c8a6", 1.6));
-    t.push(aC(52, 41, 5.5, "#9aa1ad", st(1.1)), aC(68, 41, 5.5, "#9aa1ad", st(1.1)), aC(52, 41, 3.4, "#ffb74d"), aC(68, 41, 3.4, "#ffb74d"), line("M57.5,41 h5", 1.4));
-    t.push(E(52, 58, 6, 4.8, "#2f8fe0", 1.3), E(68, 58, 6, 4.8, "#2f8fe0", 1.3), line("M58,57 h4", 1.3), aC(50, 56.5, 1.4, "#fff", 'opacity=".8"'), aC(66, 56.5, 1.4, "#fff", 'opacity=".8"'));
-    t.push(P("M51,76 Q60,85 69,76Z", "#fff", 1), line("M54,77.5 v3 M60,78 v4 M66,77.5 v3", .6));
+    t.push(aWrap(o.fist, glove(32, 113, 6), "32px 113px"), aWrap(o.fist2, glove(88, 113, 6), "88px 113px"));
+    const h = [];
+    h.push(E(60, 58, 20, 22, "#f7c8a6", 1.6));
+    h.push(aC(52, 41, 5.5, "#9aa1ad", st(1.1)), aC(68, 41, 5.5, "#9aa1ad", st(1.1)), aC(52, 41, 3.4, "#ffb74d"), aC(68, 41, 3.4, "#ffb74d"), line("M57.5,41 h5", 1.4));
+    h.push(E(52, 58, 6, 4.8, "#2f8fe0", 1.3), E(68, 58, 6, 4.8, "#2f8fe0", 1.3), line("M58,57 h4", 1.3), aC(50, 56.5, 1.4, "#fff", 'opacity=".8"'), aC(66, 56.5, 1.4, "#fff", 'opacity=".8"'));
+    h.push(P("M51,76 Q60,85 69,76Z", "#fff", 1), line("M54,77.5 v3 M60,78 v4 M66,77.5 v3", .6));
     const st1 = "M59,70 Q46,66 36,72 Q26,78 16,68 Q18,84 36,82 Q50,80 59,76Z";
-    t.push(P(st1, "#9a4f1c", 1.3), mir(P(st1, "#9a4f1c", 1.3)));
-    t.push(aC(60, 68, 6, "#ff9e9e", st(1.2)), aC(58, 66, 1.5, "#fff", 'opacity=".7"'));
-    return [bg, aEdge(t.join(""))];
+    h.push(aWrap(o.must, P(st1, "#9a4f1c", 1.3), "59px 73px"), mir(aWrap(o.must, P(st1, "#9a4f1c", 1.3), "59px 73px")));
+    h.push(aC(60, 68, 6, "#ff9e9e", st(1.2)), aC(58, 66, 1.5, "#fff", 'opacity=".7"'));
+    t.push(aWrap(o.laugh, h.join(""), "60px 112px"));
+    return [bg, aWrap(o.pod, aEdge(t.join("")))];
   }
 
   /* ---------------- 7 Cream (with Cheese the Chao) ---------------- */
-  function cream() {
+  function cream(o = {}) {
     const bg = greenHill({ sky1: "#7cc6ff", sky2: "#fff3dc", far: "#7fcf6a", palms: [[12, 126, 42, .9]] }) +
       [[30, 140], [50, 146], [86, 142], [104, 150], [70, 152]].map(([x, y], i) => aC(x, y, 2.6, ["#ff6f8e", "#fff", "#ffd21f"][i % 3], st(.6)) + aC(x, y, 1, "#ff9f1a")).join("");
     const C = "#f7e6bd", t = [];
     const ear = "M50,50 C40,30 26,38 25,66 C24,90 30,100 36,98 C38,80 41,62 54,52Z";
-    t.push(tipped(ear, C, aC(30, 100, 13, "#d9822b")), mir(tipped(ear, C, aC(30, 100, 13, "#d9822b"))));
-    t.push(hogBody({ fur: C, dress: "#f2862a", hem: "#ffd9a8", leg: C, arm: C, shoe: "#f5b331", strap: "#fff", buckle: "#ffd21f", thumb: 0 }));
+    t.push(aWrap(o.ear, tipped(ear, C, aC(30, 100, 13, "#d9822b")), "52px 51px"), mir(aWrap(o.ear, tipped(ear, C, aC(30, 100, 13, "#d9822b")), "52px 51px")));
+    t.push(hogBody({ fur: C, dress: "#f2862a", hem: "#ffd9a8", leg: C, arm: C, shoe: "#f5b331", strap: "#fff", buckle: "#ffd21f", thumb: 0, noShadow: o.ear ? 1 : 0 }));
     t.push(P("M50,96 Q60,101 70,96 L68,100 Q60,104 52,100Z", "#fff", 1), P("M60,99 L52,94 L52,104Z M60,99 L68,94 L68,104Z", "#2f6fd6", 1), aC(60, 99, 2, "#2f6fd6", st(.8)));
     t.push(aC(60, 66, 21, C, st(1.6)));
     t.push(P("M54,47 Q60,36 66,47 Q60,44 54,47Z", C, 1.1));
@@ -8267,48 +8481,122 @@ function albumParentsWire(pl) {
     t.push(E(60, 77, 9, 6, "#fffaf0", 1), E(60, 74.5, 2.2, 1.6, "#5a3020", .7), P("M56,79 Q60,83 64,79Z", "#e5537a", .8), blush(45, 74, 2.8), blush(75, 74, 2.8));
     // Cheese the Chao
     const ch = P("M0,-12 C10,-8 10,8 0,8 C-10,8 -10,-8 0,-12Z", "#a8dcff", 1.2) + aC(0, -12, 1.8, "#ffd54a", st(.7)) + aC(0, -19, 3.2, "#ffd54a", st(1)) +
-      P("M-7,-2 Q-14,-6 -12,2Z M7,-2 Q14,-6 12,2Z", "#cbeaff", .9) + E(0, 13, 5.5, 5, "#a8dcff", 1.1) +
+      aWrap(o.wing, P("M-7,-2 Q-14,-6 -12,2Z M7,-2 Q14,-6 12,2Z", "#cbeaff", .9), "0px -2px") + E(0, 13, 5.5, 5, "#a8dcff", 1.1) +
       P("M0,8.5 L-4,6 L-4,11Z M0,8.5 L4,6 L4,11Z", "#e53935", .7) + En(-3, 0, 1.4, 2, "#111") + En(3, 0, 1.4, 2, "#111") + blush(-5.5, 3.5, 1.6) + blush(5.5, 3.5, 1.6);
-    t.push(at(ch, 96, 46, 1, 8));
+    t.push(aWrap(o.chao, at(ch, 96, 46, 1, 8)));
+    if (o.ear) return [bg, aWrap(o.shadow, shadow(60, 148, 28), "60px 148px") + aWrap(o.hover, aEdge(t.join("")))];
     return [bg, aEdge(t.join(""))];
   }
 
   /* ---------------- 8 Silver ---------------- */
-  function silver() {
+  function silver(a = {}) {
     const bg = aSky("#5a4fa0", "#d7c9f5") + aCloud(84, 16, .6) + greenHill({ noSky: 1, noClouds: 1, far: "#6f9a8a", water: "#7aa6e0" }) +
-      aSpark(18, 30, 4, "#7ff4ff") + aSpark(100, 50, 3.2, "#7ff4ff") + aSpark(24, 92, 2.6, "#7ff4ff");
+      aSpark(18, 30, 4, "#7ff4ff", a.tw || "") + aSpark(100, 50, 3.2, "#7ff4ff", a.tw || "", a.tw ? "animation-delay:-.6s" : "") + aSpark(24, 92, 2.6, "#7ff4ff", a.tw || "", a.tw ? "animation-delay:-1.2s" : "");
     const F = "#d6dbe3";
     const front = "M44,50 L32,24 L50,42 L50,12 L58,40 L68,14 L68,42 L86,28 L76,52Z";
     const o = { fur: F, iris: "#f2c12e", quills: [[44, 52], [16, 46], [38, 64], [12, 80], [40, 82]], front, arm: F, muz: "#eef1f5", belly: "#fff",
       chest: P("M50,98 Q46,90 52,92 Q54,86 58,92 Q60,84 63,92 Q67,86 68,93 Q74,90 70,98 Q60,104 50,98Z", "#fff", 1.1),
-      shoe: "#fff", strap: "#2fd5e8", buckle: "#ffd21f", glove: "#fff" };
-    const t = [hogBody(o), aC(33, 120, 2, "#2fd5e8"), aC(87, 120, 2, "#2fd5e8"), hogHead(o)];
+      shoe: "#fff", strap: "#2fd5e8", buckle: "#ffd21f", glove: "#fff", armR: a.armR, noShadow: a.armR ? 1 : 0 };
+    const t = [hogBody(o), aC(33, 120, 2, "#2fd5e8"), a.armR ? "" : aC(87, 120, 2, "#2fd5e8"), hogHead(o)];
+    if (a.armR) return [bg, aWrap(a.shadow, shadow(60, 148, 28), "60px 148px") + aWrap(a.hover, aEdge(t.join("")))];
     return [bg, aEdge(t.join(""))];
   }
 
   /* ---------------- 9 Super Sonic (living: floats) ---------------- */
-  function superSonic() {
-    const bg = aRadial(uid("rd"), "#fff7c2", "#f29a1a", ".45") +
-      [["#2fd36a", 0], ["#3d8bff", 1], ["#e53935", 2], ["#ffd21f", 3], ["#b06ad9", 4], ["#7ff4ff", 5], ["#d9d9d9", 6]].map(([c, i]) => {
-        const a = -Math.PI / 2 + i * 2 * Math.PI / 7; return emerald(r1(60 + 50 * Math.cos(a)), r1(80 + 64 * Math.sin(a)), 1.1, c); }).join("");
+  function superSonic(a = {}) {
+    const EM = [["#2fd36a", 0], ["#3d8bff", 1], ["#e53935", 2], ["#ffd21f", 3], ["#b06ad9", 4], ["#7ff4ff", 5], ["#d9d9d9", 6]];
+    const bg = aRadial(uid("rd"), "#fff7c2", "#f29a1a", ".45") + (a.orbit ? a.orbit(EM) : EM.map(([c, i]) => {
+        const a = -Math.PI / 2 + i * 2 * Math.PI / 7; return emerald(r1(60 + 50 * Math.cos(a)), r1(80 + 64 * Math.sin(a)), 1.1, c); }).join(""));
     const g = uid("au");
     const aura = `<defs><radialGradient id="${g}"><stop offset=".55" stop-color="#fff59d" stop-opacity=".9"/><stop offset="1" stop-color="#ffe14d" stop-opacity="0"/></radialGradient></defs>` +
-      `<ellipse cx="60" cy="86" rx="44" ry="62" fill="url(#${g})"/>`;
+      aWrap(a.aura, `<ellipse cx="60" cy="86" rx="44" ry="62" fill="url(#${g})"/>`, "60px 86px");
     const o = { fur: "#ffd23f", belly: SK, iris: "#d32f2f", quills: Q_UP, brow: 1, thumb: 1, mouth: P("M58,81 Q67,88 75,79 Q66,84 58,81Z", "#fff", 1) };
-    const sp = aSpark(30, 40, 4, "#fff") + aSpark(92, 120, 3.5, "#fff") + aSpark(96, 36, 3, "#fff");
+    const sp = aSpark(30, 40, 4, "#fff", a.tw || "") + aSpark(92, 120, 3.5, "#fff", a.tw || "", a.tw ? "animation-delay:-.6s" : "") + aSpark(96, 36, 3, "#fff", a.tw || "", a.tw ? "animation-delay:-1.2s" : "");
     return [bg + aura, aEdge(`<g class="lv-float">${hogBody(o)}${hogHead(o)}${sp}</g>`)];
   }
 
+  /* ---------------- own animations (holo; CSS an-so-* in template.html) ---------------- */
+  const W = aWrap;
+  const rep = (tile, dx) => tile + `<g transform="translate(${dx} 0)">${tile}</g>`;
+  const later = (cls, d, svg) => `<g class="${cls}" style="animation-delay:-${d}s">${svg}</g>`;
+  // Green Hill rushing past: far hills (period 60), water glints, and a 120-wide strip of ground with the loop, a palm and spinning rings
+  function greenRun() {
+    const ck = uid("ck");
+    const s = [aSky("#2f86ea", "#bfe6ff"), `<defs><pattern id="${ck}" width="10" height="10" patternUnits="userSpaceOnUse"><rect width="10" height="10" fill="#c46a22"/><rect width="5" height="5" fill="#8a4512"/><rect x="5" y="5" width="5" height="5" fill="#8a4512"/></pattern></defs>`,
+      aCloud(10, 14, .8), aCloud(84, 28, .6)];
+    s.push(W("an-so-far", Pn("M-1,112 L0,112" + " q15,-14 30,-4 q15,-8 30,4".repeat(4) + " V128 H-1Z", "#4fae58")));
+    s.push(aR(-1, 112, 122, 14, "#3fa7e0", 'stroke="none"'), W("an-so-glint", line("M6,117 h10 M30,121 h14 M66,117 h10 M90,121 h14 M126,117 h10 M150,121 h14", .9, "#d8f3ff")));
+    const top = "Q30,121 60,128 T120,128 L121,128", low = "Q30,127 60,134 T120,134 L121,134";
+    const tile = `<circle cx="24" cy="98" r="17" fill="none" stroke="${OL}" stroke-width="9"/><circle cx="24" cy="98" r="17" fill="none" stroke="url(#${ck})" stroke-width="7"/>` +
+      `<path d="M6,88 A18,18 0 0 1 42,88" fill="none" stroke="#3ec43e" stroke-width="3"/>` + palm(100, 124, 46, 1) +
+      Pn(`M-1,128 L0,128 ${top} V160 H-1Z`, `url(#${ck})`) + Pn(`M-1,128 L0,128 ${top} V134 L120,134 Q90,141 60,134 Q30,127 0,134 L-1,134Z`, "#3ec43e") +
+      line(`M-1,128 L0,128 ${top}`, 1.3) + line(`M-1,134 L0,134 ${low}`, 1.2) +
+      [[70, 44], [84, 36], [98, 44]].map(([x, y]) => W("an-so-ring", ring(x, y, 4), `${x}px ${y}px`)).join("");
+    s.push(W("an-so-ground", rep(tile, 120)));
+    return s.join("");
+  }
+  // impact rays round a point (drawn in front of a fist without hiding it)
+  const rays = (x, y, r0 = 15, r1_ = 22) => [...Array(8)].map((_, k) => { const a = k * Math.PI / 4 + .2, c = Math.cos(a), s_ = Math.sin(a);
+    const d = `M${r1(x + r0 * c)},${r1(y + r0 * s_)} L${r1(x + r1_ * c)},${r1(y + r1_ * s_)}`; return line(d, 3.4) + line(d, 2, "#ffe14d"); }).join("");
+  const hover = () => ({ shadow: "an-so-hshadow", hover: "an-so-hover" });
+  const anim = {
+    // Sonic runs flat out: his feet a spinning red blur, leaning forward, speed lines, Green Hill (loop, palm, rings) rushing past
+    sonic: () => {
+      const o = { fur: "#1f5fd6", belly: SK, iris: "#2fae4a", thumb: 1, noShadow: 1 };
+      o.legs = aL([[53, 116], [57, 128]], o.fur, 4.2) + aL([[67, 116], [63, 128]], o.fur, 4.2) +
+        `<circle cx="60" cy="134" r="11" fill="none" stroke="#e2231a" stroke-width="8" opacity=".35"/>` +
+        W("an-so-wheel", shoe(60, 123, "#e2231a", "#fff") + shoe(60, 145, "#e2231a", "#fff"), "60px 134px");
+      const zips = [[96, 0], [108, .17], [120, .34], [84, .25]].map(([y, d]) => later("an-so-zip", d, line(`M2,${y} h20`, 2, "#fff"))).join("");
+      return [greenRun(), shadow(60, 150, 26) + zips + W("an-so-run", aEdge(hogBody(o) + hogHead(o)), "60px 140px")];
+    },
+    // Tails flies: his two tails spin round like a propeller, he hovers up and down, his plane drifting in the sky
+    tails: () => tails({ prop: "an-so-prop", plane: "an-so-plane", ...hover() }),
+    // Knuckles punches, left, right, with a POW burst at each fist
+    knuckles: () => {
+      const [bg, ch] = knuckles({ gL: "an-so-punchL", gR: "an-so-punchR" });
+      return [bg, W("an-so-twist", ch, "60px 146px") + W("an-so-powL", rays(45, 104), "45px 104px") + W("an-so-powR", rays(75, 104), "75px 104px")];
+    },
+    // Amy winds up and smashes her Piko Piko hammer down: BONK, a star burst and hearts popping up
+    amy: () => {
+      const [bg, ch] = amy({ ham: "an-so-smash" });
+      const hearts = [[100, 120, 0, "an-so-heart1"], [114, 116, 0, "an-so-heart2"]].map(([x, y, , c]) => W(c, heart(x, y, .9))).join("");
+      return [bg, W("an-so-squash", ch, "60px 146px") + W("an-so-bonk", rays(104, 126, 13, 20), "104px 126px") + hearts];
+    },
+    // Shadow skates from side to side on his jet shoes, the jets flickering
+    shadow: () => {
+      const [bg, ch] = shadowHog({ jet: "an-so-jet" });
+      return [bg, W("an-so-glide", ch, "60px 146px")];
+    },
+    // Dr. Eggman laughs "ho ho ho" (bouncing in his seat, moustache wiggling, fists shaking), the Egg Mobile hovering on its flame
+    eggman: () => eggman({ flame: "an-so-flame", laugh: "an-so-laugh", fist: "an-so-fist", fist2: "an-so-fist2", must: "an-so-must", blink: "an-so-blink", blink2: "an-so-blink2", pod: "an-so-pod" }),
+    // Cream flies by flapping her big ears, Cheese the Chao looping around beside her
+    cream: () => cream({ ear: "an-so-ear", wing: "an-so-wing", chao: "an-so-chao", ...hover() }),
+    // Silver raises his glowing hand and lifts a rock with his powers (it rises, floats, turns, settles back), floating himself
+    silver: () => {
+      const F = "#d6dbe3";
+      const armR = W("an-so-glow", aC(86, 76, 9, "#7ff4ff", 'opacity=".55"'), "86px 76px") + aL([[71, 99], [80, 90], [85, 81]], F, 3.2) + glove(86, 76, 5.5, "#fff") + aC(86, 76, 2, "#2fd5e8");
+      const rock = W("an-so-lift", W("an-so-kglow", En(92, 40, 15, 13, "#7ff4ff", 'opacity=".45"')) +
+        P("M83,44 L85,35 L92,31 L100,34 L102,43 L96,48 L87,48Z", "#9b8b78", 1.2) + line("M88,38 l4,3 l5,-2 M90,45 l3,-3", .7, "#6d5f4f"), "92px 40px");
+      const [bg, ch] = silver({ armR, tw: "lv-tw", ...hover() });
+      return [bg, rock + ch];
+    },
+    // Super Sonic floats, his golden aura flaring, the seven Chaos Emeralds circling round him
+    superSonic: () => superSonic({ aura: "an-so-aura", tw: "lv-tw",
+      orbit: EM => `<g transform="translate(60 80) scale(1 1.28)"><g class="an-so-orbit" style="transform-origin:0px 0px">` + EM.map(([c, i]) => {
+        const a = r1(-90 + i * 360 / 7);
+        return `<g transform="rotate(${a})"><g transform="translate(50 0)"><g class="an-so-unorbit" style="transform-origin:0px 0px"><g transform="rotate(${-a}) scale(1 .78)">${emerald(0, 0, 1.1, c)}</g></g></g></g>`; }).join("") + `</g></g>` }),
+  };
+
   FAN.sonic = [
-    ["Sonic", "the blue hedgehog giving a thumbs up in Green Hill, with a loop and rings", sonic],
-    ["Tails", "the two-tailed fox, with his plane in the sky", tails],
-    ["Knuckles", "the red echidna with spiky fists, guarding the Master Emerald", knuckles],
-    ["Amy Rose", "the pink hedgehog in her red dress with her Piko Piko hammer", amy],
-    ["Shadow", "the black hedgehog with red stripes under the moon", shadowHog],
-    ["Dr. Eggman", "the moustached doctor in his Egg Mobile", eggman],
-    ["Cream", "the little rabbit with her Chao friend Cheese", cream],
-    ["Silver", "the silver hedgehog with his glowing powers", silver],
-    ["Super Sonic", "golden Sonic among the seven Chaos Emeralds (he floats)", superSonic],
+    ["Sonic", "the blue hedgehog giving a thumbs up in Green Hill, with a loop and rings", sonic, anim.sonic],
+    ["Tails", "the two-tailed fox, with his plane in the sky", tails, anim.tails],
+    ["Knuckles", "the red echidna with spiky fists, guarding the Master Emerald", knuckles, anim.knuckles],
+    ["Amy Rose", "the pink hedgehog in her red dress with her Piko Piko hammer", amy, anim.amy],
+    ["Shadow", "the black hedgehog with red stripes under the moon", shadowHog, anim.shadow],
+    ["Dr. Eggman", "the moustached doctor in his Egg Mobile", eggman, anim.eggman],
+    ["Cream", "the little rabbit with her Chao friend Cheese", cream, anim.cream],
+    ["Silver", "the silver hedgehog with his glowing powers", silver, anim.silver],
+    ["Super Sonic", "golden Sonic among the seven Chaos Emeralds (he floats)", superSonic, anim.superSonic],
   ];
 })();
 
