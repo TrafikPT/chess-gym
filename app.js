@@ -3618,8 +3618,8 @@ function aParts(st, o = {}) {
 // a shiny figure plays in a golden kit (and its backdrop turns another colour, aShiny)
 const A_GOLD_KIT = { shirt: "#ffd54f", stripes: undefined, trim: "#8d6e00", shorts: "#ffca28", socks: "#ffd54f", numStroke: "none" };
 /* the picture has three looks (the owner, 2026-10-03: "base one, basic animation, own animation"): 1 copy still (a
-   page's living sticker too, CSS); o.gold (2–4 copies) = a hop with a wiggle (a scene that fills the card breathes instead);
-   o.holo (5) = the sticker's own animation (stkAnim) where it's drawn, else the character floats, sparkles twinkle and
+   page's living sticker too, CSS); o.gold (2 copies) = a hop with a wiggle (a scene that fills the card breathes instead);
+   o.holo (HOLO = 3) = the sticker's own animation (stkAnim) where it's drawn, else the character floats, sparkles twinkle and
    a living sticker plays its motion; o.shiny = 1 card in 50: the backdrop in another palette (a theme page's character
    too; a player gets a golden kit instead) */
 function stickerSvg(st, ghost = false, o = {}) {
@@ -4222,7 +4222,7 @@ function albumMigrate(a) {
 // the owner (2026-10-03): "each boss should be like two packs guaranteed": BOSS_PACKS for every boss game won on the path
 // the owner (2026-10-03): a holo sticker (HOLO copies) leaves the packs, so every sticker ends up holo; then the packs stop.
 // 1 card in SHINY_ODDS comes shiny (another palette, kept for good)
-const PACK_EVERY = 5, PACK_SIZE = 7, OLD_EVERY = 5, OLD_SIZE = 3, OLD_PACKS_MAX = 10, BOSS_PACKS = 2, LOST_PER_PACK = 5, HOLO = 5, SHINY_ODDS = 50;
+const PACK_EVERY = 5, PACK_SIZE = 7, OLD_EVERY = 5, OLD_SIZE = 3, OLD_PACKS_MAX = 10, BOSS_PACKS = 2, LOST_PER_PACK = 5, HOLO = 3, SHINY_ODDS = 50;
 function albumOf(pl) {
   // first time: one pack per sticker of the old "a sticker every 10 stars" row, at most OLD_PACKS_MAX
   if (!pl.album) pl.album = { c: 0, b: Math.min(OLD_PACKS_MAX, Math.floor((pl.stars || 0) / 10)), o: 0, s: {}, v: A_VER, c0: 0, p3: 0, c1: 0 };
@@ -4234,8 +4234,9 @@ function albumOf(pl) {
 // a boss's sticker: owned once that gate is beaten (also for gates beaten before the sticker book existed)
 function stkOwned(pl, st) { const n = albumOf(pl).s[st.id] || 0; return st.boss ? (n || stageStars(pl, st.boss) >= 1 ? 1 : 0) : n; }
 /* tiers = the three looks (the owner, 2026-10-03: "basic -> animated -> better animated"): 0 = 1 copy, still, plain
-   frame; 1 = 2–4 copies, the picture moves (a hop with a wiggle: the first duplicate must show it; a 3px bob from the 3rd
-   copy went unnoticed), still a plain frame; 2 = HOLO, the holo frame and the sticker's
+   frame; 1 = 2 copies, the picture moves (a hop with a wiggle: the first duplicate must show it; a 3px bob from the 3rd
+   copy went unnoticed), still a plain frame; 2 = HOLO (3 copies, was 5 until the owner asked: Superman should fly at 3),
+   the holo frame and the sticker's
    own animation (a FAN row's 4th entry, e.g. Spider-Man swinging on his web; else float + sparkles), then it leaves the
    packs. (The silver (2) and gold (3) frames were dropped then too: he only wants the looks to change.) */
 /* where own animations live: a FAN row's 4th entry (theme, world and subject pages); a team sticker's kind (keeper, player,
@@ -4485,7 +4486,7 @@ function aOpenPack() {
   tear.t = setTimeout(tear, 2500);
 }
 // pack opening: the "new" badge (a gold burst with a sparkle), and a copy's pips: one per copy up to the next tier's
-// count (2 moving, 5 holo), filled in the tier each copy reached, the empty ones ringed in the next tier's colour
+// count (2 moving, 3 holo), filled in the tier each copy reached, the empty ones ringed in the next tier's colour
 const A_NEW_PTS = [...Array(24)].map((_, i) => { const a = i * Math.PI / 12, r = i % 2 ? 31 : 48; return (r * Math.sin(a)).toFixed(1) + "," + (-r * Math.cos(a)).toFixed(1); }).join(" ");
 const A_NEW = `<svg viewBox="-50 -50 100 100" aria-hidden="true"><polygon points="${A_NEW_PTS}" fill="#ffca28" stroke="#e65100" stroke-width="3" stroke-linejoin="round"/>
   <path d="M0,-27 Q4,-4 27,0 Q4,4 0,27 Q-4,4 -27,0 Q-4,-4 0,-27Z" fill="#fff"/><path d="M19,-29 Q20.5,-22 27,-21 Q20.5,-20 19,-13 Q17.5,-20 11,-21 Q17.5,-22 19,-29Z" fill="#fff"/></svg>`;
