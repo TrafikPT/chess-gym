@@ -100,7 +100,9 @@ function mergePlayer(a, b) {
     // both copies brought to the current catalogue first (copies, not the stored objects): an old copy can't bring v1 ids back
     const cur = al => albumMigrate(JSON.parse(JSON.stringify(al || {}))), x = cur(a.album), y = cur(b.album);
     out.album = { c: Math.max(x.c || 0, y.c || 0), b: Math.max(x.b || 0, y.b || 0), o: Math.max(x.o || 0, y.o || 0), s: maxMap(x.s, y.s), v: A_VER,
-      c0: Math.max(x.c0 || 0, y.c0 || 0), p3: Math.max(x.p3 || 0, y.p3 || 0) };     // the larger c0: never creates packs
+      c0: Math.max(x.c0 || 0, y.c0 || 0), p3: Math.max(x.p3 || 0, y.p3 || 0),      // the larger c0: never creates packs
+      c1: Math.max(x.c1 || 0, y.c1 || 0) };     // the copy that switched later had paid a pack for each of its solves until then
+    if (x.bp != null || y.bp != null) out.album.bp = Math.max(x.bp || 0, y.bp || 0);   // neither yet: albumOf derives it from the bosses
   }
   out.school = {};
   for (const pc of new Set([...Object.keys(a.school || {}), ...Object.keys(b.school || {})])) {
@@ -2020,7 +2022,8 @@ function stageStar() {
   if (!st || !(st.review || st.f(pzCur))) return;
   pl.stages = pl.stages || {};
   const had = stageStars(pl, st.id);
-  pl.stages[st.id] = had + 1; stageLost = null; albumSolve(pl); save(); renderStageBar();
+  pl.stages[st.id] = had + 1; stageLost = null; if (had < needOf(st)) albumSolve(pl);      // replays give no packs
+  save(); renderStageBar();
 }
 // a miss on the path costs a star of that stage, while it isn't finished (a replay never takes a finished stage back);
 // the star falls off the row of stars (stageLost, until the next puzzle or game: renderStageBar / egDraw)
@@ -2356,7 +2359,8 @@ function egEnd() {
     const stars = par ? (eg.moves <= par[0] ? 3 : eg.moves <= par[1] ? 2 : 1) : eg.undos ? 2 : 3;   // pawn games: ⭐⭐⭐ without take-backs
     pl.stages = pl.stages || {};
     const had = stageStars(pl, eg.st.id); pl.stages[eg.st.id] = had + 1;
-    albumSolve(pl); kidAddStars(stars); sfx("right");
+    if (had < needOf(eg.st)) albumSolve(pl);      // replays give no packs
+    kidAddStars(stars); sfx("right");
     $("eDone").innerHTML = `<div class="big">${"⭐".repeat(stars)}</div>
       <div class="row">${albumTake() ? aPackChip() : ""}<button class="btn big" type="button" id="eAgain" aria-label="Play again">↻</button>
       <button class="btn primary big" type="button" id="eNext" aria-label="Next">▶</button></div>`;
@@ -3042,7 +3046,7 @@ function botAfterMove() {
   r[res === "win" ? "w" : res === "loss" ? "l" : "d"]++;
   if (res === "win") {
     pl.stars = (pl.stars || 0) + 3; sfx("trophy");
-    const gate = gateWin(pl, bg.bot.id, bg.gate); if (gate) bg.gate = gate;      // a boss gate on the learning path is beaten
+    const gate = gateWin(pl, bg.bot.id, bg.gate); if (gate) { bg.gate = gate; bg.packs = BOSS_PACKS; }  // a boss gate on the learning path is beaten
   } else if (res === "loss") sfx("wrong"); else sfx("right");
   save();
   botOverShow();
@@ -3055,7 +3059,7 @@ function botOverShow(clean = false) {
   const res = bg.over, beat = bg.gate && stageStars(pzPlayers(), bg.gate.id) >= needOf(bg.gate);
   $("bOver").innerHTML = `<div class="burst">${clean ? "⭐" : res === "win" ? "🏆" : res === "loss" ? bg.bot.face : "🤝"}</div>
     ${res === "win" && !clean ? `<div class="big">⭐ +3</div>` : ""}
-    <div class="row">${beat ? `<button class="btn primary big" type="button" id="bGateNext" aria-label="Next stage">▶</button>` : ""}
+    <div class="row">${bg.packs ? aPackChip().repeat(bg.packs) : ""}${beat ? `<button class="btn primary big" type="button" id="bGateNext" aria-label="Next stage">▶</button>` : ""}
     <button class="btn${beat ? "" : " primary"} big" type="button" id="bAgain" aria-label="Play again">↻</button>
     ${bg.gate ? `<button class="btn big" type="button" id="bGateMap" aria-label="Back to the map">🗺</button>` : `<button class="btn big" type="button" id="bPickAgain" aria-label="Choose a bot">🤖</button>`}
     ${bg.game && !clean ? `<button class="btn big" type="button" id="bReview" aria-label="What did I miss?">🔍</button>` : ""}</div>`;
@@ -4109,42 +4113,53 @@ const STK = (() => {
   return out;
 })();
 // album v1 id → v2 id of the stickers that moved (the old basketball and animal pages)
-const A_VER = 3, A_MOVED = Object.fromEntries(STK.filter(st => st.old).map(st => [st.old, st.id]));
+const A_VER = 4, A_MOVED = Object.fromEntries(STK.filter(st => st.old).map(st => [st.old, st.id]));
 /* bring an album up to A_VER (in place, once: guarded by a.v; running it again changes nothing). v2: a moved sticker keeps
    its copies. v3 (2026-10-03, packs of 5 for every solve): c0 = the solves the old rule (a pack of 3 per 5) already paid
-   for, p3 = the packs earned until then (incl. gifts), which stay packs of 3: the switch gives no packs for past solves */
+   for, p3 = the packs earned until then (incl. gifts), which stay packs of 3: the switch gives no packs for past solves.
+   v4 (2026-10-03, a pack per PACK_EVERY solves again): c1 = the solves already paid a pack each, so nothing earned is lost */
 function albumMigrate(a) {
   if (!a || (a.v || 1) >= A_VER) return a;
   const s = a.s || (a.s = {});
   if ((a.v || 1) < 2) for (const [o, n] of Object.entries(A_MOVED)) if (o in s) { s[n] = Math.max(s[n] || 0, s[o] || 0); delete s[o]; }
-  a.c0 = a.c || 0; a.p3 = Math.floor(a.c0 / OLD_EVERY) + (a.b || 0);
+  if ((a.v || 1) < 3) { a.c0 = a.c || 0; a.p3 = Math.floor(a.c0 / OLD_EVERY) + (a.b || 0); }
+  a.c1 = a.c || 0;
   a.v = A_VER;
   return a;
 }
 
 /* ---- progress: pl.album = { c: clean path solves, b: extra packs (the old stickers, a parent's gift), o: packs opened,
-   s: { sticker id: copies }, v: catalogue version, c0 / p3: see albumMigrate }. Packs are drawn from a seed (the pack's number),
+   s: { sticker id: copies }, v: catalogue version, c0 / p3 / c1: see albumMigrate, bp: packs from beaten bosses }. Packs are drawn from a seed (the pack's number),
    so two devices that open the same pack get the same stickers and mergePlayer can take the larger of each count ---- */
-// the owner (2026-10-03): "5 stickers per solve" = a pack of 5 for every clean solve after the switch (before: 3 per 5 solves)
-const PACK_EVERY = 1, PACK_SIZE = 5, OLD_EVERY = 5, OLD_SIZE = 3, OLD_PACKS_MAX = 10;
+// the owner (2026-10-03): "5 stickers per solve" = a pack of 5 for every clean solve after the switch (before: 3 per 5 solves);
+// later that day, a pack every solve was too much (the queen + rook mate replayed for packs): "no packs on replays and one pack
+// on average per 5 stars" = a pack of 5 for every PACK_EVERY clean solves of unfinished stages (puzzles and endgames alike)
+// the owner (2026-10-03): "each boss should be like two packs guaranteed": BOSS_PACKS for every boss game won on the path
+const PACK_EVERY = 5, PACK_SIZE = 5, OLD_EVERY = 5, OLD_SIZE = 3, OLD_PACKS_MAX = 10, BOSS_PACKS = 2;
 function albumOf(pl) {
   // first time: one pack per sticker of the old "a sticker every 10 stars" row, at most OLD_PACKS_MAX
-  if (!pl.album) pl.album = { c: 0, b: Math.min(OLD_PACKS_MAX, Math.floor((pl.stars || 0) / 10)), o: 0, s: {}, v: A_VER, c0: 0, p3: 0 };
-  return albumMigrate(pl.album);
+  if (!pl.album) pl.album = { c: 0, b: Math.min(OLD_PACKS_MAX, Math.floor((pl.stars || 0) / 10)), o: 0, s: {}, v: A_VER, c0: 0, p3: 0, c1: 0 };
+  const a = albumMigrate(pl.album);
+  // bp came after the bosses: the ones already beaten (not just "free") pay their packs once
+  if (a.bp == null) a.bp = BOSS_PACKS * STAGES.filter(st => st.gate && stageDone(pl, st)).length;
+  return a;
 }
 // a boss's sticker: owned once that gate is beaten (also for gates beaten before the sticker book existed)
 function stkOwned(pl, st) { const n = albumOf(pl).s[st.id] || 0; return st.boss ? (n || stageStars(pl, st.boss) >= 1 ? 1 : 0) : n; }
 function stkTier(st, copies) { return st.boss ? 3 : copies >= 5 ? 3 : copies >= 3 ? 2 : copies >= 2 ? 1 : 0; }
-function packsEarned(a) { const c0 = a.c0 || 0; return Math.floor(c0 / OLD_EVERY) + Math.floor(Math.max(0, a.c - c0) / PACK_EVERY); }
-function packsWaiting(pl) { const a = albumOf(pl); return Math.max(0, packsEarned(a) + a.b - a.o); }
-// a clean solve on the learning path (stageStar, an endgame win): every PACK_EVERY of them is a pack.
+// packs of 3 per OLD_EVERY solves up to c0, a pack per solve from c0 to c1, then one per PACK_EVERY
+function packsEarned(a) { const c0 = a.c0 || 0, c1 = Math.max(c0, a.c1 || 0); return Math.floor(c0 / OLD_EVERY) + (c1 - c0) + Math.floor(aSince(a) / PACK_EVERY); }
+function aSince(a) { return Math.max(0, a.c - Math.max(a.c0 || 0, a.c1 || 0)); }      // solves under the current rule
+function packsWaiting(pl) { const a = albumOf(pl); return Math.max(0, packsEarned(a) + a.b + a.bp - a.o); }
+// a clean solve of an unfinished stage on the learning path (stageStar, an endgame win; replays don't count): every
+// PACK_EVERY of them is a pack.
 // No pop-up, no sound (the owner: packs must never pull the child away from playing): the counters go up, and a small
 // pack shows beside the ▶ of that puzzle or endgame (albumTake); the packs are opened in the 📖 tab
 let albumJust = false;
 function albumSolve(pl) {
   const a = albumOf(pl);
   a.c++;
-  if ((a.c - (a.c0 || 0)) % PACK_EVERY === 0) albumJust = true;
+  if (aSince(a) % PACK_EVERY === 0) albumJust = true;
   aBadge();
 }
 function albumTake() { const j = albumJust; albumJust = false; return j; }
@@ -4173,10 +4188,12 @@ function packOpen(pl) {
   save(); aBadge();
   return got;
 }
-// a boss gate beaten (kids.js gateWin): its sticker goes into the book (no pop-up: the medal is enough there)
+// a boss gate beaten (kids.js gateWin): its sticker goes into the book and BOSS_PACKS packs wait (no pop-up: the game-over
+// panel shows the packs quietly, botOverShow)
 function albumBoss(pl, gateId) {
-  const st = STK.find(x => x.boss === gateId); if (!st) return;
-  albumOf(pl).s[st.id] = 1;
+  const a = albumOf(pl);
+  a.bp += BOSS_PACKS; aBadge();
+  const st = STK.find(x => x.boss === gateId); if (st) a.s[st.id] = 1;
 }
 
 /* ---- pictures: a sticker card (tier frame, number), the pack, the back of a sticker ---- */
@@ -4265,7 +4282,7 @@ function renderAlbum() {
 function aRenderTop() {
   const pl = pzPlayers(), a = albumOf(pl), n = albumPreview ? 0 : packsWaiting(pl), have = STK.filter(st => aCopies(pl, st)).length;
   $("aTop").innerHTML = `${albumPreview ? "" : `<button type="button" class="apack ${n ? "ready" : "wait"}" id="aPack" aria-label="${n ? "Open a sticker pack" : "Next pack"}">${aPackSvg()}${n ? `<b>${n}</b>` : ""}</button>
-      ${n || PACK_EVERY < 2 ? "" : `<span class="adots" aria-label="Clean solves towards the next pack">${[...Array(PACK_EVERY)].map((_, i) => `<i class="${i < a.c % PACK_EVERY ? "on" : ""}"></i>`).join("")}</span>`}`}
+      ${n || PACK_EVERY < 2 ? "" : `<span class="adots" aria-label="Clean solves towards the next pack">${[...Array(PACK_EVERY)].map((_, i) => `<i class="${i < aSince(a) % PACK_EVERY ? "on" : ""}"></i>`).join("")}</span>`}`}
     <span class="atotal">📖 <span class="abar"><i style="width:${100 * have / STK.length}%"></i></span> <b>${have}</b><small>/${STK.length}</small></span>`;
   // a pack opens while the tray is empty (5 stickers to stick first: the tray holds one pack)
   if ($("aPack")) $("aPack").onclick = () => { if (packsWaiting(pzPlayers()) && !albumTray.length) aOpenPack(); else { $("aPack").classList.remove("nope"); void $("aPack").offsetWidth; $("aPack").classList.add("nope"); } };
@@ -4386,11 +4403,11 @@ function aZoom(st) {
 function albumParents(pl) {
   const a = albumOf(pl), have = STK.filter(st => stkOwned(pl, st)).length, local = location.protocol === "file:";
   return `<figure class="chart wide"><figcaption>Sticker book</figcaption>
-    <p class="tiny">A pack of ${PACK_SIZE} stickers for every ${PACK_EVERY > 1 ? PACK_EVERY + " clean solves" : "clean solve"} on the learning path (puzzles, endgames and the review stop, replays too), and each boss's own sticker when it's beaten.
+    <p class="tiny">A pack of ${PACK_SIZE} stickers for every ${PACK_EVERY > 1 ? PACK_EVERY + " clean solves" : "clean solve"} on the learning path (puzzles, endgames and the review stop; replays of a finished stage don't count), and for each boss beaten ${BOSS_PACKS} packs and its own sticker.
       Every pack holds at least one sticker missing from the book until it's full. Copies turn a sticker silver (2), gold (3), then holo (5).</p>
     <div class="tiles"><div class="tile"><span class="lbl">Stickers</span><b>${have}/${STK.length}</b></div>
       <div class="tile"><span class="lbl">Packs opened</span><b>${a.o}</b></div><div class="tile"><span class="lbl">Packs waiting</span><b>${packsWaiting(pl)}</b></div>
-      <div class="tile"><span class="lbl">Next pack in</span><b>${PACK_EVERY - (a.c - (a.c0 || 0)) % PACK_EVERY} solve${PACK_EVERY - (a.c - (a.c0 || 0)) % PACK_EVERY > 1 ? "s" : ""}</b></div></div>
+      <div class="tile"><span class="lbl">Next pack in</span><b>${PACK_EVERY - aSince(a) % PACK_EVERY} solve${PACK_EVERY - aSince(a) % PACK_EVERY > 1 ? "s" : ""}</b></div></div>
     <div class="controls"><button class="btn" type="button" id="aGift">Give a pack</button><button class="btn" type="button" id="aPrevBtn">Preview the whole book</button>
       ${local ? `<button class="btn" type="button" id="aTest10">Test: +10 packs</button><button class="btn" type="button" id="aTestEmpty">Test: empty the book</button>` : ""}</div>
     ${local ? `<p class="tiny">The test buttons only show on a copy opened from disk, whose progress stays in this browser.</p>` : ""}</figure>`;
@@ -4406,7 +4423,7 @@ function albumParentsWire(pl) {
   if ($("aTest10")) $("aTest10").onclick = () => { albumOf(pl).b += 10; back(); };
   if ($("aTestEmpty")) $("aTestEmpty").onclick = () => {
     if (!confirm("Empty the sticker book in this browser?")) return;
-    pl.album = { c: 0, b: 0, o: 0, s: {}, v: A_VER, c0: 0, p3: 0 }; albumTray = []; albumHold = {}; back();
+    pl.album = { c: 0, b: 0, o: 0, s: {}, v: A_VER, c0: 0, p3: 0, c1: 0 }; albumTray = []; albumHold = {}; back();
   };
 }
 
