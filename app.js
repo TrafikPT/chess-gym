@@ -1184,6 +1184,13 @@ let pzStage = null, pzReplay = false;     // pzReplay: the stage was already fin
 // the kids' corner 🧩 tab: rating-matched puzzles, pictures only, for the young player (asked once per opening of the view)
 let pzKidNext = false, pzKidRated = false;
 function pzKid() { return !!pzPlayers().kid || pzKidRated; }
+// the puzzle's moves. The "win the free piece" rows (Lichess hangingPiece, kids.js stage "hang") mostly go on after the
+// capture (the opponent replies, then a second capture or check); for the children the capture is the whole puzzle
+// (the owner: "after eating the bot plays another move. why two moves?")
+function pzMoves() {
+  const mv = pzCur[2].split(" "), hang = (pzKid() || pzStage) && typeof STAGES !== "undefined" && STAGES.find(st => st.id === "hang");
+  return hang && hang.f(pzCur) ? mv.slice(0, 2) : mv;
+}
 let pzHinted = false, pzFailed = false, pzScored = false, pzDrag = null, pzTimer = null, pzMarks = {};
 
 /* ---- "why is it mate?": which pieces take away each square around the mated king ---- */
@@ -1396,7 +1403,7 @@ function pzGoalText(p) {
 // is it safe to take (⚖ + the piece), stop the mate (own king, shield and #)
 function pzGoalHtml() {
   const t = pzCur[4].split(" "), me = pzGame.turn(), them = me === "w" ? "b" : "w";
-  const want = pzCur[2].split(" ")[pzIdx] || "", victim = want ? pzGame.get(want.slice(2, 4)) : null;
+  const want = pzMoves()[pzIdx] || "", victim = want ? pzGame.get(want.slice(2, 4)) : null;
   if (t.some(x => /^safeTake/.test(x))) {
     const tp = pzCur[7] ? pzGame.get(pzCur[7]) : null;
     return { kind: "safe", html: `<span class="goal scale" title="Is it safe to take?">⚖️${tp ? `<span class="pc ${tp.color}${tp.type.toUpperCase()}"></span>` : ""}</span>` };
@@ -1423,7 +1430,7 @@ function pzGoalHtml() {
 function preCover() {
   const pos = parseFen(pzGame.fen()), solver = pzGame.turn(), loser = solver === "w" ? "b" : "w";
   const ksq = Object.keys(pos).find(q => pos[q] === (loser === "w" ? "K" : "k"));
-  const mover = (pzCur[2].split(" ")[pzIdx] || "").slice(0, 2);
+  const mover = (pzMoves()[pzIdx] || "").slice(0, 2);
   const noK = { ...pos }; delete noK[ksq];
   const marks = {}, arrows = [], kx = FILES.indexOf(ksq[0]), ky = +ksq[1];
   for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
@@ -1482,7 +1489,7 @@ function pzNext() {
   renderStageBar();
   pzDraw();
   if (direct) { pzIdx = 0; pzState = "solve"; pzShowGoal(); sgAsk(); pzDraw(); return; }
-  pzTimer = setTimeout(() => { pzPlay(pzCur[2].split(" ")[0]); pzIdx = 1; pzState = "solve"; pzShowGoal(); pzDraw(); }, 650);
+  pzTimer = setTimeout(() => { pzPlay(pzMoves()[0]); pzIdx = 1; pzState = "solve"; pzShowGoal(); pzDraw(); }, 650);
 }
 /* ---- stop the mate: after some defences the opponent still gives the check it threatened (the luft h3, then the
    rook checks anyway); the child then gets out of check with any move that leaves no mate in one (pzEscape) ---- */
@@ -1624,13 +1631,13 @@ function pzFinish(win) {
 }
 function pzUserMove(from, to) {
   if (pzState !== "solve") return false;
-  const want = pzCur[2].split(" ")[pzIdx];
+  const want = pzMoves()[pzIdx];
   const legal = pzGame.moves({ square: from, verbose: true }).filter(m => m.to === to);
   if (!legal.length) return false;
   pzMarks = {}; pzArrows = [];
   const promo = legal[0].promotion ? (want && want.slice(0, 4) === from + to && want[4] ? want[4] : "q") : undefined;
   const m = pzGame.move({ from, to, promotion: promo });
-  const uci = from + to + (promo || ""), last = pzIdx === pzCur[2].split(" ").length - 1;
+  const uci = from + to + (promo || ""), last = pzIdx === pzMoves().length - 1;
   pzSel = null; pzLast = [from, to];
   const accepted = (pzCur[6] && pzIdx === 0 && pzCur[6].includes(uci)) || (pzEscape && !sgMates().length);
   sfx("move");
@@ -1638,10 +1645,10 @@ function pzUserMove(from, to) {
     pzIdx++;
     const reply = pzIdx === 1 && pzCur[9] && pzCur[9][uci];
     if (reply) return smReply(reply);
-    if (pzIdx >= pzCur[2].split(" ").length) { pzFinish(true); return true; }
+    if (pzIdx >= pzMoves().length) { pzFinish(true); return true; }
     $("pzState").textContent = "Good, keep going"; $("pzState").className = "state pass";
     pzState = "wait"; pzDraw();
-    pzTimer = setTimeout(() => { pzPlay(pzCur[2].split(" ")[pzIdx]); pzIdx++; pzState = "solve"; pzDraw(); }, 450);
+    pzTimer = setTimeout(() => { pzPlay(pzMoves()[pzIdx]); pzIdx++; pzState = "solve"; pzDraw(); }, 450);
     return true;
   }
   // wrong: show it, then offer another go (rating already counts it as a miss)
@@ -1697,7 +1704,7 @@ function pzRestart() {
   $("pzCard").innerHTML = pzKid() ? "" : `<p class="text">Same puzzle again. It already counts, so try it (or watch the solution) as often as you like.</p>`;
   if (pzCur[5]) { pzState = "solve"; pzShowGoal(); sgAsk(); pzDraw(); return; }
   pzState = "intro"; pzDraw();
-  pzTimer = setTimeout(() => { pzPlay(pzCur[2].split(" ")[0]); pzIdx = 1; pzState = "solve"; pzShowGoal(); pzDraw(); }, 650);
+  pzTimer = setTimeout(() => { pzPlay(pzMoves()[0]); pzIdx = 1; pzState = "solve"; pzShowGoal(); pzDraw(); }, 650);
 }
 function pzSolution() {
   if (!pzCur || pzState === "done" || pzState === "intro" || pzState === "show") return;
@@ -1705,7 +1712,7 @@ function pzSolution() {
   clearTimeout(pzTimer);
   if (pzState === "wrong") { pzGame.undo(); pzMarks = {}; }
   pzFailed = true; pzScore(false);
-  const rest = pzEscape ? [(m => m.from + m.to + (m.promotion || ""))(smEscapes()[0])] : pzCur[2].split(" ").slice(pzIdx);
+  const rest = pzEscape ? [(m => m.from + m.to + (m.promotion || ""))(smEscapes()[0])] : pzMoves().slice(pzIdx);
   pzState = "show"; pzArrows = [];
   let k = 0;
   const step = () => {
@@ -1718,7 +1725,7 @@ function pzSolution() {
 function pzHint() {
   if (pzState !== "solve") return;
   pzHinted = true;
-  const want = pzEscape ? (m => m.from + m.to)(smEscapes()[0]) : pzCur[2].split(" ")[pzIdx];
+  const want = pzEscape ? (m => m.from + m.to)(smEscapes()[0]) : pzMoves()[pzIdx];
   pzSel = want.slice(0, 2);
   $("pzCard").innerHTML = `<p class="text">Move the highlighted piece. ${esc(pzGoalText(pzCur))}</p><p class="sub">With a hint this puzzle won't change your rating.</p>`;
   pzDraw();
