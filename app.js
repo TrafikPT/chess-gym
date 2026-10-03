@@ -97,8 +97,10 @@ function mergePlayer(a, b) {
   out.stages = maxMap(a.stages, b.stages);
   out.stars = Math.max(a.stars || 0, b.stars || 0);
   if (a.album || b.album) {    // sticker book (album.js): packs are drawn from their number, so the larger count of each is right
-    const x = a.album || {}, y = b.album || {};
-    out.album = { c: Math.max(x.c || 0, y.c || 0), b: Math.max(x.b || 0, y.b || 0), o: Math.max(x.o || 0, y.o || 0), s: maxMap(x.s, y.s) };
+    // both copies brought to the current catalogue first (copies, not the stored objects): an old copy can't bring v1 ids back
+    const cur = al => albumMigrate(JSON.parse(JSON.stringify(al || {}))), x = cur(a.album), y = cur(b.album);
+    out.album = { c: Math.max(x.c || 0, y.c || 0), b: Math.max(x.b || 0, y.b || 0), o: Math.max(x.o || 0, y.o || 0), s: maxMap(x.s, y.s), v: A_VER,
+      c0: Math.max(x.c0 || 0, y.c0 || 0), p3: Math.max(x.p3 || 0, y.p3 || 0) };     // the larger c0: never creates packs
   }
   out.school = {};
   for (const pc of new Set([...Object.keys(a.school || {}), ...Object.keys(b.school || {})])) {
@@ -2784,18 +2786,22 @@ function openKids(sub) {
 // on its card and the colour of its ring. The ids are the old names, kept for the stored records (rex was a T-rex, gus
 // a pig, cat the cat): rex = the mouse, gus = the cat, cat = the wolf. T-Rex and the Dragon search (botSearch) to
 // `depth` plies within `ms`. Pawn Pete plays Pawn Wars, a different game: no level.
+// slip = the share of moves a bot plays without looking, like the Cat (grab the biggest piece, else any move): that's
+// what leaves pieces hanging and lets forks and mates through. Tuned so each bot scores ~60-70% against the one below
+// (node bot-vs-bot, 110 games a pair, 2026-10-03: Wolf-Cat 69%, Tiger-Wolf 61%, T-Rex-Tiger 61%, Dragon-T-Rex 63%;
+// the Cat beats the Mouse ~98%): a child who has done the path should be able to beat the Dragon. elo = rough guesses.
 const BOTS = [
   { id: "rex", face: "🐭", name: "Muddled Mouse", elo: "~100", think: 500, lvl: 1 },
-  { id: "gus", face: "🐱", name: "Greedy Cat", elo: "~300", think: 600, lvl: 2 },
-  { id: "cat", face: "🐺", name: "Wily Wolf", elo: "~500", think: 700, lvl: 3 },
-  { id: "tiger", face: "🐯", name: "Tactic Tiger", elo: "~800", think: 400, lvl: 4 },
-  { id: "dino", face: "🦖", name: "T-Rex", elo: "~1000", think: 250, lvl: 5, depth: 2, ms: 900 },
-  { id: "dragon", face: "🐉", name: "Dragon", elo: "~1200", think: 200, lvl: 6, depth: 3, ms: 1800 },
+  { id: "gus", face: "🐱", name: "Greedy Cat", elo: "~400", think: 600, lvl: 2 },
+  { id: "cat", face: "🐺", name: "Wily Wolf", elo: "~500", think: 700, lvl: 3, slip: 0.35 },
+  { id: "tiger", face: "🐯", name: "Tactic Tiger", elo: "~600", think: 400, lvl: 4, slip: 0.1 },
+  { id: "dino", face: "🦖", name: "T-Rex", elo: "~700", think: 250, lvl: 5, slip: 0.45, depth: 1, ms: 900 },
+  { id: "dragon", face: "🐉", name: "Dragon", elo: "~800", think: 200, lvl: 6, slip: 0.45, depth: 2, ms: 1800 },
   { id: "pete", face: "🐣", name: "Pawn Pete", elo: "Pawn Wars", think: 500, pawns: true },
 ];
 const BOT_RING = ["#3cb371", "#9acd32", "#f2c230", "#f39c34", "#e8542f", "#b3202a"];   // lvl 1–6: green to red
 const VALUE = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
-let bg = null;   // {bot, game (chess.js) | pw (pawn wars state), me: 'w'|'b', sel, last, over, hist:[fen…], log, rp, gate}
+let bg = null;   // {bot, game (chess.js) | pw (pawn wars state), me: 'w'|'b', sel, last, over, log, rp, gate}
 // gate: the learning-path boss stage this game was started from (a win against the bot clears it)
 // log (chess games): every move as {fen before, from, to, me, piece, captured}; rp: the replay after the game {list, k}
 
@@ -2806,27 +2812,29 @@ function material(g, side) {
   return s;
 }
 function mateScore(g) { return g.in_checkmate() ? -1000 : (g.in_draw() || g.in_stalemate()) ? 0 : null; }
-// best capture the side to move can make right now (used by Careful Cat and Tactic Tiger to see simple threats)
+// what every bot but the Mouse falls back on when it slips: grab the biggest piece it can take, else any move
+function catMove(ms) { return ms.filter(m => m.captured).sort((a, b) => VALUE[b.captured] - VALUE[a.captured])[0] || ms[0]; }
+// best capture the side to move can make right now (used by Tactic Tiger to see simple threats)
 function bestCaptureGain(g) {
   let best = 0;
   for (const m of g.moves({ verbose: true })) if (m.captured) best = Math.max(best, VALUE[m.captured]);
   return best;
 }
 function botMove(bot, g) {
-  if (bot.depth) return botSearch(bot, g);
   const ms = shuffle(g.moves({ verbose: true })), me = g.turn();
   if (bot.id === "rex") return ms[0];
-  // everyone but Rex takes a mate in one
+  // everyone but the Mouse takes a mate in one
   for (const m of ms) { g.move(m); const mate = g.in_checkmate(); g.undo(); if (mate) return m; }
-  if (bot.id === "gus") {
-    const caps = ms.filter(m => m.captured).sort((a, b) => VALUE[b.captured] - VALUE[a.captured]);
-    return caps[0] || ms[0];
-  }
+  if (bot.id === "gus" || Math.random() < (bot.slip || 0)) return catMove(ms);   // the Cat, or a slip
+  if (bot.depth) return botSearch(bot, g);
   if (bot.id === "cat") {        // takes what's safe to take and doesn't leave the moved piece hanging
+    // only the moved piece: an attack on any of its other pieces goes unnoticed (guarding them all, it never hung
+    // anything: too hard for a world-2 boss)
     let best = null, bs = -1e9;
     for (const m of ms) {
       g.move(m);
-      const s = (m.captured ? VALUE[m.captured] : 0) - bestCaptureGain(g) * 0.9 + Math.random() * 0.3;
+      const hit = g.moves({ verbose: true }).some(r => r.to === m.to);
+      const s = (m.captured ? VALUE[m.captured] : 0) - (hit ? VALUE[g.get(m.to).type] * 0.9 : 0) + Math.random() * 0.3;
       g.undo();
       if (s > bs) { bs = s; best = m; }
     }
@@ -2854,7 +2862,8 @@ function botMove(bot, g) {
   return best;
 }
 
-/* ---- T-Rex and the Dragon: alpha-beta over material and piece placement, captures followed to the end ---- */
+/* ---- T-Rex and the Dragon: alpha-beta over material and piece placement, captures followed to the end ----
+   T-Rex looks 1 ply (+ captures): it sees what hangs but not your threats (forks, mates); the Dragon looks 2 plies. */
 // centipawns, from the side to move; pieces like the middle, pawns like to advance, the king hides while queens are on
 const CP = { p: 100, n: 310, b: 320, r: 500, q: 900, k: 0 };
 function botEval(g) {
@@ -2980,7 +2989,8 @@ function pwBot(s) {
 function botStart(id, gate = null) {
   const bot = BOTS.find(b => b.id === id), pl = pzPlayers();
   const me = (pl.botColor || "w");
-  bg = { bot, me, sel: null, last: [], over: null, hist: [], log: [], rp: null, gate };
+  clearTimeout(botReply.t);   // a restart while the bot was thinking: that reply belongs to the old game
+  bg = { bot, me, sel: null, last: [], over: null, log: [], rp: null, gate };
   if (bot.pawns) bg.pw = pwNew();
   else {
     bg.game = new Chess();
@@ -2988,7 +2998,7 @@ function botStart(id, gate = null) {
   }
   $("bPick").hidden = true; $("bGame").hidden = false; $("bOver").hidden = true;
   botDraw();
-  if (botTurn() !== me) setTimeout(botReply, bot.think);
+  if (botTurn() !== me) botReply.t = setTimeout(botReply, bot.think);
 }
 function botTurn() { return bg.pw ? bg.pw.turn : bg.game.turn(); }
 function botPos() { return bg.pw ? bg.pw.b : parseFen(bg.game.fen()); }
@@ -3019,7 +3029,7 @@ function botDraw() {
   const mat = bg.pw ? null : material(bg.game, bg.me);
   $("bFace").innerHTML = `<span class="face">${bg.bot.face}</span>${botTurn() !== bg.me && !bg.over ? `<span class="thinking">…</span>` : ""}`
     + (mat === null ? "" : `<span class="bmat ${mat > 0 ? "up" : mat < 0 ? "down" : ""}" aria-label="Material">${mat > 0 ? "+" + mat : mat < 0 ? "−" + -mat : "="}</span>`);
-  $("bUndo").disabled = !bg.hist.length || !!bg.over;
+  $("bRestart").hidden = !!bg.over;   // once it's over, the panel has its own ↻
 }
 function botAfterMove() {
   const pl = pzPlayers();
@@ -3065,20 +3075,15 @@ function botReply() {
 }
 function botUserMove(from, to) {
   if (!bg || bg.over || botTurn() !== bg.me || !myTargets(from).includes(to)) return false;
-  bg.hist.push(bg.pw ? JSON.stringify(bg.pw) : bg.game.fen());
   if (bg.pw) bg.pw = pwPlay(bg.pw, pwMoves(bg.pw).find(m => m.from === from && m.to === to));
-  else botLog(bg.game.move({ from, to, promotion: "q" }), true, bg.hist[bg.hist.length - 1]);
+  else { const fen = bg.game.fen(); botLog(bg.game.move({ from, to, promotion: "q" }), true, fen); }
   bg.sel = null; bg.last = [from, to]; sfx("move");
-  if (!botAfterMove()) { botDraw(); setTimeout(botReply, bg.bot.think); }
+  if (!botAfterMove()) { botDraw(); botReply.t = setTimeout(botReply, bg.bot.think); }
   return true;
 }
-function botUndo() {   // takes back your last move and the bot's reply
-  if (!bg || !bg.hist.length || bg.over || botTurn() !== bg.me) return;
-  const prev = bg.hist.pop();
-  if (bg.pw) bg.pw = JSON.parse(prev);
-  else { bg.game.load(prev); bg.log.length = Math.max(0, bg.log.map(x => x.fen).lastIndexOf(prev)); }
-  bg.last = []; bg.sel = null; botDraw();
-}
+// ↻ during a game: start over against the same bot (same gate, colour and no-queen setting); no take-backs in bot
+// games, and no question first (no pop-ups)
+function botRestart() { if (bg && !bg.rp) botStart(bg.bot.id, bg.gate); }
 function botLog(m, me, fen = bg.game.fen()) { bg.log.push({ fen, from: m.from, to: m.to, me, piece: m.piece, captured: m.captured }); }
 
 /* ---- after a game, "what did you miss?": pieces you left hanging that the bot took, free pieces you didn't take ---- */
@@ -3154,7 +3159,7 @@ function rpDraw() {
   $("bFace").innerHTML = `<span class="face">🔍</span><span class="dots">${r.list.map((_, i) => `<i class="${i <= r.k ? "on" : ""}">★</i>`).join("")}</span>
     <button class="btn primary big" type="button" id="rpNext" aria-label="Next">▶</button>`;
   $("rpNext").onclick = rpStep;
-  $("bUndo").disabled = true;
+  $("bRestart").hidden = true;
 }
 function rpStep() {   // ▶: the next moment; after the last one, back to the game-over panel
   if (!bg || !bg.rp) return;
@@ -3198,14 +3203,14 @@ function openBots() {
       if (bg.sel && bg.sel !== sq && botUserMove(bg.sel, sq)) return;
       bg.sel = p && colorOf(p) === bg.me ? sq : null; botDraw();
     });
-    $("bUndo").onclick = botUndo;
+    $("bRestart").onclick = botRestart;
     $("bQuit").onclick = () => { bg = null; renderBots(); };
   }
   if (bg) { $("bPick").hidden = true; $("bGame").hidden = false; botDraw(); } else renderBots();
 }
 
 
-/* ================= sticker book: anime-style athletes drawn in SVG, a pack of 3 for every 5 clean path solves ================= */
+/* ================= sticker book: anime-style athletes drawn in SVG, a pack of 5 for every clean path solve ================= */
 
 /* ---- drawing: one chibi athlete (pose, kit, head) on a team backdrop; a sticker is a line of settings ----
    Figure coordinates: viewBox 0 -16 100 136 (head around 50,25, feet at y 107); the card is 120 x 158. */
@@ -3344,6 +3349,45 @@ const A_ANIMALS = {
     aEye(43.5, 22.5, "#3e2723", .85) + aEye(56.5, 22.5, "#3e2723", .85) +
     `<ellipse cx="50" cy="37" rx="2.6" ry="4" fill="#e53935" ${A_OUT}/><polygon points="45.5,28.5 54.5,28.5 50,33.5" fill="#ffc107" ${A_OUT} stroke-linejoin="round"/>`,
     back: () => `<path d="M40,70 Q18,66 18,48 Q26,58 40,62Z" fill="#263238" ${A_OUT}/><path d="M40,66 Q22,60 26,42 Q30,56 41,60Z" fill="#e53935" ${A_OUT}/>` },
+  // France's mascot: a white hen (like Ettie, the hen of the 2019 Women's World Cup in France), a blue-white-red bow
+  hen: { skin: "#fff8e1", head: () => aC(46, 9, 4.2, "#e53935", A_OUT) + aC(52.5, 7.5, 4.6, "#e53935", A_OUT) +
+    aC(50, 25, 16, "#fff8e1", A_OUT) + aEye(43.5, 23.5, "#3e2723", .85) + aEye(56.5, 23.5, "#3e2723", .85) +
+    `<path d="M40.5,19.5 l-2,-2 M42.5,18.6 l-1.2,-2.6 M59.5,19.5 l2,-2 M57.5,18.6 l1.2,-2.6" stroke="${A_OL}" stroke-width=".9" stroke-linecap="round"/>` +
+    `<ellipse cx="50" cy="36.5" rx="2.2" ry="3.2" fill="#e53935" ${A_OUT}/><polygon points="46,29 54,29 50,34" fill="#ffa000" ${A_OUT} stroke-linejoin="round"/>` + aBlush(33.5, "#ff8f8f") +
+    `<path d="M60,12 L67,8 L67,16Z" fill="#ED2939" ${A_OUT}/><path d="M60,12 L53,8 L53,16Z" fill="#002654" ${A_OUT}/>` + aC(60, 12, 2.2, "#fff", A_OUT),
+    back: () => `<path d="M40,70 Q22,68 21,54 Q29,61 40,63Z" fill="#fff8e1" ${A_OUT}/><path d="M40,66 Q27,62 28,50 Q33,59 41,61Z" fill="#ffe0b2" ${A_OUT}/>` },
+  // South Korea's: a tiger like Hodori (Seoul 1988) in his sangmo, the farmers' dance hat with its long twirling ribbon (no crown: not the Tactic Tiger)
+  hodori: { skin: "#f57c00", head: () => aTigerHead("#f57c00", "stripes") +
+    `<path d="M50,1 C60,-15 82,-12 78,0 C75,9 88,13 94,4" fill="none" stroke="${A_OL}" stroke-width="5" stroke-linecap="round"/><path d="M50,1 C60,-15 82,-12 78,0 C75,9 88,13 94,4" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>` +
+    `<ellipse cx="50" cy="10" rx="15" ry="3.6" fill="#212121" ${A_OUT}/><path d="M41,10 Q41,1 50,1 Q59,1 59,10Z" fill="#212121" ${A_OUT}/>` + aC(50, 1, 2.4, "#ffc107", A_OUT),
+    back: () => aTail("#f57c00", "#222") },
+  // Switzerland's: a Saint Bernard with the little barrel under his chin
+  stbernard: { skin: "#b5651d", head: () => `<ellipse cx="33" cy="27" rx="5.5" ry="10" fill="#8d4a17" ${A_OUT} transform="rotate(14 33 27)"/><ellipse cx="67" cy="27" rx="5.5" ry="10" fill="#8d4a17" ${A_OUT} transform="rotate(-14 67 27)"/>` +
+    aC(50, 25, 16.5, "#fff", A_OUT) + `<path d="M35,20 Q36,9 46.5,9 L47.5,30 Q40,31 35,24Z M65,20 Q64,9 53.5,9 L52.5,30 Q60,31 65,24Z" fill="#b5651d"/>` +
+    aEye(43, 23, "#5d4037", .85) + aEye(57, 23, "#5d4037", .85) + `<ellipse cx="50" cy="33.5" rx="8" ry="5.6" fill="#fff" ${A_OUT}/><ellipse cx="50" cy="30.5" rx="3" ry="2.1" fill="#222"/>` +
+    `<path d="M50,32.5 V34.5 M46.5,35.5 Q48.4,37.4 50,34.5 Q51.6,37.4 53.5,35.5" fill="none" stroke="#3e2723" stroke-width="1" stroke-linecap="round"/><ellipse cx="51.6" cy="38.3" rx="1.6" ry="2" fill="#f48fb1"/>` +
+    `<path d="M44,42.5 H56" stroke="#c62828" stroke-width="2.2"/><rect x="45" y="43" width="10" height="7.5" rx="2.4" fill="#a1662f" ${A_OUT}/><path d="M47.5,43.2 V50.3 M52.5,43.2 V50.3" stroke="#5d3613" stroke-width="1"/>`,
+    back: () => `<path d="M42,72 Q24,80 20,64" fill="none" stroke="${A_OL}" stroke-width="7.2" stroke-linecap="round"/><path d="M42,72 Q24,80 20,64" fill="none" stroke="#b5651d" stroke-width="5" stroke-linecap="round"/>` + aC(20, 63, 3, "#fff") },
+  // Cape Verde's "Blue Sharks": a blue shark, white belly, a grin full of (friendly) teeth
+  shark: { skin: "#1e88e5", head: () => `<path d="M44,11 Q49,-2 58,-5 Q55,4 57,11Z" fill="#1565c0" ${A_OUT} stroke-linejoin="round"/>` +
+    `<ellipse cx="50" cy="25" rx="18" ry="16" fill="#1e88e5" ${A_OUT}/><path d="M33,28 Q50,46 67,28 Q50,35 33,28Z" fill="#eceff1"/>` +
+    `<path d="M35.5,20 q-2,3 0,6 M38,19 q-2,3.5 0,7 M64.5,20 q2,3 0,6 M62,19 q2,3.5 0,7" fill="none" stroke="#0d47a1" stroke-width="1" stroke-linecap="round"/>` +
+    aEye(44, 21, "#1a237e", .8) + aEye(56, 21, "#1a237e", .8) +
+    `<path d="M41,30 Q50,39 59,30 Q50,33 41,30Z" fill="#fff" ${A_OUT} stroke-linejoin="round"/><path d="M44,31.2 l1.3,2.4 l1.3,-2 l1.4,2.4 l1.3,-2.2 l1.3,2.4 l1.3,-2.2 l1.4,2.4 l1.3,-2" fill="none" stroke="${A_OL}" stroke-width=".6"/>`,
+    back: () => `<path d="M42,72 Q28,74 22,66 L12,52 Q22,58 24,62 L26,50 Q30,62 42,66Z" fill="#1e88e5" ${A_OUT} stroke-linejoin="round"/>` },
+  // Germany's: a black eagle (like Paule), a feather tuft, a big hooked yellow beak, feathered wings
+  eagleb: { skin: "#ffc107", head: () => `<path d="M44,10 Q42,0 47,-3 Q48,4 50,7 Q51,-1 56,-3 Q55,5 53,10Z" fill="#212121" ${A_OUT} stroke-linejoin="round"/>` +
+    aC(50, 25, 16.5, "#212121", A_OUT) + `<ellipse cx="50" cy="31" rx="10" ry="8" fill="#37474f"/>` +
+    aEye(43, 22, "#ffb300", .85) + aEye(57, 22, "#ffb300", .85) +
+    `<path d="M43,28 Q50,25.5 57,28 Q60,35 53,41 Q52.5,36.5 50,35 Q46,33 43,31Z" fill="#ffc107" ${A_OUT} stroke-linejoin="round"/><path d="M45.5,31.5 Q50,33 53,36" fill="none" stroke="#e65100" stroke-width=".9"/>`,
+    back: () => [-1, 1].map(d => [196, 212, 228, 244].map(a => { const r = a * Math.PI / 180, x = 50 - d * (10 - 16 * Math.cos(r)), y = 50 + 16 * Math.sin(r);
+      return `<ellipse cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" rx="16" ry="4.6" fill="${a % 32 ? "#212121" : "#37474f"}" ${A_OUT} transform="rotate(${d < 0 ? 180 - a : a} ${x.toFixed(1)} ${y.toFixed(1)})"/>`; }).join("")).join("") },
+  // the Netherlands': an orange lion (the KNVB's), a spiky flame-orange mane: England's lion has a round red-brown one
+  lionnl: { skin: "#ff9800", head: () => `<polygon points="${aPts([...Array(28)].map((_, i) => { const a = i * Math.PI / 14, r = i % 2 ? 17 : 25; return [50 + r * Math.cos(a), 25 + r * Math.sin(a)]; }))}" fill="#e65100" ${A_OUT} stroke-linejoin="round"/>` +
+    aC(38, 12.5, 4.2, "#ffa726", A_OUT) + aC(62, 12.5, 4.2, "#ffa726", A_OUT) + aC(50, 26, 14, "#ffa726", A_OUT) + `<ellipse cx="50" cy="33" rx="7.5" ry="5" fill="#ffe0b2"/>` +
+    aEye(44.3, 24.5, "#4e342e", .85) + aEye(55.7, 24.5, "#4e342e", .85) + `<polygon points="47.5,29.5 52.5,29.5 50,32.5" fill="#5d4037"/>` +
+    `<path d="M50,32.5 L50,34 M46.5,34.5 Q48.5,36.5 50,34 Q51.5,36.5 53.5,34.5" fill="none" stroke="#5d4037" stroke-width="1.3" stroke-linecap="round"/>` + aBlush(33, "#ff7043"),
+    back: () => `<path d="M42,72 Q24,80 20,66" fill="none" stroke="${A_OL}" stroke-width="5.2" stroke-linecap="round"/><path d="M42,72 Q24,80 20,66" fill="none" stroke="#ff9800" stroke-width="3" stroke-linecap="round"/><path d="M20,68 Q12,64 15,56 Q18,60 20,58 Q22,62 26,59 Q27,66 20,68Z" fill="#e65100" ${A_OUT} stroke-linejoin="round"/>` },
 };
 function aTigerHead(col, marks) {
   return aC(36, 11, 5.5, col, A_OUT) + aC(36, 11, 2.8, "#fff") + aC(64, 11, 5.5, col, A_OUT) + aC(64, 11, 2.8, "#fff") +
@@ -3401,7 +3445,8 @@ function aFigure(o) {
   const P = A_POSES[o.pose], an = o.head && A_ANIMALS[o.head], skin = an ? an.skin : o.skin, s = [], top = [];
   const hand = ([x, y]) => P.gloves || o.gloves ? aC(x, y, 5.6, o.gloves || "#ffeb3b", A_OUT) + aL([[x - 2.4, y - 1.2], [x + 2.4, y - 1.2]], A_OL, .8, false) : aC(x, y, 4.4, skin, A_OUT);
   const boot = ([x, y, rot]) => `<ellipse cx="${x}" cy="${y}" rx="7.5" ry="4.2" fill="${o.boots || (P.bball ? "#fff" : "#222")}" ${A_OUT} transform="rotate(${rot} ${x} ${y})"/>`;
-  const leg = (pts, b) => { const [, k, f] = pts, m = [k[0] + (f[0] - k[0]) * .45, k[1] + (f[1] - k[1]) * .45]; return aL(pts, skin, 9) + aL([m, f], o.socks, 9, false) + boot(b); };
+  const leg = (pts, b) => { const [, k, f] = pts, m = [k[0] + (f[0] - k[0]) * .45, k[1] + (f[1] - k[1]) * .45], t = [m[0] + (f[0] - m[0]) * .2, m[1] + (f[1] - m[1]) * .2];
+    return aL(pts, skin, 9) + aL([m, f], o.socks, 9, false) + (o.sockTrim && !P.bball ? aL([m, t], o.sockTrim, 9, false) : "") + boot(b); };
   const arm = pts => aL(pts, skin, 7.5) + (P.bball ? "" : aL([pts[0], [pts[0][0] + (pts[1][0] - pts[0][0]) * .5, pts[0][1] + (pts[1][1] - pts[0][1]) * .5]], o.shirt, 8.5, false)) + hand(pts[2]);
   if (an && an.back) s.push(an.back());
   (P.over ? top : s).push(arm(P.ba));
@@ -3461,8 +3506,31 @@ A_CREST.vsc = `
   <text y="34" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="7" fill="#111">VSC</text>`;
 // a crest (drawn around 0,0, about 76 x 105) at x, y, scaled
 const aCrest = (team, x, y, sc) => `<g transform="translate(${x} ${y}) scale(${sc})">${A_CREST[team]}</g>`;
+/* South Korea's Taegukgi in a w x h box, after the official construction (Wikimedia's SVG, 144 x 96 units): the red-blue
+   taegeuk on the diagonal from top left to bottom right, the trigrams across the diagonals: geon ☰ top left, gam ☵ top
+   right, ri ☲ bottom left, gon ☷ bottom right. sc scales the units, d = how far the trigrams sit from the centre */
+function aKrFlag(w, h, sc, d) {
+  const ang = (Math.atan2(h, w) * 180 / Math.PI).toFixed(2), bar = (x, full) => full ? `M${x},-12v24` : `M${x},-12v11M${x},1v11`;
+  const tri = (x0, bits) => bits.map((b, i) => bar(x0 + i * 6, b)).join("");
+  return `<rect width="${w}" height="${h}" fill="#fff"/><g transform="translate(${w / 2} ${h / 2}) scale(${sc})" fill="none" stroke="#000" stroke-width="4">` +
+    `<path transform="rotate(${ang})" d="${tri(-d - 6, [1, 1, 1])}${tri(d - 6, [0, 0, 0])}"/><path transform="rotate(${-ang})" d="${tri(-d - 6, [1, 0, 1])}${tri(d - 6, [0, 1, 0])}"/>` +
+    `<g transform="rotate(${ang})" stroke="none"><circle r="24" fill="#cd2e3a"/><path fill="#0047a0" d="M-24,0a24,24 0 1,0 48,0A12,12 0 1,0 0,0a12,12 0 1,1 -24,0"/></g></g>`;
+}
+// Cape Verde's flag in a w x h box: blue, a white-red-white band below the middle, ten yellow stars in a ring at 3/8 of the length
+function aCvFlag(w, h) {
+  const star = (x, y, r) => aStar(x, y, r, "#F7D116");
+  return `<rect width="${w}" height="${h}" fill="#003893"/><rect y="${h / 2}" width="${w}" height="${h / 4}" fill="#fff"/><rect y="${h * 7 / 12}" width="${w}" height="${h / 12}" fill="#CF2027"/>` +
+    [...Array(10)].map((_, i) => { const a = Math.PI / 2 + i * Math.PI / 5; return star(w * 3 / 8 + h / 4 * Math.cos(a), h * 5 / 8 + h / 4 * Math.sin(a), h / 20); }).join("");
+}
+const aBands = (w, h, cols) => cols.map((c, i) => `<rect y="${(i * h / cols.length).toFixed(2)}" width="${w}" height="${(h / cols.length + .3).toFixed(2)}" fill="${c}"/>`).join("");
+const aSwissCross = (w, h, u) => `<rect width="${w}" height="${h}" fill="#DA291C"/><rect x="${w / 2 - 3 * u}" y="${h / 2 - 10 * u}" width="${6 * u}" height="${20 * u}" fill="#fff"/><rect x="${w / 2 - 10 * u}" y="${h / 2 - 3 * u}" width="${20 * u}" height="${6 * u}" fill="#fff"/>`;
 /* backdrops (120 x 158): flags, the clubs' colours with their crests, a pitch, a court, the bosses' night sky */
 const A_BACK = {
+  kr: aKrFlag(120, 158, 1.05, 66),
+  ch: aSwissCross(120, 158, 3.75),
+  cv: aCvFlag(120, 158),
+  de: aBands(120, 158, ["#000", "#DD0000", "#FFCE00"]),
+  nl: aBands(120, 158, ["#AE1C28", "#fff", "#21468B"]),
   pt: `<rect width="120" height="158" fill="#DA291C"/><rect width="46" height="158" fill="#046A38"/>`,
   cn: `<rect width="120" height="158" fill="#DE2910"/>${aStar(96, 22, 11, "#FFDE00")}${aStar(78, 10, 3.5, "#FFDE00")}${aStar(112, 42, 3.5, "#FFDE00")}`,
   br: `<rect width="120" height="158" fill="#009C3B"/><polygon points="60,16 114,79 60,142 6,79" fill="#FFDF00"/><circle cx="60" cy="79" r="29" fill="#002776"/>`,
@@ -3471,6 +3539,8 @@ const A_BACK = {
   jp: `<rect width="120" height="158" fill="#fff"/><circle cx="60" cy="79" r="34" fill="#BC002D"/>`,
   es: `<rect width="120" height="158" fill="#AA151B"/><rect y="40" width="120" height="78" fill="#F1BF00"/>`,
   ar: `<rect width="120" height="158" fill="#74ACDF"/><rect y="53" width="120" height="52" fill="#fff"/><circle cx="60" cy="79" r="11" fill="#F6B40E"/>`,
+  fr: `<rect width="120" height="158" fill="#fff"/><rect width="40" height="158" fill="#002654"/><rect x="80" width="40" height="158" fill="#ED2939"/>`,
+  it: `<rect width="120" height="158" fill="#fff"/><rect width="40" height="158" fill="#009246"/><rect x="80" width="40" height="158" fill="#CE2B37"/>`,
   slb: `<rect width="120" height="158" fill="#E30613"/><rect y="124" width="120" height="34" fill="#fff"/><g opacity=".9">${aCrest("slb", 60, 74, 1.5)}</g>`,
   vsc: `<rect width="120" height="158" fill="#fff"/><rect width="60" height="158" fill="#111"/><g opacity=".9">${aCrest("vsc", 60, 76, 1.45)}</g>`,
   pitch: `<rect width="120" height="158" fill="#43a047"/>${[0, 2, 4, 6].map(i => `<rect x="${i * 17}" width="17" height="158" fill="#4caf50"/>`).join("")}<rect x="0" y="122" width="120" height="2.5" fill="#fff" opacity=".8"/><circle cx="60" cy="123" r="24" fill="none" stroke="#fff" stroke-width="2.5" opacity=".8"/>`,
@@ -3482,13 +3552,17 @@ const A_RAYS = `<g opacity=".28">${[...Array(36)].map((_, i) => { const a = i * 
 const A_MINI_ALIGN = { cn: "xMaxYMin" };     // where a flag's emblem is when it's cut to a small landscape box
 const A_CLUB_BG = { slb: "#E30613", vsc: "#fff" };
 // a small landscape flag (60 x 40): a slice of the backdrop, or a club's colour with its whole crest
+const A_MINI = { es: `<rect width="60" height="40" fill="#AA151B"/><rect y="10" width="60" height="20" fill="#F1BF00"/>`,   // flags whose bands or emblems don't survive the cut
+  kr: aKrFlag(60, 40, 40 / 96, 44), ch: aSwissCross(60, 40, 1.35), cv: aCvFlag(60, 40), de: aBands(60, 40, ["#000", "#DD0000", "#FFCE00"]), nl: aBands(60, 40, ["#AE1C28", "#fff", "#21468B"]) };
 function aMiniInner(key) {
+  if (A_MINI[key]) return A_MINI[key];
   return A_CREST[key] ? `<rect width="60" height="40" fill="${A_CLUB_BG[key]}"/>${key === "vsc" ? `<rect width="30" height="40" fill="#111"/>` : ""}${aCrest(key, 30, 20.5, .36)}`
     : `<svg width="60" height="40" viewBox="0 0 120 158" preserveAspectRatio="${A_MINI_ALIGN[key] || "xMidYMid"} slice">${A_BACK[key]}</svg>`;
 }
 function aMiniFlag(key, w = 36, h = 24) { return `<svg class="aflag" viewBox="0 0 60 40" width="${w}" height="${h}">${aMiniInner(key)}</svg>`; }
 // the whole sticker picture (backdrop + figure), or just the figure as a grey silhouette for an empty slot
 function stickerSvg(st, ghost = false) {
+  if (st.scene || st.sp) return aSceneSvg(st, ghost);
   const fig = `<g transform="translate(2 18.6) scale(1.16)" ${ghost ? "" : `filter="url(#aWhiteEdge)"`}>${aFigure(st)}</g>`;
   if (ghost) return `<svg class="aghost" viewBox="0 0 120 158" aria-hidden="true">${fig}</svg>`;
   return `<svg viewBox="0 0 120 158" aria-hidden="true">${A_BACK[st.bd]}${A_RAYS}${st.mini ? `<svg x="6" y="134" width="27" height="18" viewBox="0 0 60 40">${aMiniInner(st.mini)}</svg><rect x="6" y="134" width="27" height="18" fill="none" stroke="#fff" stroke-width="1.5"/>` : ""}${A_CREST[st.bd] && st.pose !== "kit" ? `<circle cx="19" cy="139" r="15" fill="#fff" opacity=".92"/>${aCrest(st.bd, 19, 139.5, .26)}` : ""}${fig}</svg>`;
@@ -3501,9 +3575,425 @@ function aDefs() {
     <feFlood flood-color="#fff"/><feComposite in2="d" operator="in" result="edge"/><feMerge><feMergeNode in="edge"/><feMergeNode in="SourceGraphic"/></feMerge></filter></svg>`;
   document.body.appendChild(d);
 }
+/* scene pieces for the picture pages: a figure placed on the card (default = where stickerSvg puts it; extra drawing in
+   figure coordinates on top), the white cut-out edge, a 4-point sparkle, a sky gradient, crowd dots, a small flag */
+const aFig = (o, x = 2, y = 18.6, s = 1.16, extra = "", rot = "") => `<g transform="translate(${x} ${y}) scale(${s})${rot ? " " + rot : ""}">${aFigure(o)}${extra}</g>`;
+const aEdge = s => `<g filter="url(#aWhiteEdge)">${s}</g>`;
+const aSpark = (x, y, r, c = "#fff", cls = "", st = "") =>
+  `<path${cls ? ` class="${cls}"` : ""}${st ? ` style="${st}"` : ""} d="M${x},${y - r} Q${x},${y} ${x + r},${y} Q${x},${y} ${x},${y + r} Q${x},${y} ${x - r},${y} Q${x},${y} ${x},${y - r}Z" fill="${c}"/>`;
+const aVGrad = (id, a, b) => `<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient>`;
+function aCrowd(x0, x1, ys, cols, seed, r = 2.4) {
+  const R = aRand(seed), out = [];
+  ys.forEach((y, j) => { for (let x = x0 + (j % 2) * r; x < x1; x += r * 2.3) {
+    const c = cols[Math.floor(R() * cols.length)], sk = A_SKIN[Math.floor(R() * 5)];
+    out.push(`<rect x="${(x - r).toFixed(1)}" y="${(y + r * .6).toFixed(1)}" width="${(r * 2).toFixed(1)}" height="${(r * 1.6).toFixed(1)}" rx="${r * .5}" fill="${c}"/>`, aC(x, y, r * .78, sk));
+  } });
+  return out.join("");
+}
+const aFlagAt = (key, x = 6, y = 134) => `<svg x="${x}" y="${y}" width="27" height="18" viewBox="0 0 60 40">${aMiniInner(key)}</svg><rect x="${x}" y="${y}" width="27" height="18" fill="none" stroke="#fff" stroke-width="1.5"/>`;
+// a goal net (posts drawn by the caller)
+const aNet = (x0, y0, x1, y1, step = 6, op = .7) => `<g opacity="${op}" stroke="#fff" stroke-width=".7">${[...Array(Math.floor((x1 - x0) / step) + 1)].map((_, i) => `<path d="M${x0 + i * step},${y0} V${y1}"/>`).join("")}${[...Array(Math.floor((y1 - y0) / step) + 1)].map((_, i) => `<path d="M${x0},${y0 + i * step} H${x1}"/>`).join("")}</g>`;
 
-/* ---- the catalogue: 10 football team pages (the kit + 8 players, one the team's mascot), 2 basketball pages,
-   2 animal pages, the bosses' page. Ids are stable (page id + slot): progress is stored by id, numbers can move ---- */
+/* ---- the picture page (<team>y): 1 the team's landmark, 2+3 one big picture over two slots (the striker shoots | the
+   ball flies past the diving keeper; each half is drawn 133.5 wide so the two meet over the gap in the book, and is cut to
+   the card elsewhere), 4 a comic action shot, 5 the team photo, 6 a retro card, 7 a night match, 8 the goal party,
+   9 a living sticker (CSS: the flag waves, the player bobs and winks, sparkles twinkle). A scene = [backdrop, main, over
+   (optional)]: an empty slot shows the main part as a ghost ---- */
+const aU = p => p + (++aUid);
+const aSky = (a, b) => { const g = aU("asky"); return `<defs>${aVGrad(g, a, b)}</defs><rect width="120" height="158" fill="url(#${g})"/>`; };
+const aCloud = (x, y, s = 1) => `<g fill="#fff" opacity=".95" transform="translate(${x} ${y}) scale(${s})"><circle cx="4" cy="6" r="5.5"/><circle cx="11" cy="3" r="7"/><circle cx="19" cy="7" r="5"/><rect y="6" width="23" height="6" rx="3"/></g>`;
+const aSun = (x, y, r = 10) => aC(x, y, r, "#ffe082") + aC(x, y, r * .7, "#fff3c4");
+const aP = (d, f, x = "") => `<path d="${d}" fill="${f}" ${A_OUT}${x ? " " + x : ""}/>`;
+const aR = (x, y, w, h, f, x2 = "") => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${f}" ${A_OUT}${x2 ? " " + x2 : ""}/>`;
+const aWaves = (y, c, w, n = 3, W = 120) => `<rect y="${y}" width="${W}" height="${158 - y}" fill="${c}"/>` + [...Array(n)].map((_, i) =>
+  `<path d="M${i % 2 * 8 - 10},${y + 7 + i * 9}${" q5,-3 10,0".repeat(W / 10 + 2)}" fill="none" stroke="${w}" stroke-width="1.1" opacity=".7"/>`).join("");
+const aMerlons = (x0, x1, y, f, w = 3.4, gap = 2.6) => { let o = ""; for (let x = x0; x + w <= x1 + .1; x += w + gap) o += aR(x.toFixed(1), y - 3.2, w, 3.4, f); return o; };
+const aArch = (x, y, w, h, f = "#5d4a2e") => `<path d="M${x},${y + h} V${y + w / 2} A${w / 2},${w / 2} 0 0 1 ${x + w},${y + w / 2} V${y + h}Z" fill="${f}"/>`;
+const aFlagPole = (x, y, cols) => `<path d="M${x},${y + 16} V${y}" stroke="${A_OL}" stroke-width="1"/>` + cols.map((c, i) => `<rect x="${x + .5}" y="${y + i * 7 / cols.length}" width="10" height="${7 / cols.length + .1}" fill="${c}"/>`).join("");
+// the landmarks: [backdrop, the landmark]
+const A_LAND = {
+  pt: () => [aSky("#6ec3f4", "#e6f6ff") + aSun(100, 20) + aCloud(4, 14, .9) + aWaves(116, "#3b8fd0", "#bfe3ff", 4),        // Torre de Belém in the Tagus
+    `<g transform="translate(23 -6) scale(1.1)">${aR(4, 92, 58, 28, "#efdcb5")}${[5, 12, 19, 26, 33, 40, 47, 54].map(x => aP(`M${x},92 V87.5 Q${x + 2.6},84.5 ${x + 5.2},87.5 V92Z`, "#f3e4c4") + `<path d="M${x + 2.6},87.3 v3.6 M${x + 1.1},89 h3" stroke="#c62828" stroke-width=".9"/>`).join("")}` +
+    [10, 22, 34, 46].map(x => aArch(x, 104, 8, 15, "#6d5a3a")).join("") + aR(16, 36, 32, 56, "#f3e4c4") +
+    [17.5, 23, 28.5, 34, 39.5].map(x => aP(`M${x},36 V31.5 Q${x + 2.3},29 ${x + 4.6},31.5 V36Z`, "#f3e4c4")).join("") +
+    [10.5, 46.5].map(x => aR(x, 31, 7, 10, "#efdcb5") + aP(`M${x - .5},31.5 Q${x + 3.5},23 ${x + 7.5},31.5Z`, "#efdcb5") + `<path d="M${x + 3.5},25.5 V21" stroke="${A_OL}" stroke-width="1.1"/>`).join("") +
+    aArch(21, 46, 8, 12) + aArch(35, 46, 8, 12) + aR(19, 58, 26, 3.4, "#efdcb5") + aArch(25.5, 38, 3, 5) + aArch(35.5, 38, 3, 5) + aArch(28, 68, 8, 16) +
+    `<path d="M29,64 h6 v6 q-3,2.5 -6,0Z" fill="#fff" stroke="#c62828" stroke-width=".9"/><path d="M32,64.5 v5 M29.8,66.8 h4.4" stroke="#c62828" stroke-width="1"/></g>`],
+  slb: () => {      // Ponte 25 de Abril at sunset, Cristo Rei on the Almada hill
+    const cy = x => x < 38 ? 32 + (38 - x) * 1.1 : x > 92 ? 32 + (x - 92) * 1.1 : 32 + 46 * (1 - ((x - 65) / 27) ** 2);
+    const tower = x => `<g>${aR(x - 5, 30, 3.4, 84, "#c62828")}${aR(x + 1.6, 30, 3.4, 84, "#c62828")}${[34, 52, 72].map(y => aR(x - 5, y, 10, 2.6, "#b71c1c")).join("")}</g>`;
+    return [aSky("#ff8a65", "#ffe0b2") + aSun(98, 64, 12) + aWaves(110, "#1e6fa8", "#90caf9", 5) +
+      `<path d="M78,110 V100 h6 v-6 h7 v4 h8 v-8 h6 v6 h9 v14Z" fill="#e8b28a" ${A_OUT}/>${[81, 87, 95, 102, 110].map(x => `<rect x="${x}" y="103" width="2" height="2.4" fill="#8d4a2b"/>`).join("")}` +
+      aP("M-4,112 Q8,64 34,70 Q46,80 52,112Z", "#689f38"),
+      aR(12.6, 46, 4.8, 22, "#eceff1") + `<path d="M15,47 V36 M9.5,40 H20.5" stroke="${A_OL}" stroke-width="3.6" stroke-linecap="round"/><path d="M15,47 V36 M9.5,40 H20.5" stroke="#fff" stroke-width="2" stroke-linecap="round"/>` + aC(15, 34, 2.2, "#fff", A_OUT) +
+      tower(38) + tower(92) + aR(-2, 94, 124, 5, "#c62828") + `<path d="M0,99${[...Array(24)].map((_, i) => ` L${i * 5 + 2.5},${i % 2 ? 99 : 104}`).join("")} L120,99" fill="none" stroke="#b71c1c" stroke-width="1.2"/><path d="M-2,104 H122" stroke="#b71c1c" stroke-width="1.6"/>` +
+      `<g stroke="#ef9a9a" stroke-width=".7">${[...Array(29)].map((_, i) => i * 4 + 4).filter(x => Math.abs(x - 38) > 3 && Math.abs(x - 92) > 3).map(x => `<path d="M${x},${cy(x).toFixed(1)} V94"/>`).join("")}</g>` +
+      `<path d="M-4,${cy(-4).toFixed(1)} L38,32 Q65,124 92,32 L124,${cy(124).toFixed(1)}" fill="none" stroke="${A_OL}" stroke-width="2.6"/><path d="M-4,${cy(-4).toFixed(1)} L38,32 Q65,124 92,32 L124,${cy(124).toFixed(1)}" fill="none" stroke="#e53935" stroke-width="1.4"/>`];
+  },
+  vsc: () => {      // Guimarães castle on its hill (the keep in the middle, square towers on the wall)
+    const st = "#cfc3a5", tw = (x, y, w) => aR(x, y, w, 112 - y, st) + aMerlons(x, x + w, y, st) + `<rect x="${x + w / 2 - 1}" y="${y + 8}" width="2" height="5" fill="#5d4a2e"/>`;
+    return [aSky("#64b5f6", "#e3f2fd") + aCloud(76, 12) + aCloud(8, 30, .7) + aP("M-5,158 V112 Q30,98 60,104 Q92,96 125,110 V158Z", "#7cb342") + aP("M-5,158 V128 Q40,118 125,132 V158Z", "#689f38"),
+      aR(12, 72, 96, 40, st) + aMerlons(12, 108, 72, st) + tw(10, 58, 16) + tw(94, 60, 16) + tw(30, 64, 12) + tw(78, 64, 12) +
+      aR(49, 28, 22, 84, "#d7cbad") + aMerlons(49, 71, 28, "#d7cbad") + `<rect x="57" y="40" width="2" height="7" fill="#5d4a2e"/><rect x="62" y="40" width="2" height="7" fill="#5d4a2e"/><rect x="58.5" y="60" width="3" height="8" fill="#5d4a2e"/>` +
+      aFlagPole(60, 6, ["#046A38", "#DA291C"]) + aArch(54, 96, 12, 16)];
+  },
+  cv: () => [aSky("#4fc3f7", "#e1f5fe") + aCloud(84, 14, .8) + aWaves(124, "#1565c0", "#90caf9", 3),        // Pico do Fogo
+    aP("M-6,126 L50,36 Q62,30 74,36 L126,126Z", "#6d4c41") + aP("M50,36 Q62,30 74,36 L70,40 Q62,36 54,40Z", "#4e342e") +
+    `<path d="M56,44 L36,92 M64,42 L60,100 M70,44 L90,96" stroke="#8d6e63" stroke-width="3" opacity=".6"/>` +
+    aP("M-6,126 V108 Q16,98 34,106 Q60,96 84,104 Q104,98 126,106 V126Z", "#7cb342") +
+    [[22, 108], [30, 111], [86, 106], [95, 109]].map(([x, y]) => aR(x, y, 6, 5, "#fff") + `<path d="M${x - .5},${y} L${x + 3},${y - 3} L${x + 6.5},${y}Z" fill="#e57373" ${A_OUT}/>`).join("") +
+    aC(62, 26, 5, "#cfd8dc") + aC(67, 19, 6, "#eceff1") + aC(73, 11, 5, "#f5f5f5")],
+  es: () => {       // the Sagrada Família: the four bell towers of the Nativity façade and the tall middle tower with its star
+    const sp = (x, top, w = 6) => aP(`M${x - w},100 L${x - w + 1},${top + 18} Q${x},${top} ${x + w - 1},${top + 18} L${x + w},100Z`, "#d9b382") +
+      [0, 1, 2, 3].map(i => aC(x, top + 24 + i * 9, 1.1, "#6d4c41")).join("") + aC(x, top + 2, 2.6, ["#e53935", "#fdd835", "#43a047"][Math.round(x) % 3], A_OUT);
+    return [aSky("#81d4fa", "#fff3e0") + aCloud(90, 18, .8) + `<rect y="128" width="120" height="30" fill="#e0c9a6"/>`,
+      sp(60, 6, 7) + `<g transform="translate(60 6)">${aStar(0, 0, 5, "#fdd835")}</g>` + sp(30, 40) + sp(90, 40) + sp(43, 26) + sp(77, 26) +
+      aR(16, 92, 88, 36, "#cfa572") + aArch(52, 102, 16, 26, "#6d4c41") + aArch(24, 108, 9, 20, "#6d4c41") + aArch(87, 108, 9, 20, "#6d4c41") +
+      `<path d="M16,96 H104" stroke="#8d6e4a" stroke-width="1"/>` + [30, 43, 77, 90].map(x => aC(x, 98, 2.2, "#a5d6a7", A_OUT)).join("")];
+  },
+  fr: () => {       // the Eiffel Tower over the Champ de Mars
+    const L = y => y > 96 ? 22 + (132 - y) * .62 : y > 66 ? 44 + (96 - y) * .2 : 50 + (66 - y) * .14, R = y => 120 - L(y);
+    const X = (y0, y1) => `<path d="M${L(y0).toFixed(1)},${y0} L${R(y1).toFixed(1)},${y1} M${R(y0).toFixed(1)},${y0} L${L(y1).toFixed(1)},${y1}" />`;
+    return [aSky("#90caf9", "#fce4ec") + aCloud(6, 20, .8) + aCloud(86, 34, .7) + `<rect y="128" width="120" height="30" fill="#7cb342"/><path d="M60,128 L44,158 H76Z" fill="#e0c9a6"/>`,
+      aP(`M22,132 Q34,118 ${L(96).toFixed(1)},96 L${L(66)},66 L56,22 L57,12 L63,12 L64,22 L${R(66)},66 L${R(96).toFixed(1)},96 Q86,118 98,132 L84,132 Q72,110 60,110 Q48,110 36,132Z`, "#a1887f") +
+      `<g stroke="#5d4037" stroke-width=".8" opacity=".75">${X(66, 81)}${X(81, 96)}${X(22, 44)}${X(44, 66)}</g>` +
+      aR(34, 93, 52, 4.4, "#8d6e63") + aR(46, 63, 28, 3.4, "#8d6e63") + aR(54, 20, 12, 3, "#8d6e63") + `<path d="M60,12 V2" stroke="${A_OL}" stroke-width="1.4"/>`];
+  },
+  it: () => {       // the Colosseum: three rows of arches and the attic, broken off on the right
+    const st = "#e6c99a", row = (y, h, x1) => aR(8, y, x1 - 8, h, st) + [...Array(Math.floor((x1 - 12) / 11))].map((_, i) => aArch(11 + i * 11, y + 3, 6.4, h - 4, "#7a5a3a")).join("");
+    return [aSky("#ffcc80", "#fff8e1") + aSun(96, 22, 9) + `<rect y="126" width="120" height="32" fill="#d7c4a0"/>`,
+      `<path d="M8,128 V44 H72 L76,58 H90 L94,80 H104 L108,104 H112 V128Z" fill="${st}" ${A_OUT}/>` + aR(8, 44, 64, 14, st) +
+      [...Array(6)].map((_, i) => `<rect x="${12 + i * 10}" y="48" width="4" height="5" fill="#7a5a3a"/>`).join("") + row(58, 22, 92) + row(80, 24, 106) + row(104, 24, 112) +
+      `<path d="M8,58 H92 M8,80 H106 M8,104 H112" stroke="#b08d5a" stroke-width="1.4"/><rect x="72" y="44" width="40" height="84" fill="#000" opacity=".08"/>`];
+  },
+  de: () => {       // the Brandenburg Gate with the quadriga
+    const sd = "#e8d5a8", cols = [12, 28, 44, 70, 86, 102];
+    return [aSky("#90caf9", "#eceff1") + aCloud(4, 10, .8) + aCloud(92, 26, .6) + `<rect y="126" width="120" height="32" fill="#b0bec5"/>${[132, 140, 150].map(y => `<path d="M0,${y} H120" stroke="#90a4ae" stroke-width=".8"/>`).join("")}`,
+      aR(8, 64, 104, 60, "#8d7b5a") + cols.map(x => aR(x, 64, 6, 56, sd) + aR(x - 1.5, 118, 9, 4, sd)).join("") + aR(5, 120, 110, 6, sd) +
+      aR(4, 52, 112, 12, sd) + `<path d="M6,57 H114" stroke="#b39b6c" stroke-width="1"/>` + aR(30, 42, 60, 10, sd) + aR(24, 40, 72, 3, sd) +
+      `<g fill="#4f8a7a" ${A_OUT}>${[38, 49, 60, 71].map((x, i) => `<path d="M${x},40 v-7 q2,-6 6,-7 l2,-3 l1,4 q-3,2 -3,6 v7Z" transform="translate(${i % 2 ? 1 : 0} 0)"/>`).join("")}` +
+      `<path d="M52,40 Q51,34 57,33 H63 Q69,34 68,40Z"/><path d="M58,33 V20 Q60,17 62,20 V33Z"/></g>` +
+      `<path d="M60,19 V8" stroke="${A_OL}" stroke-width="1.2"/>` + aC(60, 8, 3, "none", `stroke="#4f8a7a" stroke-width="1.6"`)];
+  },
+  nl: () => {       // a windmill by a canal, rows of tulips
+    const rows = [["#e53935", 112, 5], ["#fdd835", 121, 6.5], ["#ec407a", 131, 8], ["#ff7043", 143, 10]];
+    const tulips = rows.map(([c, y, s]) => `<rect y="${y - s * .3}" width="120" height="${s * 1.4}" fill="#558b2f"/>` + [...Array(Math.ceil(120 / s) + 1)].map((_, i) => {
+      const x = i * s + (y % 2) * s / 2; return `<path d="M${(x - s * .35).toFixed(1)},${y - s * .5} L${(x - s * .2).toFixed(1)},${(y - s * .2).toFixed(1)} L${x},${y - s * .55} L${(x + s * .2).toFixed(1)},${(y - s * .2).toFixed(1)} L${(x + s * .35).toFixed(1)},${y - s * .5} Q${(x + s * .35).toFixed(1)},${y + s * .2} ${x},${y + s * .2} Q${(x - s * .35).toFixed(1)},${y + s * .2} ${(x - s * .35).toFixed(1)},${y - s * .5}Z" fill="${c}" stroke="${A_OL}" stroke-width=".5"/>`; }).join("")).join("");
+    const sail = a => `<g transform="rotate(${a} 60 46)"><rect x="57" y="4" width="7" height="40" fill="#fff8e1" ${A_OUT}/><path d="M57,12 h7 M57,20 h7 M57,28 h7 M57,36 h7 M60.5,4 V44" stroke="#8d6e63" stroke-width=".7"/></g>`;
+    return [aSky("#81d4fa", "#e1f5fe") + aCloud(6, 12, .8) + `<rect y="92" width="120" height="20" fill="#9ccc65"/><rect y="100" width="120" height="7" fill="#42a5f5"/>`,
+      aP("M47,104 L52,52 H68 L73,104Z", "#6d4c41") + aP("M50,54 Q50,40 60,38 Q70,40 70,54Z", "#4e342e") + aR(44, 78, 32, 3, "#3e2723") +
+      aArch(56, 90, 8, 14, "#3e2723") + aR(57.5, 62, 5, 6, "#fff8e1") + [20, 110, 200, 290].map(sail).join("") + aC(60, 46, 2.8, "#3e2723", A_OUT) + tulips];
+  },
+  ch: () => [aSky("#1e88e5", "#bbdefb") + aCloud(84, 70, .7),       // the Matterhorn above a meadow and a chalet
+    aP("M6,124 L44,64 L52,34 L60,22 L66,30 L72,46 L84,58 L116,124Z", "#78909c") + `<path d="M60,22 L66,30 L72,46 L84,58 L116,124 H80 L70,70 L64,44Z" fill="#546e7a"/>` +
+    `<path d="M52,34 L60,22 L66,30 L64,40 L58,36 L54,46 L50,44Z M44,64 L48,58 L54,70 L46,74Z M70,46 L72,46 L80,56 L74,58Z" fill="#fff"/>` +
+    aP("M-5,158 V118 Q30,106 60,114 Q92,108 125,116 V158Z", "#7cb342") +
+    [[12, 116], [22, 112]].map(([x, y]) => `<path d="M${x},${y - 18} L${x - 6},${y} H${x + 6}Z" fill="#2e7d32" ${A_OUT}/>`).join("") +
+    aR(86, 108, 22, 14, "#a1662f") + aP("M82,110 L97,98 L112,110Z", "#6d4c41") + aR(90, 112, 5, 5, "#fff8e1") + aR(99, 112, 5, 5, "#fff8e1") +
+    aR(95.5, 100, 7, 5, "#DA291C") + `<path d="M99,101 v3 M97.5,102.5 h3" stroke="#fff" stroke-width="1.2"/>`],
+  en: () => [aSky("#90a4ae", "#eceff1") + aCloud(76, 12) + aCloud(4, 34, .7) + aWaves(126, "#546e7a", "#b0bec5", 3),      // Elizabeth Tower (Big Ben) by the Thames
+    aR(64, 96, 56, 30, "#c8a96a") + [68, 80, 92, 104, 116].map(x => aP(`M${x - 2},96 L${x},88 L${x + 2},96Z`, "#c8a96a") + `<rect x="${x - 4}" y="102" width="2" height="10" fill="#8d6e4a"/>`).join("") +
+    aR(34, 56, 20, 70, "#c8a96a") + `<path d="M39,60 V124 M44,60 V124 M49,60 V124" stroke="#a1844f" stroke-width=".8"/>` + aR(32, 38, 24, 18, "#d4b77a") +
+    aC(44, 47, 7.6, "#fff8e1", A_OUT) + `<path d="M44,47 V42 M44,47 L47.5,48.5" stroke="${A_OL}" stroke-width="1.2" stroke-linecap="round"/>` +
+    aR(34, 28, 20, 10, "#c8a96a") + [37, 42, 47].map(x => aArch(x, 30, 3.6, 7, "#5d4a2e")).join("") + aP("M33,28 L44,8 L55,28Z", "#455a64") + `<path d="M44,8 V2" stroke="${A_OL}" stroke-width="1.2"/>`],
+  no: () => [aSky("#64b5f6", "#e3f2fd") + aP("M30,104 L50,62 L62,74 L74,56 L94,104Z", "#90a4ae") + `<path d="M50,62 L44,74 L52,70 L56,72Z M74,56 L68,68 L76,64 L80,66Z" fill="#fff"/>` +        // a fjord, a stave church on the shore
+    aP("M-5,40 Q14,44 24,72 Q34,96 48,108 H-5Z", "#5d6d4e") + aP("M125,30 Q100,40 92,70 Q84,96 70,108 H125Z", "#4e5d42") + aWaves(104, "#1565c0", "#90caf9", 2) +
+    aP("M-5,158 V126 Q40,116 70,124 Q100,118 125,124 V158Z", "#689f38"),
+    aR(48, 104, 24, 20, "#5d4037") + aP("M42,106 L60,92 L78,106Z", "#3e2723") + aR(52, 88, 16, 8, "#5d4037") + aP("M47,90 L60,78 L73,90Z", "#3e2723") +
+    aR(55, 72, 10, 8, "#5d4037") + aP("M52,74 L60,56 L68,74Z", "#3e2723") + `<path d="M60,56 V50" stroke="${A_OL}" stroke-width="1.2"/>` +
+    [[42, 106, -1], [78, 106, 1], [47, 90, -1], [73, 90, 1], [52, 74, -1], [68, 74, 1]].map(([x, y, d]) => `<path d="M${x},${y} q${-3 * d},-1 ${-3 * d},-5 q${2 * d},0 ${2 * d},2" fill="none" stroke="${A_OL}" stroke-width="1.4" stroke-linecap="round"/>`).join("") +
+    aArch(57, 112, 6, 12, "#2a1a10")],
+  br: () => [aSky("#4fc3f7", "#e1f5fe") + aCloud(80, 10, .8) + aWaves(120, "#0277bd", "#81d4fa", 3) +       // Christ the Redeemer on Corcovado, the Sugarloaf
+    aP("M60,122 Q66,96 76,96 Q86,98 88,122Z", "#2e7d32") + aP("M78,122 Q82,70 98,66 Q114,68 118,122Z", "#388e3c") +
+    `<path d="M76,96 L98,67" stroke="${A_OL}" stroke-width=".6"/><rect x="85" y="80" width="4" height="3" fill="#e53935"/>`,
+    aP("M-5,124 L18,96 L40,80 L52,80 L64,98 L84,124Z", "#2e7d32") + `<g transform="translate(46 80) scale(1.5) translate(-35 -63)">${aR(32, 56, 6, 7, "#cfd8dc")}` +
+    aP("M33,57 L31.5,34 L18,31 V28.5 L50,28.5 V31 L36.5,34 L35,57Z", "#eceff1") + aC(34.5, 25.5, 3, "#eceff1", A_OUT) + `</g>`],
+  ar: () => [aSky("#74ACDF", "#e3f2fd") + aSun(98, 22, 8) + aCloud(6, 16, .7) +       // the Obelisco on the Avenida 9 de Julio, jacarandas
+    [[0, 84, 16], [14, 90, 14], [88, 88, 14], [102, 80, 18]].map(([x, y, w]) => `<rect x="${x}" y="${y}" width="${w}" height="${114 - y}" fill="#b0bec5"/>` +
+      [...Array(Math.floor((110 - y) / 7))].map((_, j) => `<path d="M${x + 3},${y + 5 + j * 7} H${x + w - 3}" stroke="#eceff1" stroke-width="2" stroke-dasharray="2 2"/>`).join("")).join("") +
+    `<path d="M-2,158 L52,114 H68 L122,158Z" fill="#78909c"/><path d="M60,118 V158" stroke="#fff" stroke-width="1.6" stroke-dasharray="5 5"/><rect y="112" width="120" height="4" fill="#9e9e9e"/>` +
+    [[6, 1], [22, .8], [98, .8], [114, 1]].map(([x, k]) => `<path d="M${x},116 V${108 - 4 * k}" stroke="#5d4037" stroke-width="${2.4 * k}"/>` +
+      `<g transform="translate(${x} ${102 - 4 * k}) scale(${k})">${aC(-5, 2, 5.5, "#9575cd", A_OUT)}${aC(5, 2, 5.5, "#9575cd", A_OUT)}${aC(0, -3, 6.5, "#9575cd", A_OUT)}${aC(1, -4, 2.6, "#b39ddb")}${aC(-4, 2, 2, "#b39ddb")}</g>`).join(""),
+    aP("M53,120 L56,26 L60,14 L64,26 L67,120Z", "#f5f5f5") + `<path d="M60,14 L64,26 L67,120 H61Z" fill="#000" opacity=".1"/><rect x="58.5" y="30" width="3" height="4" fill="#455a64"/>` + aR(50, 118, 20, 4, "#e0e0e0")],
+  cn: () => {       // the Great Wall over green hills, three watchtowers
+    const d = "M-6,124 C14,108 28,96 46,100 S70,70 86,74 S112,96 126,84";
+    return [aSky("#81d4fa", "#fffde7") + aCloud(84, 12, .8) + aP("M-5,100 Q30,60 60,84 Q90,50 125,78 V158 H-5Z", "#81c784") + aP("M-5,130 Q30,104 70,118 Q100,104 125,112 V158 H-5Z", "#43a047"),
+      `<path d="${d}" fill="none" stroke="${A_OL}" stroke-width="10.4" stroke-linecap="round"/><path d="${d}" fill="none" stroke="#d7ccc8" stroke-width="8"/>` +
+      `<path d="${d}" fill="none" stroke="#a1887f" stroke-width="2.6" stroke-dasharray="2.5 2.5" transform="translate(0 -4.6)"/>` +
+      [[20, 112], [60, 85], [104, 82]].map(([x, y]) => aR(x - 6, y - 14, 12, 14, "#bcaaa4") + aMerlons(x - 6, x + 6, y - 14, "#bcaaa4", 2.4, 2) + aArch(x - 2, y - 9, 4, 6, "#5d4037")).join("")];
+  },
+  jp: () => {       // Mt Fuji, a five-storey pagoda, cherry blossom
+    const roof = (y, w) => aP(`M${30 - w},${y} Q${30 - w + 3},${y - 1} ${30 - w + 4},${y - 5} H${30 + w - 4} Q${30 + w - 3},${y - 1} ${30 + w},${y}Z`, "#37474f");
+    return [aSky("#ffe0b2", "#fff8e1") + aP("M-5,118 L46,48 Q60,40 74,48 L125,118Z", "#5c7cae") + `<path d="M36,62 L46,48 Q60,40 74,48 L84,62 L78,59 L72,65 L66,58 L60,64 L54,58 L48,65 L42,59Z" fill="#fff"/>` +
+      `<rect y="114" width="120" height="44" fill="#558b2f"/>` + `<path d="M126,10 Q100,16 84,30" fill="none" stroke="#5d4037" stroke-width="2.4"/>` +
+      [[96, 14], [104, 20], [88, 26], [112, 12], [92, 32]].map(([x, y]) => aC(x, y, 5, "#f8bbd0") + aC(x + 1, y - 1, 2, "#fce4ec")).join(""),
+      [0, 1, 2, 3, 4].map(i => aR(30 - 9 + i, 108 - i * 15, 18 - 2 * i, 12, "#e53935") + roof(108 - i * 15, 19 - i * 2)).join("") + aR(18, 118, 24, 6, "#9e9e9e") +
+      `<path d="M30,44 V26" stroke="${A_OL}" stroke-width="1.6"/>` + [30, 34, 38].map(y => `<path d="M27.5,${y} h5" stroke="#ffb300" stroke-width="1.2"/>`).join("")];
+  },
+  kr: () => [aSky("#4fc3f7", "#e1f5fe") + aCloud(6, 18, .8) + aCloud(88, 40, .6) +        // N Seoul Tower on Namsan, a palace roof below
+    aP("M-5,130 Q60,82 125,130 V158 H-5Z", "#43a047") + [[0, 126, 10], [12, 122, 8], [100, 120, 10], [112, 126, 8]].map(([x, y, w]) => aR(x, y, w, 34, "#b0bec5")).join(""),
+    aR(57, 46, 6, 56, "#eceff1") + aR(55, 98, 10, 8, "#cfd8dc") + `<ellipse cx="60" cy="44" rx="13" ry="5" fill="#90a4ae" ${A_OUT}/><ellipse cx="60" cy="38" rx="11" ry="6" fill="#eceff1" ${A_OUT}/>` +
+    `<rect x="50" y="35" width="20" height="3" fill="#4fc3f7"/>` + aR(58.5, 14, 3, 18, "#eceff1") + `<path d="M58.5,18 h3 M58.5,24 h3" stroke="#e53935" stroke-width="2.4"/><path d="M60,14 V6" stroke="${A_OL}" stroke-width="1"/>` +
+    aR(78, 136, 34, 14, "#c62828") + [80, 92, 104].map(x => `<rect x="${x}" y="138" width="6" height="12" fill="#5d4037"/>`).join("") +
+    aP("M72,138 Q76,134 78,128 H112 Q114,134 118,138Z", "#37474f") + `<path d="M78,131 H112" stroke="#26a69a" stroke-width="1.4"/>`],
+};
+// one figure in a scene, the white cut-out edge around it
+const aYFig = (o, x, y, s, rot = "", extra = "") => aEdge(aFig(o, x, y, s, extra, rot));
+const aKitOf = t => ({ ...A_TEAMS[t].kit });
+// a corner flag (the club's crest on its colours)
+const aYFlag = (t, x = 6, y = 134) => aFlagAt(t, x, y);
+const A_KEEP2 = { shirt: "#7e57c2", trim: "#fff", shorts: "#4527a0", socks: "#7e57c2", gloves: "#fff" };     // the other team's keeper
+/* per team: crowd / confetti colours, the night match's glow, the retro card's year (only where sure; the comment says what it is) */
+const A_YT = {
+  pt: ["#DA291C #046A38 #FFE900", "#69f0ae", 1966],      // World Cup: third place
+  slb: ["#E30613 #fff #ffc107", "#ff5252", 1904],        // Benfica founded
+  vsc: ["#fff #111 #ffc107", "#ffd740", 1922],           // Vitória SC founded
+  cv: ["#003893 #fff #CF2027 #F7D116", "#40c4ff", 2013],  // first Africa Cup of Nations (quarter-finals)
+  es: ["#C60B1E #FFC400", "#ffd740", 1964],              // European champions
+  fr: ["#002654 #fff #ED2939", "#40c4ff", 1998],         // World Cup
+  it: ["#2F7DE1 #fff #009246 #CE2B37", "#40c4ff", 1934],  // first World Cup
+  de: ["#000 #DD0000 #FFCE00", "#ffd740", 1954],         // first World Cup
+  nl: ["#F36C21 #fff #21468B", "#ffab40", 1988],         // European champions
+  ch: ["#DA291C #fff", "#ff5252", 1954],                 // hosted the World Cup
+  en: ["#fff #CE1124 #1D2A5C", "#ff5252", 1966],         // World Cup
+  no: ["#BA0C2F #fff #00205B", "#40c4ff", 0],
+  br: ["#FFDC02 #009C3B #002776", "#eeff41", 1958],      // first World Cup
+  ar: ["#74ACDF #fff #F6B40E", "#80d8ff", 1978],         // first World Cup
+  cn: ["#DE2910 #FFDE00", "#ffd740", 0],
+  jp: ["#1B3A8C #fff #BC002D", "#40c4ff", 0],
+  kr: ["#E4002B #fff #0047a0 #111", "#ff4081", 2002],     // World Cup semi-finalists as co-hosts
+};
+const aYCols = t => A_YT[t][0].split(" ");
+const aPitch = (y, W = 120, step = 24) => `<rect y="${y}" width="${W}" height="${158 - y}" fill="#43a047"/>${[...Array(Math.ceil(W / step / 2))].map((_, i) => `<rect x="${i * step * 2}" y="${y}" width="${step}" height="${158 - y}" fill="#4caf50"/>`).join("")}`;
+const aBoards = (y, W, cols, w = 24) => [...Array(Math.ceil(W / w))].map((_, i) => `<rect x="${i * w}" y="${y}" width="${w}" height="9" fill="${cols[i % cols.length]}" ${A_OUT}/>`).join("");
+function aConfetti(n, cols, seed) {
+  const R = aRand(seed);
+  return [...Array(n)].map(() => { const x = R() * 120, y = R() * 128, a = R() * 180, c = cols[Math.floor(R() * cols.length)];
+    return R() < .7 ? `<rect x="${(x - 1.8).toFixed(1)}" y="${(y - 1).toFixed(1)}" width="3.6" height="2" fill="${c}" transform="rotate(${a.toFixed(0)} ${x.toFixed(1)} ${y.toFixed(1)})"/>` : aC(x, y, 1.3, c); }).join("");
+}
+Object.assign(A_POSES, {
+  photo: { ba: [[39, 49], [33, 59], [33, 69]], fa: [[61, 49], [67, 59], [67, 69]], bl: [[45, 78], [44, 91], [43, 103]], bb: [41, 107, 0], fl: [[55, 78], [56, 91], [57, 103]], fb: [59, 107, 0] },
+  strike: { ...A_POSES.kick, ball: undefined }, hooray: { ...A_POSES.cheer, ball: undefined } });
+const A_YSCENES = {
+  land: t => A_LAND[t](),
+  // the big picture, 267 wide: the left half shows 0-133.5, the right half 133.5-267
+  two: (t, half) => {
+    const cols = aYCols(t), look = aLook(t, 0);
+    const back = `<rect width="267" height="62" fill="#263238"/>${aCrowd(0, 270, [8, 18, 28, 38, 48], [...cols, "#fff"], 11 + t.length, 2.6)}${aBoards(56, 267, [...cols, "#ffeb3b"])}` +
+      aPitch(65, 267, 22) + `<path d="M0,126 H267" stroke="#fff" stroke-width="2.2" opacity=".85"/>` + aNet(166, 58, 254, 124);
+    const main = [`<path d="M162,126 V56 H258 V126" fill="none" stroke="${A_OL}" stroke-width="5.4"/><path d="M162,126 V56 H258 V126" fill="none" stroke="#fff" stroke-width="3.4"/>` +
+      `<path d="M100,124 Q140,70 176,74" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" opacity=".55" stroke-dasharray="1 7"/><path d="M134,92 Q156,76 172,74" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" opacity=".8"/>` +
+      aYFig({ ...aKitOf(t), pose: "strike", num: 9, hs: "spiky", ...look }, 10, 20, 1.12) +
+      aEdge(aFootball(180, 74, 8)) + aYFig({ ...A_KEEP2, pose: "keeper", num: 1, hs: "neat", ...aLook(t, 4) }, 188, 50, .78, "rotate(68 50 60)") +
+      aSpark(166, 64, 5) + aSpark(196, 44, 4)];
+    return [`<g transform="translate(${half ? -133.5 : 0} 0)">${back}</g>`, `<g transform="translate(${half ? -133.5 : 0} 0)">${main}</g>`];
+  },
+  comic: t => {       // a bicycle kick: halftone, a burst, speed lines
+    const ht = aU("aht"), k = aKitOf(t), rgb = h => [1, 3, 5].map(i => parseInt(h.length < 5 ? h[1 + (i >> 1)].repeat(2) : h.slice(i, i + 2), 16));
+    const far = c => rgb(c).reduce((s, v, i) => s + Math.abs(v - rgb(k.stripes || k.shirt)[i]) + Math.abs(v - rgb(k.shirt)[i]), 0);
+    const bg = ["#4fc3f7", "#ff8a80", "#b9f6ca", "#ffd180", "#ea80fc"].reduce((a, c) => far(c) > far(a) ? c : a);
+    const burst = (cx, cy, r1, r2, n, f, x = "") => `<polygon points="${aPts([...Array(n * 2)].map((_, i) => { const r = i % 2 ? r2 : r1, a = i * Math.PI / n + .2; return [cx + r * Math.cos(a), cy + r * Math.sin(a)]; }))}" fill="${f}" ${x} stroke-linejoin="round"/>`;
+    return [`<defs><pattern id="${ht}" width="6" height="6" patternUnits="userSpaceOnUse"><circle cx="1.5" cy="1.5" r="1.3" fill="#000" opacity=".25"/><circle cx="4.5" cy="4.5" r="1.3" fill="#000" opacity=".25"/></pattern></defs>` +
+      `<rect width="120" height="158" fill="${bg}"/><rect width="120" height="158" fill="url(#${ht})"/>` + burst(84, 32, 50, 30, 14, "#fff", `stroke="${A_OL}" stroke-width="1.4"`) + burst(84, 32, 30, 18, 12, "#ffeb3b") +
+      [[-6, 150, 58, 92], [4, 158, 64, 100], [-6, 134, 48, 84], [20, 160, 74, 108], [-6, 118, 40, 78]].map(([a, b, c, d]) => `<path d="M${a},${b} L${c},${d}" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".9"/>`).join("") +
+      `<rect y="140" width="120" height="18" fill="#43a047"/>${[...Array(16)].map((_, i) => `<path d="M${i * 8 + 2},141 l2,-5 l2,5" fill="#2e7d32"/>`).join("")}` + aYFlag(t),
+      aYFig({ ...k, pose: "kick", hs: "curly", num: 7, ...aLook(t, 6) }, 112, 22, 1, "scale(-1 1) rotate(195 50 60)") +
+      `<path d="M70,66 Q94,62 98,46" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/><path d="M64,74 Q92,72 104,52" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".8"/>` +
+      `<path d="M100,10 l4,-6 M108,16 l7,-3 M110,28 l7,1" stroke="${A_OL}" stroke-width="2" stroke-linecap="round"/>`];
+  },
+  photo: t => {       // the team photo: three players, the captain lifting the cup
+    const k = aKitOf(t), cols = aYCols(t);
+    return [`<rect width="120" height="158" fill="#263238"/>${aCrowd(0, 124, [6, 15, 24, 33, 42], cols, 5 + t.length, 2.3)}${aBoards(48, 120, cols.length > 1 ? cols : [cols[0], "#fff"])}` +
+      aPitch(57, 120, 24) + aSpark(14, 12, 5) + aSpark(96, 20, 6) + aSpark(60, 8, 3.5) + aYFlag(t),
+      aYFig({ ...k, pose: "photo", num: 4, hs: "buzz", ...aLook(t, 2) }, 0, 40, .53) + aYFig({ ...k, pose: "photo", num: 8, hs: "pony", lash: 1, ...aLook(t, 3) }, 64, 40, .53) +
+      aYFig({ ...k, pose: "lift", num: 10, hs: "spiky", ...aLook(t, 4) }, 27, 58, .62) + aEdge(aFootball(100, 132, 7.5))];
+  },
+  retro: t => {       // an old card: sepia, a laced collar and a laced ball, a year when there's one to tell
+    const sp = aU("asep"), vg = aU("avg"), k = aKitOf(t), yr = A_YT[t][2];
+    const extra = `<path d="M42,41 L50,47.5 L58,41 L57,46 L50,51 L43,46Z" fill="#fff" ${A_OUT}/><path d="M48.6,47.8 l2.8,1.6 M51.4,47.8 l-2.8,1.6" stroke="${A_OL}" stroke-width=".7"/>` +
+      aC(77, 104, 8.3, "#8d5524", A_OUT) + `<path d="M70,101 Q77,98 84,101 M70,107 Q77,110 84,107 M77,96 V112" fill="none" stroke="#5d3613" stroke-width=".9"/><path d="M75.5,99.5 h3 M75.5,101.5 h3 M75.5,103.5 h3" stroke="#f3e6c8" stroke-width=".7"/>`;
+    const filt = `<defs><filter id="${sp}" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values=".39 .77 .19 0 0  .35 .69 .17 0 0  .27 .53 .13 0 0  0 0 0 1 0"/></filter>` +
+      `<radialGradient id="${vg}" cx=".5" cy=".5" r=".72"><stop offset=".55" stop-color="#3b2208" stop-opacity="0"/><stop offset="1" stop-color="#3b2208" stop-opacity=".6"/></radialGradient></defs>`;
+    const label = yr ? `<text x="60" y="144" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-weight="700" font-size="11" fill="#5a4020" letter-spacing="1">${yr}</text>`
+      : [48, 60, 72].map(x => aStar(x, 140, 3.4, "#8a6d3b")).join("");
+    return [filt + `<g filter="url(#${sp})"><rect width="120" height="158" fill="#cfd8dc"/><path d="M0,30 L20,18 H100 L120,30 V58 H0Z" fill="#6d4c41" ${A_OUT}/>` +
+      [...Array(5)].map((_, i) => `<path d="M0,${36 + i * 5} H120" stroke="#4e342e" stroke-width="1"/>`).join("") + aCrowd(4, 118, [34, 44], ["#5d4037", "#3e2723", "#795548"], 9, 2.2) +
+      `<rect y="58" width="120" height="100" fill="#689f38"/>${[...Array(9)].map((_, i) => `<ellipse cx="${(i * 37) % 113 + 6}" cy="${70 + (i * 23) % 60}" rx="7" ry="2" fill="#8d6e63" opacity=".55"/>`).join("")}</g>`,
+      `<g filter="url(#${sp})">${aYFig({ ...k, stripes: k.stripes, boots: "#4e342e", pose: "run", hs: "neat", ...aLook(t, 1) }, 2, 14, 1.12, "", extra)}</g>`,
+      `<g filter="url(#${sp})"><rect width="120" height="158" fill="url(#${vg})"/><path d="M18,20 l14,40 M90,30 l-6,30 M30,120 l30,6" stroke="#fff" stroke-width=".5" opacity=".35"/>` +
+      `<rect x="3.5" y="3.5" width="113" height="151" rx="4" fill="none" stroke="#f3e6c8" stroke-width="7"/>` +
+      `<path d="M20,133 H100 L96,140 L100,147 H20 L24,140Z" fill="#f3e6c8" stroke="#8a6d3b" stroke-width="1"/>${label}</g>` + `<path d="M0,0 L9,0 L0,9Z M120,158 L111,158 L120,149Z" fill="#fff" opacity=".7"/>`];
+  },
+  night: t => {       // floodlights in the dark, a glowing player and a comet ball
+    const gl = aU("agl"), tr = aU("atr"), bm = aU("abm"), c = A_YT[t][1];
+    return [`<defs><filter id="${gl}" x="-20%" y="-20%" width="140%" height="140%"><feMorphology in="SourceAlpha" operator="dilate" radius="1.6" result="d"/>` +
+      `<feFlood flood-color="${c}"/><feComposite in2="d" operator="in"/><feGaussianBlur stdDeviation="2.6" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>` +
+      `<linearGradient id="${tr}" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffff8d" stop-opacity="0"/><stop offset="1" stop-color="#ffff8d" stop-opacity=".95"/></linearGradient>` +
+      `<linearGradient id="${bm}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e1f5fe" stop-opacity=".45"/><stop offset="1" stop-color="#e1f5fe" stop-opacity="0"/></linearGradient></defs>` +
+      `<rect width="120" height="158" fill="#070b24"/>${[[14, 30], [30, 12], [98, 52], [108, 76], [20, 70], [48, 40], [76, 62]].map(([x, y]) => aC(x, y, .9, "#fff")).join("")}` +
+      `<polygon points="0,0 14,0 70,150 20,158" fill="url(#${bm})"/><polygon points="120,0 108,0 54,150 104,158" fill="url(#${bm})" opacity=".7"/>` +
+      `<rect y="118" width="120" height="40" fill="#0b3d1f"/><path d="M0,124 H120" stroke="${c}" stroke-width="1.2" opacity=".6"/><ellipse cx="60" cy="146" rx="30" ry="9" fill="none" stroke="${c}" stroke-width="1.2" opacity=".5"/>` +
+      `<polygon points="122,-14 128,-4 88,18 81,10" fill="url(#${tr})"/>` + aYFlag(t),
+      `<g filter="url(#${gl})">${aFig({ ...aKitOf(t), pose: "header", num: 10, hs: "spiky", ...aLook(t, 5), boots: c })}</g>` +
+      aC(84.4, 12.8, 13, "#ffff8d", `opacity=".25"`) + aSpark(102, 26, 4, "#ffff8d") + aSpark(68, 6, 3, "#ffff8d")];
+  },
+  party: t => {       // the goal party: the ball in the net, confetti in the team's colours
+    const cols = aYCols(t), conf = [...cols, "#ff5252", "#69f0ae", "#e040fb", "#ffeb3b"];
+    return [`<rect width="120" height="158" fill="#1a237e"/>${aCrowd(0, 124, [8, 18, 28], cols, 4 + t.length, 2.4)}` +
+      `<g opacity=".6">${[...Array(16)].map((_, i) => `<path d="M${-60 + i * 12},34 L${i * 12},126 M${i * 12},34 L${-60 + i * 12},126" stroke="#fff" stroke-width=".7"/>`).join("")}</g>` +
+      `<path d="M0,34 H120" stroke="#fff" stroke-width="3"/><rect y="124" width="120" height="34" fill="#43a047"/><path d="M0,126 H120" stroke="#fff" stroke-width="2"/>` +
+      aEdge(aFootball(100, 116, 8)) + aConfetti(55, conf, 21 + t.length) +
+      [["M4,10 q8,6 4,14 t4,14", conf[0]], ["M110,4 q-8,6 -4,14 t-4,14", conf[1]], ["M30,4 q6,8 0,14", conf[2]], ["M92,40 q-6,8 0,16", conf[3]]].map(([d, c]) => `<path d="${d}" fill="none" stroke="${c}" stroke-width="2" stroke-linecap="round"/>`).join("") + aYFlag(t),
+      aYFig({ ...aKitOf(t), pose: "hooray", num: 10, hs: "curly", ...aLook(t, 6) }, 2, 18.6, 1.16) + aConfetti(10, conf, 5 + t.length)];
+  },
+  live: t => {        // the living sticker: the flag waves, the player bobs and winks, sparkles twinkle (CSS lv-…)
+    const look = aLook(t, 1), s = .95, ox = 4, oy = 30, x0 = 76, y0 = 8, ex = ox + 56.7 * s, ey = oy + 28.5 * s, flag = aMiniInner(t);
+    const strips = [...Array(11)].map((_, i) => `<g class="lv-wave" style="animation-delay:-${(i * .14).toFixed(2)}s"><svg x="${x0 + i * 3}" y="${y0}" width="3.1" height="22" viewBox="${(i * 60 / 11).toFixed(2)} 0 ${(60 / 11 + .1).toFixed(2)} 40" preserveAspectRatio="none">${flag}</svg></g>`).join("");
+    return [aSky("#81d4fa", "#e1f5fe") + aCloud(6, 8, .7) + `<rect y="96" width="120" height="10" fill="#263238"/>${aCrowd(0, 124, [99], aYCols(t), 3 + t.length, 2)}` + aPitch(106, 120, 24) +
+      `<path d="M0,128 H120" stroke="#fff" stroke-width="1.6" opacity=".8"/>`,
+      `<path d="M${x0 - .6},96 L${x0 + .8},${y0 - 2}" stroke="${A_OL}" stroke-width="3"/><path d="M${x0 - .6},96 L${x0 + .8},${y0 - 2}" stroke="#d7ccc8" stroke-width="1.6"/>${aC(x0 + .8, y0 - 3, 2, "#ffc107", A_OUT)}` +
+      `<g class="lv-bob">${aYFig({ ...aKitOf(t), pose: "cheer", num: 9, hs: "spiky", ...look }, ox, oy, s)}` +
+      `<g class="lv-wink"><ellipse cx="${ex.toFixed(1)}" cy="${(ey + .4).toFixed(1)}" rx="${(4.5 * s).toFixed(2)}" ry="${(5.5 * s).toFixed(2)}" fill="${look.skin}"/><path d="M${(ex - 4).toFixed(1)},${(ey + 1.2).toFixed(1)} Q${ex.toFixed(1)},${(ey - 3).toFixed(1)} ${(ex + 4).toFixed(1)},${(ey + 1.2).toFixed(1)}" fill="none" stroke="#1a1a1a" stroke-width="1.9" stroke-linecap="round"/></g></g>` +
+      strips + `<rect x="${x0}" y="${y0}" width="33" height="22" fill="none" stroke="${A_OL}" stroke-width=".6" opacity=".4"/>` +
+      aSpark(14, 22, 5, "#fff", "lv-tw") + aSpark(104, 48, 4, "#fff", "lv-tw", "animation-delay:-.6s") + aSpark(24, 90, 4, "#fff", "lv-tw", "animation-delay:-1.2s")];
+  },
+};
+// the nine stickers of a picture page, in grid order (2 and 3 = the two halves, side by side in the top row)
+const A_YPAGE = [{ scene: "land" }, { scene: "two", half: "l" }, { scene: "two", half: "r" }, { scene: "comic" }, { scene: "photo" }, { scene: "retro" },
+  { scene: "night" }, { scene: "party" }, { scene: "live" }];
+function aSceneSvg(st, ghost) {
+  const [back, main, top = ""] = st.sp ? A_SPECIALS[st.sp]() : A_YSCENES[st.scene](st.team, st.half === "r"), w = st.half ? 133.5 : 120;
+  const fl = st.scene === "land" ? aYFlag(st.team) : "";
+  return `<svg${ghost ? ` class="aghost"` : ""} viewBox="0 0 ${w} 158" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${ghost ? main : back + main + top + fl}</svg>`;
+}
+
+/* ---- the special page (sp, first in the book; the owner's choice from lab/special_ideas.html, 2026-10-03): chess pieces
+   and friends that belong to no team. Earned from packs like every other sticker. A sticker = [backdrop, main] like the
+   picture pages; the ball buddy is the page's one living sticker (it bobs) ---- */
+const aAt = (x, y, sc, inner, rot = "") => `<g transform="translate(${x} ${y}) scale(${sc})${rot ? " " + rot : ""}">${inner}</g>`;
+const aGoldCrown = (y, w = 9) => `<polygon points="${-w},${y} ${-w - 1},${y - 8} ${-w / 2},${y - 4} 0,${y - 10} ${w / 2},${y - 4} ${w + 1},${y - 8} ${w},${y}" fill="#ffc107" ${A_OUT} stroke-linejoin="round"/>` +
+  aC(0, y - 2.6, 1.3, "#e53935") + aC(-w + 2.6, y - 2, 1, "#29b6f6") + aC(w - 2.6, y - 2, 1, "#29b6f6");
+// a chess piece with a face, drawn around 0,0 (base at y 19): kind r / k / q, mood happy / brave, crown, captain's armband
+function aPiece(kind, col, mood, o = {}) {
+  const s = [`<path d="M-11,13 H11 L13,19 H-13Z" fill="${col}" ${A_OUT}/>`];
+  let fy = 1;
+  if (kind === "r") s.push(`<path d="M-8,14 L-7,-6 H7 L8,14Z" fill="${col}" ${A_OUT}/><path d="M-10,-6 V-16 H-6 V-12 H-2 V-16 H2 V-12 H6 V-16 H10 V-6Z" fill="${col}" ${A_OUT} stroke-linejoin="round"/>`);
+  else {
+    s.push(`<path d="M-8,14 L-6,-2 H6 L8,14Z" fill="${col}" ${A_OUT}/>`, `<ellipse cx="0" cy="-2" rx="7.5" ry="2.4" fill="${col}" ${A_OUT}/>`, aC(0, -8, 8, col, A_OUT)); fy = -8;
+    if (o.crown) s.push(aGoldCrown(-14) + (kind === "k" ? `<path d="M0,-24 V-30 M-2.6,-27.5 H2.6" stroke="${A_OL}" stroke-width="2.8"/><path d="M0,-24 V-30 M-2.6,-27.5 H2.6" stroke="#ffc107" stroke-width="1.4"/>` : aC(0, -25.5, 1.8, "#fff", A_OUT)));
+  }
+  if (o.armband) s.push(`<rect x="-7" y="3.5" width="14" height="5" fill="#ffc107" ${A_OUT}/><text x="0" y="7.6" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="4.4" fill="#5d4037">C</text>`);
+  s.push(aEye(-3.4, fy, "#3e2723", .5) + aEye(3.4, fy, "#3e2723", .5) + (mood === "brave"
+    ? `<path d="M-6,${fy - 4.2} L-1.2,${fy - 2.6} M6,${fy - 4.2} L1.2,${fy - 2.6}" stroke="${A_OL}" stroke-width="1.2" stroke-linecap="round"/><path d="M-2.5,${fy + 4.6} H2.5" stroke="${A_OL}" stroke-width="1" stroke-linecap="round"/>`
+    : `<path d="M-2.6,${fy + 3.6} Q0,${fy + 6.4} 2.6,${fy + 3.6}" fill="none" stroke="${A_OL}" stroke-width="1" stroke-linecap="round"/>` +
+      `<ellipse cx="-5.6" cy="${fy + 2.8}" rx="1.4" ry=".8" fill="#ff8a80" opacity=".8"/><ellipse cx="5.6" cy="${fy + 2.8}" rx="1.4" ry=".8" fill="#ff8a80" opacity=".8"/>`));
+  return s.join("");
+}
+A_ANIMALS.robot = { skin: "#b0bec5", head: () => `<path d="M50,9 V1" stroke="${A_OL}" stroke-width="2"/>` + aC(50, 0, 2.6, "#e53935", A_OUT) +
+  aC(30, 25, 3.6, "#90a4ae", A_OUT) + aC(70, 25, 3.6, "#90a4ae", A_OUT) +
+  `<rect x="31" y="9" width="38" height="32" rx="7" fill="#cfd8dc" ${A_OUT}/><rect x="35.5" y="14" width="29" height="21" rx="4" fill="#263238"/>` +
+  `<rect x="40" y="19" width="6" height="7" rx="2" fill="#40c4ff"/><rect x="54" y="19" width="6" height="7" rx="2" fill="#40c4ff"/>` +
+  `<path d="M44,29.5 Q50,33.5 56,29.5" fill="none" stroke="#40c4ff" stroke-width="1.6" stroke-linecap="round"/>` + aC(42, 21, .9, "#fff") + aC(56, 21, .9, "#fff") +
+  `<path d="M34,11.5 Q40,10 46,11" stroke="#fff" stroke-width="1.4" fill="none" stroke-linecap="round" opacity=".7"/>` };
+const aPent = (x, y, r, rot, f, x2 = "") => `<polygon points="${aPts([0, 1, 2, 3, 4].map(i => { const a = rot + i * 2 * Math.PI / 5; return [x + r * Math.cos(a), y + r * Math.sin(a)]; }))}" fill="${f}" ${x2}/>`;
+const aRadial = (id, a, b, cy = ".42") => `<defs><radialGradient id="${id}" cx=".5" cy="${cy}" r=".75"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></radialGradient></defs><rect width="120" height="158" fill="url(#${id})"/>${A_RAYS}`;
+const aGloveAt = (x, y, r = 7) => aC(x, y, r, "#ffeb3b", A_OUT) + aL([[x - r * .43, y - r * .21], [x + r * .43, y - r * .21]], A_OL, .8, false);
+const aPlinth = g => `<rect x="26" y="124" width="68" height="20" rx="2" fill="#4e342e" ${A_OUT}/><rect x="44" y="128" width="32" height="11" rx="1.5" fill="${g}" ${A_OUT}/>${aStar(60, 133.5, 3.6, "#7a5200")}`;
+const A_SPECIALS = {
+  rook: () => [A_BACK.pitch + A_RAYS + aNet(12, 22, 108, 112, 8, .55) +          // the rook in goal, gloves out, saves the shot
+    `<path d="M112,28 l6,-4 M113,36 h6 M110,44 l6,3" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/>` + aSpark(96, 26, 4, "#ffeb3b") + aSpark(112, 52, 3, "#ffeb3b"),
+    `<path d="M8,118 V18 H112 V118" fill="none" stroke="${A_OL}" stroke-width="5.4"/><path d="M8,118 V18 H112 V118" fill="none" stroke="#fff" stroke-width="3.6"/>` +
+    aEdge(aL([[44, 82], [30, 70], [20, 54]], "#f5ecd7", 6) + aGloveAt(20, 52) + aL([[76, 82], [92, 66], [100, 50]], "#f5ecd7", 6) + aGloveAt(100, 48) +
+      aAt(60, 92, 2.4, aPiece("r", "#f5ecd7", "brave") + `<text x="0" y="12.5" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="7" fill="#e53935" stroke="#fff" stroke-width=".5" paint-order="stroke">1</text>`) +
+      aFootball(104, 36, 7.5))],
+  buddy: () => {      // the ball buddy: winks, a thumbs-up, bobs (the living sticker)
+    const cp = aU("abc");
+    return [A_BACK.pitch + A_RAYS + `<ellipse cx="60" cy="134" rx="26" ry="4.5" fill="#000" opacity=".2"/>` +
+      [[6, 56], [2, 70], [6, 84]].map(([x, y]) => `<path d="M${x},${y} H${x + 14}" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".9"/>`).join(""),
+      `<defs><clipPath id="${cp}"><circle cx="60" cy="70" r="31"/></clipPath></defs><g class="lv-bob">` + aEdge(
+        aL([[50, 98], [46, 112], [42, 124]], "#fff", 3.4) + `<ellipse cx="40" cy="126" rx="8" ry="4.4" fill="#e53935" ${A_OUT}/>` +
+        aL([[70, 98], [76, 110], [80, 122]], "#fff", 3.4) + `<ellipse cx="83" cy="124" rx="8" ry="4.4" fill="#e53935" ${A_OUT} transform="rotate(-18 83 124)"/>` +
+        aL([[31, 76], [20, 72], [14, 60]], "#fff", 3.4) + aC(14, 57, 5.4, "#fff", A_OUT) +
+        aL([[89, 76], [99, 70], [103, 58]], "#fff", 3.4) + aC(103, 55, 5.4, "#fff", A_OUT) + `<path d="M103,49.5 v-4" stroke="${A_OL}" stroke-width="3.4" stroke-linecap="round"/><path d="M103,49.5 v-4" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/>` +
+        aC(60, 70, 31, "#fff") + `<g clip-path="url(#${cp})">${[[60, 36, 11, Math.PI / 2], [28, 62, 11, 0], [92, 62, 11, Math.PI], [40, 100, 10, -Math.PI / 4], [80, 100, 10, Math.PI * 1.25]].map(p => aPent(...p, "#263238")).join("")}` +
+        `<path d="M74,44 A31,31 0 0 1 82,96 A36,36 0 0 0 74,44Z" fill="#000" opacity=".08"/></g>` + aC(60, 70, 31, "none", `stroke="${A_OL}" stroke-width="1.6"`) +
+        aEye(50, 68, "#1e88e5", 1.3) + `<path d="M64.5,69 Q70,62.5 75.5,69" fill="none" stroke="#1a1a1a" stroke-width="2.3" stroke-linecap="round"/>` +
+        `<path d="M50,80 Q60,92 70,80Z" fill="#c0392b" stroke="${A_OL}" stroke-width="1" stroke-linejoin="round"/><ellipse cx="60" cy="85.5" rx="4.2" ry="2" fill="#ff8a80"/>` +
+        `<g transform="translate(10 42)">${aBlush(34.5)}</g>`) + `</g>`];
+  },
+  referee: () => {    // black kit, a whistle, the yellow card in one hand and the red one in the other
+    const look = { skin: A_SKIN[1], hair: A_HAIR.dark, eyes: A_EYES.brown }, crd = (x, c, r) => `<rect x="${x - 5.5}" y="9" width="11" height="15" rx="1.4" fill="${c}" ${A_OUT} transform="rotate(${r} ${x} 26)"/>` + aC(x, 26, 4.4, look.skin, A_OUT);
+    const extra = crd(27, "#ffeb3b", -14) + crd(73, "#e53935", 14) + `<path d="M44.5,42 Q47,39 49,38.5 M55.5,42 Q54,39.5 53,38.8" fill="none" stroke="#eceff1" stroke-width="1"/>` +
+      `<rect x="47" y="35.4" width="10" height="4.6" rx="2.2" fill="#b0bec5" ${A_OUT}/>` + aC(56.5, 39, 3.2, "#b0bec5", A_OUT) + aC(56.5, 39, 1.1, "#546e7a") +
+      `<path d="M63,33 l5,-3 M64.5,37.5 h6 M63,42 l5,3" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>`;
+    return [A_BACK.pitch + A_RAYS, aEdge(aFig({ shirt: "#212121", trim: "#fff", shorts: "#212121", socks: "#212121", pose: "cheer", hs: "neat", ...look, star: 1 }, 2, 18.6, 1.16, extra)) + aEdge(aFootball(100, 142, 7))];
+  },
+  royals: () => [aRadial(aU("arp"), "#8e24aa", "#3a0a4f", ".4") + `<path d="M40,104 H80 L112,158 H8Z" fill="#c62828"/><path d="M40,104 H80 L112,158 H8Z" fill="none" stroke="#ffc107" stroke-width="2"/>` +       // King & Queen: the captain pair
+    aSpark(14, 22, 5) + aSpark(106, 30, 6) + aSpark(62, 14, 3.5) + aSpark(108, 84, 3.5),
+    aEdge(aAt(38, 96, 2.25, aPiece("k", "#f5ecd7", "happy", { crown: 1, armband: 1 })) + aAt(84, 101, 2.05, aPiece("q", "#f5ecd7", "happy", { crown: 1 })) + aFootball(61, 140, 7))],
+  rocket: () => {     // a football with a flame trail and stars
+    const R = aRand(19), g = aU("ark"), flame = (w, c) => `<path d="M${76 - 20 * w},${56 - 14 * w} C${52 - 10 * w},84 30,116 0,158 C34,132 ${64 + 8 * w},100 ${90 + 14 * w},${70 + 18 * w}Z" fill="${c}"/>`;
+    return [`<defs>${aVGrad(g, "#1a0638", "#4a148c")}</defs><rect width="120" height="158" fill="url(#${g})"/>` + [...Array(26)].map(() => aC(R() * 120, R() * 158, R() < .2 ? 1.1 : .6, "#fff")).join("") +
+      [[18, 60, 70, 20], [40, 120, 96, 84], [8, 96, 40, 70]].map(([a, b, c, d]) => `<path d="M${a},${b} L${c},${d}" stroke="#fff" stroke-width="1.4" stroke-linecap="round" opacity=".6"/>`).join("") +
+      aStar(102, 108, 6, "#ffeb3b") + aStar(18, 30, 5, "#ffeb3b") + aSpark(108, 20, 5) + aSpark(50, 22, 3.5) + aSpark(110, 138, 4, "#fff59d"),
+      flame(1, "#e53935") + flame(.7, "#ff9800") + flame(.4, "#ffeb3b") + aEdge(`<g transform="translate(78 54) scale(2.4) rotate(20) translate(-78 -54)">${aFootball(78, 54, 9)}</g>`)];
+  },
+  octopus: () => {    // the octopus keeper: eight arms, two gloves (the sea world)
+    const g = aU("asea"), C = "#ab47bc", D = "#7b1fa2";
+    const ten = d => `<path d="${d}" fill="none" stroke="${A_OL}" stroke-width="9.4" stroke-linecap="round"/><path d="${d}" fill="none" stroke="${C}" stroke-width="7.2" stroke-linecap="round"/><path d="${d}" fill="none" stroke="#f8bbd0" stroke-width="2.2" stroke-linecap="round" stroke-dasharray=".1 5" transform="translate(0 1.6)"/>`;
+    return [`<defs>${aVGrad(g, "#4fc3f7", "#01579b")}</defs><rect width="120" height="158" fill="url(#${g})"/>` +
+      [[10, 30], [50, 66], [86, 100]].map(([a, c]) => `<polygon points="${a},0 ${a + 12},0 ${c + 8},140 ${c},140" fill="#fff" opacity=".08"/>`).join("") +
+      [[12, 30, 3], [18, 20, 2], [104, 40, 3.5], [98, 28, 2], [108, 18, 1.6], [28, 44, 1.6]].map(([x, y, r]) => aC(x, y, r, "none", `stroke="#e1f5fe" stroke-width="1" opacity=".8"`)).join("") +
+      aNet(22, 34, 98, 118, 9.5, .55) + `<path d="M20,120 V32 H100 V120" fill="none" stroke="#fff" stroke-width="3" opacity=".85"/>` +
+      `<path d="M0,128 Q30,120 60,126 Q90,132 120,124 V158 H0Z" fill="#f3d9a4"/>` + aStar(104, 144, 6, "#ff7043") + `<path d="M14,146 q4,-7 8,0Z" fill="#f48fb1" ${A_OUT}/>` +
+      `<path d="M6,128 q-4,-10 2,-18 q6,-8 0,-18 M114,126 q4,-10 -2,-18 q-6,-8 0,-18" fill="none" stroke="#2e7d32" stroke-width="3" stroke-linecap="round"/>`,
+      aEdge(["M46,82 Q30,74 24,54", "M74,82 Q90,74 96,54", "M44,88 Q24,94 16,82 Q12,74 20,72", "M76,88 Q96,94 104,82 Q108,74 100,72", "M50,94 Q40,114 26,118 Q18,120 20,112",
+        "M70,94 Q80,114 94,118 Q102,120 100,112", "M56,96 Q54,116 44,126 Q40,130 46,132", "M64,96 Q66,116 76,126 Q80,130 74,132"].map(ten).join("") + aGloveAt(24, 51, 6) + aGloveAt(96, 51, 6) +
+        `<ellipse cx="60" cy="62" rx="27" ry="30" fill="${C}" ${A_OUT}/><path d="M36,80 Q60,96 84,80 L84,86 Q60,102 36,86Z" fill="#ffeb3b" ${A_OUT}/>` +
+        `<text x="60" y="94" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="9" fill="#111">1</text>` +
+        aC(48, 44, 4, D, `opacity=".45"`) + aC(72, 40, 3, D, `opacity=".45"`) + aC(66, 50, 2.2, D, `opacity=".45"`) + `<path d="M42,38 Q50,32 56,36" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".5"/>` +
+        aEye(50, 64, "#00897b", 1.25) + aEye(70, 64, "#00897b", 1.25) + `<g transform="translate(10 37)">${aBlush(34.5)}${aMouth()}</g>`) + aEdge(aFootball(16, 140, 7.5))];
+  },
+  robot: () => {      // a robot footballer on a neon pitch
+    const g = aU("arb");
+    return [`<defs>${aVGrad(g, "#0d1b4a", "#1a237e")}</defs><rect width="120" height="158" fill="url(#${g})"/>` +
+      `<g stroke="#00e5ff" stroke-width=".8" opacity=".55">${[...Array(9)].map((_, i) => `<path d="M${60 + (i - 4) * 6},96 L${60 + (i - 4) * 34},158"/>`).join("")}${[96, 102, 110, 121, 136, 156].map(y => `<path d="M0,${y} H120"/>`).join("")}</g>` +
+      [[14, 20], [30, 44], [98, 16], [106, 60], [20, 76], [86, 40]].map(([x, y]) => `<rect x="${x}" y="${y}" width="3" height="3" fill="#00e5ff" opacity=".7"/>`).join("") +
+      `<path d="M4,30 H20 V40 H30 M116,70 H100 V80 H92" fill="none" stroke="#00e5ff" stroke-width="1" opacity=".5"/>`,
+      aEdge(aFig({ shirt: "#ff7043", trim: "#263238", shorts: "#263238", socks: "#ff7043", boots: "#263238", head: "robot", pose: "run", num: 8 }))];
+  },
+  goldball: () => {   // a shining gold football on a stand (not a real award)
+    const gg = aU("agg"), cp = aU("agc");
+    return [aRadial(aU("agb"), "#c62828", "#3e0a0a") + aC(60, 62, 44, "#ffe082", `opacity=".18"`) +
+      aSpark(22, 26, 7) + aSpark(98, 22, 6) + aSpark(100, 96, 5, "#fff3c4") + aSpark(18, 92, 4.5, "#fff3c4") + aSpark(84, 40, 3.5),
+      `<defs><radialGradient id="${gg}" cx=".38" cy=".32" r=".75"><stop offset="0" stop-color="#fffde7"/><stop offset=".35" stop-color="#ffd54f"/><stop offset=".8" stop-color="#ffb300"/><stop offset="1" stop-color="#a87100"/></radialGradient>` +
+      `<clipPath id="${cp}"><circle cx="60" cy="62" r="32"/></clipPath></defs>` +
+      `<path d="M44,104 H76 L72,96 H48Z" fill="#212121" ${A_OUT}/><path d="M50,96 Q60,92 70,96" fill="none" stroke="${A_OL}" stroke-width="1"/>` +
+      `<path d="M40,104 H80 L84,128 H36Z" fill="#212121" ${A_OUT}/><rect x="30" y="128" width="60" height="9" rx="2" fill="#424242" ${A_OUT}/>` +
+      `<rect x="46" y="110" width="28" height="11" rx="1.5" fill="#ffc107" ${A_OUT}/>${aStar(60, 115.5, 3.6, "#7a5200")}` +
+      aEdge(aC(60, 62, 32, `url(#${gg})`) + `<g clip-path="url(#${cp})">${[[60, 62, 11, -Math.PI / 2], [60, 26, 10, Math.PI / 2], [27, 52, 10, 0], [93, 52, 10, Math.PI], [38, 94, 10, -Math.PI / 4], [82, 94, 10, Math.PI * 1.25]].map(p => aPent(...p, "#b8860b", `stroke="#7a5200" stroke-width="1"`)).join("")}</g>` +
+        aC(60, 62, 32, "none", `stroke="#7a5200" stroke-width="1.6"`) + `<path d="M40,48 Q46,36 58,34" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" opacity=".8"/>`)];
+  },
+  goldboot: () => {   // a gold football boot on a plinth (not a real award)
+    const g = aU("agbt"), boot = "M30,50 Q27,72 26,90 Q25,99 34,99 H97 Q107,99 107,91 Q107,82 95,79 Q80,75 70,68 Q62,62 61,50 Q46,45 30,50Z";
+    return [aRadial(aU("abg"), "#2e7d32", "#0b2e13", ".45") + aSpark(18, 26, 6) + aSpark(102, 30, 7) + aSpark(100, 112, 4.5) + aSpark(16, 104, 4) + aSpark(78, 16, 3, "#fff3c4"),
+      `<defs><linearGradient id="${g}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff3c4"/><stop offset=".3" stop-color="#ffd54f"/><stop offset=".65" stop-color="#ffb300"/><stop offset="1" stop-color="#9a6500"/></linearGradient></defs>` +
+      `<g transform="translate(60 72) rotate(-12) translate(-64 -74)">` + [33, 45, 77, 90, 100].map(x => `<rect x="${x - 2.5}" y="98" width="5" height="6.5" rx="1.5" fill="#b8860b" ${A_OUT}/>`).join("") +
+      `<path d="${boot}" fill="url(#${g})" stroke="${A_OL}" stroke-width="1.5" stroke-linejoin="round"/>` +
+      `<path d="M26,93 H106" stroke="#b8860b" stroke-width="4"/><path d="M26,96.5 Q26,99 34,99 H97 Q106,99 106.5,95" fill="none" stroke="${A_OL}" stroke-width="1.2"/>` +
+      `<path d="M30,50 Q46,45 61,50 Q56,55 46,55 Q36,55 30,50Z" fill="#7a5200" ${A_OUT}/><path d="M33,84 Q52,70 78,80 L74,86 Q52,78 35,90Z" fill="#fff3c4" opacity=".8"/>` +
+      [[60, 57], [63, 62], [67, 66.5]].map(([x, y]) => `<path d="M${x - 4},${y + 1.5} L${x + 4},${y - 2.5}" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/>`).join("") +
+      `<path d="M33,58 Q32,72 33,82" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".75"/></g>` +
+      `<path d="M36,116 H84 L90,124 H30Z" fill="#ffc107" ${A_OUT} stroke-linejoin="round"/>` + aPlinth("#ffc107")];
+  },
+};
+// the special page, in the owner's order (S11, S1, S3, S6, S19, S9, S15, S14, S4 of the lab); ids sp1…sp9 by slot
+const A_SP_ORDER = ["rook", "buddy", "referee", "royals", "rocket", "octopus", "robot", "goldball", "goldboot"];
+/* ---- the catalogue, by team: each of the 12 teams has a football page (the kit + 8 players, one the team's mascot)
+   and a "friends" page (5 basketball players and 4 animal friends in the team's kit); Portugal's section holds Portugal,
+   Benfica and Vitória SC. Then the bosses' page. Ids are page id + slot: progress is stored by id, numbers can move.
+   Album v2 (2026-10-03) moved the old basketball (bba, bbb) and animal (ana, anb) pages into the teams: `old` = the
+   sticker's v1 id, albumMigrate carries its copies over ---- */
 const A_SKIN = ["#f8dcc4", "#f2c29b", "#e0ac7e", "#b67a4b", "#8a5530", "#f5d6b4"];
 const A_HAIR = { black: "#1b1b1b", dark: "#3b2314", brown: "#6b3e1f", blond: "#e3b84f", light: "#f3dc8c", red: "#b5501f" };
 const A_EYES = { brown: "#6b3e1f", dark: "#3b2a1a", blue: "#3a7bd5", green: "#4a9a5a" };
@@ -3528,6 +4018,20 @@ const A_TEAMS = {
     looks: "0 light blue|0 blond blue|1 brown green|0 light blue|2 black dark|0 blond blue|0 red green" },
   jp: { kit: { shirt: "#1B3A8C", trim: "#fff", shorts: "#fff", socks: "#1B3A8C" }, gk: { shirt: "#ef6c00", trim: "#111", shorts: "#ef6c00", socks: "#ef6c00" }, mascot: "fox",
     looks: "5 black dark|5 black dark|5 dark brown|5 black dark|5 black dark|5 brown brown|5 black dark" },
+  fr: { kit: { shirt: "#14254F", trim: "#fff", numStroke: "#ED2939", shorts: "#fff", socks: "#ED2939" }, gk: { shirt: "#ec407a", trim: "#fff", shorts: "#ec407a", socks: "#ec407a" }, mascot: "hen",
+    looks: "1 brown brown|4 black dark|0 blond blue|3 black dark|1 dark green|2 dark brown|0 red green" },
+  it: { kit: { shirt: "#2F7DE1", trim: "#fff", shorts: "#fff", socks: "#2F7DE1" }, gk: { shirt: "#2e7d32", trim: "#fff", shorts: "#2e7d32", socks: "#2e7d32" }, mascot: "wolf",
+    looks: "1 dark brown|2 black dark|1 brown green|0 dark brown|3 black dark|2 brown brown|0 blond blue" },
+  kr: { kit: { shirt: "#E4002B", trim: "#fff", numStroke: "#111", shorts: "#111", socks: "#E4002B" }, gk: { shirt: "#26a69a", trim: "#111", shorts: "#26a69a", socks: "#26a69a" }, mascot: "hodori",
+    looks: "5 black dark|5 black dark|5 dark brown|5 black dark|5 black dark|1 black dark|5 dark dark" },
+  ch: { kit: { shirt: "#DA291C", trim: "#fff", shorts: "#DA291C", socks: "#DA291C", sockTrim: "#fff" }, gk: { shirt: "#fbc02d", trim: "#111", shorts: "#fbc02d", socks: "#fbc02d" }, mascot: "stbernard",
+    looks: "0 brown blue|1 dark brown|3 black dark|0 blond blue|2 dark brown|0 light green|4 black dark" },
+  cv: { kit: { shirt: "#003893", trim: "#fff", numStroke: "#CF2027", shorts: "#003893", socks: "#003893", sockTrim: "#CF2027" }, gk: { shirt: "#ff9800", trim: "#111", shorts: "#ff9800", socks: "#ff9800" }, mascot: "shark",
+    looks: "4 black dark|3 black dark|4 black dark|2 dark brown|3 black brown|4 black dark|1 dark green" },
+  de: { kit: { shirt: "#fff", trim: "#111", numStroke: "#FFCE00", shorts: "#111", socks: "#fff" }, gk: { shirt: "#43a047", trim: "#fff", shorts: "#43a047", socks: "#43a047" }, mascot: "eagleb",
+    looks: "0 blond blue|1 brown brown|3 black dark|0 light blue|1 dark green|4 black dark|0 brown blue" },
+  nl: { kit: { shirt: "#F36C21", trim: "#fff", numStroke: "#21468B", shorts: "#fff", socks: "#F36C21" }, gk: { shirt: "#00acc1", trim: "#111", shorts: "#00acc1", socks: "#00acc1" }, mascot: "lionnl",
+    looks: "0 blond blue|4 black dark|1 brown brown|0 light blue|3 black dark|0 blond green|1 dark brown" },
 };
 // a team page: the kit, then eight players (two of them women: ponytail, long lashes), the last the team's mascot
 const A_SLOTS = [
@@ -3540,58 +4044,90 @@ function aLook(team, i) {
   const [sk, h, e] = A_TEAMS[team].looks.split("|")[i].split(" ");
   return { skin: A_SKIN[+sk], hair: A_HAIR[h], eyes: A_EYES[e] };
 }
+// the sections of the book (a flag each; Portugal's holds the two Portuguese clubs), every team = 3 pages (football, friends, pictures)
+// (Cape Verde beside Portugal, then Europe, South America, Asia)
+const A_SECTIONS = [["pt", "slb", "vsc"], ["cv"], ["es"], ["fr"], ["it"], ["de"], ["nl"], ["ch"], ["en"], ["no"], ["br"], ["ar"], ["cn"], ["jp"], ["kr"]];
 const A_PAGES = [
-  ...["pt", "slb", "vsc", "cn", "br", "es", "ar", "en", "no", "jp"].map(t => ({ id: t, team: t })),
-  { id: "bba", icon: "🏀" }, { id: "bbb", icon: "🏀" }, { id: "ana", icon: "🐾⚽" }, { id: "anb", icon: "🐾🏀" }, { id: "boss", icon: "👑" },
+  { id: "sp", icon: "🌟", sec: "sp" },
+  ...A_SECTIONS.flatMap(ts => ts.flatMap(t => [{ id: t, team: t, sec: ts[0] }, { id: t + "x", team: t, sec: ts[0], friends: 1 }, { id: t + "y", team: t, sec: ts[0], pics: 1 }])),
+  { id: "boss", icon: "👑", sec: "boss" },
 ];
-const A_KIT = (shirt, trim, extra = {}) => ({ shirt, trim, shorts: shirt, socks: "#fff", ...extra });
-const A_BB = [      // basketball: [team, pose, look slot, number]
-  ["pt", "dribble", 0, 7], ["cn", "shoot", 1, 11], ["br", "dribble", 2, 10], ["es", "shoot", 3, 5], ["ar", "dribble", 4, 6], ["slb", "shoot", 5, 14], ["jp", "dribble", 6, 8], ["en", "shoot", 0, 23], ["no", "dribble", 1, 13],
-  ["vsc", "shoot", 2, 9], ["cn", "dribble", 3, 15], ["pt", "shoot", 4, 4], ["es", "dribble", 0, 9], ["br", "shoot", 5, 12], ["jp", "shoot", 1, 3], ["slb", "dribble", 3, 21], ["ar", "shoot", 6, 7], ["vsc", "dribble", 4, 10],
-];
-const A_ANIMAL_STK = [   // [animal, pose, kit]
-  ["tiger", "kick", A_KIT("#1e88e5", "#fff")], ["cat", "cheer", A_KIT("#8e24aa", "#ffeb3b")], ["wolf", "header", A_KIT("#2e7d32", "#fff")],
-  ["mouse", "run", A_KIT("#ec407a", "#fff")], ["rabbit", "keeper", A_KIT("#ff7043", "#fff")], ["monkey", "kick", A_KIT("#00acc1", "#ffeb3b")],
-  ["bear", "lift", A_KIT("#c62828", "#ffc107")], ["fox", "run", A_KIT("#3949ab", "#fff")], ["dragon", "kick", A_KIT("#1e88e5", "#fff")],
-  ["panda", "dribble", A_KIT("#552583", "#fdb927")], ["lion", "shoot", A_KIT("#00897b", "#fff")], ["trex", "dribble", A_KIT("#ff7043", "#fff")],
-  ["penguin", "shoot", A_KIT("#fdd835", "#111")], ["eagle", "dribble", A_KIT("#1565c0", "#fff")], ["bull", "shoot", A_KIT("#c62828", "#fff")],
-  ["chick", "dribble", A_KIT("#43a047", "#fff")], ["rooster", "shoot", A_KIT("#fff", "#c62828")], ["jaguar", "dribble", A_KIT("#6a1b9a", "#fff")],
-];
+/* a team's friends page: 5 basketball players "b pose lookSlot number" (look slots 3 and 5 are the women) and 4 animal
+   friends "a animal pose number", laid out like a chequerboard; ":old" = the sticker's id before album v2 */
+const A_FRIENDS = {
+  pt: "b dribble 0 7:bba1|a chick dribble 3:anb7|b shoot 4 4:bbb3|a lion kick 9|b shoot 3 11|a polar keeper 1|b dribble 5 23|a jaguar header 17|b dribble 2 15",
+  slb: "b shoot 5 14:bba6|a rooster shoot 6:anb8|b dribble 3 21:bbb7|a tiger run 18|b dribble 0 7|a bear keeper 1|b shoot 2 10|a rabbit cheer 4|b shoot 6 30",
+  vsc: "b shoot 2 9:bbb1|a bull shoot 7:anb6|b dribble 4 10:bbb9|a fox kick 11|b dribble 3 5|a canary header 2|b shoot 5 8|a mouse cheer 20|b dribble 1 12",
+  cn: "b shoot 1 11:bba2|a tiger kick 1:ana1|b dribble 3 15:bbb2|a dragon kick 9:ana9|b dribble 5 6|a rabbit run 8|b shoot 0 9|a monkey shoot 3|b shoot 4 14",
+  br: "b dribble 2 10:bba3|a monkey kick 6:ana6|b shoot 5 12:bbb5|a jaguar dribble 18:anb9|b shoot 3 7|a eagle header 3|b dribble 0 4|a chick cheer 20|b dribble 6 11",
+  es: "b shoot 3 5:bba4|a bear lift 7:ana7|b dribble 0 9:bbb4|a eagle dribble 14:anb5|b dribble 5 13|a mouse run 8|b shoot 2 6|a wolf keeper 1|b shoot 4 23",
+  ar: "b dribble 4 6:bba5|a trex dribble 12:anb3|b shoot 6 7:bbb8|a penguin shoot 13:anb4|b shoot 3 5|a polar run 4|b dribble 5 10|a canary cheer 21|b shoot 1 9",
+  en: "b shoot 0 23:bba8|a mouse run 4:ana4|b dribble 3 8|a fox run 8:ana8|b shoot 5 11|a dragon header 6|b dribble 2 4|a panda keeper 1|b dribble 4 7",
+  no: "b dribble 1 13:bba9|a wolf header 3:ana3|b shoot 3 9|a fox cheer 7|b dribble 5 6|a penguin keeper 1|b shoot 0 12|a trex kick 19|b shoot 2 5",
+  jp: "b dribble 6 8:bba7|a cat cheer 2:ana2|b shoot 1 3:bbb6|a panda dribble 10:anb1|b shoot 3 11|a monkey run 5|b dribble 5 7|a tiger lift 9|b dribble 0 14",
+  fr: "b dribble 0 9|a rabbit keeper 5:ana5|b shoot 3 5|a cat kick 10|b dribble 5 11|a bear shoot 4|b shoot 1 7|a rooster run 17|b dribble 4 23",
+  it: "b shoot 2 6|a lion shoot 11:anb2|b dribble 3 8|a bull run 4|b shoot 5 13|a eagle kick 9|b dribble 0 10|a cat header 7|b shoot 4 7",
+  kr: "b shoot 0 7|a rabbit kick 11|b dribble 3 10|a panda header 5|b shoot 5 13|a fox keeper 1|b dribble 1 9|a monkey run 17|b shoot 4 6",
+  ch: "b dribble 2 10|a cat run 8|b shoot 3 4|a polar kick 9|b dribble 5 14|a bear keeper 1|b shoot 0 23|a mouse cheer 11|b dribble 6 7",
+  cv: "b shoot 1 12|a penguin kick 7|b dribble 3 9|a monkey header 10|b shoot 5 5|a chick run 4|b dribble 0 11|a bull keeper 1|b shoot 2 8",
+  de: "b dribble 0 5|a wolf kick 13|b shoot 3 14|a fox header 7|b dribble 5 8|a bear run 10|b shoot 4 6|a rabbit keeper 1|b dribble 2 9",
+  nl: "b shoot 2 14|a mouse kick 10|b dribble 3 7|a rooster run 9|b shoot 5 11|a cat keeper 1|b dribble 0 4|a penguin cheer 8|b shoot 6 3",
+};
+const A_BB_HAIR = ["spiky", "neat", "buzz", "pony", "spiky", "pony", "curly"];      // by look slot, as on the football page
 // the bosses of the learning path: a crown, the bot's ring colour on a black kit; only beating that boss gives it
 const A_BOSSES = [["gate1", "cat", "kick", 2], ["gate2", "wolf", "header", 3], ["gate4", "chick", "cheer", 0], ["gate3", "tiger", "keeper", 4], ["gate5", "trex", "lift", 5], ["gate6", "dragon", "kick", 6]];
 const STK = (() => {
   const out = [], add = (pg, o) => out.push({ ...o, id: pg.id + (out.filter(s => s.page === pg).length + 1), page: pg, n: out.length + 1 });
   for (const pg of A_PAGES) {
-    if (pg.team) A_SLOTS.forEach((sl, i) => {
-      const T = A_TEAMS[pg.team], kit = sl.gk ? { ...T.gk, gloves: "#fff" } : T.kit;
+    const T = A_TEAMS[pg.team];
+    if (pg.friends) A_FRIENDS[pg.team].split("|").forEach(row => {
+      const [spec, old] = row.split(":"), f = spec.split(" "), k = T.kit;
+      const kit = { shirt: k.shirt, stripes: k.stripes, trim: k.trim, numStroke: k.numStroke, old };
+      if (f[0] === "b") add(pg, { bd: "court", mini: pg.team, pose: f[1], num: +f[3], hs: A_BB_HAIR[+f[2]], lash: f[2] === "3" || f[2] === "5" ? 1 : 0,
+        ...aLook(pg.team, +f[2]), ...kit, shorts: k.shirt, socks: "#fff" });
+      else add(pg, { bd: A_POSES[f[2]].bball ? "court" : "pitch", mini: pg.team, head: f[1], pose: f[2], num: +f[3], ...kit,
+        shorts: A_POSES[f[2]].bball ? k.shirt : k.shorts, socks: A_POSES[f[2]].bball ? "#fff" : k.socks });
+    });
+    else if (pg.pics) A_YPAGE.forEach(o => add(pg, { ...o, team: pg.team }));
+    else if (pg.id === "sp") A_SP_ORDER.forEach(k => add(pg, { sp: k }));
+    else if (pg.team) A_SLOTS.forEach((sl, i) => {
+      const kit = sl.gk ? { ...T.gk, gloves: "#fff" } : T.kit;
       add(pg, { bd: pg.team, ...kit, ...sl, ...(sl.mascot ? { head: T.mascot } : i ? aLook(pg.team, i - 1) : {}), gk: undefined, mascot: undefined });
     });
-    else if (pg.id === "bba" || pg.id === "bbb") A_BB.slice(pg.id === "bba" ? 0 : 9, pg.id === "bba" ? 9 : 18).forEach(([t, pose, lk, num]) => {
-      const k = A_TEAMS[t].kit;
-      add(pg, { bd: "court", mini: t, pose, num, hs: ["spiky", "neat", "buzz", "pony", "spiky", "pony", "curly"][lk], lash: lk === 3 || lk === 5 ? 1 : 0,
-        ...aLook(t, lk), shirt: k.shirt, stripes: k.stripes, trim: k.trim, numStroke: k.numStroke, shorts: k.shirt, socks: "#fff" });
-    });
-    else if (pg.id === "ana" || pg.id === "anb") A_ANIMAL_STK.slice(pg.id === "ana" ? 0 : 9, pg.id === "ana" ? 9 : 18).forEach(([head, pose, kit]) =>
-      add(pg, { bd: A_POSES[pose].bball ? "court" : "pitch", head, pose, num: out.length % 23 + 1, ...kit }));
     else A_BOSSES.forEach(([gate, head, pose, lvl]) =>
       add(pg, { bd: "boss", head, pose, boss: gate, crown: 1, num: 1, shirt: "#212121", trim: lvl ? BOT_RING[lvl - 1] : "#fff", shorts: "#212121", socks: "#212121" }));
   }
   return out;
 })();
+// album v1 id → v2 id of the stickers that moved (the old basketball and animal pages)
+const A_VER = 3, A_MOVED = Object.fromEntries(STK.filter(st => st.old).map(st => [st.old, st.id]));
+/* bring an album up to A_VER (in place, once: guarded by a.v; running it again changes nothing). v2: a moved sticker keeps
+   its copies. v3 (2026-10-03, packs of 5 for every solve): c0 = the solves the old rule (a pack of 3 per 5) already paid
+   for, p3 = the packs earned until then (incl. gifts), which stay packs of 3: the switch gives no packs for past solves */
+function albumMigrate(a) {
+  if (!a || (a.v || 1) >= A_VER) return a;
+  const s = a.s || (a.s = {});
+  if ((a.v || 1) < 2) for (const [o, n] of Object.entries(A_MOVED)) if (o in s) { s[n] = Math.max(s[n] || 0, s[o] || 0); delete s[o]; }
+  a.c0 = a.c || 0; a.p3 = Math.floor(a.c0 / OLD_EVERY) + (a.b || 0);
+  a.v = A_VER;
+  return a;
+}
 
 /* ---- progress: pl.album = { c: clean path solves, b: extra packs (the old stickers, a parent's gift), o: packs opened,
-   s: { sticker id: copies } }. A pack for every PACK_EVERY clean solves; packs are drawn from a seed (the pack's number),
+   s: { sticker id: copies }, v: catalogue version, c0 / p3: see albumMigrate }. Packs are drawn from a seed (the pack's number),
    so two devices that open the same pack get the same stickers and mergePlayer can take the larger of each count ---- */
-const PACK_EVERY = 5, PACK_SIZE = 3, OLD_PACKS_MAX = 10;
+// the owner (2026-10-03): "5 stickers per solve" = a pack of 5 for every clean solve after the switch (before: 3 per 5 solves)
+const PACK_EVERY = 1, PACK_SIZE = 5, OLD_EVERY = 5, OLD_SIZE = 3, OLD_PACKS_MAX = 10;
 function albumOf(pl) {
   // first time: one pack per sticker of the old "a sticker every 10 stars" row, at most OLD_PACKS_MAX
-  if (!pl.album) pl.album = { c: 0, b: Math.min(OLD_PACKS_MAX, Math.floor((pl.stars || 0) / 10)), o: 0, s: {} };
-  return pl.album;
+  if (!pl.album) pl.album = { c: 0, b: Math.min(OLD_PACKS_MAX, Math.floor((pl.stars || 0) / 10)), o: 0, s: {}, v: A_VER, c0: 0, p3: 0 };
+  return albumMigrate(pl.album);
 }
 // a boss's sticker: owned once that gate is beaten (also for gates beaten before the sticker book existed)
 function stkOwned(pl, st) { const n = albumOf(pl).s[st.id] || 0; return st.boss ? (n || stageStars(pl, st.boss) >= 1 ? 1 : 0) : n; }
 function stkTier(st, copies) { return st.boss ? 3 : copies >= 5 ? 3 : copies >= 3 ? 2 : copies >= 2 ? 1 : 0; }
-function packsWaiting(pl) { const a = albumOf(pl); return Math.max(0, Math.floor(a.c / PACK_EVERY) + a.b - a.o); }
+function packsEarned(a) { const c0 = a.c0 || 0; return Math.floor(c0 / OLD_EVERY) + Math.floor(Math.max(0, a.c - c0) / PACK_EVERY); }
+function packsWaiting(pl) { const a = albumOf(pl); return Math.max(0, packsEarned(a) + a.b - a.o); }
 // a clean solve on the learning path (stageStar, an endgame win): every PACK_EVERY of them is a pack.
 // No pop-up, no sound (the owner: packs must never pull the child away from playing): the counters go up, and a small
 // pack shows beside the ▶ of that puzzle or endgame (albumTake); the packs are opened in the 📖 tab
@@ -3599,23 +4135,30 @@ let albumJust = false;
 function albumSolve(pl) {
   const a = albumOf(pl);
   a.c++;
-  if (a.c % PACK_EVERY === 0) albumJust = true;
+  if ((a.c - (a.c0 || 0)) % PACK_EVERY === 0) albumJust = true;
   aBadge();
 }
 function albumTake() { const j = albumJust; albumJust = false; return j; }
-function aPackChip() { return `<span class="apchip" aria-label="A new sticker pack">${aPackSvg()}</span>`; }
+// the small pack shown in a puzzle card / beside an endgame's ↻ ▶: tapping it opens the book, like the counters at the top
+function aPackChip() { return `<button type="button" class="apchip" aria-label="A new sticker pack: open the sticker book">${aPackSvg()}</button>`; }
+document.addEventListener("click", ev => { if (ev.target.closest && ev.target.closest(".apchip")) albumGo(ev); });
+// to the 📖 tab (from the kids' corner or a kid puzzle; the same on the iPad site)
+function albumGo(ev) {
+  if (ev && ev.stopPropagation) ev.stopPropagation();
+  if (window.SECTION === "kids") { kidTab = "stickers"; openKids(); } else go("kids", "stickers");
+}
 function aRand(seed) {      // mulberry32
   let t = seed >>> 0;
   return () => { t = (t + 0x6D2B79F5) >>> 0; let r = Math.imul(t ^ (t >>> 15), 1 | t); r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) ^ r; return ((r ^ (r >>> 14)) >>> 0) / 4294967296; };
 }
-// open the next pack: PACK_SIZE different stickers, one of them new while any is missing (bosses only come from bosses)
+// open the next pack: PACK_SIZE different stickers (OLD_SIZE for a pack earned before the switch, albumMigrate), one of them new while any is missing (bosses only come from bosses)
 function packOpen(pl) {
   if (packsWaiting(pl) <= 0) return null;
-  const a = albumOf(pl), R = aRand(a.o * 7919 + 104729);
+  const a = albumOf(pl), R = aRand(a.o * 7919 + 104729), size = a.o < (a.p3 || 0) ? OLD_SIZE : PACK_SIZE;
   a.o++;
   const pool = STK.filter(st => !st.boss), missing = pool.filter(st => !a.s[st.id]), pick = [];
   if (missing.length) pick.push(missing[Math.floor(R() * missing.length)]);
-  while (pick.length < PACK_SIZE) { const st = pool[Math.floor(R() * pool.length)]; if (!pick.includes(st)) pick.push(st); }
+  while (pick.length < size) { const st = pool[Math.floor(R() * pool.length)]; if (!pick.includes(st)) pick.push(st); }
   for (let i = pick.length - 1; i > 0; i--) { const j = Math.floor(R() * (i + 1)); [pick[i], pick[j]] = [pick[j], pick[i]]; }
   const got = pick.map(st => { const was = a.s[st.id] || 0; a.s[st.id] = was + 1; return { st, was }; });
   save(); aBadge();
@@ -3643,7 +4186,21 @@ function aPackSvg(part = "all") {
 }
 const A_CARD_BACK = `<svg viewBox="0 0 120 158" aria-hidden="true"><rect width="120" height="158" fill="#1565c0"/>${[...Array(24)].map((_, i) => aStar(10 + (i % 4) * 33 + (Math.floor(i / 4) % 2) * 16, 12 + Math.floor(i / 4) * 27, 3.5, "#42a5f5")).join("")}
   <circle cx="60" cy="79" r="30" fill="#ffc107"/><circle cx="60" cy="79" r="26" fill="#0d47a1"/><g transform="translate(60 79) scale(2) translate(-60 -79)">${aFootball(60, 79, 9)}</g></svg>`;
-function aPageIcon(pg, w = 40, h = 27) { return pg.team ? aMiniFlag(pg.team, w, h) : `<span class="aemo">${pg.icon}</span>`; }
+// a page's picture: the team's flag (crest for a club); its friends page = the flag with a basketball and a paw on it,
+// its picture page = the flag with a little framed picture (sky, sun, hills) and a gold sparkle
+const A_PAW = `<ellipse cx="10" cy="13" rx="5" ry="4.2" fill="#4e342e"/>${[[4.2, 7.6], [8, 4.6], [12, 4.6], [15.8, 7.6]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="2.1" fill="#4e342e"/>`).join("")}`;
+const A_PIC_ICON = `<svg class="abdg l" viewBox="0 0 20 20"><rect x="1.5" y="3" width="17" height="14" rx="1.5" fill="#fff" stroke="#4e342e" stroke-width="1.4"/><rect x="3.5" y="5" width="13" height="10" fill="#81d4fa"/>` +
+  `<circle cx="13" cy="8" r="1.8" fill="#ffca28"/><path d="M3.5,15 L8,9.5 L11,13 L13,11 L16.5,15Z" fill="#43a047"/></svg>`;
+const A_SPARK_ICON = `<svg class="abdg r" viewBox="0 0 20 20">${aC(10, 10, 9.6, "#fff")}${aSpark(10, 10, 8, "#ffb300")}${aSpark(15.5, 4.5, 2.6, "#ffb300")}</svg>`;
+// (small = the page buttons, where a friends page sits beside its team's flag: the paw and the ball alone)
+function aPageIcon(pg, w = 40, h = 27, small = false) {
+  if (!pg.team) return `<span class="aemo">${pg.icon}</span>`;
+  if (!pg.friends && !pg.pics) return aMiniFlag(pg.team, w, h);
+  const paw = pg.pics ? A_PIC_ICON : `<svg class="abdg l" viewBox="0 0 20 20">${aC(10, 10, 9.6, "#fff")}<g transform="translate(1.2 1.6) scale(.88)">${A_PAW}</g></svg>`;
+  const ball = pg.pics ? A_SPARK_ICON : `<svg class="abdg r" viewBox="0 0 20 20">${aBasketball(10, 10, 8.6)}</svg>`;
+  if (small) return `<span class="aico f" style="height:${h}px">${paw}${ball}</span>`;
+  return `<span class="aico" style="width:${w}px;height:${h}px">${aMiniFlag(pg.team, w, h)}${paw}${ball}</span>`;
+}
 
 /* ---- the book (kids' 📖 tab): one page at a time, ◀ ▶ or a swipe to turn, the pages' pictures below to jump;
    packs waiting at the top. Opening one: tap the pack (it tears by itself after a moment), three stickers turn over,
@@ -3663,6 +4220,7 @@ function aBadge() {
     const el = $(id); if (!el) continue;
     const had = +(el.dataset.n || 0);
     el.hidden = !n || !show; el.dataset.n = n; el.innerHTML = `${aPackSvg()}<b>${n}</b>`;
+    if (!el.onclick) { el.onclick = albumGo; el.setAttribute("role", "button"); el.tabIndex = 0; el.setAttribute("aria-label", "Sticker packs waiting: open the sticker book"); }
     if (n > had && had >= 0 && el.dataset.seen) { el.classList.remove("bump"); void el.offsetWidth; el.classList.add("bump"); }
     el.dataset.seen = 1;
   }
@@ -3693,26 +4251,30 @@ function renderAlbum() {
   };
   aRenderTop(); aRenderPage(); aRenderTray();
   const bar = document.querySelector(".kidbar");      // the book is sized for the screen below the tabs: bring them to the top
-  if (bar && bar.getBoundingClientRect().top > 8 && !window.GYM_KIDS_ONLY) bar.scrollIntoView({ block: "start", behavior: aReduced() ? "auto" : "smooth" });
+  if (bar && bar.getBoundingClientRect().top > 8 && !window.GYM_KIDS_ONLY) bar.scrollIntoView({ block: "start", behavior: "smooth" });
 }
 function aRenderTop() {
   const pl = pzPlayers(), a = albumOf(pl), n = albumPreview ? 0 : packsWaiting(pl), have = STK.filter(st => aCopies(pl, st)).length;
   $("aTop").innerHTML = `${albumPreview ? "" : `<button type="button" class="apack ${n ? "ready" : "wait"}" id="aPack" aria-label="${n ? "Open a sticker pack" : "Next pack"}">${aPackSvg()}${n ? `<b>${n}</b>` : ""}</button>
-      ${n ? "" : `<span class="adots" aria-label="Clean solves towards the next pack">${[...Array(PACK_EVERY)].map((_, i) => `<i class="${i < a.c % PACK_EVERY ? "on" : ""}"></i>`).join("")}</span>`}`}
+      ${n || PACK_EVERY < 2 ? "" : `<span class="adots" aria-label="Clean solves towards the next pack">${[...Array(PACK_EVERY)].map((_, i) => `<i class="${i < a.c % PACK_EVERY ? "on" : ""}"></i>`).join("")}</span>`}`}
     <span class="atotal">📖 <span class="abar"><i style="width:${100 * have / STK.length}%"></i></span> <b>${have}</b><small>/${STK.length}</small></span>`;
-  if ($("aPack")) $("aPack").onclick = () => { if (packsWaiting(pzPlayers())) aOpenPack(); else { $("aPack").classList.remove("nope"); void $("aPack").offsetWidth; $("aPack").classList.add("nope"); } };
+  // a pack opens while the tray is empty (5 stickers to stick first: the tray holds one pack)
+  if ($("aPack")) $("aPack").onclick = () => { if (packsWaiting(pzPlayers()) && !albumTray.length) aOpenPack(); else { $("aPack").classList.remove("nope"); void $("aPack").offsetWidth; $("aPack").classList.add("nope"); } };
 }
 function aRenderPage() {
   const pl = pzPlayers(), pg = A_PAGES[albumPage], sts = STK.filter(st => st.page === pg), have = sts.filter(st => aCopies(pl, st)).length;
   $("aPage").className = "apage" + (have === sts.length ? " full" : "");
-  $("aPage").innerHTML = `<div class="ahead">${aPageIcon(pg, 48, 32)}<span class="abar"><i style="width:${100 * have / sts.length}%"></i></span><b>${have}</b><small>/${sts.length}</small></div>
+  $("aPage").innerHTML = `<div class="ahead">${pg.sec !== pg.team && pg.team ? `<span class="asec">${aMiniFlag(pg.sec, 36, 24)}</span>` : ""}${aPageIcon(pg, 48, 32)}<span class="abar"><i style="width:${100 * have / sts.length}%"></i></span><b>${have}</b><small>/${sts.length}</small></div>
     <div class="agrid">${sts.map(st => { const c = aCopies(pl, st);
-      return `<div class="aslot${c ? " got" : ""}" data-st="${st.id}">${c ? stickerCard(st, c) : `${stickerSvg(st, true)}<span class="anum">${st.n}</span>`}</div>`; }).join("")}</div>`;
+      return `<div class="aslot${c ? " got" : ""}${st.half ? " h" + st.half : ""}" data-st="${st.id}">${c ? stickerCard(st, c) : `${stickerSvg(st, true)}<span class="anum">${st.n}</span>`}</div>`; }).join("")}</div>`;
   $("aPrev").disabled = albumPage === 0; $("aNext").disabled = albumPage === A_PAGES.length - 1;
-  $("aNav").innerHTML = A_PAGES.map((p, i) => {
+  // the pages' pictures, grouped by section (a team's two pages, Portugal's six) in one frame each
+  const btn = (p, i) => {
     const s = STK.filter(st => st.page === p), h = s.filter(st => aCopies(pl, st)).length;
-    return `<button type="button" data-pg="${i}" aria-pressed="${i === albumPage}" class="${h === s.length ? "full" : ""}" aria-label="Page ${i + 1}">${aPageIcon(p, 30, 20)}<i><b style="width:${100 * h / s.length}%"></b></i></button>`;
-  }).join("");
+    return `<button type="button" data-pg="${i}" aria-pressed="${i === albumPage}" class="${h === s.length ? "full" : ""}" aria-label="Page ${i + 1}">${aPageIcon(p, 27, 18, true)}<i><b style="width:${100 * h / s.length}%"></b></i></button>`;
+  };
+  $("aNav").innerHTML = [...new Set(A_PAGES.map(p => p.sec))].map(sec => `<div class="agrp${pg.sec === sec ? " on" : ""}" data-sec="${sec}">${
+    A_PAGES.map((p, i) => p.sec === sec ? btn(p, i) : "").join("")}</div>`).join("");
   $("aNav").querySelectorAll("[data-pg]").forEach(b => b.onclick = () => aTurn(+b.dataset.pg));
 }
 function aRenderTray() {
@@ -3721,12 +4283,10 @@ function aRenderTray() {
   t.innerHTML = albumTray.map((g, i) => `<button type="button" class="aitem" data-i="${i}" style="--i:${i}" aria-label="Stick it in">${stickerCard(g.st, g.was + 1)}</button>`).join("");
   t.querySelectorAll("[data-i]").forEach(b => b.onclick = () => aStick(albumTray[+b.dataset.i], b));
 }
-const aReduced = () => window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
 function aTurn(i, then) {
   if (i < 0 || i >= A_PAGES.length || aTurn.busy) return;
   if (i === albumPage) return then && then();
   const el = $("aPage"), dir = i > albumPage ? "l" : "r";
-  if (aReduced()) { albumPage = i; aRenderPage(); return then && then(); }
   aTurn.busy = true; sfx("flip");
   el.classList.add("out-" + dir);
   setTimeout(() => {
@@ -3736,7 +4296,7 @@ function aTurn(i, then) {
 }
 function aOpenPack() {
   const ov = $("aOverlay");
-  if (albumPreview || !ov.hidden) return;
+  if (albumPreview || !ov.hidden || albumTray.length) return;
   const got = packOpen(pzPlayers()); if (!got) return;
   for (const g of got) if (!(g.st.id in albumHold)) albumHold[g.st.id] = g.was;
   aRenderTop();
@@ -3753,11 +4313,17 @@ function aOpenPack() {
     $("aTear").classList.add("torn");
     setTimeout(() => {
       $("aTear").hidden = true;
+      // a new sticker: a sparkle badge; a copy: pips towards the next tier, and when it reaches one, the frame turns into it
       $("aReveal").innerHTML = got.map((g, i) => {
-        const up = stkTier(g.st, g.was + 1) > stkTier(g.st, g.was), mark = !g.was ? "✨" : up ? ["", "🥈", "🥇", "🌈"][stkTier(g.st, g.was + 1)] : "";
-        return `<div class="aflip" style="--i:${i}"><div class="aback">${A_CARD_BACK}</div><div class="afront">${stickerCard(g.st, g.was + 1)}${mark ? `<span class="amark">${mark}</span>` : ""}</div></div>`;
+        const c = g.was + 1, up = g.was && stkTier(g.st, c) > stkTier(g.st, g.was);
+        return `<div class="aflip${g.was ? " dup" : " new"}" style="--i:${i}" data-st="${g.st.id}"><div class="aback">${A_CARD_BACK}</div><div class="afront">${stickerCard(g.st, up ? g.was : c)}` +
+          `${g.was ? aPips(c) : `<span class="amark anew">${A_NEW}</span>`}</div></div>`;
       }).join("");
       got.forEach((g, i) => setTimeout(() => sfx(g.was ? "flip" : "sticker"), 350 + i * 450));
+      got.forEach((g, i) => {
+        if (!g.was || stkTier(g.st, g.was + 1) <= stkTier(g.st, g.was)) return;
+        setTimeout(() => { const el = $("aReveal") && $("aReveal").querySelector(`.aflip[data-st="${g.st.id}"] .stk`); if (el) el.outerHTML = stickerCard(g.st, g.was + 1, "tup"); }, 950 + i * 450);
+      });
       const shown = 350 + got.length * 450 + 300;
       setTimeout(() => { if (!done) ov.onclick = toTray; }, shown);
       toTray.t = setTimeout(toTray, shown + 1800);
@@ -3765,6 +4331,15 @@ function aOpenPack() {
   };
   ov.onclick = tear;
   tear.t = setTimeout(tear, 2500);
+}
+// pack opening: the "new" badge (a gold burst with a sparkle), and a copy's pips: one per copy up to the next tier's
+// count (2 silver, 3 gold, 5 holo), filled in the tier each copy reached, the empty ones ringed in the next tier's colour
+const A_NEW_PTS = [...Array(24)].map((_, i) => { const a = i * Math.PI / 12, r = i % 2 ? 31 : 48; return (r * Math.sin(a)).toFixed(1) + "," + (-r * Math.cos(a)).toFixed(1); }).join(" ");
+const A_NEW = `<svg viewBox="-50 -50 100 100" aria-hidden="true"><polygon points="${A_NEW_PTS}" fill="#ffca28" stroke="#e65100" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M0,-27 Q4,-4 27,0 Q4,4 0,27 Q-4,4 -27,0 Q-4,-4 0,-27Z" fill="#fff"/><path d="M19,-29 Q20.5,-22 27,-21 Q20.5,-20 19,-13 Q17.5,-20 11,-21 Q17.5,-22 19,-29Z" fill="#fff"/></svg>`;
+function aPips(c) {
+  const next = [2, 3, 5].find(x => x > c), n = next || 5;
+  return `<span class="apips" aria-label="${c} copies">${[...Array(n)].map((_, k) => k < c ? `<i class="p${stkTier({}, k + 1)}${k === c - 1 ? " nw" : ""}"></i>` : `<i class="e${stkTier({}, n)}"></i>`).join("")}</span>`;
 }
 // a sticker from the tray flies into its slot (turning to its page first)
 function aStick(g, el) {
@@ -3785,7 +4360,7 @@ function aStick(g, el) {
       if (more.length) albumHold[g.st.id] = Math.min(...more.map(x => x.was)); else delete albumHold[g.st.id];
       aRenderPage(); aRenderTop(); aRenderTray(); sfx("sticker");
       const c = $("aPage").querySelector(`.aslot[data-st="${g.st.id}"] .stk`); if (c) c.classList.add("land");
-    }, aReduced() ? 50 : 700);
+    }, 700);
   };
   const pi = A_PAGES.indexOf(g.st.page);
   if (pi === albumPage) land(); else if (!aTurn.busy) aTurn(pi, land); else g.fly = false;
@@ -3802,11 +4377,11 @@ function aZoom(st) {
 function albumParents(pl) {
   const a = albumOf(pl), have = STK.filter(st => stkOwned(pl, st)).length, local = location.protocol === "file:";
   return `<figure class="chart wide"><figcaption>Sticker book</figcaption>
-    <p class="tiny">A pack of ${PACK_SIZE} stickers for every ${PACK_EVERY} clean solves on the learning path (puzzles, endgames and the review stop, replays too), and each boss's own sticker when it's beaten.
+    <p class="tiny">A pack of ${PACK_SIZE} stickers for every ${PACK_EVERY > 1 ? PACK_EVERY + " clean solves" : "clean solve"} on the learning path (puzzles, endgames and the review stop, replays too), and each boss's own sticker when it's beaten.
       Every pack holds at least one sticker missing from the book until it's full. Copies turn a sticker silver (2), gold (3), then holo (5).</p>
     <div class="tiles"><div class="tile"><span class="lbl">Stickers</span><b>${have}/${STK.length}</b></div>
       <div class="tile"><span class="lbl">Packs opened</span><b>${a.o}</b></div><div class="tile"><span class="lbl">Packs waiting</span><b>${packsWaiting(pl)}</b></div>
-      <div class="tile"><span class="lbl">Next pack in</span><b>${PACK_EVERY - a.c % PACK_EVERY} solves</b></div></div>
+      <div class="tile"><span class="lbl">Next pack in</span><b>${PACK_EVERY - (a.c - (a.c0 || 0)) % PACK_EVERY} solve${PACK_EVERY - (a.c - (a.c0 || 0)) % PACK_EVERY > 1 ? "s" : ""}</b></div></div>
     <div class="controls"><button class="btn" type="button" id="aGift">Give a pack</button><button class="btn" type="button" id="aPrevBtn">Preview the whole book</button>
       ${local ? `<button class="btn" type="button" id="aTest10">Test: +10 packs</button><button class="btn" type="button" id="aTestEmpty">Test: empty the book</button>` : ""}</div>
     ${local ? `<p class="tiny">The test buttons only show on a copy opened from disk, whose progress stays in this browser.</p>` : ""}</figure>`;
@@ -3822,7 +4397,7 @@ function albumParentsWire(pl) {
   if ($("aTest10")) $("aTest10").onclick = () => { albumOf(pl).b += 10; back(); };
   if ($("aTestEmpty")) $("aTestEmpty").onclick = () => {
     if (!confirm("Empty the sticker book in this browser?")) return;
-    pl.album = { c: 0, b: 0, o: 0, s: {} }; albumTray = []; albumHold = {}; back();
+    pl.album = { c: 0, b: 0, o: 0, s: {}, v: A_VER, c0: 0, p3: 0 }; albumTray = []; albumHold = {}; back();
   };
 }
 
