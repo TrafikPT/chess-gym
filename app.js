@@ -1394,6 +1394,8 @@ function pzGoalText(p) {
   if (t.includes("savePiece")) return "One of your pieces is attacked: keep it safe.";
   if (t.includes("promotion") && p[5]) return "Push your pawn to the end and make a new queen.";
   if (t.includes("equality")) return "Find the move that saves the game.";
+  if (t.includes("pinLine")) return "Pin along a line: put your rook or queen on the file or rank of the king, with one piece in between. That piece can't move: win it.";
+  if (t.includes("pinDiag")) return "Pin along a diagonal: put your bishop or queen on the king's diagonal, with one piece in between. That piece can't move: win it.";
   if (t.includes("pin")) return "Use a pin: a piece that can't move out of the way without exposing its king.";
   if (t.includes("skewer")) return "Skewer: attack a big piece; when it moves away, take what stood behind it.";
   if (t.includes("discoveredAttack")) return "Discovered attack: move one piece out of the way so the piece behind it attacks.";
@@ -1401,7 +1403,8 @@ function pzGoalText(p) {
 }
 // the goal as a picture, from the solver's side (targets in the opponent's colour, own pieces in the solver's):
 // mate (king in a target, with the number of moves from 2 on), check, save (shield), promote (pawn → queen), fork (🍴),
-// pin (📌), skewer (🍢), discovered attack (two arrows from one line), take a piece (+), win something (⚔),
+// pin (📌, or for the pin stages' rows the pin drawn on a file / diagonal, pinIcon), skewer (🍢), discovered attack
+// (two arrows from one line), take a piece (+), win something (⚔),
 // is it safe to take (⚖ + the piece), stop the mate (own king, shield and #)
 function pzGoalHtml() {
   const t = pzCur[4].split(" "), me = pzGame.turn(), them = me === "w" ? "b" : "w";
@@ -1422,6 +1425,7 @@ function pzGoalHtml() {
   }
   if (t.includes("promotion") && want[4]) return { kind: "promo", html: `<span class="goal promo" title="Make a queen"><span class="pc ${me}P"></span><b>→</b><span class="pc ${me}Q"></span></span>` };
   if (t.includes("fork")) return { kind: "fork", html: `<span class="goal win" title="Fork">🍴</span>` };
+  if (t.includes("pinLine") || t.includes("pinDiag")) return { kind: "pin", html: pinIcon(t.includes("pinDiag") ? "pinDiag" : "pinLine", me, them).replace('class="goal pinic"', 'class="goal pinic" title="Pin"') };
   if (t.includes("pin")) return { kind: "pin", html: `<span class="goal win" title="Pin">📌</span>` };
   if (t.includes("skewer")) return { kind: "skewer", html: `<span class="goal win" title="Skewer">🍢</span>` };
   if (t.includes("discoveredAttack")) return { kind: "disc", html: DISC_ICON.replace('class="goal disc"', 'class="goal disc" title="Discovered attack"') };
@@ -1867,6 +1871,14 @@ function gateIcon(face) { return `<span class="gate">${face}</span>`; }
 // discovered attack: the bishop steps off the line (one arrow) and the rook behind it now hits the queen (the other)
 const DISC_ICON = `<span class="goal disc"><span class="pc bQ" style="top:0"></span><span class="pc wB" style="top:33.3%"></span><span class="pc wR" style="top:66.6%"></span>` +
   `<svg viewBox="0 5 2 3" aria-hidden="true">${arrowPath("a2b3", "green", "w")}${arrowPath("a1a3", "green", "w")}</svg></span>`;
+// a pin (puzzles/themes.py --pins tags each row): your rook pins a piece to its king along a file (pinLine) or your
+// bishop along a diagonal (pinDiag), the arrow running through it onto the king; in the colours of the side to move
+function pinIcon(kind, me = "w", them = "b") {
+  const diag = kind === "pinDiag", at = (pc, top, left) => `<span class="pc ${pc}" style="top:${top}%;left:${left}%"></span>`;
+  return `<span class="goal pinic">${at(them + "K", 0, diag ? 66.6 : 33.3)}${at(them + "N", 33.3, 33.3)}${at(me + (diag ? "B" : "R"), 66.6, diag ? 0 : 33.3)}` +
+    `<svg viewBox="0 5 3 3" aria-hidden="true">${arrowPath(diag ? "a1c3" : "b1b3", "green", "w")}</svg></span>`;
+}
+const isPin = (p, kind) => !p[5] && p[4].split(" ").includes(kind);
 // a tactic stage's puzzles: that theme and no other path tactic or mate, short (at most 2 moves to find), rated up to 1100
 const TACTIC_THEMES = ["fork", "pin", "skewer", "discoveredAttack"];
 function tacticOnly(p, t) {
@@ -1906,19 +1918,24 @@ const STAGES = [
   { id: "egr", name: "Endgame: mate with king + rook", need: 3, eg: "KR", icon: egIcon("KR"), f: () => false },
   { id: "mate1", name: "Mate in 1 (real games)", icon: `<span class="goal mate mn" data-n="1"><span class="pc bK"></span></span>`, f: p => !p[5] && /mateIn1/.test(p[4]) && p[3] <= 750 },
   { id: "mate2", name: "Mate in 2", icon: `<span class="goal mate mn" data-n="2"><span class="pc bK"></span></span>`, f: p => !p[5] && /mateIn2/.test(p[4]) && p[3] < 1000 },
-  // one tactic each (Lichess, mostly puzzles/themes.json up to 1100; build.py ships them to the iPad site too)
-  { id: "pin", name: "Pins", icon: `<span class="goal win">📌</span>`, f: p => !p[5] && tacticOnly(p, "pin") },
+  // one tactic each (Lichess, mostly puzzles/themes.json up to 1100; build.py ships them to the iPad site too).
+  // Pins in three steps (puzzles/themes.py --pins: your first move makes the pin, a later one takes the pinned piece):
+  // along a file or rank, along a diagonal (both under 1000), then both mixed up to 1100. step: added in front of a
+  // stage, so never "free" while that stage is unfinished (stageMigrate): the mixed one alone was too hard (2026-10-03)
+  { id: "pinl", name: "Pins along a file or rank (rook, queen)", step: "pin", icon: pinIcon("pinLine"), f: p => isPin(p, "pinLine") && p[3] < 1000 },
   { id: "gate5", name: "Boss: beat T-Rex", need: 1, gate: "dino", icon: gateIcon("🦖"), f: () => false },
   // 🏰 the castle in the clouds
+  { id: "pind", name: "Pins along a diagonal (bishop, queen)", step: "pin", icon: pinIcon("pinDiag"), f: p => isPin(p, "pinDiag") && p[3] < 1000 },
+  { id: "pin", name: "Pins (both kinds)", icon: `<span class="goal win">📌</span>`, f: p => isPin(p, "pinLine") || isPin(p, "pinDiag") },
   { id: "skewer", name: "Skewers", icon: `<span class="goal win">🍢</span>`, f: p => !p[5] && tacticOnly(p, "skewer") },
   { id: "disc", name: "Discovered attacks", icon: DISC_ICON, f: p => !p[5] && tacticOnly(p, "discoveredAttack") },
-  // the harder ⚖️ (safe_gen.py, safeTakeHard): count attackers and defenders, take with the smaller piece, hidden
-  // defenders, a big piece worth taking even though it's defended
+  { id: "gate6", name: "Boss: beat the Dragon", need: 1, gate: "dragon", icon: gateIcon("🐉"), f: () => false },
+  // 🚀 space (no boss): the harder ⚖️ (safe_gen.py, safeTakeHard): count attackers and defenders, take with the smaller
+  // piece, hidden defenders, a big piece worth taking even though it's defended
   { id: "safe2", name: "Is it safe to take? (harder)", icon: `<span class="goal scale mn" data-n="2">⚖️<span class="pc bR"></span></span>`, f: p => /safeTakeHard/.test(p[4]) },
   // a review stop: puzzles from the stages already finished, missed ones first (reviewPick)
   { id: "review", name: "Review: puzzles from finished stages", review: true, icon: `<span class="goal win">🔁</span>`, f: () => false },
-  { id: "gate6", name: "Boss: beat the Dragon", need: 1, gate: "dragon", icon: gateIcon("🐉"), f: () => false },
-  // 🚀 space: king-and-pawn games (kids' corner, like the endgames above): catch a running pawn; make a queen with the king's help
+  // king-and-pawn games (kids' corner, like the endgames above): catch a running pawn; make a queen with the king's help
   { id: "egcatch", name: "Endgame: catch the pawn with your king", need: 3, eg: "catch", icon: `<span class="goal take"><span class="pc bP"></span></span><span class="egm"><span class="pc wK mini"></span></span>`, f: () => false },
   { id: "egkp", name: "Endgame: king + pawn, make a queen", need: 3, eg: "kp", icon: `<span class="goal promo"><span class="pc wP"></span><b>→</b><span class="pc wQ"></span></span><span class="egm"><span class="pc wK mini"></span></span>`, f: () => false },
 ];
@@ -1956,7 +1973,8 @@ function stageFree(pl, st) { return !!(pl.gateFree || {})[st.id]; }
 // and drop the stars of puzzle stages and gates after it (they came from outside the path; endgame and review stars
 // only ever came from the path and stay).
 // Then, once per stage the player hasn't seen (pl.gatesSeen; the old order's stages count as seen): a new stage before
-// the first unfinished stage he had is free, so the child keeps his place. Stages added later get the same treatment.
+// the first unfinished stage he had is free, so the child keeps his place. Stages added later get the same treatment,
+// except a "step" in front of a stage he hasn't finished (the pin steps): he plays that first.
 const OLD_ORDER = "take saveq check promo gate1 savep back mateq mater gate2 egqr egrr egq egr gate3 fork mix safe stopm gate4 mate2 pin skewer disc gate5 safe2 review egcatch egkp".split(" ");
 function stageMigrate(pl) {
   if (!window.GYM || !GYM.puzzles || ((pl.pathV || 0) >= 2 && pl.gatesSeen && STAGES.every(st => pl.gatesSeen[st.id]))) return;
@@ -1975,7 +1993,8 @@ function stageMigrate(pl) {
   const first = STAGES.findIndex(st => pl.gatesSeen[st.id] && !stageDone(pl, st) && !stageFree(pl, st));
   STAGES.forEach((st, i) => {
     if (pl.gatesSeen[st.id]) return;
-    if (!stageDone(pl, st) && (first < 0 || i < first)) pl.gateFree[st.id] = 1;
+    const stepOn = st.step && !stageDone(pl, STAGES.find(x => x.id === st.step));     // an easier step before a stage still to do
+    if (!stageDone(pl, st) && (first < 0 || i < first) && !stepOn) pl.gateFree[st.id] = 1;
     pl.gatesSeen[st.id] = 1;
   });
   save();
@@ -4214,9 +4233,10 @@ function albumOf(pl) {
 }
 // a boss's sticker: owned once that gate is beaten (also for gates beaten before the sticker book existed)
 function stkOwned(pl, st) { const n = albumOf(pl).s[st.id] || 0; return st.boss ? (n || stageStars(pl, st.boss) >= 1 ? 1 : 0) : n; }
-/* tiers: 1 copy plain, 2 silver, 3 gold (a gentle bob), HOLO holo (the sticker's own animation: a FAN row's 4th entry, e.g.
-   Spider-Man swinging on his web; else float + sparkles), then it leaves the packs. (A 6th copy for the own animation,
-   tier 4, was dropped on 2026-10-03: the owner wants three looks only.) */
+/* tiers = the three looks (the owner, 2026-10-03: "basic -> animated -> better animated"): 0 = 1–2 copies, still, plain
+   frame; 1 = 3–4 copies, the picture moves (a gentle bob), still a plain frame; 2 = HOLO, the holo frame and the sticker's
+   own animation (a FAN row's 4th entry, e.g. Spider-Man swinging on his web; else float + sparkles), then it leaves the
+   packs. (The silver (2) and gold (3) frames were dropped then too: he only wants the looks to change.) */
 /* where own animations live: a FAN row's 4th entry (theme, world and subject pages); a team sticker's kind (keeper, player,
    comic…: A_OWN[kind](team, st), js/fan/teamanim.js, one drawing for all 17 teams); the team's own landmark / food / thing
    (A_TOWN[team][land|food|thing](team, st), js/fan/teamown_*.js) */
@@ -4227,7 +4247,7 @@ function stkAnim(st) {
   const t = st.team || st.mini || st.bd, k = st.cty || st.scene || st.kind || (st.sp && "sp_" + st.sp), f = (A_TOWN[t] && A_TOWN[t][k]) || A_OWN[k];
   return typeof f === "function" ? () => f(t, st) : null;
 }
-function stkTier(st, copies) { return st.boss ? 3 : copies >= HOLO ? 3 : copies >= 3 ? 2 : copies >= 2 ? 1 : 0; }
+function stkTier(st, copies) { return st.boss || copies >= HOLO ? 2 : copies >= 3 ? 1 : 0; }
 // packs of 3 per OLD_EVERY solves up to c0, a pack per solve from c0 to c1, then one per PACK_EVERY
 function packsEarned(a) { const c0 = a.c0 || 0, c1 = Math.max(c0, a.c1 || 0); return Math.floor(c0 / OLD_EVERY) + (c1 - c0) + Math.floor(aSince(a) / PACK_EVERY); }
 function aSince(a) { return Math.max(0, a.c - Math.max(a.c0 || 0, a.c1 || 0)); }      // solves under the current rule
@@ -4291,7 +4311,7 @@ function albumBoss(pl, gateId) {
 /* ---- pictures: a sticker card (tier frame, number), the pack, the back of a sticker ---- */
 function stickerCard(st, copies, cls = "", shiny = aIsShiny(st)) {
   const t = stkTier(st, copies);
-  return `<div class="stk t${t}${shiny ? " shiny" : ""}${cls ? " " + cls : ""}" data-st="${st.id}"><div class="sin">${stickerSvg(st, false, { holo: copies >= HOLO && !st.boss, gold: t === 2, shiny })}` +
+  return `<div class="stk t${t}${shiny ? " shiny" : ""}${cls ? " " + cls : ""}" data-st="${st.id}"><div class="sin">${stickerSvg(st, false, { holo: copies >= HOLO && !st.boss, gold: t === 1, shiny })}` +
     `<span class="sno">${st.n}</span>${t ? `<span class="spip">${"◆".repeat(t)}</span>` : ""}${shiny ? A_SHINY_MARK : ""}</div></div>`;
 }
 function aIsShiny(st) { if (albumPreview || !S.players) return false; const a = albumOf(pzPlayers()); return !!(a.sh && a.sh[st.id]); }
@@ -4464,12 +4484,12 @@ function aOpenPack() {
   tear.t = setTimeout(tear, 2500);
 }
 // pack opening: the "new" badge (a gold burst with a sparkle), and a copy's pips: one per copy up to the next tier's
-// count (2 silver, 3 gold, 5 holo), filled in the tier each copy reached, the empty ones ringed in the next tier's colour
+// count (3 moving, 5 holo), filled in the tier each copy reached, the empty ones ringed in the next tier's colour
 const A_NEW_PTS = [...Array(24)].map((_, i) => { const a = i * Math.PI / 12, r = i % 2 ? 31 : 48; return (r * Math.sin(a)).toFixed(1) + "," + (-r * Math.cos(a)).toFixed(1); }).join(" ");
 const A_NEW = `<svg viewBox="-50 -50 100 100" aria-hidden="true"><polygon points="${A_NEW_PTS}" fill="#ffca28" stroke="#e65100" stroke-width="3" stroke-linejoin="round"/>
   <path d="M0,-27 Q4,-4 27,0 Q4,4 0,27 Q-4,4 -27,0 Q-4,-4 0,-27Z" fill="#fff"/><path d="M19,-29 Q20.5,-22 27,-21 Q20.5,-20 19,-13 Q17.5,-20 11,-21 Q17.5,-22 19,-29Z" fill="#fff"/></svg>`;
 function aPips(c, st = {}) {
-  const next = [2, 3, HOLO].find(x => x > c), n = next || HOLO;
+  const next = [3, HOLO].find(x => x > c), n = next || HOLO;
   return `<span class="apips" aria-label="${c} copies">${[...Array(n)].map((_, k) => k < c ? `<i class="p${stkTier(st, k + 1)}${k === c - 1 ? " nw" : ""}"></i>` : `<i class="e${stkTier(st, n)}"></i>`).join("")}</span>`;
 }
 // a sticker from the tray flies into its slot (turning to its page first)
@@ -4496,10 +4516,10 @@ function aStick(g, el) {
   const pi = A_PAGES.indexOf(g.st.page);
   if (pi === albumPage) land(); else if (!aTurn.busy) aTurn(pi, land); else g.fly = false;
 }
-// a sticker in the book, big, with its ladder: plain, silver, gold, holo (the ones reached lit)
+// a sticker in the book, big, with its ladder: still, moving, holo (the ones reached lit)
 function aZoom(st) {
   const ov = $("aOverlay"), c = aCopies(pzPlayers(), st), t = stkTier(st, c);
-  ov.innerHTML = `<div class="azoom">${stickerCard(st, c)}<div class="aladder">${[0, 1, 2, 3].map(k => `<i class="l${k}${k <= t ? " on" : ""}"></i>`).join("")}<b>×${c}</b></div></div>`;
+  ov.innerHTML = `<div class="azoom">${stickerCard(st, c)}<div class="aladder">${[0, 1, 2].map(k => `<i class="l${k}${k <= t ? " on" : ""}"></i>`).join("")}<b>×${c}</b></div></div>`;
   ov.hidden = false; sfx("flip");
   ov.onclick = () => { ov.hidden = true; ov.onclick = null; ov.innerHTML = ""; };
 }
@@ -4509,7 +4529,7 @@ function albumParents(pl) {
   const a = albumOf(pl), have = STK.filter(st => stkOwned(pl, st)).length, local = location.protocol === "file:";
   return `<figure class="chart wide"><figcaption>Sticker book</figcaption>
     <p class="tiny">A pack of ${PACK_SIZE} stickers for every ${PACK_EVERY > 1 ? PACK_EVERY + " clean solves" : "clean solve"} on the learning path (puzzles, endgames and the review stop; replays of a finished stage don't count), and for each boss beaten ${BOSS_PACKS} packs and its own sticker.
-      Every pack holds at least one sticker missing from the book until it's full. Copies turn a sticker silver (2), gold (3), then holo (${HOLO}: it plays its own animation and leaves the packs); from gold on the picture moves;
+      Every pack holds at least one sticker missing from the book until it's full. With 3 copies a sticker's picture starts to move, with ${HOLO} it turns holo (it plays its own animation and leaves the packs);
       1 card in ${SHINY_ODDS} is shiny. A world's page opens when the path reaches that world. ${aPool(pl).length ? "" : "<b>Every open sticker is holo: no more packs for now.</b>"}</p>
     <div class="tiles"><div class="tile"><span class="lbl">Stickers</span><b>${have}/${STK.length}</b></div>
       <div class="tile"><span class="lbl">Packs opened</span><b>${a.o}</b></div><div class="tile"><span class="lbl">Packs waiting</span><b>${packsWaiting(pl)}</b></div>
