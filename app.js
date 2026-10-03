@@ -106,6 +106,10 @@ function mergePlayer(a, b) {
     if (x.lp || y.lp) out.album.lp = Math.max(x.lp || 0, y.lp || 0);     // packs for the stickers album v5 removed
     if (x.sh || y.sh) out.album.sh = maxMap(x.sh, y.sh);                 // shiny stickers
   }
+  if (a.real || b.real) {      // the photo book (real.js): stickers by union, the larger count of packs opened / given,
+    const x = a.real || {}, y = b.real || {}, base = [x.base, y.base].filter(v => v != null);      // the earlier start
+    out.real = { s: maxMap(x.s, y.s), o: Math.max(x.o || 0, y.o || 0), g: Math.max(x.g || 0, y.g || 0), base: base.length ? Math.min(...base) : 0 };
+  }
   out.school = {};
   for (const pc of new Set([...Object.keys(a.school || {}), ...Object.keys(b.school || {})])) {
     const x = (a.school || {})[pc] || [], y = (b.school || {})[pc] || [];
@@ -2778,7 +2782,8 @@ function openKids(sub) {
     kidsWired = true;
     document.querySelectorAll("[data-kt]").forEach(b => b.onclick = () => {
       if (b.dataset.kt === "rated") { pzKidNext = true; return go("puzzles"); }     // 🧩: rating-matched puzzles
-      kidTab = b.dataset.kt; openKids();
+      kidTab = b.dataset.kt; if (kidTab === "stickers") albumBook = "shelf";
+      openKids();
     });
     $("sboard").addEventListener("pointerdown", ev => {
       const sq = squareAt(ev, $("sboard"), "w");
@@ -4282,6 +4287,7 @@ document.addEventListener("click", ev => { if (ev.target.closest && ev.target.cl
 // to the 📖 tab (from the kids' corner or a kid puzzle; the same on the iPad site)
 function albumGo(ev) {
   if (ev && ev.stopPropagation) ev.stopPropagation();
+  albumBook = "shelf";
   if (window.SECTION === "kids") { kidTab = "stickers"; openKids(); } else go("kids", "stickers");
 }
 function aRand(seed) {      // mulberry32
@@ -4359,10 +4365,10 @@ function aCopies(pl, st) {
   if (albumPreview) return albumPreview[st.id] || 0;
   return st.id in albumHold ? albumHold[st.id] : stkOwned(pl, st);
 }
-// packs waiting: the red count on the 📖 tab, and a small pack + count at the top right (kids' bar, kid puzzles)
+// packs waiting (both books): the red count on the 📖 tab, and a small pack + count at the top right (kids' bar, kid puzzles)
 function aBadge() {
   if (!$("kAlbumBadge") || !S.players) return;
-  const n = packsWaiting(pzPlayers());
+  const n = packsWaiting(pzPlayers()) + realWaiting(pzPlayers());
   $("kAlbumBadge").hidden = !n; $("kAlbumBadge").textContent = n;
   for (const [id, show] of [["kPacksTop", true], ["pzPacks", typeof pzKid === "function" && pzKid()]]) {
     const el = $(id); if (!el) continue;
@@ -4374,6 +4380,8 @@ function aBadge() {
   }
 }
 function renderAlbum() {
+  // the 📖 tab opens on the shelf (js/real.js): the drawn book and the photo book; the parents' preview is the drawn one
+  if (!albumPreview && albumBook !== "fan") return albumBook === "real" ? renderReal() : renderShelf();
   const pl = pzPlayers();
   aDefs();
   if (albumTrayPl !== S.player) { albumTray = []; albumHold = {}; albumTrayPl = S.player; }
@@ -4404,9 +4412,10 @@ function renderAlbum() {
 }
 function aRenderTop() {
   const pl = pzPlayers(), a = albumOf(pl), n = albumPreview ? 0 : packsWaiting(pl), have = STK.filter(st => aCopies(pl, st)).length;
-  $("aTop").innerHTML = `${albumPreview ? "" : `<button type="button" class="apack ${n ? "ready" : "wait"}" id="aPack" aria-label="${n ? "Open a sticker pack" : "Next pack"}">${aPackSvg()}${n ? `<b>${n}</b>` : ""}</button>
+  $("aTop").innerHTML = `${albumPreview ? "" : `<button type="button" class="abshelf" id="aShelf" aria-label="All sticker books">📚</button><button type="button" class="apack ${n ? "ready" : "wait"}" id="aPack" aria-label="${n ? "Open a sticker pack" : "Next pack"}">${aPackSvg()}${n ? `<b>${n}</b>` : ""}</button>
       ${n || PACK_EVERY < 2 ? "" : `<span class="adots" aria-label="Clean solves towards the next pack">${[...Array(PACK_EVERY)].map((_, i) => `<i class="${i < aSince(a) % PACK_EVERY ? "on" : ""}"></i>`).join("")}</span>`}`}
     <span class="atotal">📖 <span class="abar"><i style="width:${100 * have / STK.length}%"></i></span> <b>${have}</b><small>/${STK.length}</small></span>`;
+  if ($("aShelf")) $("aShelf").onclick = () => { albumBook = "shelf"; sfx("flip"); renderAlbum(); };
   // a pack opens while the tray is empty (5 stickers to stick first: the tray holds one pack)
   if ($("aPack")) $("aPack").onclick = () => { if (packsWaiting(pzPlayers()) && !albumTray.length) aOpenPack(); else { $("aPack").classList.remove("nope"); void $("aPack").offsetWidth; $("aPack").classList.add("nope"); } };
 }
@@ -4432,9 +4441,10 @@ function aRenderPage() {
 }
 function aRenderTray() {
   const t = $("aTray"); if (!t) return;
-  t.hidden = !albumTray.length || window.SECTION !== "kids" || kidTab !== "stickers";
+  t.hidden = !albumTray.length || window.SECTION !== "kids" || kidTab !== "stickers" || (albumBook !== "fan" && !albumPreview);
   t.innerHTML = albumTray.map((g, i) => `<button type="button" class="aitem" data-i="${i}" style="--i:${i}" aria-label="Stick it in">${stickerCard(g.st, g.was + 1)}</button>`).join("");
   t.querySelectorAll("[data-i]").forEach(b => b.onclick = () => aStick(albumTray[+b.dataset.i], b));
+  realRenderTray();
 }
 function aTurn(i, then) {
   if (i < 0 || i >= A_PAGES.length || aTurn.busy) return;
@@ -4538,7 +4548,7 @@ function albumParents(pl) {
       <div class="tile"><span class="lbl">Next pack in</span><b>${PACK_EVERY - aSince(a) % PACK_EVERY} solve${PACK_EVERY - aSince(a) % PACK_EVERY > 1 ? "s" : ""}</b></div></div>
     <div class="controls"><button class="btn" type="button" id="aGift">Give a pack</button><button class="btn" type="button" id="aPrevBtn">Preview the whole book</button>
       ${local ? `<button class="btn" type="button" id="aTest10">Test: +10 packs</button><button class="btn" type="button" id="aTestEmpty">Test: empty the book</button>` : ""}</div>
-    ${local ? `<p class="tiny">The test buttons only show on a copy opened from disk, whose progress stays in this browser.</p>` : ""}</figure>`;
+    ${local ? `<p class="tiny">The test buttons only show on a copy opened from disk, whose progress stays in this browser.</p>` : ""}</figure>${realParents(pl)}`;
 }
 function albumParentsWire(pl) {
   const back = () => { save(); aBadge(); renderParents(); };
@@ -4548,6 +4558,7 @@ function albumParentsWire(pl) {
     albumPreview = Object.fromEntries(STK.map(st => [st.id, st.boss ? 1 : [1, 1, 1, 2, 2, 3, 4, 5][Math.floor(R() * 8)]]));
     kidTab = "stickers"; openKids();
   };
+  realParentsWire(pl);
   if ($("aTest10")) $("aTest10").onclick = () => { albumOf(pl).b += 10; back(); };
   if ($("aTestEmpty")) $("aTestEmpty").onclick = () => {
     if (!confirm("Empty the sticker book in this browser?")) return;
@@ -13971,6 +13982,310 @@ function albumParentsWire(pl) {
     },
   };
 })();
+
+// generated by real_teams.py (squads from zerozero.pt): the photo sticker book's teams, in page order
+const REAL_TEAMS = {"por":{"key":"por","name":"Portugal","town":"Seleção Nacional","founded":"1914","logo":"https://cdn-img.staticzz.com/img/bandeiras/1_por_imgbank_flag.png","stadium":{"name":"Estádio Nacional do Jamor","img":"https://upload.wikimedia.org/wikipedia/commons/thumb/7/72/StadionJamor.JPG/960px-StadionJamor.JPG","credit":"Koshelyev, CC BY-SA 3.0, Wikimedia Commons"},"coach":{"id":"234","n":"","name":"Jorge Jesus","img":"https://cdn-img.staticzz.com/img/treinadores/234/234_jorge_jesus_1784032920.png","cc":"PT","country":"Portugal","sub":"72 anos","out":false},"players":[{"id":"284406","n":"1","name":"Diogo Costa","img":"https://cdn-img.staticzz.com/img/planteis/new/75/95/16547595_diogo_costa_20260615104216.png","cc":"PT","country":"Portugal","sub":"27 anos - FC Porto","out":false,"pos":"gk","pick":1},{"id":"275322","n":"12","name":"Rui Silva","img":"https://cdn-img.staticzz.com/img/planteis/new/75/97/16547597_rui_silva_20260615104220.png","cc":"PT","country":"Portugal","sub":"32 anos - Sporting","out":false,"pos":"gk","pick":1},{"id":"490932","n":"22","name":"Samuel Soares","img":"https://cdn-img.staticzz.com/img/jogadores/new/09/32/490932_samuel_soares_20260908114417.png","cc":"PT","country":"Portugal","sub":"24 anos - Benfica","out":false,"pos":"gk","pick":0},{"id":"284416","n":"2","name":"Diogo Dalot","img":"https://cdn-img.staticzz.com/img/planteis/new/76/17/16547617_diogo_dalot_20260615104221.png","cc":"PT","country":"Portugal","sub":"27 anos - Manchester United","out":false,"pos":"df","pick":1},{"id":"74941","n":"20","name":"João Cancelo","img":"https://cdn-img.staticzz.com/img/planteis/new/75/98/16547598_joao_cancelo_20260615104219.png","cc":"PT","country":"Portugal","sub":"32 anos - Barcelona","out":false,"pos":"df","pick":1},{"id":"384159","n":"0","name":"Gonçalo Inácio","img":"https://cdn-img.staticzz.com/img/planteis/new/76/00/16547600_goncalo_inacio_20260615104217.png","cc":"PT","country":"Portugal","sub":"25 anos - Sporting","out":false,"pos":"df","pick":0},{"id":"155270","n":"3","name":"Rúben Dias","img":"https://cdn-img.staticzz.com/img/planteis/new/76/01/16547601_ruben_dias_20260615104221.png","cc":"PT","country":"Portugal","sub":"29 anos - Manchester City","out":false,"pos":"df","pick":1},{"id":"520353","n":"4","name":"Tomás Araújo","img":"https://cdn-img.staticzz.com/img/planteis/new/76/23/16547623_tomas_araujo_20260615104221.png","cc":"PT","country":"Portugal","sub":"24 anos - Benfica","out":false,"pos":"df","pick":1},{"id":"195322","n":"13","name":"Renato Veiga","img":"https://cdn-img.staticzz.com/img/planteis/new/76/02/16547602_renato_veiga_20260615104217.png","cc":"PT","country":"Portugal","sub":"23 anos - Villarreal","out":false,"pos":"df","pick":0},{"id":"384164","n":"5","name":"Nuno Mendes","img":"https://cdn-img.staticzz.com/img/planteis/new/75/99/16547599_nuno_mendes_20260615104220.png","cc":"PT","country":"Portugal","sub":"24 anos - PSG","out":false,"pos":"df","pick":1},{"id":"155487","n":"5","name":"Nuno Tavares","img":"https://cdn-img.staticzz.com/img/jogadores/new/54/87/155487_nuno_tavares_20260513233938.png","cc":"PT","country":"Portugal","sub":"26 anos - Lazio","out":false,"pos":"df","pick":0},{"id":"211116","n":"6","name":"João Palhinha","img":"https://cdn-img.staticzz.com/img/jogadores/new/11/16/211116_joao_palhinha_20260909230241.png","cc":"PT","country":"Portugal","sub":"31 anos - Benfica","out":false,"pos":"md","pick":1},{"id":"216234","n":"21","name":"Rúben Neves","img":"https://cdn-img.staticzz.com/img/planteis/new/76/03/16547603_ruben_neves_20260615104219.png","cc":"PT","country":"Portugal","sub":"29 anos - Al-Hilal","out":false,"pos":"md","pick":1},{"id":"74953","n":"10","name":"Bernardo Silva","img":"https://cdn-img.staticzz.com/img/planteis/new/76/07/16547607_bernardo_silva_20260615104217.png","cc":"PT","country":"Portugal","sub":"32 anos - Real Madrid","out":false,"pos":"md","pick":1},{"id":"587629","n":"15","name":"João Neves","img":"https://cdn-img.staticzz.com/img/planteis/new/76/04/16547604_joao_neves_20260615104218.png","cc":"PT","country":"Portugal","sub":"22 anos - PSG","out":false,"pos":"md","pick":1},{"id":"421284","n":"23","name":"Vitinha","img":"https://cdn-img.staticzz.com/img/planteis/new/76/05/16547605_vitinha_20260615104220.png","cc":"PT","country":"Portugal","sub":"26 anos - PSG","out":false,"pos":"md","pick":1},{"id":"220488","n":"8","name":"Bruno Fernandes","img":"https://cdn-img.staticzz.com/img/planteis/new/76/06/16547606_bruno_fernandes_20260615104222.png","cc":"PT","country":"Portugal","sub":"32 anos - Manchester United","out":false,"pos":"md","pick":1},{"id":"318154","n":"14","name":"Francisco Conceição","img":"https://cdn-img.staticzz.com/img/planteis/new/76/10/16547610_francisco_conceicao_20260615104220.png","cc":"PT","country":"Portugal","sub":"23 anos - Juventus","out":false,"pos":"fw","pick":1},{"id":"500256","n":"16","name":"Francisco Trincão","img":"https://cdn-img.staticzz.com/img/planteis/new/76/09/16547609_francisco_trincao_20260615104218.png","cc":"PT","country":"Portugal","sub":"26 anos - Al-Ahli Jeddah","out":false,"pos":"fw","pick":1},{"id":"479425","n":"","name":"Fábio Silva","img":"https://cdn-img.staticzz.com/img/jogadores/new/94/25/479425_fabio_silva_20260602200913.png","cc":"PT","country":"Portugal","sub":"24 anos - Borussia Dortmund","out":false,"pos":"fw","pick":0},{"id":"cristiano-ronaldo","n":"7","name":"Cristiano Ronaldo","img":"https://cdn-img.staticzz.com/img/planteis/new/76/13/16547613_cristiano_ronaldo_20260615104221.png","cc":"PT","country":"Portugal","sub":"41 anos - Al-Nassr","out":false,"pos":"fw","pick":1},{"id":"428376","n":"9","name":"Gonçalo Ramos","img":"https://cdn-img.staticzz.com/img/planteis/new/76/12/16547612_goncalo_ramos_20260615104222.png","cc":"PT","country":"Portugal","sub":"25 anos - AC Milan","out":false,"pos":"fw","pick":1},{"id":"284412","n":"11","name":"João Félix","img":"https://cdn-img.staticzz.com/img/planteis/new/76/08/16547608_joao_felix_20260615104217.png","cc":"PT","country":"Portugal","sub":"26 anos - Al-Nassr","out":false,"pos":"fw","pick":1},{"id":"80634","n":"17","name":"Rafael Leão","img":"https://cdn-img.staticzz.com/img/planteis/new/76/14/16547614_rafael_leao_20260615104218.png","cc":"PT","country":"Portugal","sub":"27 anos - Galatasaray","out":false,"pos":"fw","pick":1},{"id":"296469","n":"18","name":"Pedro Neto","img":"https://cdn-img.staticzz.com/img/planteis/new/76/11/16547611_pedro_neto_20260615104218.png","cc":"PT","country":"Portugal","sub":"26 anos - Chelsea","out":false,"pos":"fw","pick":1}],"source":"https://www.zerozero.pt/equipa/portugal"},"slb":{"key":"slb","name":"Benfica","town":"Lisboa","founded":"1904","logo":"https://cdn-img.staticzz.com/img/logos/equipas/4_imgbank_1683238034.png","stadium":{"name":"Estádio da Luz","img":"https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/LuzLissabon.jpg/960px-LuzLissabon.jpg","credit":"Massimo Catarinella, CC BY 3.0, Wikimedia Commons"},"coach":{"id":"4199","n":"","name":"Marco Silva","img":"https://cdn-img.staticzz.com/img/treinadores/199/4199_pri__20251102001626_marco_silva.png","cc":"PT","country":"Portugal","sub":"49 anos","out":false},"players":[{"id":"594058","n":"1","name":"Anatoliy Trubin","img":"https://cdn-img.staticzz.com/img/planteis/new/38/82/16613882_anatoliy_trubin_20260916233424.png","cc":"UA","country":"Ucrânia","sub":"25 anos - 20.00 M €","out":false,"pos":"gk","pick":1},{"id":"490932","n":"24","name":"Samuel Soares","img":"https://cdn-img.staticzz.com/img/planteis/new/38/83/16613883_samuel_soares_20260916234543.png","cc":"PT","country":"Portugal","sub":"24 anos - 10.00 M €","out":false,"pos":"gk","pick":1},{"id":"678980","n":"50","name":"Diogo Ferreira","img":"https://cdn-img.staticzz.com/img/planteis/new/21/69/16752169_diogo_ferreira_20260910083910.jpg","cc":"PT","country":"Portugal","sub":"19 anos - 1.50 M €","out":false,"pos":"gk","pick":0},{"id":"523006","n":"6","name":"Alexander Bah","img":"https://cdn-img.staticzz.com/img/planteis/new/39/15/16613915_alexander_bah_20260917000539.png","cc":"DK","country":"Dinamarca","sub":"28 anos - 9.50 M €","out":false,"pos":"df","pick":1},{"id":"897370","n":"58","name":"Daniel Banjaqui","img":"https://cdn-img.staticzz.com/img/planteis/new/39/19/16613919_daniel_banjaqui_20260916233502.png","cc":"PT","country":"Portugal","sub":"18 anos - 10.00 M €","out":false,"pos":"df","pick":0},{"id":"260288","n":"2","name":"Clément Lenglet","img":"https://cdn-img.staticzz.com/img/planteis/new/43/63/16624363_clement_lenglet_20260916234453.png","cc":"FR","country":"França","sub":"31 anos - 4.00 M €","out":false,"pos":"df","pick":1},{"id":"933097","n":"3","name":"Alessandro Circati","img":"https://cdn-img.staticzz.com/img/planteis/new/30/70/16783070_alessandro_circati_20260916233804.png","cc":"AU","country":"Austrália","sub":"22 anos - 18.00 M €","out":false,"pos":"df","pick":1},{"id":"1357607","n":"33","name":"Gabriel Índio","img":"https://cdn-img.staticzz.com/img/planteis/new/38/86/16613886_gabriel_indio_20260917000406.png","cc":"BR","country":"Brasil","sub":"18 anos - 4.00 M €","out":false,"pos":"df","pick":0},{"id":"520353","n":"44","name":"Tomás Araújo","img":"https://cdn-img.staticzz.com/img/planteis/new/53/29/16625329_tomas_araujo_20260916233606.png","cc":"PT","country":"Portugal","sub":"24 anos - 35.00 M €","out":false,"pos":"df","pick":1},{"id":"892639","n":"94","name":"Rui Silva","img":"https://cdn-img.staticzz.com/img/jogadores/new/26/39/892639_rui_silva_20251211162646.png","cc":"PT","country":"Portugal","sub":"19 anos - 950 mil €","out":false,"pos":"df","pick":0},{"id":"741673","n":"26","name":"Samuel Dahl","img":"https://cdn-img.staticzz.com/img/planteis/new/39/16/16613916_samuel_dahl_20260916234417.png","cc":"SE","country":"Suécia","sub":"23 anos - 13.00 M €","out":false,"pos":"df","pick":1},{"id":"740111","n":"34","name":"Souffian El Karouani","img":"https://cdn-img.staticzz.com/img/planteis/new/64/34/16836434_souffian_el_karouani_20260916233333.png","cc":"MA","country":"Marrocos","sub":"25 anos - 15.00 M €","out":false,"pos":"df","pick":1},{"id":"897379","n":"62","name":"José Neto","img":"https://cdn-img.staticzz.com/img/planteis/new/41/11/16614111_jose_neto_20260917000437.png","cc":"PT","country":"Portugal","sub":"18 anos - 3.00 M €","out":false,"pos":"df","pick":0},{"id":"748331","n":"17","name":"Amar Dedić","img":"https://cdn-img.staticzz.com/img/jogadores/new/83/31/748331_amar_dedic_20250916194312.png","cc":"BA","country":"Bósnia e Herzegovina","sub":"24 anos - 20.00 M €","out":true,"pos":"df","pick":0},{"id":"490496","n":"4","name":"António Silva","img":"https://cdn-img.staticzz.com/img/jogadores/new/04/96/490496_antonio_silva_20251125172257.png","cc":"PT","country":"Portugal","sub":"22 anos - 26.00 M €","out":true,"pos":"df","pick":0},{"id":"962962","n":"66","name":"Joshua Wynder","img":"https://cdn-img.staticzz.com/img/jogadores/new/29/62/962962_joshua_wynder_20251206225316.png","cc":"US","country":"Estados Unidos","sub":"21 anos - 950 mil €","out":true,"pos":"df","pick":0},{"id":"740418","n":"5","name":"Enzo Barrenechea","img":"https://cdn-img.staticzz.com/img/planteis/new/41/14/16614114_enzo_barrenechea_20260916234647.png","cc":"AR","country":"Argentina","sub":"25 anos - 14.00 M €","out":false,"pos":"md","pick":1},{"id":"523684","n":"16","name":"Manu Silva","img":"https://cdn-img.staticzz.com/img/planteis/new/41/13/16614113_manu_silva_20260916234809.png","cc":"PT","country":"Portugal","sub":"25 anos - 5.50 M €","out":false,"pos":"md","pick":0},{"id":"211116","n":"36","name":"João Palhinha","img":"https://cdn-img.staticzz.com/img/planteis/new/84/19/16808419_joao_palhinha_20260916234311.png","cc":"PT","country":"Portugal","sub":"31 anos - 15.00 M €","out":false,"pos":"md","pick":1},{"id":"256199","n":"8","name":"Fredrik Aursnes","img":"https://cdn-img.staticzz.com/img/planteis/new/53/23/16625323_fredrik_aursnes_20260916234221.png","cc":"NO","country":"Noruega","sub":"30 anos - 15.00 M €","out":false,"pos":"md","pick":1},{"id":"591276","n":"18","name":"Leandro Barreiro","img":"https://cdn-img.staticzz.com/img/planteis/new/38/84/16613884_leandro_barreiro_20260916235116.png","cc":"LU","country":"Luxemburgo","sub":"26 anos - 19.00 M €","out":false,"pos":"md","pick":1},{"id":"897361","n":"73","name":"Miguel Figueiredo","img":"https://cdn-img.staticzz.com/img/planteis/new/41/15/16614115_miguel_figueiredo_20260812004533.png","cc":"PT","country":"Portugal","sub":"18 anos - 1.00 M €","out":false,"pos":"md","pick":0},{"id":"663094","n":"10","name":"Georgiy Sudakov","img":"https://cdn-img.staticzz.com/img/planteis/new/41/27/16614127_georgiy_sudakov_20260916234008.png","cc":"UA","country":"Ucrânia","sub":"24 anos - 26.00 M €","out":false,"pos":"md","pick":1},{"id":"1178849","n":"30","name":"Claudio Echeverri","img":"https://cdn-img.staticzz.com/img/planteis/new/09/04/16840904_claudio_echeverri_20260916234718.png","cc":"AR","country":"Argentina","sub":"20 anos - 15.00 M €","out":false,"pos":"md","pick":1},{"id":"760099","n":"77","name":"Gonçalo Moreira","img":"https://cdn-img.staticzz.com/img/planteis/new/39/12/16613912_goncalo_moreira_20260805151104.png","cc":"PT","country":"Portugal","sub":"20 anos - 1.20 M €","out":false,"pos":"md","pick":0},{"id":"744267","n":"20","name":"Richard Ríos","img":"https://cdn-img.staticzz.com/img/jogadores/new/62/95/1556295_richard_rios_20260917155500.png","cc":"CO","country":"Colômbia","sub":"26 anos - 25.00 M €","out":true,"pos":"md","pick":0},{"id":"386235","n":"11","name":"Dodi Lukebakio","img":"https://cdn-img.staticzz.com/img/planteis/new/53/25/16625325_dodi_lukebakio_20260916234138.png","cc":"BE","country":"Bélgica","sub":"29 anos - 15.00 M €","out":false,"pos":"fw","pick":1},{"id":"977459","n":"25","name":"Gianluca Prestianni","img":"https://cdn-img.staticzz.com/img/planteis/new/38/80/16613880_gianluca_prestianni_20260916234942.png","cc":"AR","country":"Argentina","sub":"20 anos - 40.00 M €","out":false,"pos":"fw","pick":1},{"id":"261061","n":"27","name":"Rafa Silva","img":"https://cdn-img.staticzz.com/img/planteis/new/41/23/16614123_rafa_silva_20260916235044.png","cc":"PT","country":"Portugal","sub":"33 anos - 3.00 M €","out":false,"pos":"fw","pick":1},{"id":"459841","n":"14","name":"Vangelis Pavlidis","img":"https://cdn-img.staticzz.com/img/planteis/new/41/19/16614119_vangelis_pavlidis_20260917000143.png","cc":"GR","country":"Grécia","sub":"27 anos - 35.00 M €","out":false,"pos":"fw","pick":1},{"id":"698637","n":"22","name":"Jhon Durán","img":"https://cdn-img.staticzz.com/img/planteis/new/64/32/16686432_jhon_duran_20260916233911.png","cc":"CO","country":"Colômbia","sub":"22 anos - 15.00 M €","out":false,"pos":"fw","pick":0},{"id":"811905","n":"72","name":"Anísio Cabral","img":"https://cdn-img.staticzz.com/img/planteis/new/41/24/16614124_anisio_cabral_20260916235931.png","cc":"PT","country":"Portugal","sub":"18 anos - 5.00 M €","out":false,"pos":"fw","pick":0},{"id":"645478","n":"13","name":"Jakub Kamiński","img":"https://cdn-img.staticzz.com/img/planteis/new/74/57/16647457_jakub_kaminski_20260916234049.png","cc":"PL","country":"Polónia","sub":"24 anos - 17.00 M €","out":false,"pos":"fw","pick":1},{"id":"741885","n":"21","name":"Andreas Schjelderup","img":"https://cdn-img.staticzz.com/img/planteis/new/53/35/16625335_andreas_schjelderup_20260916235237.png","cc":"NO","country":"Noruega","sub":"22 anos - 40.00 M €","out":false,"pos":"fw","pick":1},{"id":"1264057","n":"57","name":"Jaden Umeh","img":"https://cdn-img.staticzz.com/img/planteis/new/41/26/16614126_jaden_umeh_20260805151301.png","cc":"IE","country":"República da Irlanda","sub":"18 anos - 800 mil €","out":false,"pos":"fw","pick":0},{"id":"155479","n":"47","name":"Tiago Gouveia","img":"https://cdn-img.staticzz.com/img/planteis/new/38/81/16613881_tiago_gouveia_20260805151235.png","cc":"PT","country":"Portugal","sub":"25 anos - 3.50 M €","out":true,"pos":"fw","pick":0},{"id":"690584","n":"84","name":"João Rego","img":"https://cdn-img.staticzz.com/img/jogadores/new/05/84/690584_joao_rego_20251101233346.png","cc":"PT","country":"Portugal","sub":"21 anos - 3.00 M €","out":true,"pos":"fw","pick":0},{"id":"883294","n":"9","name":"Franjo Ivanovic","img":"https://cdn-img.staticzz.com/img/jogadores/new/32/94/883294_franjo_ivanovic_20260812091819.png","cc":"HR","country":"Croácia","sub":"23 anos - 15.00 M €","out":true,"pos":"fw","pick":0},{"id":"74312","n":"7","name":"Bruma","img":"https://cdn-img.staticzz.com/img/planteis/new/41/18/16614118_bruma_20260908115954.png","cc":"PT","country":"Portugal","sub":"31 anos - 3.00 M €","out":true,"pos":"fw","pick":0}],"source":"https://www.zerozero.pt/equipa/benfica"},"vsc":{"key":"vsc","name":"Vitória SC","town":"Guimarães","founded":"1922","logo":"https://cdn-img.staticzz.com/img/logos/equipas/18_imgbank_1691672368.png","stadium":{"name":"Estádio D. Afonso Henriques","img":"https://upload.wikimedia.org/wikipedia/commons/thumb/1/12/The_Est%C3%A1dio_D._Alfonso_Henriques_%282018%29.jpg/960px-The_Est%C3%A1dio_D._Alfonso_Henriques_%282018%29.jpg","credit":"Vincenzo.togni, CC BY-SA 4.0, Wikimedia Commons"},"coach":{"id":"13969","n":"","name":"Tiago Margarido","img":"https://cdn-img.staticzz.com/img/treinadores/969/13969_tiago_margarido_1789469553.jpg","cc":"PT","country":"Portugal","sub":"37 anos","out":false},"players":[{"id":"610179","n":"22","name":"Juan Castillo","img":"https://cdn-img.staticzz.com/img/planteis/new/50/15/16625015_juan_castillo_20260914162603.jpg","cc":"CO","country":"Colômbia","sub":"23 anos - 500 mil €","out":false,"pos":"gk","pick":1},{"id":"772151","n":"48","name":"Oliwier Zych","img":"https://cdn-img.staticzz.com/img/planteis/new/01/88/16670188_oliwier_zych_20260914162909.jpg","cc":"PL","country":"Polónia","sub":"22 anos - 2.00 M €","out":false,"pos":"gk","pick":1},{"id":"818378","n":"91","name":"José Ribeiro","img":"https://cdn-img.staticzz.com/img/jogadores/new/83/78/818378_jose_ribeiro_20260914163443.jpg","cc":"PT","country":"Portugal","sub":"20 anos - 200 mil €","out":false,"pos":"gk","pick":0},{"id":"738197","n":"98","name":"Lucas Furtado","img":"https://cdn-img.staticzz.com/img/planteis/new/50/23/16625023_lucas_furtado_20260914163301.jpg","cc":"BR","country":"Brasil","sub":"21 anos","out":false,"pos":"gk","pick":0},{"id":"530914","n":"2","name":"Miguel Maga","img":"https://cdn-img.staticzz.com/img/planteis/new/50/05/16625005_miguel_maga_20260914162444.jpg","cc":"PT","country":"Portugal","sub":"23 anos - 1.60 M €","out":false,"pos":"df","pick":1},{"id":"955418","n":"23","name":"Tony Strata","img":"https://cdn-img.staticzz.com/img/planteis/new/50/22/16625022_tony_strata_20260914162628.jpg","cc":"RO","country":"Roménia","sub":"22 anos - 2.00 M €","out":false,"pos":"df","pick":1},{"id":"937545","n":"4","name":"Óscar Rivas","img":"https://cdn-img.staticzz.com/img/planteis/new/50/10/16625010_oscar_rivas_20260914162815.jpg","cc":"ES","country":"Espanha","sub":"26 anos - 700 mil €","out":false,"pos":"df","pick":1},{"id":"1398611","n":"15","name":"Yeimar Mosquera","img":"https://cdn-img.staticzz.com/img/planteis/new/38/28/16673828_yeimar_mosquera_20260914162206.jpg","cc":"CO","country":"Colômbia","sub":"21 anos - 400 mil €","out":false,"pos":"df","pick":1},{"id":"479075","n":"21","name":"Toni Borevkovic","img":"https://cdn-img.staticzz.com/img/planteis/new/01/05/16850105_toni_borevkovic_20260914162534.jpg","cc":"HR","country":"Croácia","sub":"29 anos - 3.00 M €","out":false,"pos":"df","pick":1},{"id":"829486","n":"28","name":"Thiago Balieiro","img":"https://cdn-img.staticzz.com/img/planteis/new/50/19/16625019_thiago_balieiro_20260914162726.jpg","cc":"BR","country":"Brasil","sub":"23 anos - 500 mil €","out":false,"pos":"df","pick":1},{"id":"589030","n":"13","name":"João Mendes","img":"https://cdn-img.staticzz.com/img/planteis/new/50/07/16625007_joao_mendes_20260914162139.jpg","cc":"PT","country":"Portugal","sub":"26 anos - 2.50 M €","out":false,"pos":"df","pick":1},{"id":"746047","n":"82","name":"Francisco Dias","img":"https://cdn-img.staticzz.com/img/planteis/new/50/25/16625025_francisco_dias_20260914163116.jpg","cc":"PT","country":"Portugal","sub":"23 anos","out":false,"pos":"df","pick":0},{"id":"756912","n":"5","name":"Ahmed Sidibé","img":"https://cdn-img.staticzz.com/img/planteis/new/17/04/16741704_ahmed_sidibe_20260914162932.jpg","cc":"FR","country":"França","sub":"24 anos - 600 mil €","out":true,"pos":"df","pick":0},{"id":"943307","n":"44","name":"Lohann Doucet","img":"https://cdn-img.staticzz.com/img/planteis/new/33/32/16663332_lohann_doucet_20260914162845.jpg","cc":"BF","country":"Burquina Fasso","sub":"24 anos - 1.00 M €","out":false,"pos":"md","pick":1},{"id":"915411","n":"56","name":"Santiago Verdi","img":"https://cdn-img.staticzz.com/img/planteis/new/49/96/16624996_santiago_verdi_20260914162954.jpg","cc":"PT","country":"Portugal","sub":"18 anos","out":false,"pos":"md","pick":0},{"id":"1012292","n":"6","name":"Matija Mitrović","img":"https://cdn-img.staticzz.com/img/planteis/new/50/00/16625000_matija_mitrovic_20260914163014.jpg","cc":"RS","country":"Sérvia","sub":"21 anos - 2.00 M €","out":false,"pos":"md","pick":1},{"id":"529446","n":"8","name":"Gonçalo Nogueira","img":"https://cdn-img.staticzz.com/img/planteis/new/50/01/16625001_goncalo_nogueira_20260914163057.jpg","cc":"PT","country":"Portugal","sub":"22 anos - 5.00 M €","out":false,"pos":"md","pick":1},{"id":"715109","n":"16","name":"Beni Mukendi","img":"https://cdn-img.staticzz.com/img/planteis/new/50/12/16625012_beni_mukendi_20260914162257.jpg","cc":"AO","country":"Angola","sub":"24 anos - 4.00 M €","out":false,"pos":"md","pick":1},{"id":"547290","n":"10","name":"Alanzinho","img":"https://cdn-img.staticzz.com/img/planteis/new/99/51/16849951_alanzinho_20260914162036.jpg","cc":"BR","country":"Brasil","sub":"26 anos - 5.00 M €","out":false,"pos":"md","pick":1},{"id":"218663","n":"20","name":"Samu Silva","img":"https://cdn-img.staticzz.com/img/planteis/new/50/04/16625004_samu_silva_20260914162510.jpg","cc":"PT","country":"Portugal","sub":"30 anos - 2.50 M €","out":false,"pos":"md","pick":1},{"id":"694119","n":"11","name":"Gustavo Silva","img":"https://cdn-img.staticzz.com/img/planteis/new/50/08/16625008_gustavo_silva_20260914162109.jpg","cc":"BR","country":"Brasil","sub":"27 anos - 4.00 M €","out":false,"pos":"fw","pick":1},{"id":"690579","n":"17","name":"Miguel Nogueira","img":"https://cdn-img.staticzz.com/img/planteis/new/50/16/16625016_miguel_nogueira_20260914162326.jpg","cc":"PT","country":"Portugal","sub":"21 anos - 200 mil €","out":false,"pos":"fw","pick":0},{"id":"227576","n":"18","name":"Telmo Arcanjo","img":"https://cdn-img.staticzz.com/img/planteis/new/50/14/16625014_telmo_arcanjo_20260914162351.jpg","cc":"CV","country":"Cabo Verde","sub":"25 anos - 3.00 M €","out":false,"pos":"fw","pick":1},{"id":"459719","n":"9","name":"Arnel Jakupović","img":"https://cdn-img.staticzz.com/img/planteis/new/03/69/16840369_arnel_jakupovic_20260914163135.jpg","cc":"AT","country":"Áustria","sub":"28 anos - 800 mil €","out":false,"pos":"fw","pick":1},{"id":"821423","n":"24","name":"Alioune Ndoye","img":"https://cdn-img.staticzz.com/img/planteis/new/50/21/16625021_alioune_ndoye_20260914162705.jpg","cc":"SN","country":"Senegal","sub":"24 anos - 1.20 M €","out":false,"pos":"fw","pick":1},{"id":"1054757","n":"29","name":"Patrick Ouotro","img":"https://cdn-img.staticzz.com/img/planteis/new/09/22/16710922_patrick_ouotro_20260914162749.jpg","cc":"CI","country":"Costa do Marfim","sub":"21 anos - 300 mil €","out":false,"pos":"fw","pick":0},{"id":"1260913","n":"7","name":"Oumar Camara","img":"https://cdn-img.staticzz.com/img/planteis/new/50/02/16625002_oumar_camara_20260914163035.jpg","cc":"FR","country":"França","sub":"19 anos - 8.50 M €","out":false,"pos":"fw","pick":1},{"id":"941306","n":"19","name":"Victor Andersson","img":"https://cdn-img.staticzz.com/img/planteis/new/96/50/16789650_victor_andersson_20260914162418.jpg","cc":"SE","country":"Suécia","sub":"21 anos - 250 mil €","out":false,"pos":"fw","pick":0}],"source":"https://www.zerozero.pt/equipa/vitoria-sc"},"chn":{"key":"chn","name":"China","town":"Seleção da China","founded":"1949","logo":"https://cdn-img.staticzz.com/img/bandeiras/36_chn_imgbank_flag.png","stadium":{"name":"Estádio dos Trabalhadores, Pequim","img":"https://upload.wikimedia.org/wikipedia/commons/thumb/5/54/Beijing_Workers_Stadium%2C_Sep_2023.jpg/960px-Beijing_Workers_Stadium%2C_Sep_2023.jpg","credit":"HMGiovanniV, CC BY-SA 4.0, Wikimedia Commons"},"coach":{"id":"85469","n":"","name":"Shao Jiayi","img":"https://upload.wikimedia.org/wikipedia/commons/thumb/6/60/FileJiayi_Shao_2011_2.jpg/500px-FileJiayi_Shao_2011_2.jpg","cc":"CN","country":"China","sub":"46 anos","out":false,"credit":"xtranews.de, CC BY 2.0, Wikimedia Commons"},"players":[{"id":"1005074","n":"","name":"Bingliang Yan","img":"","cc":"CN","country":"China","sub":"26 anos - Tianjin Jinmen Tiger - 250 mil €","out":false,"pos":"gk","pick":0},{"id":"1259708","n":"","name":"Li Hao","img":"https://cdn-img.staticzz.com/img/jogadores/new/97/08/1259708_li_hao_20250417175402.jpg","cc":"CN","country":"China","sub":"22 anos - Qingdao West Coast - 350 mil €","out":false,"pos":"gk","pick":0},{"id":"300562","n":"1","name":"Yan Junling","img":"https://cdn-img.staticzz.com/img/jogadores/new/05/62/300562_yan_junling_20250427130233.jpg","cc":"CN","country":"China","sub":"35 anos - Shanghai Port - 200 mil €","out":false,"pos":"gk","pick":1},{"id":"198505","n":"12","name":"Dianzuo Liu","img":"https://cdn-img.staticzz.com/img/jogadores/new/85/05/198505_dianzuo_liu_20250624093542.png","cc":"CN","country":"China","sub":"36 anos - Chengdu Rongcheng FC - 150 mil €","out":false,"pos":"gk","pick":0},{"id":"718287","n":"16","name":"Ma Zhen","img":"https://cdn-img.staticzz.com/img/jogadores/87/718287_pri__20210303102401_ma_zhen.jpg","cc":"CN","country":"China","sub":"28 anos - Shanghai Shenhua - 400 mil €","out":false,"pos":"gk","pick":1},{"id":"394196","n":"","name":"Zhunyi Gao","img":"https://cdn-img.staticzz.com/img/jogadores/new/41/96/394196_zhunyi_gao_20240710091914.png","cc":"CN","country":"China","sub":"31 anos - Shandong Taishan  - 250 mil €","out":false,"pos":"df","pick":0},{"id":"307870","n":"","name":"Tyias Browning","img":"https://cdn-img.staticzz.com/img/jogadores/70/307870_20210622014502_tyias_browning.png","cc":"CN","country":"China","sub":"32 anos - Shanghai Port - 650 mil €","out":false,"pos":"df","pick":0},{"id":"3526674","n":"","name":"Gengrui Wang","img":"","cc":"CN","country":"China","sub":"18 anos - Qingdao West Coast","out":false,"pos":"df","pick":0},{"id":"1824544","n":"","name":"Zhang Aihui","img":"","cc":"CN","country":"China","sub":"21 anos - Zhejiang FC - 350 mil €","out":false,"pos":"df","pick":0},{"id":"331893","n":"","name":"Han Pengfei","img":"https://cdn-img.staticzz.com/img/jogadores/new/18/93/331893_han_pengfei_20250624095338.png","cc":"CN","country":"China","sub":"33 anos - Chengdu Rongcheng FC - 150 mil €","out":false,"pos":"df","pick":0},{"id":"520436","n":"","name":"Wei Zhen","img":"https://cdn-img.staticzz.com/img/jogadores/52/669052__20200423130821_zhen_wei.jpg","cc":"CN","country":"China","sub":"29 anos - Shanghai Port - 350 mil €","out":false,"pos":"df","pick":0},{"id":"986920","n":"2","name":"Hu Hetao","img":"https://cdn-img.staticzz.com/img/jogadores/new/69/20/986920_hu_hetao_20250625085119.png","cc":"CN","country":"China","sub":"22 anos - Chengdu Rongcheng FC - 700 mil €","out":false,"pos":"df","pick":1},{"id":"1521211","n":"4","name":"Umidjan Yusup","img":"https://cdn-img.staticzz.com/img/jogadores/new/12/11/1521211_yusup_umidjan_20250710023104.png","cc":"CN","country":"China","sub":"22 anos - Shanghai Port - 400 mil €","out":false,"pos":"df","pick":1},{"id":"648963","n":"5","name":"Chenjie Zhu","img":"https://cdn-img.staticzz.com/img/jogadores/new/89/63/648963_chenjie_zhu_20250427103807.png","cc":"CN","country":"China","sub":"26 anos - Shanghai Shenhua - 850 mil €","out":false,"pos":"df","pick":1},{"id":"537718","n":"13","name":"Li Yang","img":"https://cdn-img.staticzz.com/img/jogadores/new/77/18/537718_li_yang_20250624094831.png","cc":"CN","country":"China","sub":"29 anos - Chengdu Rongcheng FC - 200 mil €","out":false,"pos":"df","pick":0},{"id":"988549","n":"18","name":"Liu Haofan","img":"","cc":"CN","country":"China","sub":"22 anos - Zhejiang FC - 500 mil €","out":false,"pos":"df","pick":0},{"id":"424063","n":"19","name":"Liu Yang","img":"https://cdn-img.staticzz.com/img/jogadores/new/40/63/424063_liu_yang_20240710090600.png","cc":"CN","country":"China","sub":"31 anos - Shandong Taishan  - 300 mil €","out":false,"pos":"df","pick":1},{"id":"2522626","n":"23","name":"Alex Yang","img":"https://cdn-img.staticzz.com/img/jogadores/new/26/26/2522626_xi_yang_20250417175651.png","cc":"CN","country":"China","sub":"21 anos - Shanghai Port - 400 mil €","out":false,"pos":"df","pick":1},{"id":"1026019","n":"26","name":"Xu Bin","img":"https://cdn-img.staticzz.com/img/jogadores/new/60/19/1026019_xu_bin_20260131184016.jpg","cc":"CN","country":"China","sub":"22 anos - Wolverhampton - 450 mil €","out":false,"pos":"df","pick":1},{"id":"3526444","n":"","name":"Bunyamin Abdusalam","img":"","cc":"CN","country":"China","sub":"18 anos - Yunnan Yukun - 50 mil €","out":false,"pos":"md","pick":0},{"id":"363739","n":"","name":"Yang Ming-Yang","img":"https://cdn-img.staticzz.com/img/jogadores/new/37/39/363739_yang_ming_yang_20250625092450.png","cc":"CN","country":"China","sub":"31 anos - Chengdu Rongcheng FC - 400 mil €","out":false,"pos":"md","pick":0},{"id":"2237411","n":"","name":"Shenghao Huang","img":"","cc":"CN","country":"China","sub":"19 anos - Guangdong GZ-Power - 50 mil €","out":false,"pos":"md","pick":0},{"id":"215767","n":"","name":"Serginho","img":"https://cdn-img.staticzz.com/img/jogadores/new/57/67/215767_serginho_20250421221854.jpg","cc":"CN","country":"China","sub":"31 anos - Beijing Guoan - 1.60 M €","out":false,"pos":"md","pick":0},{"id":"586288","n":"","name":"Dai Wai Tsun","img":"https://cdn-img.staticzz.com/img/jogadores/88/586288_20230414134958_dai_wai_tsun.jpg","cc":"CN","country":"China","sub":"27 anos - Shenzhen Peng City - 200 mil €","out":false,"pos":"md","pick":0},{"id":"363248","n":"6","name":"Wang Shangyuan","img":"https://cdn-img.staticzz.com/img/jogadores/48/363248_20170312202151_shangyuan_wang.jpg","cc":"CN","country":"China","sub":"33 anos - Henan FC - 250 mil €","out":false,"pos":"md","pick":0},{"id":"555188","n":"8","name":"Gao Tianyi","img":"https://cdn-img.staticzz.com/img/jogadores/new/51/88/555188_gao_tianyi_20250427102930.png","cc":"CN","country":"China","sub":"28 anos - Shanghai Shenhua - 750 mil €","out":false,"pos":"md","pick":1},{"id":"486334","n":"11","name":"Liangming Lin","img":"https://cdn-img.staticzz.com/img/jogadores/new/63/34/486334_liangming_lin_20250421224613.png","cc":"CN","country":"China","sub":"29 anos - Beijing Guoan - 650 mil €","out":false,"pos":"md","pick":1},{"id":"1523959","n":"14","name":"Li Zhenquan","img":"","cc":"CN","country":"China","sub":"22 anos - Chongqing Tongliang Long - 400 mil €","out":false,"pos":"md","pick":0},{"id":"710385","n":"15","name":"Huang Jiahui","img":"https://cdn-img.staticzz.com/img/jogadores/new/54/18/1255418_huang_jiahui_20250228122539.png","cc":"CN","country":"China","sub":"25 anos - Tianjin Jinmen Tiger - 300 mil €","out":false,"pos":"md","pick":1},{"id":"517875","n":"21","name":"Zhengyu Huang","img":"https://cdn-img.staticzz.com/img/jogadores/new/78/75/517875_zhengyu_huang_20240710094203.png","cc":"CN","country":"China","sub":"29 anos - Shandong Taishan  - 450 mil €","out":false,"pos":"md","pick":1},{"id":"562864","n":"22","name":"Cheng Jin","img":"https://cdn-img.staticzz.com/img/jogadores/64/562864_20170529024136_cheng_jin.jpg","cc":"CN","country":"China","sub":"31 anos - Zhejiang FC - 300 mil €","out":false,"pos":"md","pick":1},{"id":"2531581","n":"25","name":"Kuai Jiwen","img":"","cc":"CN","country":"China","sub":"20 anos - Shanghai Port - 300 mil €","out":false,"pos":"md","pick":0},{"id":"1543728","n":"","name":"Pengyu Zhu","img":"","cc":"CN","country":"China","sub":"21 anos - Dalian Yingbo FC - 400 mil €","out":false,"pos":"fw","pick":0},{"id":"3616836","n":"","name":"Songyuan Zhao","img":"","cc":"CN","country":"China","sub":"17 anos","out":false,"pos":"fw","pick":0},{"id":"631672","n":"","name":"Zhong Yihao","img":"https://cdn-img.staticzz.com/img/jogadores/72/631672_20180609051508_zhong_yihao.jpg","cc":"CN","country":"China","sub":"30 anos - Henan FC - 200 mil €","out":false,"pos":"fw","pick":0},{"id":"474330","n":"","name":"Pu Chen","img":"https://cdn-img.staticzz.com/img/jogadores/new/43/30/474330_pu_chen_20240711085253.png","cc":"CN","country":"China","sub":"29 anos - Shandong Taishan  - 250 mil €","out":false,"pos":"fw","pick":0},{"id":"986918","n":"","name":"Du Yuezheng","img":"https://cdn-img.staticzz.com/img/jogadores/18/986918_20230414135628_yuezheng_du.jpg","cc":"CN","country":"China","sub":"21 anos - Chongqing Tongliang Long - 50 mil €","out":false,"pos":"fw","pick":0},{"id":"704488","n":"","name":"Tao Qianglong","img":"https://cdn-img.staticzz.com/img/jogadores/88/704488_20221230102224_qianglong_tao.jpg","cc":"CN","country":"China","sub":"24 anos - Zhejiang FC - 300 mil €","out":false,"pos":"fw","pick":0},{"id":"1812599","n":"","name":"Mingrui Yang","img":"","cc":"CN","country":"China","sub":"19 anos - Dalian Yingbo FC - 200 mil €","out":false,"pos":"fw","pick":0},{"id":"1523950","n":"","name":"Mao Weijie","img":"","cc":"CN","country":"China","sub":"21 anos - Dalian Yingbo FC - 700 mil €","out":false,"pos":"fw","pick":0},{"id":"248999","n":"","name":"Wu Lei","img":"https://cdn-img.staticzz.com/img/jogadores/99/248999_20201008151237_wu_lei.jpg","cc":"CN","country":"China","sub":"34 anos - Shanghai Port - 500 mil €","out":false,"pos":"fw","pick":0},{"id":"561351","n":"3","name":"Ba Dun","img":"https://cdn-img.staticzz.com/img/jogadores/51/561351_pri__20181112124852_ba_dun.jpg","cc":"CN","country":"China","sub":"31 anos - Tianjin Jinmen Tiger - 300 mil €","out":false,"pos":"fw","pick":1},{"id":"970383","n":"7","name":"Xie Wenneng","img":"https://cdn-img.staticzz.com/img/jogadores/new/03/83/970383_xie_wenneng_20240711091542.png","cc":"CN","country":"China","sub":"25 anos - Shandong Taishan  - 550 mil €","out":false,"pos":"fw","pick":1},{"id":"629442","n":"9","name":"Wang Ziming","img":"https://cdn-img.staticzz.com/img/jogadores/new/94/42/629442_wang_ziming_20250421224840.png","cc":"CN","country":"China","sub":"30 anos - Chengdu Rongcheng FC - 250 mil €","out":false,"pos":"fw","pick":0},{"id":"454859","n":"9","name":"Yuning Zhang","img":"https://cdn-img.staticzz.com/img/jogadores/new/48/59/454859_yuning_zhang_20250421224520.png","cc":"CN","country":"China","sub":"29 anos - Beijing Guoan - 600 mil €","out":false,"pos":"fw","pick":1},{"id":"409003","n":"10","name":"Wei Shihao","img":"https://cdn-img.staticzz.com/img/jogadores/new/90/03/409003_wei_shihao_20250625094523.png","cc":"CN","country":"China","sub":"31 anos - Chengdu Rongcheng FC - 750 mil €","out":false,"pos":"fw","pick":1},{"id":"1935184","n":"17","name":"Behram Abduweli","img":"https://cdn-img.staticzz.com/img/jogadores/new/51/84/1935184_behram_abduweli_20240916124126.jpg","cc":"CN","country":"China","sub":"23 anos - Chengdu Rongcheng FC - 400 mil €","out":false,"pos":"fw","pick":1},{"id":"1236425","n":"20","name":"Wang Yudong","img":"https://cdn-img.staticzz.com/img/jogadores/new/64/25/1236425_wang_yudong_20250325145242.png","cc":"CN","country":"China","sub":"19 anos - Zhejiang FC - 1.60 M €","out":false,"pos":"fw","pick":1},{"id":"1824986","n":"24","name":"Chengyu Liu","img":"https://cdn-img.staticzz.com/img/jogadores/new/49/86/1824986_chengyu_liu_20250427102423.png","cc":"CN","country":"China","sub":"20 anos - Shanghai Shenhua - 400 mil €","out":false,"pos":"fw","pick":1}],"source":"https://www.zerozero.pt/equipa/china"}};
+
+/* ---- the photo sticker book (the owner, 2026-10-03): real teams in Panini style, beside the drawn book on a shelf (📖 tab).
+   Teams: REAL_TEAMS (js/realteams.js, written by real_teams.py from zerozero.pt). Each team = crest (foil), stadium (wide),
+   head coach and 20 players, on two pages. The page holds only the photos' addresses: each device downloads a photo the
+   first time it's needed, shrinks it (JPEG on the card colour, PNG for crests) and keeps it in IndexedDB (rPhotos), so the
+   photos never sit in our repo or on the public site.
+   Packs (the owner): one photo pack for every pack of the drawn book (packs earned, gifts, boss packs alike), REAL_GIFT
+   to start with, REAL_PACK stickers each, only stickers he hasn't got (no duplicates: the last pack can be smaller, then
+   the packs stop). Stored as pl.real = {s: {id: 1}, o: packs opened, g: packs given, base: drawn packs earned when the
+   book came} (merged in mergePlayer). ---- */
+const REAL_PACK = 7, REAL_GIFT = 2;
+const R_POS = { gk: "GR", df: "DEF", md: "MED", fw: "AV" };
+// the stickers, team by team: crest, stadium, coach, then the players (keepers first, as zerozero lists them);
+// page 1 = crest, stadium (two slots wide), coach and 8 players, page 2 = the other 12
+const RSTK = [], R_PAGES = [];
+for (const [k, t] of Object.entries(REAL_TEAMS)) {
+  const pg = [{ id: `r${k}1`, team: k }, { id: `r${k}2`, team: k }];
+  [{ kind: "crest", name: t.name, img: t.logo, id: "crest" }, { kind: "stadium", name: t.stadium.name, img: t.stadium.img, id: "stadium" },
+    { kind: "coach", name: t.coach.name, img: t.coach.img, cc: t.coach.cc, id: "coach" },
+    ...t.players.filter(p => p.pick).map(p => ({ kind: "player", name: p.name, img: p.img, n: p.n, cc: p.cc, pos: p.pos, id: p.id }))]
+    .forEach((st, i) => RSTK.push(Object.assign(st, { id: `r${k}-${st.id}`, team: k, page: pg[i < 11 ? 0 : 1] })));
+  R_PAGES.push(...pg);
+}
+let albumBook = "shelf";      // the 📖 tab: "shelf" (both books), "fan" (the drawn book) or "real"
+
+/* ---- packs ---- */
+function aEarnedAll(a) { return packsEarned(a) + a.b + a.bp + (a.lp || 0); }      // every pack the drawn book has given
+function realOf(pl) {
+  if (!pl.real) pl.real = { s: {}, o: 0, g: REAL_GIFT, base: aEarnedAll(albumOf(pl)) };
+  return pl.real;
+}
+const realHas = (pl, st) => !!realOf(pl).s[st.id];
+function realWaiting(pl) {
+  const r = realOf(pl), n = Math.max(0, r.g + aEarnedAll(albumOf(pl)) - r.base - r.o);
+  return n && RSTK.some(st => !r.s[st.id]) ? n : 0;
+}
+// the next pack: REAL_PACK stickers he hasn't got (fewer at the end); drawn from the pack's number like the drawn book's
+function realPackOpen(pl) {
+  if (realWaiting(pl) <= 0) return null;
+  const r = realOf(pl), R = aRand(r.o * 7919 + 271828), miss = RSTK.filter(st => !r.s[st.id]), pick = [];
+  while (pick.length < Math.min(REAL_PACK, miss.length)) { const st = miss[Math.floor(R() * miss.length)]; if (!pick.includes(st)) pick.push(st); }
+  r.o++;
+  for (const st of pick) r.s[st.id] = 1;
+  save(); aBadge();
+  return pick;
+}
+
+/* ---- photos: downloaded once per device, shrunk, kept in IndexedDB; a failure falls back to the address itself
+   (the browser's own cache), and a picture that can't load leaves the silhouette ---- */
+const rPhotos = (() => {
+  let dbp = null;
+  const mem = {}, url = {};
+  const db = () => dbp || (dbp = new Promise((ok, no) => {
+    const r = indexedDB.open("gymPhotos", 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("img");
+    r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error);
+  }));
+  const req = (mode, fn) => db().then(d => new Promise((ok, no) => { const r = fn(d.transaction("img", mode).objectStore("img")); r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); }));
+  // photos become JPEG on the card colour (transparent PNG cutouts are ~8x bigger); crests keep their transparency
+  const shrink = (blob, w, alpha) => new Promise((ok, no) => {
+    const u = URL.createObjectURL(blob), im = new Image();
+    im.onload = () => {
+      const k = Math.min(1, w / im.naturalWidth), c = document.createElement("canvas"), g = c.getContext("2d");
+      c.width = Math.round(im.naturalWidth * k); c.height = Math.round(im.naturalHeight * k);
+      if (!alpha) { g.fillStyle = "#1a1a1a"; g.fillRect(0, 0, c.width, c.height); }
+      g.drawImage(im, 0, 0, c.width, c.height); URL.revokeObjectURL(u);
+      c.toBlob(b => b ? ok(b) : no(new Error("toBlob")), alpha ? "image/png" : "image/jpeg", .82);
+    };
+    im.onerror = () => { URL.revokeObjectURL(u); no(new Error("decode")); };
+    im.src = u;
+  });
+  // stored as {type, buf}: older Safari can't keep Blobs in IndexedDB
+  const toUrl = rec => URL.createObjectURL(new Blob([rec.buf], { type: rec.type }));
+  const key = (src, w, alpha) => src + "@" + w + (alpha ? "a" : "");
+  function get(src, w, alpha) {
+    const k = key(src, w, alpha);
+    if (mem[k]) return mem[k];
+    return mem[k] = req("readonly", s => s.get(k)).then(rec => rec ? toUrl(rec)
+      : fetch(src, { mode: "cors" }).then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.blob(); })
+        .then(b => shrink(b, w, alpha)).then(b => b.arrayBuffer ? b.arrayBuffer() : new Response(b).arrayBuffer())
+        .then(buf => { const rec2 = { type: alpha ? "image/png" : "image/jpeg", buf }; return req("readwrite", s => s.put(rec2, k)).then(() => toUrl(rec2)); }))
+      .then(u => (url[k] = u))
+      .catch(() => { delete mem[k]; return src; });     // try again next time; meanwhile the browser loads it directly
+  }
+  return { get, now: (src, w, alpha) => url[key(src, w, alpha)] };
+})();
+// an <img> for a photo: its stored copy when ready, else filled in by rFill once loaded
+function rImg(src, w, alpha = false, cls = "") {
+  if (!src) return "";
+  const u = rPhotos.now(src, w, alpha);
+  return u ? `<img class="rph ${cls}" src="${u}" alt="">` : `<img class="rph ${cls}" data-src="${esc(src)}" data-w="${w}"${alpha ? ' data-a="1"' : ""} alt="">`;
+}
+function rFill(root) {
+  if (root) root.querySelectorAll("img[data-src]").forEach(im => {
+    const src = im.dataset.src; im.removeAttribute("data-src");
+    rPhotos.get(src, +im.dataset.w, !!im.dataset.a).then(u => { im.src = u; });
+  });
+}
+document.addEventListener("error", ev => { const t = ev.target; if (t.classList && t.classList.contains("rph")) t.classList.add("rnone"); }, true);
+// every photo of the book, quietly, a few at a time (the stickers he has first): after that the book works offline
+let rPrefetched = false;
+function realPrefetch(pl) {
+  if (rPrefetched) return; rPrefetched = true;
+  const jobs = [...RSTK].sort((a, b) => realHas(pl, b) - realHas(pl, a)).map(st => [st.img, st.kind === "stadium" ? 800 : 360, st.kind === "crest"]);
+  for (const t of Object.values(REAL_TEAMS)) jobs.push([t.logo, 96, true]);
+  const next = () => { const j = jobs.shift(); if (j && j[0]) rPhotos.get(...j).then(next); else if (j) next(); };
+  for (let i = 0; i < 3; i++) next();
+}
+const rFlag = cc => cc && cc.length === 2 ? String.fromCodePoint(...[...cc].map(c => 0x1F1E6 + c.charCodeAt(0) - 65)) : "";
+
+/* ---- a card (the same box as a drawn sticker, so the reveal, the tray and the flight are shared): the photo, the shirt
+   number, the crest in the corner, the name on a black band (gold for the coach); the crest card is foil ---- */
+function realCard(st, wide = false, cls = "") {
+  const t = REAL_TEAMS[st.team], logo = rImg(t.logo, 96, true, "rlogo");
+  if (st.kind === "crest")
+    return `<div class="rstk rfoil ${cls}" data-st="${st.id}">${rImg(st.img, 360, true)}<div class="rban"><b>${esc(st.name)}</b><small>${t.founded}</small></div></div>`;
+  if (st.kind === "stadium")
+    return `<div class="rstk rstad${wide ? " rwide" : ""} ${cls}" data-st="${st.id}">${rImg(st.img, 800)}${logo}<div class="rban"><b>${esc(st.name)}</b></div></div>`;
+  return `<div class="rstk${st.kind === "coach" ? " rcoach" : ""} ${cls}" data-st="${st.id}">${rImg(st.img, 360)}${st.n ? `<span class="rno">${st.n}</span>` : ""}${logo}` +
+    `<div class="rban"><b>${esc(st.name)}</b><small>${rFlag(st.cc)} ${st.kind === "coach" ? "TREINADOR" : R_POS[st.pos]}</small></div></div>`;
+}
+// an empty slot: the shirt number and flag (a player), 📋 + flag (the coach), a faint crest, a stadium
+function realEmpty(st) {
+  const t = REAL_TEAMS[st.team];
+  return st.kind === "player" ? `<span class="anum">${st.n}</span><span class="rflag">${rFlag(st.cc)}</span>`
+    : st.kind === "coach" ? `<span class="anum">📋</span><span class="rflag">${rFlag(st.cc)}</span>`
+    : st.kind === "crest" ? rImg(t.logo, 360, true, "rghost") : `<span class="anum">🏟️</span>`;
+}
+
+/* ---- the shelf: both books, each with its packs waiting ---- */
+function renderShelf() {
+  const pl = pzPlayers(), nf = packsWaiting(pl), nr = realWaiting(pl);
+  const hf = STK.filter(st => stkOwned(pl, st)).length, hr = RSTK.filter(st => realHas(pl, st)).length;
+  aDefs();
+  const fanPic = STK.filter(st => st.page.id === "sp").slice(0, 3).map((st, i) => `<span style="--i:${i - 1}">${stickerCard(st, 1)}</span>`).join("");
+  const realPic = Object.values(REAL_TEAMS).map(t => `<span>${rImg(t.logo, 96, true)}</span>`).join("");
+  const book = (id, cls, pic, have, all, n, label) => `<button type="button" class="abk ${cls}${n ? " ready" : ""}" id="${id}" aria-label="${label}">` +
+    `<span class="abk-pic">${pic}</span><span class="abk-prog"><span class="abar"><i style="width:${100 * have / all}%"></i></span><b>${have}</b><small>/${all}</small></span>` +
+    `${n ? `<span class="abk-n${cls === "abk-real" ? " rpk" : ""}">${aPackSvg()}<b>${n}</b></span>` : ""}</button>`;
+  $("kStickers").innerHTML = `<div class="ashelf">${book("bkFan", "abk-fan", fanPic, hf, STK.length, nf, "The sticker book")}` +
+    `${book("bkReal", "abk-real", realPic, hr, RSTK.length, nr, "The photo sticker book")}</div>`;
+  rFill($("kStickers"));
+  $("bkFan").onclick = () => { albumBook = "fan"; sfx("flip"); renderAlbum(); };
+  $("bkReal").onclick = () => { albumBook = "real"; sfx("flip"); renderAlbum(); };
+  aRenderTray(); realRenderTray();
+}
+
+/* ---- the photo book: like the drawn one (◀ ▶ or a swipe, the teams' crests below), its own pack and tray ---- */
+let realPage = 0, realTray = [], realTrayPl = null;
+function renderReal() {
+  const pl = pzPlayers();
+  if (realTrayPl !== S.player) { realTray = []; realTrayPl = S.player; }
+  $("kStickers").innerHTML = `<div class="atop" id="rTop"></div>
+    <div class="abook"><button class="btn big apg" type="button" id="rPrev" aria-label="Previous page">◀</button>
+      <div class="apage p12 rpage" id="rPage"></div>
+      <button class="btn big apg" type="button" id="rNext" aria-label="Next page">▶</button></div>
+    <div class="anav" id="rNav" role="group" aria-label="Teams"></div>`;
+  if (!$("rTray")) { const t = document.createElement("div"); t.className = "atray"; t.id = "rTray"; $("kidsView").appendChild(t); }
+  $("rPrev").onclick = () => realTurn(realPage - 1);
+  $("rNext").onclick = () => realTurn(realPage + 1);
+  let down = null;
+  $("rPage").onpointerdown = ev => { down = { x: ev.clientX, y: ev.clientY }; };
+  $("rPage").onpointerup = ev => {
+    if (!down) return;
+    const dx = ev.clientX - down.x, dy = ev.clientY - down.y; down = null;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) return realTurn(realPage + (dx < 0 ? 1 : -1));
+    const slot = ev.target.closest(".aslot.got");
+    if (slot && Math.abs(dx) < 12 && Math.abs(dy) < 12) realZoom(RSTK.find(st => st.id === slot.dataset.st));
+  };
+  realRenderTop(); realRenderPage(); realRenderTray(); aRenderTray();
+  realPrefetch(pl);
+  const bar = document.querySelector(".kidbar");
+  if (bar && bar.getBoundingClientRect().top > 8 && !window.GYM_KIDS_ONLY) bar.scrollIntoView({ block: "start", behavior: "smooth" });
+}
+// a sticker still in the tray isn't in the book yet
+const realShown = (pl, st) => realHas(pl, st) && !realTray.includes(st);
+function realRenderTop() {
+  const pl = pzPlayers(), n = realWaiting(pl), have = RSTK.filter(st => realShown(pl, st)).length;
+  $("rTop").innerHTML = `<button type="button" class="abshelf" id="rShelf" aria-label="All sticker books">📚</button>` +
+    `<button type="button" class="apack rpk ${n ? "ready" : "wait"}" id="rPack" aria-label="${n ? "Open a sticker pack" : "No pack yet"}">${aPackSvg()}${n ? `<b>${n}</b>` : ""}</button>` +
+    `<span class="atotal">📸 <span class="abar"><i style="width:${100 * have / RSTK.length}%"></i></span> <b>${have}</b><small>/${RSTK.length}</small></span>`;
+  $("rShelf").onclick = () => { albumBook = "shelf"; sfx("flip"); renderAlbum(); };
+  $("rPack").onclick = () => { if (realWaiting(pzPlayers()) && !realTray.length) realOpenPack(); else { $("rPack").classList.remove("nope"); void $("rPack").offsetWidth; $("rPack").classList.add("nope"); } };
+}
+function realRenderPage() {
+  const pl = pzPlayers(), pg = R_PAGES[realPage], t = REAL_TEAMS[pg.team], sts = RSTK.filter(st => st.page === pg), have = sts.filter(st => realShown(pl, st)).length;
+  $("rPage").className = "apage p12 rpage" + (have === sts.length ? " full" : "");
+  $("rPage").innerHTML = `<div class="ahead">${rImg(t.logo, 96, true, "rhlogo")}<span class="abar"><i style="width:${100 * have / sts.length}%"></i></span><b>${have}</b><small>/${sts.length}</small></div>
+    <div class="agrid" id="rGrid">${sts.map(st => { const got = realShown(pl, st);
+      return `<div class="aslot rslot${got ? " got" : ""}${st.kind === "stadium" ? " rw" : ""}" data-st="${st.id}">${got ? realCard(st, true) : realEmpty(st)}</div>`; }).join("")}</div>`;
+  rFill($("rPage"));
+  $("rPrev").disabled = realPage === 0; $("rNext").disabled = realPage === R_PAGES.length - 1;
+  $("rNav").innerHTML = Object.keys(REAL_TEAMS).map(k => `<div class="agrp${pg.team === k ? " on" : ""}" data-sec="${k}">${R_PAGES.map((p, i) => {
+    if (p.team !== k) return "";
+    const s = RSTK.filter(st => st.page === p), h = s.filter(st => realShown(pl, st)).length;
+    return `<button type="button" data-pg="${i}" aria-pressed="${i === realPage}" class="${h === s.length ? "full" : ""}" aria-label="Page ${i + 1}">${rImg(REAL_TEAMS[k].logo, 96, true, "rnlogo")}<i><b style="width:${100 * h / s.length}%"></b></i></button>`;
+  }).join("")}</div>`).join("");
+  rFill($("rNav"));
+  $("rNav").querySelectorAll("[data-pg]").forEach(b => b.onclick = () => realTurn(+b.dataset.pg));
+}
+function realRenderTray() {
+  const t = $("rTray"); if (!t) return;
+  t.hidden = !realTray.length || window.SECTION !== "kids" || kidTab !== "stickers" || albumBook !== "real";
+  t.innerHTML = realTray.map((st, i) => `<button type="button" class="aitem" data-i="${i}" style="--i:${i}" aria-label="Stick it in">${realCard(st)}</button>`).join("");
+  rFill(t);
+  t.querySelectorAll("[data-i]").forEach(b => b.onclick = () => realStick(realTray[+b.dataset.i], b));
+}
+function realTurn(i, then) {
+  if (i < 0 || i >= R_PAGES.length || realTurn.busy) return;
+  if (i === realPage) return then && then();
+  const el = $("rPage"), dir = i > realPage ? "l" : "r";
+  realTurn.busy = true; sfx("flip");
+  el.classList.add("out-" + dir);
+  setTimeout(() => {
+    realPage = i; realRenderPage(); el.classList.add("in-" + dir);
+    setTimeout(() => { el.classList.remove("in-" + dir); realTurn.busy = false; if (then) then(); }, 230);
+  }, 200);
+}
+// opening: the pack (in the photo book's colours) tears, the cards turn over (every one new), then wait in the tray
+function realOpenPack() {
+  const ov = $("aOverlay");
+  if (!ov.hidden || realTray.length) return;
+  const got = realPackOpen(pzPlayers()); if (!got) return;
+  realTray = got.slice();      // in the tray (not in the book yet) from now: the counts don't jump ahead
+  realRenderTop(); realRenderPage();
+  ov.innerHTML = `<div class="apackbig rpk" id="aTear"><span class="ptop">${aPackSvg("top")}</span><span class="pbody">${aPackSvg("body")}</span></div><div class="areveal" id="aReveal"></div>`;
+  ov.hidden = false;
+  let torn = false, done = false;
+  const toTray = () => {
+    if (done) return; done = true; clearTimeout(toTray.t);
+    ov.hidden = true; ov.onclick = null; ov.innerHTML = "";
+    realRenderTray();
+  };
+  const tear = () => {
+    if (torn) return; torn = true; clearTimeout(tear.t); sfx("tear");
+    $("aTear").classList.add("torn");
+    setTimeout(() => {
+      $("aTear").hidden = true;
+      $("aReveal").innerHTML = got.map((st, i) => `<div class="aflip new" style="--i:${i}" data-st="${st.id}"><div class="aback">${A_CARD_BACK}</div>` +
+        `<div class="afront">${realCard(st)}<span class="amark anew">${A_NEW}</span></div></div>`).join("");
+      rFill($("aReveal"));
+      got.forEach((st, i) => setTimeout(() => sfx("sticker"), 350 + i * 450));
+      const shown = 350 + got.length * 450 + 300;
+      setTimeout(() => { if (!done) ov.onclick = toTray; }, shown);
+      toTray.t = setTimeout(toTray, shown + 1800);
+    }, 500);
+  };
+  ov.onclick = tear;
+  tear.t = setTimeout(tear, 2500);
+}
+// a card from the tray flies into its slot (turning to its page first)
+function realStick(st, el) {
+  if (!st || realStick.busy) return;
+  realStick.busy = true;
+  const land = () => {
+    const slot = $("rPage").querySelector(`.aslot[data-st="${st.id}"]`), from = el.getBoundingClientRect(), to = slot.getBoundingClientRect();
+    const f = document.createElement("div");
+    f.className = "afly"; f.style.cssText = `left:${from.left}px;top:${from.top}px;--cw:${from.width}px`;
+    f.innerHTML = realCard(st); rFill(f);
+    document.body.appendChild(f); el.style.visibility = "hidden";
+    void f.offsetWidth;
+    f.style.transform = `translate(${to.left - from.left}px, ${to.top - from.top}px) scale(${Math.min(to.width, to.height / 1.296) / from.width})`;
+    setTimeout(() => {
+      f.remove(); realStick.busy = false;
+      realTray.splice(realTray.indexOf(st), 1);
+      realRenderPage(); realRenderTop(); realRenderTray(); sfx("sticker");
+      const c = $("rPage").querySelector(`.aslot[data-st="${st.id}"] .rstk`); if (c) c.classList.add("land");
+    }, 700);
+  };
+  const pi = R_PAGES.indexOf(st.page);
+  if (pi === realPage) land(); else if (!realTurn.busy) realTurn(pi, land); else realStick.busy = false;
+}
+function realZoom(st) {
+  const ov = $("aOverlay");
+  ov.innerHTML = `<div class="azoom">${realCard(st)}</div>`;
+  rFill(ov); ov.hidden = false; sfx("flip");
+  ov.onclick = () => { ov.hidden = true; ov.onclick = null; ov.innerHTML = ""; };
+}
+
+/* ---- parents: the numbers, a pack as a gift, the photo credits ---- */
+function realParents(pl) {
+  const r = realOf(pl), have = RSTK.filter(st => realHas(pl, st)).length, local = location.protocol === "file:";
+  const credits = Object.values(REAL_TEAMS).map(t => `${esc(t.stadium.name)}: ${esc(t.stadium.credit)}${t.coach.credit ? `; ${esc(t.coach.name)}: ${esc(t.coach.credit)}` : ""}`).join(" · ");
+  return `<figure class="chart wide"><figcaption>Photo sticker book</figcaption>
+    <p class="tiny">${Object.values(REAL_TEAMS).map(t => esc(t.name)).join(", ")}: crest, stadium, coach and 20 players each. A pack of ${REAL_PACK} with every pack of the drawn book
+      (${REAL_GIFT} to start with), only stickers not in the book yet, so it fills up in ${Math.ceil(RSTK.length / REAL_PACK)} packs.
+      Photos are downloaded by this device the first time they're needed (about 2 MB in all) and then work offline.</p>
+    <div class="tiles"><div class="tile"><span class="lbl">Stickers</span><b>${have}/${RSTK.length}</b></div>
+      <div class="tile"><span class="lbl">Packs opened</span><b>${r.o}</b></div><div class="tile"><span class="lbl">Packs waiting</span><b>${realWaiting(pl)}</b></div></div>
+    <div class="controls"><button class="btn" type="button" id="rGift">Give a photo pack</button>
+      ${local ? `<button class="btn" type="button" id="rTestEmpty">Test: empty the photo book</button>` : ""}</div>
+    <p class="tiny">Players, coaches and crests: photos from <a href="https://www.zerozero.pt" target="_blank" rel="noopener">zerozero.pt</a>, loaded by this device. ${credits}.</p></figure>`;
+}
+function realParentsWire(pl) {
+  const back = () => { save(); aBadge(); renderParents(); };
+  $("rGift").onclick = () => { if (confirm(`Give ${pl.name} a photo sticker pack?`)) { realOf(pl).g++; back(); } };
+  if ($("rTestEmpty")) $("rTestEmpty").onclick = () => {
+    if (!confirm("Empty the photo sticker book in this browser?")) return;
+    delete pl.real; realTray = []; back();
+  };
+}
 
 /* ================= coach: your own games vs the repertoire, timed answers, playing out the plan ================= */
 

@@ -1668,6 +1668,63 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
 .aladder { display: flex; align-items: center; gap: 12px; padding: 8px 16px; border-radius: 30px; background: rgba(255,255,255,.92); }
 .aladder i { width: 30px; height: 30px; border-radius: 50%; opacity: .22; box-shadow: inset 0 0 0 2px rgba(0,0,0,.25); }
 .aladder i.on { opacity: 1; }
+/* ---- the shelf (📖 tab: the drawn book and the photo book, js/real.js) ---- */
+.ashelf { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 7vw; padding: 26px 0 10px;
+  --bw: min(36vw, 290px, calc((100dvh - 250px) / 1.32)); }
+.abk { appearance: none; border: 0; cursor: pointer; position: relative; width: var(--bw); height: calc(var(--bw) * 1.32); padding: calc(var(--bw) * .09);
+  box-sizing: border-box; border-radius: 8px 20px 20px 8px; display: grid; grid-template-rows: 1fr auto; gap: 10px; color: #fff;
+  box-shadow: inset 16px 0 16px -10px rgba(0,0,0,.45), 0 10px 24px rgba(0,0,0,.3); }
+.abk:active { transform: scale(.97); }
+.abk.ready { animation: abob 2s ease-in-out infinite; }
+.abk-fan { background: radial-gradient(circle at 30% 20%, #42a5f5, #1565c0 60%, #0d47a1); }
+.abk-real { background: repeating-linear-gradient(135deg, #111 0 18px, #262626 18px 36px); }
+.abk-pic { position: relative; display: grid; place-items: center; }
+.abk-fan .abk-pic > span { position: absolute; --cw: calc(var(--bw) * .4); transform: translateX(calc(var(--i) * var(--bw) * .22)) rotate(calc(var(--i) * 10deg)); }
+.abk-real .abk-pic { grid-template-columns: 1fr 1fr; gap: calc(var(--bw) * .05); }
+.abk-real .abk-pic > span { width: calc(var(--bw) * .3); height: calc(var(--bw) * .3); border-radius: 50%; background: #fff; display: grid; place-items: center; box-shadow: 0 2px 6px rgba(0,0,0,.5); }
+.abk-real .abk-pic img { width: 76%; height: 76%; object-fit: contain; }
+.abk-prog { display: flex; align-items: center; gap: 6px; font: 700 calc(var(--bw) * .085) var(--display); }
+.abk-prog .abar { flex: 1; width: auto; height: 12px; }
+.abk-prog small { font-size: .65em; opacity: .8; }
+.abk-n { position: absolute; top: calc(var(--bw) * -.1); right: calc(var(--bw) * -.1); width: calc(var(--bw) * .26); }
+.abk-n svg { display: block; width: 100%; filter: drop-shadow(0 3px 4px rgba(0,0,0,.35)); }
+.abk-n b { position: absolute; top: -8px; right: -12px; min-width: 28px; padding: 0 6px; border-radius: 14px; background: #e53935; color: #fff; font: 700 18px/28px var(--body); }
+.abshelf { font-size: 30px; line-height: 1; padding: 6px 10px; border-radius: 12px; border: 2px solid var(--line); background: var(--surface); cursor: pointer; }
+/* the photo book's pack: the same pack in black and silver */
+.rpk svg, .abk-n.rpk svg, .apackbig.rpk .pbody svg, .apackbig.rpk .ptop svg { filter: grayscale(1) brightness(.7) contrast(1.4) drop-shadow(0 3px 4px rgba(0,0,0,.35)); }
+.apack.rpk.wait svg { filter: grayscale(1); }
+/* a photo card: the same box as a drawn sticker (so the reveal, the tray and the flight fit), the photo, the shirt number,
+   the crest in the corner, the name on a black band (gold: the coach); the silhouette shows until the photo is there */
+.rstk { position: relative; width: var(--cw); height: calc(var(--cw) * (.07 + .93 * 158 / 120)); box-sizing: border-box; overflow: hidden;
+  border: calc(var(--cw) * .035) solid #fff; border-radius: calc(var(--cw) * .09); box-shadow: 0 2px 6px rgba(0,0,0,.3); color: #fff; text-align: center;
+  font-family: Arial, Helvetica, sans-serif; background: #1a1a1a url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 110'%3E%3Ccircle cx='50' cy='32' r='22' fill='%23555'/%3E%3Cpath d='M8 110c0-30 18-46 42-46s42 16 42 46z' fill='%23555'/%3E%3C/svg%3E") center 30% / 55% no-repeat; }
+.rph:not([src]), .rph.rnone { visibility: hidden; }
+.rstk .rph { position: absolute; left: 0; top: 0; width: 100%; height: 78%; object-fit: cover; object-position: center top; display: block; }
+.rstk .rno { position: absolute; z-index: 2; top: 4%; left: 5%; min-width: calc(var(--cw) * .2); height: calc(var(--cw) * .2); padding: 0 calc(var(--cw) * .03);
+  box-sizing: border-box; border-radius: 99px; background: #fff; color: #111; font: 900 calc(var(--cw) * .12)/calc(var(--cw) * .2) Arial, sans-serif; }
+.rstk .rph.rlogo { left: auto; right: 5%; top: 4%; width: calc(var(--cw) * .2); height: calc(var(--cw) * .2); object-fit: contain; z-index: 2; filter: drop-shadow(0 0 1px #fff); }
+.rstk .rban { position: absolute; left: 0; right: 0; bottom: 0; height: 22%; background: #000; border-top: calc(var(--cw) * .02) solid #fff;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.15; }
+.rstk .rban b { font-weight: 800; font-size: calc(var(--cw) * .085); text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 94%; }
+.rstk .rban small { font-size: calc(var(--cw) * .07); opacity: .85; white-space: nowrap; }
+.rstk.rcoach .rban { background: #b8912c; } .rstk.rcoach .rban small { color: #111; opacity: 1; font-weight: 700; }
+.rstk.rfoil { background: linear-gradient(135deg, #d8d8d8, #fff 30%, #a9a9a9 50%, #f2f2f2 70%, #bcbcbc); color: #111; }
+.rstk.rfoil::after { content: ""; position: absolute; top: 0; bottom: 0; left: -60%; width: 50%; background: linear-gradient(100deg, transparent, rgba(255,255,255,.85), transparent);
+  animation: rsheen 3.2s ease-in-out infinite; }
+@keyframes rsheen { 0%, 55% { left: -60%; } 100% { left: 120%; } }
+.rstk.rfoil .rph { left: 12%; top: 9%; width: 76%; height: 64%; object-fit: contain; filter: drop-shadow(0 2px 3px rgba(0,0,0,.4)); }
+.rstk.rfoil .rban { background: transparent; border: 0; }
+.rstk.rstad .rph:not(.rlogo) { object-position: center; }
+.rstk.rwide { width: 100%; height: 100%; }
+.rstk.rwide .rph:not(.rlogo) { height: 84%; } .rstk.rwide .rban { height: 16%; }
+.rstk.land { animation: aland .6s ease; }
+/* the photo book's page: the stadium takes two slots; an empty slot shows the shirt number and the flag (a faint crest for the crest) */
+.aslot.rw { grid-column: span 2; width: auto; }
+.aslot.rslot:not(.got) { align-content: center; gap: 4px; }
+.rslot .rflag { position: relative; font-size: calc(var(--cw) * .17); line-height: 1; }
+.rslot .rghost { width: 62%; filter: grayscale(1); opacity: .2; }
+.rpage .ahead .rhlogo { width: 40px; height: 40px; object-fit: contain; }
+.anav .rnlogo { width: 26px; height: 26px; object-fit: contain; }
 .aladder .l0 { background: #fff; } .aladder .l1 { background: #29b6f6; }
 .aladder .l2 { background: conic-gradient(#ff5e5e, #ffd84d, #5eff8a, #4dd2ff, #b06bff, #ff5e5e); }
 /* the three looks (the owner, 2026-10-03): 1 copy still (a page's living sticker too: each lv- element's own resting
