@@ -3584,16 +3584,20 @@ function aParts(st, o = {}) {
 }
 // a shiny figure plays in a golden kit (and its backdrop turns another colour, aShiny)
 const A_GOLD_KIT = { shirt: "#ffd54f", stripes: undefined, trim: "#8d6e00", shorts: "#ffca28", socks: "#ffd54f", numStroke: "none" };
-/* the picture: o.holo (5 copies) = the same picture alive: the character floats (scenes stay still), sparkles twinkle
-   (the owner, 2026-10-03: "animating it is enough"; proper animations per sticker maybe later); o.shiny = 1 card in 50:
-   the backdrop in another palette (a theme page's character too; a player gets a golden kit instead) */
+/* the picture has three looks (the owner, 2026-10-03: "base one, basic animation, own animation"): 1–2 copies still (a
+   page's living sticker too, CSS); o.gold (3–4 copies) = a gentle bob (a scene that fills the card breathes instead);
+   o.holo (5) = the sticker's own animation (stkAnim) where it's drawn, else the character floats, sparkles twinkle and
+   a living sticker plays its motion; o.shiny = 1 card in 50: the backdrop in another palette (a theme page's character
+   too; a player gets a golden kit instead) */
 function stickerSvg(st, ghost = false, o = {}) {
-  const [back, main, top = ""] = o.anim && !ghost ? stkAnim(st)() : aParts(st, ghost ? { ghost: 1 } : o);
-  if (o.anim && !ghost) return `<svg viewBox="0 0 120 158" aria-hidden="true">${o.shiny ? `<g filter="url(#aShiny)">${back}${main}</g>` : back + main}${top}</svg>`;
+  const own = o.holo && !ghost && stkAnim(st);
+  const [back, main, top = ""] = own ? own() : aParts(st, ghost ? { ghost: 1 } : o);
+  if (own) return `<svg viewBox="0 0 120 158" aria-hidden="true">${o.shiny ? `<g filter="url(#aShiny)">${back}${main}</g>` : back + main}${top}</svg>`;
   if (ghost) return `<svg class="aghost" viewBox="0 0 120 158" aria-hidden="true">${main}</svg>`;
   const sh = o.shiny ? ` filter="url(#aShiny)"` : "", still = st.scene && st.scene !== "comic";
   const m = st.fan && sh ? `<g${sh}>${main}</g>` : main;
-  return `<svg viewBox="0 0 120 158" aria-hidden="true"><g${sh}>${back}</g>${o.holo && !still ? `<g class="lv-float">${m}</g>` : m}${top}${o.holo ? aHoloSparks() : ""}</svg>`;
+  if (o.gold && still) return `<svg viewBox="0 0 120 158" aria-hidden="true"><g class="an-breathe"><g${sh}>${back}</g>${m}${top}</g></svg>`;
+  return `<svg viewBox="0 0 120 158" aria-hidden="true"><g${sh}>${back}</g>${(o.holo || o.gold) && !still ? `<g class="${o.holo ? "lv-float" : "an-gold"}">${m}</g>` : m}${top}${o.holo ? aHoloSparks() : ""}</svg>`;
 }
 const aHoloSparks = () => [[16, 26, 6, 0], [102, 40, 5, .6], [22, 112, 4, 1.2], [98, 118, 6, .9], [60, 12, 4, .3]].map(([x, y, r, d]) => aSpark(x, y, r, "#fff", "lv-tw", `animation-delay:-${d}s`)).join("");
 // the white cut-out edge around the figure: one filter for the whole page
@@ -3641,7 +3645,7 @@ const aArch = (x, y, w, h, f = "#5d4a2e") => `<path d="M${x},${y + h} V${y + w /
 const aFlagPole = (x, y, cols) => `<path d="M${x},${y + 16} V${y}" stroke="${A_OL}" stroke-width="1"/>` + cols.map((c, i) => `<rect x="${x + .5}" y="${y + i * 7 / cols.length}" width="10" height="${7 / cols.length + .1}" fill="${c}"/>`).join("");
 // the landmarks: [backdrop, the landmark]
 const A_LAND = {
-  pt: () => [aSky("#6ec3f4", "#e6f6ff") + aSun(100, 20) + aCloud(4, 14, .9) + aWaves(116, "#3b8fd0", "#bfe3ff", 4),        // Torre de Belém in the Tagus
+  pt: (o = {}) => [aSky("#6ec3f4", "#e6f6ff") + aSun(100, 20) + aCloud(4, 14, .9) + (o.waves || aWaves)(116, "#3b8fd0", "#bfe3ff", 4),        // Torre de Belém in the Tagus (o: the own animation's parts, teamown_a.js)
     `<g transform="translate(23 -6) scale(1.1)">${aR(4, 92, 58, 28, "#efdcb5")}${[5, 12, 19, 26, 33, 40, 47, 54].map(x => aP(`M${x},92 V87.5 Q${x + 2.6},84.5 ${x + 5.2},87.5 V92Z`, "#f3e4c4") + `<path d="M${x + 2.6},87.3 v3.6 M${x + 1.1},89 h3" stroke="#c62828" stroke-width=".9"/>`).join("")}` +
     [10, 22, 34, 46].map(x => aArch(x, 104, 8, 15, "#6d5a3a")).join("") + aR(16, 36, 32, 56, "#f3e4c4") +
     [17.5, 23, 28.5, 34, 39.5].map(x => aP(`M${x},36 V31.5 Q${x + 2.3},29 ${x + 4.6},31.5 V36Z`, "#f3e4c4")).join("") +
@@ -3659,24 +3663,24 @@ const A_LAND = {
       `<g stroke="#ef9a9a" stroke-width=".7">${[...Array(29)].map((_, i) => i * 4 + 4).filter(x => Math.abs(x - 38) > 3 && Math.abs(x - 92) > 3).map(x => `<path d="M${x},${cy(x).toFixed(1)} V94"/>`).join("")}</g>` +
       `<path d="M-4,${cy(-4).toFixed(1)} L38,32 Q65,124 92,32 L124,${cy(124).toFixed(1)}" fill="none" stroke="${A_OL}" stroke-width="2.6"/><path d="M-4,${cy(-4).toFixed(1)} L38,32 Q65,124 92,32 L124,${cy(124).toFixed(1)}" fill="none" stroke="#e53935" stroke-width="1.4"/>`];
   },
-  vsc: () => {      // Guimarães castle on its hill (the keep in the middle, square towers on the wall)
+  vsc: (o = {}) => {      // Guimarães castle on its hill (the keep in the middle, square towers on the wall)
     const st = "#cfc3a5", tw = (x, y, w) => aR(x, y, w, 112 - y, st) + aMerlons(x, x + w, y, st) + `<rect x="${x + w / 2 - 1}" y="${y + 8}" width="2" height="5" fill="#5d4a2e"/>`;
     return [aSky("#64b5f6", "#e3f2fd") + aCloud(76, 12) + aCloud(8, 30, .7) + aP("M-5,158 V112 Q30,98 60,104 Q92,96 125,110 V158Z", "#7cb342") + aP("M-5,158 V128 Q40,118 125,132 V158Z", "#689f38"),
       aR(12, 72, 96, 40, st) + aMerlons(12, 108, 72, st) + tw(10, 58, 16) + tw(94, 60, 16) + tw(30, 64, 12) + tw(78, 64, 12) +
       aR(49, 28, 22, 84, "#d7cbad") + aMerlons(49, 71, 28, "#d7cbad") + `<rect x="57" y="40" width="2" height="7" fill="#5d4a2e"/><rect x="62" y="40" width="2" height="7" fill="#5d4a2e"/><rect x="58.5" y="60" width="3" height="8" fill="#5d4a2e"/>` +
-      aFlagPole(60, 6, ["#046A38", "#DA291C"]) + aArch(54, 96, 12, 16)];
+      (o.flag || aFlagPole)(60, 6, ["#046A38", "#DA291C"]) + aArch(54, 96, 12, 16)];
   },
-  cv: () => [aSky("#4fc3f7", "#e1f5fe") + aCloud(84, 14, .8) + aWaves(124, "#1565c0", "#90caf9", 3),        // Pico do Fogo
+  cv: (o = {}) => [aSky("#4fc3f7", "#e1f5fe") + aCloud(84, 14, .8) + (o.waves || aWaves)(124, "#1565c0", "#90caf9", 3),        // Pico do Fogo
     aP("M-6,126 L50,36 Q62,30 74,36 L126,126Z", "#6d4c41") + aP("M50,36 Q62,30 74,36 L70,40 Q62,36 54,40Z", "#4e342e") +
     `<path d="M56,44 L36,92 M64,42 L60,100 M70,44 L90,96" stroke="#8d6e63" stroke-width="3" opacity=".6"/>` +
     aP("M-6,126 V108 Q16,98 34,106 Q60,96 84,104 Q104,98 126,106 V126Z", "#7cb342") +
     [[22, 108], [30, 111], [86, 106], [95, 109]].map(([x, y]) => aR(x, y, 6, 5, "#fff") + `<path d="M${x - .5},${y} L${x + 3},${y - 3} L${x + 6.5},${y}Z" fill="#e57373" ${A_OUT}/>`).join("") +
-    aC(62, 26, 5, "#cfd8dc") + aC(67, 19, 6, "#eceff1") + aC(73, 11, 5, "#f5f5f5")],
-  es: () => {       // the Sagrada Família: the four bell towers of the Nativity façade and the tall middle tower with its star
+    (o.smoke || (() => aC(62, 26, 5, "#cfd8dc") + aC(67, 19, 6, "#eceff1") + aC(73, 11, 5, "#f5f5f5")))()],
+  es: (o = {}) => {       // the Sagrada Família: the four bell towers of the Nativity façade and the tall middle tower with its star
     const sp = (x, top, w = 6) => aP(`M${x - w},100 L${x - w + 1},${top + 18} Q${x},${top} ${x + w - 1},${top + 18} L${x + w},100Z`, "#d9b382") +
       [0, 1, 2, 3].map(i => aC(x, top + 24 + i * 9, 1.1, "#6d4c41")).join("") + aC(x, top + 2, 2.6, ["#e53935", "#fdd835", "#43a047"][Math.round(x) % 3], A_OUT);
     return [aSky("#81d4fa", "#fff3e0") + aCloud(90, 18, .8) + `<rect y="128" width="120" height="30" fill="#e0c9a6"/>`,
-      sp(60, 6, 7) + `<g transform="translate(60 6)">${aStar(0, 0, 5, "#fdd835")}</g>` + sp(30, 40) + sp(90, 40) + sp(43, 26) + sp(77, 26) +
+      sp(60, 6, 7) + `<g transform="translate(60 6)">${(o.star || (s => s))(aStar(0, 0, 5, "#fdd835"))}</g>` + sp(30, 40) + sp(90, 40) + sp(43, 26) + sp(77, 26) +
       aR(16, 92, 88, 36, "#cfa572") + aArch(52, 102, 16, 26, "#6d4c41") + aArch(24, 108, 9, 20, "#6d4c41") + aArch(87, 108, 9, 20, "#6d4c41") +
       `<path d="M16,96 H104" stroke="#8d6e4a" stroke-width="1"/>` + [30, 43, 77, 90].map(x => aC(x, 98, 2.2, "#a5d6a7", A_OUT)).join("")];
   },
@@ -3695,23 +3699,23 @@ const A_LAND = {
       [...Array(6)].map((_, i) => `<rect x="${12 + i * 10}" y="48" width="4" height="5" fill="#7a5a3a"/>`).join("") + row(58, 22, 92) + row(80, 24, 106) + row(104, 24, 112) +
       `<path d="M8,58 H92 M8,80 H106 M8,104 H112" stroke="#b08d5a" stroke-width="1.4"/><rect x="72" y="44" width="40" height="84" fill="#000" opacity=".08"/>`];
   },
-  de: () => {       // the Brandenburg Gate with the quadriga
+  de: (o = {}) => {       // the Brandenburg Gate with the quadriga (o.horse(svg, i): each horse on its own, js/fan/teamown_b.js)
     const sd = "#e8d5a8", cols = [12, 28, 44, 70, 86, 102];
     return [aSky("#90caf9", "#eceff1") + aCloud(4, 10, .8) + aCloud(92, 26, .6) + `<rect y="126" width="120" height="32" fill="#b0bec5"/>${[132, 140, 150].map(y => `<path d="M0,${y} H120" stroke="#90a4ae" stroke-width=".8"/>`).join("")}`,
       aR(8, 64, 104, 60, "#8d7b5a") + cols.map(x => aR(x, 64, 6, 56, sd) + aR(x - 1.5, 118, 9, 4, sd)).join("") + aR(5, 120, 110, 6, sd) +
       aR(4, 52, 112, 12, sd) + `<path d="M6,57 H114" stroke="#b39b6c" stroke-width="1"/>` + aR(30, 42, 60, 10, sd) + aR(24, 40, 72, 3, sd) +
-      `<g fill="#4f8a7a" ${A_OUT}>${[38, 49, 60, 71].map((x, i) => `<path d="M${x},40 v-7 q2,-6 6,-7 l2,-3 l1,4 q-3,2 -3,6 v7Z" transform="translate(${i % 2 ? 1 : 0} 0)"/>`).join("")}` +
+      `<g fill="#4f8a7a" ${A_OUT}>${[38, 49, 60, 71].map((x, i) => { const h = `<path d="M${x},40 v-7 q2,-6 6,-7 l2,-3 l1,4 q-3,2 -3,6 v7Z" transform="translate(${i % 2 ? 1 : 0} 0)"/>`; return o.horse ? o.horse(h, i) : h; }).join("")}` +
       `<path d="M52,40 Q51,34 57,33 H63 Q69,34 68,40Z"/><path d="M58,33 V20 Q60,17 62,20 V33Z"/></g>` +
       `<path d="M60,19 V8" stroke="${A_OL}" stroke-width="1.2"/>` + aC(60, 8, 3, "none", `stroke="#4f8a7a" stroke-width="1.6"`)];
   },
-  nl: () => {       // a windmill by a canal, rows of tulips
+  nl: (o = {}) => {       // a windmill by a canal, rows of tulips (o.sails(svg): the four sails on their own)
     const rows = [["#e53935", 112, 5], ["#fdd835", 121, 6.5], ["#ec407a", 131, 8], ["#ff7043", 143, 10]];
     const tulips = rows.map(([c, y, s]) => `<rect y="${y - s * .3}" width="120" height="${s * 1.4}" fill="#558b2f"/>` + [...Array(Math.ceil(120 / s) + 1)].map((_, i) => {
       const x = i * s + (y % 2) * s / 2; return `<path d="M${(x - s * .35).toFixed(1)},${y - s * .5} L${(x - s * .2).toFixed(1)},${(y - s * .2).toFixed(1)} L${x},${y - s * .55} L${(x + s * .2).toFixed(1)},${(y - s * .2).toFixed(1)} L${(x + s * .35).toFixed(1)},${y - s * .5} Q${(x + s * .35).toFixed(1)},${y + s * .2} ${x},${y + s * .2} Q${(x - s * .35).toFixed(1)},${y + s * .2} ${(x - s * .35).toFixed(1)},${y - s * .5}Z" fill="${c}" stroke="${A_OL}" stroke-width=".5"/>`; }).join("")).join("");
     const sail = a => `<g transform="rotate(${a} 60 46)"><rect x="57" y="4" width="7" height="40" fill="#fff8e1" ${A_OUT}/><path d="M57,12 h7 M57,20 h7 M57,28 h7 M57,36 h7 M60.5,4 V44" stroke="#8d6e63" stroke-width=".7"/></g>`;
     return [aSky("#81d4fa", "#e1f5fe") + aCloud(6, 12, .8) + `<rect y="92" width="120" height="20" fill="#9ccc65"/><rect y="100" width="120" height="7" fill="#42a5f5"/>`,
       aP("M47,104 L52,52 H68 L73,104Z", "#6d4c41") + aP("M50,54 Q50,40 60,38 Q70,40 70,54Z", "#4e342e") + aR(44, 78, 32, 3, "#3e2723") +
-      aArch(56, 90, 8, 14, "#3e2723") + aR(57.5, 62, 5, 6, "#fff8e1") + [20, 110, 200, 290].map(sail).join("") + aC(60, 46, 2.8, "#3e2723", A_OUT) + tulips];
+      aArch(56, 90, 8, 14, "#3e2723") + aR(57.5, 62, 5, 6, "#fff8e1") + (o.sails || (x => x))([20, 110, 200, 290].map(sail).join("")) + aC(60, 46, 2.8, "#3e2723", A_OUT) + tulips];
   },
   ch: () => [aSky("#1e88e5", "#bbdefb") + aCloud(84, 70, .7),       // the Matterhorn above a meadow and a chalet
     aP("M6,124 L44,64 L52,34 L60,22 L66,30 L72,46 L84,58 L116,124Z", "#78909c") + `<path d="M60,22 L66,30 L72,46 L84,58 L116,124 H80 L70,70 L64,44Z" fill="#546e7a"/>` +
@@ -3720,27 +3724,28 @@ const A_LAND = {
     [[12, 116], [22, 112]].map(([x, y]) => `<path d="M${x},${y - 18} L${x - 6},${y} H${x + 6}Z" fill="#2e7d32" ${A_OUT}/>`).join("") +
     aR(86, 108, 22, 14, "#a1662f") + aP("M82,110 L97,98 L112,110Z", "#6d4c41") + aR(90, 112, 5, 5, "#fff8e1") + aR(99, 112, 5, 5, "#fff8e1") +
     aR(95.5, 100, 7, 5, "#DA291C") + `<path d="M99,101 v3 M97.5,102.5 h3" stroke="#fff" stroke-width="1.2"/>`],
-  en: () => [aSky("#90a4ae", "#eceff1") + aCloud(76, 12) + aCloud(4, 34, .7) + aWaves(126, "#546e7a", "#b0bec5", 3),      // Elizabeth Tower (Big Ben) by the Thames
+  en: (o = {}) => [aSky("#90a4ae", "#eceff1") + aCloud(76, 12) + aCloud(4, 34, .7) + aWaves(126, "#546e7a", "#b0bec5", 3),      // Elizabeth Tower (Big Ben) by the Thames
     aR(64, 96, 56, 30, "#c8a96a") + [68, 80, 92, 104, 116].map(x => aP(`M${x - 2},96 L${x},88 L${x + 2},96Z`, "#c8a96a") + `<rect x="${x - 4}" y="102" width="2" height="10" fill="#8d6e4a"/>`).join("") +
     aR(34, 56, 20, 70, "#c8a96a") + `<path d="M39,60 V124 M44,60 V124 M49,60 V124" stroke="#a1844f" stroke-width=".8"/>` + aR(32, 38, 24, 18, "#d4b77a") +
-    aC(44, 47, 7.6, "#fff8e1", A_OUT) + `<path d="M44,47 V42 M44,47 L47.5,48.5" stroke="${A_OL}" stroke-width="1.2" stroke-linecap="round"/>` +
+    aC(44, 47, 7.6, "#fff8e1", A_OUT) + (o.hands ? o.hands(44, 47) : `<path d="M44,47 V42 M44,47 L47.5,48.5" stroke="${A_OL}" stroke-width="1.2" stroke-linecap="round"/>`) +
     aR(34, 28, 20, 10, "#c8a96a") + [37, 42, 47].map(x => aArch(x, 30, 3.6, 7, "#5d4a2e")).join("") + aP("M33,28 L44,8 L55,28Z", "#455a64") + `<path d="M44,8 V2" stroke="${A_OL}" stroke-width="1.2"/>`],
-  no: () => [aSky("#64b5f6", "#e3f2fd") + aP("M30,104 L50,62 L62,74 L74,56 L94,104Z", "#90a4ae") + `<path d="M50,62 L44,74 L52,70 L56,72Z M74,56 L68,68 L76,64 L80,66Z" fill="#fff"/>` +        // a fjord, a stave church on the shore
-    aP("M-5,40 Q14,44 24,72 Q34,96 48,108 H-5Z", "#5d6d4e") + aP("M125,30 Q100,40 92,70 Q84,96 70,108 H125Z", "#4e5d42") + aWaves(104, "#1565c0", "#90caf9", 2) +
+  no: (o = {}) => [aSky("#64b5f6", "#e3f2fd") + aP("M30,104 L50,62 L62,74 L74,56 L94,104Z", "#90a4ae") + `<path d="M50,62 L44,74 L52,70 L56,72Z M74,56 L68,68 L76,64 L80,66Z" fill="#fff"/>` +        // a fjord, a stave church on the shore
+    aP("M-5,40 Q14,44 24,72 Q34,96 48,108 H-5Z", "#5d6d4e") + aP("M125,30 Q100,40 92,70 Q84,96 70,108 H125Z", "#4e5d42") + (o.waves || (x => x))(aWaves(104, "#1565c0", "#90caf9", 2)) +
     aP("M-5,158 V126 Q40,116 70,124 Q100,118 125,124 V158Z", "#689f38"),
     aR(48, 104, 24, 20, "#5d4037") + aP("M42,106 L60,92 L78,106Z", "#3e2723") + aR(52, 88, 16, 8, "#5d4037") + aP("M47,90 L60,78 L73,90Z", "#3e2723") +
     aR(55, 72, 10, 8, "#5d4037") + aP("M52,74 L60,56 L68,74Z", "#3e2723") + `<path d="M60,56 V50" stroke="${A_OL}" stroke-width="1.2"/>` +
     [[42, 106, -1], [78, 106, 1], [47, 90, -1], [73, 90, 1], [52, 74, -1], [68, 74, 1]].map(([x, y, d]) => `<path d="M${x},${y} q${-3 * d},-1 ${-3 * d},-5 q${2 * d},0 ${2 * d},2" fill="none" stroke="${A_OL}" stroke-width="1.4" stroke-linecap="round"/>`).join("") +
     aArch(57, 112, 6, 12, "#2a1a10")],
-  br: () => [aSky("#4fc3f7", "#e1f5fe") + aCloud(80, 10, .8) + aWaves(120, "#0277bd", "#81d4fa", 3) +       // Christ the Redeemer on Corcovado, the Sugarloaf
+  // o.mv(key, svg) wraps the parts that move in the holo animation (js/fan/teamown_*.js); without it the plain picture
+  br: (o = {}, m = o.mv || ((k, s) => s)) => [aSky("#4fc3f7", "#e1f5fe") + aCloud(80, 10, .8) + m("waves", aWaves(120, "#0277bd", "#81d4fa", 3)) +       // Christ the Redeemer on Corcovado, the Sugarloaf
     aP("M60,122 Q66,96 76,96 Q86,98 88,122Z", "#2e7d32") + aP("M78,122 Q82,70 98,66 Q114,68 118,122Z", "#388e3c") +
-    `<path d="M76,96 L98,67" stroke="${A_OL}" stroke-width=".6"/><rect x="85" y="80" width="4" height="3" fill="#e53935"/>`,
+    `<path d="M76,96 L98,67" stroke="${A_OL}" stroke-width=".6"/>` + m("car", `<rect x="85" y="80" width="4" height="3" fill="#e53935"/>`),
     aP("M-5,124 L18,96 L40,80 L52,80 L64,98 L84,124Z", "#2e7d32") + `<g transform="translate(46 80) scale(1.5) translate(-35 -63)">${aR(32, 56, 6, 7, "#cfd8dc")}` +
     aP("M33,57 L31.5,34 L18,31 V28.5 L50,28.5 V31 L36.5,34 L35,57Z", "#eceff1") + aC(34.5, 25.5, 3, "#eceff1", A_OUT) + `</g>`],
-  ar: () => [aSky("#74ACDF", "#e3f2fd") + aSun(98, 22, 8) + aCloud(6, 16, .7) +       // the Obelisco on the Avenida 9 de Julio, jacarandas
+  ar: (o = {}, m = o.mv || ((k, s) => s)) => [aSky("#74ACDF", "#e3f2fd") + aSun(98, 22, 8) + aCloud(6, 16, .7) +       // the Obelisco on the Avenida 9 de Julio, jacarandas
     [[0, 84, 16], [14, 90, 14], [88, 88, 14], [102, 80, 18]].map(([x, y, w]) => `<rect x="${x}" y="${y}" width="${w}" height="${114 - y}" fill="#b0bec5"/>` +
       [...Array(Math.floor((110 - y) / 7))].map((_, j) => `<path d="M${x + 3},${y + 5 + j * 7} H${x + w - 3}" stroke="#eceff1" stroke-width="2" stroke-dasharray="2 2"/>`).join("")).join("") +
-    `<path d="M-2,158 L52,114 H68 L122,158Z" fill="#78909c"/><path d="M60,118 V158" stroke="#fff" stroke-width="1.6" stroke-dasharray="5 5"/><rect y="112" width="120" height="4" fill="#9e9e9e"/>` +
+    `<path d="M-2,158 L52,114 H68 L122,158Z" fill="#78909c"/>` + m("dash", `<path d="M60,118 V158" stroke="#fff" stroke-width="1.6" stroke-dasharray="5 5"/>`) + `<rect y="112" width="120" height="4" fill="#9e9e9e"/>` +
     [[6, 1], [22, .8], [98, .8], [114, 1]].map(([x, k]) => `<path d="M${x},116 V${108 - 4 * k}" stroke="#5d4037" stroke-width="${2.4 * k}"/>` +
       `<g transform="translate(${x} ${102 - 4 * k}) scale(${k})">${aC(-5, 2, 5.5, "#9575cd", A_OUT)}${aC(5, 2, 5.5, "#9575cd", A_OUT)}${aC(0, -3, 6.5, "#9575cd", A_OUT)}${aC(1, -4, 2.6, "#b39ddb")}${aC(-4, 2, 2, "#b39ddb")}</g>`).join(""),
     aP("M53,120 L56,26 L60,14 L64,26 L67,120Z", "#f5f5f5") + `<path d="M60,14 L64,26 L67,120 H61Z" fill="#000" opacity=".1"/><rect x="58.5" y="30" width="3" height="4" fill="#455a64"/>` + aR(50, 118, 20, 4, "#e0e0e0")],
@@ -3751,11 +3756,11 @@ const A_LAND = {
       `<path d="${d}" fill="none" stroke="#a1887f" stroke-width="2.6" stroke-dasharray="2.5 2.5" transform="translate(0 -4.6)"/>` +
       [[20, 112], [60, 85], [104, 82]].map(([x, y]) => aR(x - 6, y - 14, 12, 14, "#bcaaa4") + aMerlons(x - 6, x + 6, y - 14, "#bcaaa4", 2.4, 2) + aArch(x - 2, y - 9, 4, 6, "#5d4037")).join("")];
   },
-  jp: () => {       // Mt Fuji, a five-storey pagoda, cherry blossom
+  jp: (o = {}, m = o.mv || ((k, s) => s)) => {       // Mt Fuji, a five-storey pagoda, cherry blossom
     const roof = (y, w) => aP(`M${30 - w},${y} Q${30 - w + 3},${y - 1} ${30 - w + 4},${y - 5} H${30 + w - 4} Q${30 + w - 3},${y - 1} ${30 + w},${y}Z`, "#37474f");
     return [aSky("#ffe0b2", "#fff8e1") + aP("M-5,118 L46,48 Q60,40 74,48 L125,118Z", "#5c7cae") + `<path d="M36,62 L46,48 Q60,40 74,48 L84,62 L78,59 L72,65 L66,58 L60,64 L54,58 L48,65 L42,59Z" fill="#fff"/>` +
-      `<rect y="114" width="120" height="44" fill="#558b2f"/>` + `<path d="M126,10 Q100,16 84,30" fill="none" stroke="#5d4037" stroke-width="2.4"/>` +
-      [[96, 14], [104, 20], [88, 26], [112, 12], [92, 32]].map(([x, y]) => aC(x, y, 5, "#f8bbd0") + aC(x + 1, y - 1, 2, "#fce4ec")).join(""),
+      `<rect y="114" width="120" height="44" fill="#558b2f"/>` + m("branch", `<path d="M126,10 Q100,16 84,30" fill="none" stroke="#5d4037" stroke-width="2.4"/>` +
+      [[96, 14], [104, 20], [88, 26], [112, 12], [92, 32]].map(([x, y]) => aC(x, y, 5, "#f8bbd0") + aC(x + 1, y - 1, 2, "#fce4ec")).join("")),
       [0, 1, 2, 3, 4].map(i => aR(30 - 9 + i, 108 - i * 15, 18 - 2 * i, 12, "#e53935") + roof(108 - i * 15, 19 - i * 2)).join("") + aR(18, 118, 24, 6, "#9e9e9e") +
       `<path d="M30,44 V26" stroke="${A_OL}" stroke-width="1.6"/>` + [30, 34, 38].map(y => `<path d="M27.5,${y} h5" stroke="#ffb300" stroke-width="1.2"/>`).join("")];
   },
@@ -3806,15 +3811,19 @@ Object.assign(A_POSES, {
 /* the comic's bicycle kick: the body lying back in the air, head low on the left, the kicking foot up at the ball in the
    burst; the head is drawn apart, tilted up towards the ball about the neck (a whole upside-down figure read as a bearded
    face, the owner found sticker 256 weird) */
+const A_COMIC = { R: -118, X: 6, Y: 40, K: 1.12 };
+// a point of the comic kicker's figure (figure coordinates) on the card: where the ball is, for its own animation
+const aComicAt = (x, y) => { const { R, X, Y, K } = A_COMIC, a = R * Math.PI / 180, dx = x - 50, dy = y - 60;
+  return [X + K * (50 + dx * Math.cos(a) - dy * Math.sin(a)), Y + K * (60 + dx * Math.sin(a) + dy * Math.cos(a))]; };
 function aComicKick(o) {
-  const R = -118, X = 6, Y = 40, K = 1.12, HR = -25, a = R * Math.PI / 180;
+  const { R, X, Y, K } = A_COMIC, HR = -25, a = R * Math.PI / 180;
   const nx = X + K * (50 + 19 * Math.sin(a)), ny = Y + K * (60 - 19 * Math.cos(a));
   return aEdge(aFig({ ...o, noHead: 1 }, X, Y, K, "", `rotate(${R} 50 60)`) +
     `<g transform="translate(${nx.toFixed(1)} ${ny.toFixed(1)}) scale(${K}) rotate(${HR}) translate(-50 -41)">${aKidHead({ ...o, mouth: "shout" })}</g>`);
 }
 const A_YSCENES = {
   land: t => A_LAND[t](),
-  comic: t => {       // a bicycle kick: halftone, a burst, speed lines
+  comic: (t, o = {}) => {       // a bicycle kick: halftone, a burst, speed lines (o.noBall: without the ball, for its own animation)
     const ht = aU("aht"), k = aKitOf(t), rgb = h => [1, 3, 5].map(i => parseInt(h.length < 5 ? h[1 + (i >> 1)].repeat(2) : h.slice(i, i + 2), 16));
     const far = c => rgb(c).reduce((s, v, i) => s + Math.abs(v - rgb(k.stripes || k.shirt)[i]) + Math.abs(v - rgb(k.shirt)[i]), 0);
     const bg = ["#4fc3f7", "#ff8a80", "#ffd180", "#ea80fc"].reduce((a, c) => far(c) > far(a) ? c : a);
@@ -3823,16 +3832,16 @@ const A_YSCENES = {
       `<rect width="120" height="158" fill="${bg}"/><rect width="120" height="158" fill="url(#${ht})"/>` + burst(84, 32, 50, 30, 14, "#fff", `stroke="${A_OL}" stroke-width="1.4"`) + burst(84, 32, 30, 18, 12, "#ffeb3b") +
       [[-6, 150, 58, 92], [4, 158, 64, 100], [-6, 134, 48, 84], [20, 160, 74, 108], [-6, 118, 40, 78]].map(([a, b, c, d]) => `<path d="M${a},${b} L${c},${d}" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".9"/>`).join("") +
       `<rect y="140" width="120" height="18" fill="#43a047"/>${[...Array(16)].map((_, i) => `<path d="M${i * 8 + 2},141 l2,-5 l2,5" fill="#2e7d32"/>`).join("")}` + aYFlag(t),
-      aComicKick({ ...k, pose: "kick", hs: "curly", num: 7, ...aLook(t, 6) }) +
+      aComicKick({ ...k, pose: o.noBall ? "strike" : "kick", hs: "curly", num: 7, ...aLook(t, 6) }) +
       `<path d="M70,66 Q94,62 98,46" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/><path d="M64,74 Q92,72 104,52" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".8"/>` +
       `<path d="M100,10 l4,-6 M108,16 l7,-3 M110,28 l7,1" stroke="${A_OL}" stroke-width="2" stroke-linecap="round"/>`];
   },
-  photo: t => {       // the team photo: three players, the captain lifting the cup
+  photo: (t, o = {}) => {       // the team photo: three players, the captain lifting the cup (o.lift: a class on the captain)
     const k = aKitOf(t), cols = aYCols(t);
     return [`<rect width="120" height="158" fill="#263238"/>${aCrowd(0, 124, [6, 15, 24, 33, 42], cols, 5 + t.length, 2.3)}${aBoards(48, 120, cols.length > 1 ? cols : [cols[0], "#fff"])}` +
       aPitch(57, 120, 24) + aSpark(14, 12, 5) + aSpark(96, 20, 6) + aSpark(60, 8, 3.5) + aYFlag(t),
       aYFig({ ...k, pose: "photo", num: 4, hs: "buzz", ...aLook(t, 2) }, 0, 40, .53) + aYFig({ ...k, pose: "photo", num: 8, hs: "pony", lash: 1, ...aLook(t, 3) }, 64, 40, .53) +
-      aYFig({ ...k, pose: "lift", num: 10, hs: "spiky", ...aLook(t, 4) }, 27, 58, .62) + aEdge(aFootball(100, 132, 7.5))];
+      (o.lift ? `<g class="${o.lift}">` : "") + aYFig({ ...k, pose: "lift", num: 10, hs: "spiky", ...aLook(t, 4) }, 27, 58, .62) + (o.lift ? "</g>" : "") + aEdge(aFootball(100, 132, 7.5))];
   },
   badge: t => {       // the team's badge, a foil sticker as on the first slot of a football album: the flag in a gold-rimmed shield (a club: its crest)
     const g = aU("afoil"), c = aU("ashd"), sh = "M60,24 L97,35 V78 Q97,114 60,134 Q23,114 23,78 V35Z";
@@ -3911,13 +3920,15 @@ const aPent = (x, y, r, rot, f, x2 = "") => `<polygon points="${aPts([0, 1, 2, 3
 const aRadial = (id, a, b, cy = ".42") => `<defs><radialGradient id="${id}" cx=".5" cy="${cy}" r=".75"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></radialGradient></defs><rect width="120" height="158" fill="url(#${id})"/>${A_RAYS}`;
 const aGloveAt = (x, y, r = 7) => aC(x, y, r, "#ffeb3b", A_OUT) + aL([[x - r * .43, y - r * .21], [x + r * .43, y - r * .21]], A_OL, .8, false);
 const aPlinth = g => `<rect x="26" y="124" width="68" height="20" rx="2" fill="#4e342e" ${A_OUT}/><rect x="44" y="128" width="32" height="11" rx="1.5" fill="${g}" ${A_OUT}/>${aStar(60, 133.5, 3.6, "#7a5200")}`;
+// a part wrapped in an animated group for a sticker's own animation (cls empty: the part as it is, the plain picture)
+const aWrap = (cls, svg, origin) => cls ? `<g class="${cls}"${origin ? ` style="transform-origin:${origin}"` : ""}>${svg}</g>` : svg;
 const A_SPECIALS = {
-  rook: () => [A_BACK.pitch + A_RAYS + aNet(12, 22, 108, 112, 8, .55) +          // the rook in goal, gloves out, saves the shot
+  rook: (o = {}) => [A_BACK.pitch + A_RAYS + aNet(12, 22, 108, 112, 8, .55) +          // the rook in goal, gloves out, saves the shot
     `<path d="M112,28 l6,-4 M113,36 h6 M110,44 l6,3" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/>` + aSpark(96, 26, 4, "#ffeb3b") + aSpark(112, 52, 3, "#ffeb3b"),
     `<path d="M8,118 V18 H112 V118" fill="none" stroke="${A_OL}" stroke-width="5.4"/><path d="M8,118 V18 H112 V118" fill="none" stroke="#fff" stroke-width="3.6"/>` +
     aEdge(aL([[44, 82], [30, 70], [20, 54]], "#f5ecd7", 6) + aGloveAt(20, 52) + aL([[76, 82], [92, 66], [100, 50]], "#f5ecd7", 6) + aGloveAt(100, 48) +
       aAt(60, 92, 2.4, aPiece("r", "#f5ecd7", "brave") + `<text x="0" y="12.5" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="7" fill="#e53935" stroke="#fff" stroke-width=".5" paint-order="stroke">1</text>`) +
-      aFootball(104, 36, 7.5))],
+      (o.noBall ? "" : aFootball(104, 36, 7.5)))],
   buddy: () => {      // the ball buddy: winks, a thumbs-up, bobs (the living sticker)
     const cp = aU("abc");
     return [A_BACK.pitch + A_RAYS + `<ellipse cx="60" cy="134" rx="26" ry="4.5" fill="#000" opacity=".2"/>` +
@@ -3940,9 +3951,9 @@ const A_SPECIALS = {
       `<path d="M63,33 l5,-3 M64.5,37.5 h6 M63,42 l5,3" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>`;
     return [A_BACK.pitch + A_RAYS, aEdge(aFig({ shirt: "#212121", trim: "#fff", shorts: "#212121", socks: "#212121", pose: "cheer", hs: "neat", ...look, star: 1 }, 2, 18.6, 1.16, extra)) + aEdge(aFootball(100, 142, 7))];
   },
-  royals: () => [aRadial(aU("arp"), "#8e24aa", "#3a0a4f", ".4") + `<path d="M40,104 H80 L112,158 H8Z" fill="#c62828"/><path d="M40,104 H80 L112,158 H8Z" fill="none" stroke="#ffc107" stroke-width="2"/>` +       // King & Queen: the captain pair
+  royals: (o = {}) => [aRadial(aU("arp"), "#8e24aa", "#3a0a4f", ".4") + `<path d="M40,104 H80 L112,158 H8Z" fill="#c62828"/><path d="M40,104 H80 L112,158 H8Z" fill="none" stroke="#ffc107" stroke-width="2"/>` +       // King & Queen: the captain pair
     aSpark(14, 22, 5) + aSpark(106, 30, 6) + aSpark(62, 14, 3.5) + aSpark(108, 84, 3.5),
-    aEdge(aAt(38, 96, 2.25, aPiece("k", "#f5ecd7", "happy", { crown: 1, armband: 1 })) + aAt(84, 101, 2.05, aPiece("q", "#f5ecd7", "happy", { crown: 1 })) + aFootball(61, 140, 7))],
+    aEdge(aWrap(o.king, aAt(38, 96, 2.25, aPiece("k", "#f5ecd7", "happy", { crown: 1, armband: 1 })), "38px 120px") + aWrap(o.queen, aAt(84, 101, 2.05, aPiece("q", "#f5ecd7", "happy", { crown: 1 })), "84px 122px") + aFootball(61, 140, 7))],
   rocket: () => {     // a football with a flame trail and stars
     const R = aRand(19), g = aU("ark"), flame = (w, c) => `<path d="M${76 - 20 * w},${56 - 14 * w} C${52 - 10 * w},84 30,116 0,158 C34,132 ${64 + 8 * w},100 ${90 + 14 * w},${70 + 18 * w}Z" fill="${c}"/>`;
     return [`<defs>${aVGrad(g, "#1a0638", "#4a148c")}</defs><rect width="120" height="158" fill="url(#${g})"/>` + [...Array(26)].map(() => aC(R() * 120, R() * 158, R() < .2 ? 1.1 : .6, "#fff")).join("") +
@@ -3974,7 +3985,7 @@ const A_SPECIALS = {
       `<path d="M4,30 H20 V40 H30 M116,70 H100 V80 H92" fill="none" stroke="#00e5ff" stroke-width="1" opacity=".5"/>`,
       aEdge(aFig({ shirt: "#ff7043", trim: "#263238", shorts: "#263238", socks: "#ff7043", boots: "#263238", head: "robot", pose: "run", num: 8 }))];
   },
-  goldball: () => {   // a shining gold football on a stand (not a real award)
+  goldball: (o = {}) => {   // a shining gold football on a stand (not a real award)
     const gg = aU("agg"), cp = aU("agc");
     return [aRadial(aU("agb"), "#c62828", "#3e0a0a") + aC(60, 62, 44, "#ffe082", `opacity=".18"`) +
       aSpark(22, 26, 7) + aSpark(98, 22, 6) + aSpark(100, 96, 5, "#fff3c4") + aSpark(18, 92, 4.5, "#fff3c4") + aSpark(84, 40, 3.5),
@@ -3983,19 +3994,19 @@ const A_SPECIALS = {
       `<path d="M44,104 H76 L72,96 H48Z" fill="#212121" ${A_OUT}/><path d="M50,96 Q60,92 70,96" fill="none" stroke="${A_OL}" stroke-width="1"/>` +
       `<path d="M40,104 H80 L84,128 H36Z" fill="#212121" ${A_OUT}/><rect x="30" y="128" width="60" height="9" rx="2" fill="#424242" ${A_OUT}/>` +
       `<rect x="46" y="110" width="28" height="11" rx="1.5" fill="#ffc107" ${A_OUT}/>${aStar(60, 115.5, 3.6, "#7a5200")}` +
-      aEdge(aC(60, 62, 32, `url(#${gg})`) + `<g clip-path="url(#${cp})">${[[60, 62, 11, -Math.PI / 2], [60, 26, 10, Math.PI / 2], [27, 52, 10, 0], [93, 52, 10, Math.PI], [38, 94, 10, -Math.PI / 4], [82, 94, 10, Math.PI * 1.25]].map(p => aPent(...p, "#b8860b", `stroke="#7a5200" stroke-width="1"`)).join("")}</g>` +
+      aEdge(aC(60, 62, 32, `url(#${gg})`) + `<g clip-path="url(#${cp})">${aWrap(o.spin, [[60, 62, 11, -Math.PI / 2], [60, 26, 10, Math.PI / 2], [27, 52, 10, 0], [93, 52, 10, Math.PI], [38, 94, 10, -Math.PI / 4], [82, 94, 10, Math.PI * 1.25]].map(p => aPent(...p, "#b8860b", `stroke="#7a5200" stroke-width="1"`)).join(""), "60px 62px")}</g>` +
         aC(60, 62, 32, "none", `stroke="#7a5200" stroke-width="1.6"`) + `<path d="M40,48 Q46,36 58,34" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" opacity=".8"/>`)];
   },
-  goldboot: () => {   // a gold football boot on a plinth (not a real award)
+  goldboot: (o = {}) => {   // a gold football boot on a plinth (not a real award)
     const g = aU("agbt"), boot = "M30,50 Q27,72 26,90 Q25,99 34,99 H97 Q107,99 107,91 Q107,82 95,79 Q80,75 70,68 Q62,62 61,50 Q46,45 30,50Z";
     return [aRadial(aU("abg"), "#2e7d32", "#0b2e13", ".45") + aSpark(18, 26, 6) + aSpark(102, 30, 7) + aSpark(100, 112, 4.5) + aSpark(16, 104, 4) + aSpark(78, 16, 3, "#fff3c4"),
       `<defs><linearGradient id="${g}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff3c4"/><stop offset=".3" stop-color="#ffd54f"/><stop offset=".65" stop-color="#ffb300"/><stop offset="1" stop-color="#9a6500"/></linearGradient></defs>` +
-      `<g transform="translate(60 72) rotate(-12) translate(-64 -74)">` + [33, 45, 77, 90, 100].map(x => `<rect x="${x - 2.5}" y="98" width="5" height="6.5" rx="1.5" fill="#b8860b" ${A_OUT}/>`).join("") +
+      (o.kick ? `<g class="${o.kick}" style="transform-origin:34px 96px">` : "") + `<g transform="translate(60 72) rotate(-12) translate(-64 -74)">` + [33, 45, 77, 90, 100].map(x => `<rect x="${x - 2.5}" y="98" width="5" height="6.5" rx="1.5" fill="#b8860b" ${A_OUT}/>`).join("") +
       `<path d="${boot}" fill="url(#${g})" stroke="${A_OL}" stroke-width="1.5" stroke-linejoin="round"/>` +
       `<path d="M26,93 H106" stroke="#b8860b" stroke-width="4"/><path d="M26,96.5 Q26,99 34,99 H97 Q106,99 106.5,95" fill="none" stroke="${A_OL}" stroke-width="1.2"/>` +
       `<path d="M30,50 Q46,45 61,50 Q56,55 46,55 Q36,55 30,50Z" fill="#7a5200" ${A_OUT}/><path d="M33,84 Q52,70 78,80 L74,86 Q52,78 35,90Z" fill="#fff3c4" opacity=".8"/>` +
       [[60, 57], [63, 62], [67, 66.5]].map(([x, y]) => `<path d="M${x - 4},${y + 1.5} L${x + 4},${y - 2.5}" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/>`).join("") +
-      `<path d="M33,58 Q32,72 33,82" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".75"/></g>` +
+      `<path d="M33,58 Q32,72 33,82" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".75"/></g>` + (o.kick ? "</g>" : "") +
       `<path d="M36,116 H84 L90,124 H30Z" fill="#ffc107" ${A_OUT} stroke-linejoin="round"/>` + aPlinth("#ffc107")];
   },
 };
@@ -4115,11 +4126,11 @@ function aTeamSticker(t, kind) {
   const T = A_TEAMS[t];
   if (kind === "keeper" || kind === "player" || kind === "mascot") {
     const i = { keeper: 2, player: 1, mascot: 8 }[kind], sl = A_SLOTS[i], kit = sl.gk ? { ...T.gk, gloves: "#fff" } : T.kit;
-    return { bd: t, ...kit, ...sl, ...(sl.mascot ? { head: T.mascot } : aLook(t, i - 1)), gk: undefined, mascot: undefined };
+    return { bd: t, ...kit, ...sl, ...(sl.mascot ? { head: T.mascot } : aLook(t, i - 1)), gk: undefined, mascot: undefined, kind };
   }
   if (kind === "bb") {
     const f = A_FRIENDS[t].split("|")[aBbRow(t)].split(":")[0].split(" "), k = T.kit;
-    return { bd: "court", mini: t, pose: f[1], num: +f[3], hs: A_BB_HAIR[+f[2]], ...aLook(t, +f[2]), shirt: k.shirt, stripes: k.stripes, trim: k.trim,
+    return { bd: "court", mini: t, kind, pose: f[1], num: +f[3], hs: A_BB_HAIR[+f[2]], ...aLook(t, +f[2]), shirt: k.shirt, stripes: k.stripes, trim: k.trim,
       numStroke: k.numStroke, shorts: k.shirt, socks: "#fff" };
   }
   if (kind === "food" || kind === "thing") return { cty: kind, team: t };
@@ -4189,12 +4200,20 @@ function albumOf(pl) {
 }
 // a boss's sticker: owned once that gate is beaten (also for gates beaten before the sticker book existed)
 function stkOwned(pl, st) { const n = albumOf(pl).s[st.id] || 0; return st.boss ? (n || stageStars(pl, st.boss) >= 1 ? 1 : 0) : n; }
-/* tiers: 1 copy plain, 2 silver, 3 gold, HOLO holo (the picture moves: float + sparkles); a sticker with its own animation
-   (a FAN row's 4th entry, e.g. Spider-Man swinging on his web) needs one copy more for it, tier 4 (the owner, 2026-10-03:
-   "Spider-Man has one more copy than all other stickers"), and only then leaves the packs (stkMax) */
-function stkAnim(st) { const row = st && st.fan && FAN[st.fan] && FAN[st.fan][st.fi]; return row && typeof row[3] === "function" ? row[3] : null; }
-const stkMax = st => HOLO + (stkAnim(st) ? 1 : 0);
-function stkTier(st, copies) { return st.boss ? 3 : copies > HOLO && stkAnim(st) ? 4 : copies >= HOLO ? 3 : copies >= 3 ? 2 : copies >= 2 ? 1 : 0; }
+/* tiers: 1 copy plain, 2 silver, 3 gold (a gentle bob), HOLO holo (the sticker's own animation: a FAN row's 4th entry, e.g.
+   Spider-Man swinging on his web; else float + sparkles), then it leaves the packs. (A 6th copy for the own animation,
+   tier 4, was dropped on 2026-10-03: the owner wants three looks only.) */
+/* where own animations live: a FAN row's 4th entry (theme, world and subject pages); a team sticker's kind (keeper, player,
+   comic…: A_OWN[kind](team, st), js/fan/teamanim.js, one drawing for all 17 teams); the team's own landmark / food / thing
+   (A_TOWN[team][land|food|thing](team, st), js/fan/teamown_*.js) */
+const A_OWN = {}, A_TOWN = {};
+function stkAnim(st) {
+  if (!st) return null;
+  if (st.fan) { const row = FAN[st.fan] && FAN[st.fan][st.fi]; return row && typeof row[3] === "function" ? row[3] : null; }
+  const t = st.team || st.mini || st.bd, k = st.cty || st.scene || st.kind || (st.sp && "sp_" + st.sp), f = (A_TOWN[t] && A_TOWN[t][k]) || A_OWN[k];
+  return typeof f === "function" ? () => f(t, st) : null;
+}
+function stkTier(st, copies) { return st.boss ? 3 : copies >= HOLO ? 3 : copies >= 3 ? 2 : copies >= 2 ? 1 : 0; }
 // packs of 3 per OLD_EVERY solves up to c0, a pack per solve from c0 to c1, then one per PACK_EVERY
 function packsEarned(a) { const c0 = a.c0 || 0, c1 = Math.max(c0, a.c1 || 0); return Math.floor(c0 / OLD_EVERY) + (c1 - c0) + Math.floor(aSince(a) / PACK_EVERY); }
 function aSince(a) { return Math.max(0, a.c - Math.max(a.c0 || 0, a.c1 || 0)); }      // solves under the current rule
@@ -4208,7 +4227,7 @@ function aWorldsOpen(pl) {
 }
 const stkLocked = (pl, st) => st.page.world >= aWorldsOpen(pl);
 // what packs draw from: every sticker not yet holo, on an open page (bosses only come from bosses)
-function aPool(pl) { const a = albumOf(pl), open = aWorldsOpen(pl); return STK.filter(st => !st.boss && (a.s[st.id] || 0) < stkMax(st) && !(st.page.world >= open)); }
+function aPool(pl) { const a = albumOf(pl), open = aWorldsOpen(pl); return STK.filter(st => !st.boss && (a.s[st.id] || 0) < HOLO && !(st.page.world >= open)); }
 // a clean solve of an unfinished stage on the learning path (stageStar, an endgame win; replays don't count): every
 // PACK_EVERY of them is a pack.
 // No pop-up, no sound (the owner: packs must never pull the child away from playing): the counters go up, and a small
@@ -4258,7 +4277,7 @@ function albumBoss(pl, gateId) {
 /* ---- pictures: a sticker card (tier frame, number), the pack, the back of a sticker ---- */
 function stickerCard(st, copies, cls = "", shiny = aIsShiny(st)) {
   const t = stkTier(st, copies);
-  return `<div class="stk t${t === 4 ? "3 t4" : t}${shiny ? " shiny" : ""}${cls ? " " + cls : ""}" data-st="${st.id}"><div class="sin">${stickerSvg(st, false, { holo: copies >= HOLO && !st.boss, anim: t === 4, shiny })}` +
+  return `<div class="stk t${t}${shiny ? " shiny" : ""}${cls ? " " + cls : ""}" data-st="${st.id}"><div class="sin">${stickerSvg(st, false, { holo: copies >= HOLO && !st.boss, gold: t === 2, shiny })}` +
     `<span class="sno">${st.n}</span>${t ? `<span class="spip">${"◆".repeat(t)}</span>` : ""}${shiny ? A_SHINY_MARK : ""}</div></div>`;
 }
 function aIsShiny(st) { if (albumPreview || !S.players) return false; const a = albumOf(pzPlayers()); return !!(a.sh && a.sh[st.id]); }
@@ -4413,7 +4432,7 @@ function aOpenPack() {
       $("aTear").hidden = true;
       // a new sticker: a sparkle badge; a copy: pips towards the next tier, and when it reaches one, the frame turns into it
       $("aReveal").innerHTML = got.map((g, i) => {
-        const c = g.was + 1, up = g.was && stkTier(g.st, c) > stkTier(g.st, g.was);      // (aPips: one more pip for a sticker with its own animation)
+        const c = g.was + 1, up = g.was && stkTier(g.st, c) > stkTier(g.st, g.was);
         return `<div class="aflip${g.was ? " dup" : " new"}" style="--i:${i}" data-st="${g.st.id}"><div class="aback">${A_CARD_BACK}</div><div class="afront">${stickerCard(g.st, up ? g.was : c)}` +
           `${g.was ? aPips(c, g.st) : `<span class="amark anew">${A_NEW}</span>`}</div></div>`;
       }).join("");
@@ -4436,7 +4455,7 @@ const A_NEW_PTS = [...Array(24)].map((_, i) => { const a = i * Math.PI / 12, r =
 const A_NEW = `<svg viewBox="-50 -50 100 100" aria-hidden="true"><polygon points="${A_NEW_PTS}" fill="#ffca28" stroke="#e65100" stroke-width="3" stroke-linejoin="round"/>
   <path d="M0,-27 Q4,-4 27,0 Q4,4 0,27 Q-4,4 -27,0 Q-4,-4 0,-27Z" fill="#fff"/><path d="M19,-29 Q20.5,-22 27,-21 Q20.5,-20 19,-13 Q17.5,-20 11,-21 Q17.5,-22 19,-29Z" fill="#fff"/></svg>`;
 function aPips(c, st = {}) {
-  const next = [2, 3, HOLO, stkMax(st)].find(x => x > c), n = next || stkMax(st);
+  const next = [2, 3, HOLO].find(x => x > c), n = next || HOLO;
   return `<span class="apips" aria-label="${c} copies">${[...Array(n)].map((_, k) => k < c ? `<i class="p${stkTier(st, k + 1)}${k === c - 1 ? " nw" : ""}"></i>` : `<i class="e${stkTier(st, n)}"></i>`).join("")}</span>`;
 }
 // a sticker from the tray flies into its slot (turning to its page first)
@@ -4466,7 +4485,7 @@ function aStick(g, el) {
 // a sticker in the book, big, with its ladder: plain, silver, gold, holo (the ones reached lit)
 function aZoom(st) {
   const ov = $("aOverlay"), c = aCopies(pzPlayers(), st), t = stkTier(st, c);
-  ov.innerHTML = `<div class="azoom">${stickerCard(st, c)}<div class="aladder">${[0, 1, 2, 3, ...(stkAnim(st) ? [4] : [])].map(k => `<i class="l${k}${k <= t ? " on" : ""}"></i>`).join("")}<b>×${c}</b></div></div>`;
+  ov.innerHTML = `<div class="azoom">${stickerCard(st, c)}<div class="aladder">${[0, 1, 2, 3].map(k => `<i class="l${k}${k <= t ? " on" : ""}"></i>`).join("")}<b>×${c}</b></div></div>`;
   ov.hidden = false; sfx("flip");
   ov.onclick = () => { ov.hidden = true; ov.onclick = null; ov.innerHTML = ""; };
 }
@@ -4476,7 +4495,7 @@ function albumParents(pl) {
   const a = albumOf(pl), have = STK.filter(st => stkOwned(pl, st)).length, local = location.protocol === "file:";
   return `<figure class="chart wide"><figcaption>Sticker book</figcaption>
     <p class="tiny">A pack of ${PACK_SIZE} stickers for every ${PACK_EVERY > 1 ? PACK_EVERY + " clean solves" : "clean solve"} on the learning path (puzzles, endgames and the review stop; replays of a finished stage don't count), and for each boss beaten ${BOSS_PACKS} packs and its own sticker.
-      Every pack holds at least one sticker missing from the book until it's full. Copies turn a sticker silver (2), gold (3), then holo (${HOLO}: it comes alive and leaves the packs; a sticker with its own animation needs ${HOLO + 1} for it);
+      Every pack holds at least one sticker missing from the book until it's full. Copies turn a sticker silver (2), gold (3), then holo (${HOLO}: it plays its own animation and leaves the packs); from gold on the picture moves;
       1 card in ${SHINY_ODDS} is shiny. A world's page opens when the path reaches that world. ${aPool(pl).length ? "" : "<b>Every open sticker is holo: no more packs for now.</b>"}</p>
     <div class="tiles"><div class="tile"><span class="lbl">Stickers</span><b>${have}/${STK.length}</b></div>
       <div class="tile"><span class="lbl">Packs opened</span><b>${a.o}</b></div><div class="tile"><span class="lbl">Packs waiting</span><b>${packsWaiting(pl)}</b></div>
@@ -4501,7 +4520,7 @@ function albumParentsWire(pl) {
 }
 
 /* Sticker book theme page: Heroes 1 (Marvel), nine chibi superheroes in the album's anime style; sets FAN.marvel = [[name, what, draw, anim], ...]
-   (anim = the sticker's own animation, tier 4: see spidermanSwing and the eight after it, at the end) */
+   (anim = the sticker's own animation, played at holo: see spidermanSwing and the eight after it, at the end) */
 (() => {
   "use strict";
   /* ---------- small drawing helpers (card coordinates 120 x 158 unless said otherwise) ---------- */
@@ -4906,7 +4925,7 @@ function albumParentsWire(pl) {
     return [bg, aEdge(shadow(60, 148, 50, 2.6) + ant + `<g transform="translate(20 34) scale(.7)">${man}</g>`)];
   }
 
-  /* Spider-Man's own animation (tier 4, one copy past holo): he swings on his web, a bit smaller, about the point where
+  /* Spider-Man's own animation (played at holo): he swings on his web, a bit smaller, about the point where
      the web sticks (128.7, -2.5: the end of his web line once scaled), the city drifting against him, speed lines at the
      bottom of the arc (lv-pend / lv-drift / lv-streak in template.html; the pivot was checked at -9° and 11°) */
   function spidermanSwing() {
@@ -5009,7 +5028,7 @@ function albumParentsWire(pl) {
   const sparks = (pts, c = "#fff") => pts.map(([x, y, r]) => aSpark(x, y, r, c)).join("");
   const back = (id, a, b) => `<defs>${aVGrad(id, a, b)}</defs><rect width="120" height="158" fill="url(#${id})"/>`;
   const lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
-  // the stickers' own animations (tier 4, stkAnim): each drawing takes k = 1 for its animated version (live(f), the rows'
+  // the stickers' own animations (played at holo, stkAnim): each drawing takes k = 1 for its animated version (live(f), the rows'
   // 4th entry); an() wraps a part in an an-dc-* group (CSS in template.html), st = inline style: transform-origin in the
   // part's own coordinates, a delay. The class never sits on an element with a transform= attribute.
   const an = (c, svg, st = "") => `<g class="an-dc-${c}"${st ? ` style="${st}"` : ""}>${svg}</g>`;
@@ -5780,16 +5799,33 @@ function albumParentsWire(pl) {
       aSpark(104, 24, 3.6) + aSpark(46, 22, 2.8), `<g transform="${T}">${aEdge(sub)}</g>`];
   }
 
+  /* ---- the own animations (played at holo; CSS an-oc-* in template.html) ---- */
+  const G = (cls, svg, origin) => aWrap(cls, svg, origin);
+  const rising = xs => xs.map((x, i) => `<g class="an-oc-rise" style="animation-delay:-${f1(i * 3 / xs.length)}s">${bubble(x, 138, 1.6 + (i % 3) * .9)}</g>`).join("");
+  const move = (draw, cls, origin, extra = "", over = "") => () => { const [b, m] = draw(); return [b + extra, G(cls, m, origin), over]; };
+  const B = rising([14, 38, 84, 104, 60]);
+  const anim = {
+    barnacles: move(barnacles, "an-oc-lead", "60px 146px", B),          // the Captain leans forward, pointing the way: "Octonauts, let's do this!"
+    kwazii: move(kwazii, "an-oc-pump", "60px 146px", B),                // Kwazii jumps with his fist up
+    peso: move(peso, "an-oc-waddle", "60px 146px", B),                  // Peso waddles and waves hello
+    shellington: move(shellington, "an-oc-peer", "60px 146px", B),      // Shellington leans in to peer through his magnifier
+    dashi: move(dashi, "an-oc-bob", "60px 146px", B, `<g class="an-oc-flash"><rect width="120" height="158" fill="#fff"/></g>`),   // Dashi's camera flashes
+    tweak: move(tweak, "an-oc-fix", "60px 146px", B),                   // Tweak swings her wrench, fixing something
+    inkling: move(inkling, "an-oc-float", "60px 80px", B),              // Professor Inkling floats up and down, ears flapping
+    tunip: move(tunip, "an-oc-bounce", "60px 146px", B),                // Tunip bounces happily
+    gupA: move(gupA, "an-oc-zoom", "60px 80px", rising([40, 50, 60, 70, 80, 90])),   // the Gup-A zooms up off the card and comes back round from below
+  };
+
   FAN.octonauts = [
-    ["Captain Barnacles", "the polar-bear captain in his peaked cap, pointing the crew ahead", barnacles],
-    ["Kwazii", "the ginger pirate cat: eye patch, gold earring, ear tufts, fist up", kwazii],
-    ["Peso", "the little penguin medic waving hello, with his blue medical bag", peso],
-    ["Shellington", "the sea-otter scientist in glasses, studying a starfish through his magnifier", shellington],
-    ["Dashi", "the dachshund photographer on all fours: long low body, floppy ear, camera flashing", dashi],
-    ["Tweak", "the white bunny engineer in green overalls with her big wrench", tweak],
-    ["Professor Inkling", "the Dumbo octopus with his monocle and a book", inkling],
-    ["Tunip", "the little Vegimal: round, turnip-like, leafy top", tunip],
-    ["Gup-A", "the orange fish-shaped sub zooming up past the Octopod, the Captain in its glass dome", gupA],
+    ["Captain Barnacles", "the polar-bear captain in his peaked cap, pointing the crew ahead", barnacles, anim.barnacles],
+    ["Kwazii", "the ginger pirate cat: eye patch, gold earring, ear tufts, fist up", kwazii, anim.kwazii],
+    ["Peso", "the little penguin medic waving hello, with his blue medical bag", peso, anim.peso],
+    ["Shellington", "the sea-otter scientist in glasses, studying a starfish through his magnifier", shellington, anim.shellington],
+    ["Dashi", "the dachshund photographer on all fours: long low body, floppy ear, camera flashing", dashi, anim.dashi],
+    ["Tweak", "the white bunny engineer in green overalls with her big wrench", tweak, anim.tweak],
+    ["Professor Inkling", "the Dumbo octopus with his monocle and a book", inkling, anim.inkling],
+    ["Tunip", "the little Vegimal: round, turnip-like, leafy top", tunip, anim.tunip],
+    ["Gup-A", "the orange fish-shaped sub zooming up past the Octopod, the Captain in its glass dome", gupA, anim.gupA],
   ];
 })();
 
@@ -6056,16 +6092,35 @@ function albumParentsWire(pl) {
       body: dress("#f7c51e", 7.5, 18, 28) }))];
   }
 
+  /* ---- the own animations (played at holo; CSS an-pp-* in template.html) ---- */
+  const G = (cls, svg, origin) => aWrap(cls, svg, origin);
+  const move = (draw, cls, origin, extra = "", over = "") => () => { const [b, m] = draw(); return [b + extra, G(cls, m, origin), over]; };
+  const twinkle = pts => pts.map(([x, y, r], i) => aSpark(x, y, r, "#fff", "lv-tw", `animation-delay:-${(i * .4).toFixed(2)}s`)).join("");
+  // muddy splashes bursting out of the puddle each time Peppa lands
+  const splash = [[30, 128, -40], [20, 120, -70], [90, 126, 40], [100, 118, 70], [44, 122, -15], [76, 122, 15]].map(([x, y, r]) =>
+    `<g class="an-pp-splash" style="transform-origin:58px 136px"><ellipse cx="${x}" cy="${y}" rx="2.8" ry="4.8" fill="#8a5a2e" transform="rotate(${r} ${x} ${y})"/></g>`).join("");
+  const anim = {
+    peppa: move(peppa, "an-pp-jump", "64px 130px", "", splash),           // Peppa jumps up and down in the muddy puddle, mud splashing every landing
+    george: move(george, "an-pp-roar", "60px 140px"),                     // George waves Mr Dinosaur about: "Dine-saw! Grrr!"
+    mummy: move(mummy, "an-pp-sway", "60px 140px"),                       // Mummy Pig sways happily in the garden
+    daddy: move(daddy, "an-pp-laugh", "60px 140px"),                      // Daddy Pig laughs, his big round tummy jiggling
+    grandparents: move(grandparents, "an-pp-sway", "60px 140px"),         // Grandpa and Granny rock from side to side
+    suzy: move(suzy, "an-pp-hop", "60px 140px"),                          // Suzy Sheep bounces and waves under the rainbow
+    rebecca: move(rebecca, "an-pp-bunny", "60px 140px"),                  // Rebecca Rabbit hops, hop, hop
+    danny: move(danny, "an-pp-hop", "60px 140px"),                        // Danny Dog jumps about at the seaside
+    pedro: move(pedro, "an-pp-yawn", "60px 140px", twinkle([[20, 20, 3], [96, 30, 3], [60, 12, 2.4], [104, 70, 2.2]])),   // Pedro sways sleepily under the twinkling stars
+  };
+
   FAN.peppa = [
-    ["Peppa Pig", "Red dress, jumping in a muddy puddle, her house on the hill", peppa],
-    ["George", "Blue top, holding up Mr Dinosaur", george],
-    ["Mummy Pig", "Orange dress, in the garden", mummy],
-    ["Daddy Pig", "Glasses, turquoise top, big round tummy, the red car", daddy],
-    ["Grandpa and Granny Pig", "Face to face in their vegetable garden: sailing cap and indigo shirt; magenta dress", grandparents],
-    ["Suzy Sheep", "Fluffy cloud of white fleece, pink dress, waving, a rainbow", suzy],
-    ["Rebecca Rabbit", "Sky-blue dress, a carrot, her burrow door", rebecca],
-    ["Danny Dog", "Floppy ears, purple top, at the seaside with a ball", danny],
-    ["Pedro Pony", "Glasses, yellow top, the hills at night", pedro],
+    ["Peppa Pig", "Red dress, jumping in a muddy puddle, her house on the hill", peppa, anim.peppa],
+    ["George", "Blue top, holding up Mr Dinosaur", george, anim.george],
+    ["Mummy Pig", "Orange dress, in the garden", mummy, anim.mummy],
+    ["Daddy Pig", "Glasses, turquoise top, big round tummy, the red car", daddy, anim.daddy],
+    ["Grandpa and Granny Pig", "Face to face in their vegetable garden: sailing cap and indigo shirt; magenta dress", grandparents, anim.grandparents],
+    ["Suzy Sheep", "Fluffy cloud of white fleece, pink dress, waving, a rainbow", suzy, anim.suzy],
+    ["Rebecca Rabbit", "Sky-blue dress, a carrot, her burrow door", rebecca, anim.rebecca],
+    ["Danny Dog", "Floppy ears, purple top, at the seaside with a ball", danny, anim.danny],
+    ["Pedro Pony", "Glasses, yellow top, the hills at night", pedro, anim.pedro],
   ];
 })();
 
@@ -6458,16 +6513,34 @@ function albumParentsWire(pl) {
       aEdge(place(p, 74, 66, 1.12))];
   }
 
+  /* ---- the own animations (played at holo; CSS an-pw-* in template.html): "no job is too big, no pup is too small" ---- */
+  const G = (cls, svg, origin) => aWrap(cls, svg, origin);
+  const move = (draw, cls, origin, extra = "", over = "") => () => { const [b, m] = draw(); return [b + extra, G(cls, m, origin), over]; };
+  const passing = (cls, items, dur) => items.map(([svg, d]) => `<g class="${cls}" style="animation-delay:-${(d * dur).toFixed(2)}s">${svg}</g>`).join("");
+  const siren = `<g class="an-pw-red">${aC(10, 30, 16, "#ff1744", `opacity=".45"`)}</g><g class="an-pw-blue">${aC(110, 30, 16, "#2979ff", `opacity=".45"`)}</g>`;
+  const clods = [[30, 124, 0], [24, 118, .3], [36, 116, .6]].map(([x, y, d]) => `<g class="an-pw-clod" style="animation-delay:-${d}s">${aC(x, y, 2.6, "#8d6e3f", A_OUT)}</g>`).join("");
+  const anim = {
+    ryder: move(ryder, "an-pw-hop", "60px 146px"),                                    // Ryder jumps: "Paw Patrol, to the Lookout!"
+    chase: move(chase, "an-pw-attention", "60px 146px", siren),                       // Chase snaps to attention, the police lights flashing
+    marshall: move(marshall, "an-pw-hose", "50px 140px"),                             // Marshall leans into his bucking fire hose
+    skye: move(skye, "an-pw-fly", "60px 80px", passing("an-pw-cloud", [[cloud(124, 30, .9), 0], [cloud(124, 96, .7), .5], [cloud(124, 130, .6), .8]], 3)),   // Skye flies, the clouds rushing past
+    rubble: move(rubble, "an-pw-dig", "60px 140px", "", clods),                      // Rubble digs, scoop after scoop, the dirt flying
+    rocky: move(rocky, "an-pw-wave", "60px 146px"),                                   // Rocky waves his wrench: "Don't lose it, reuse it!"
+    zuma: move(zuma, "an-pw-surf", "60px 120px"),                                     // Zuma rides the curling wave
+    everest: move(everest, "an-pw-board", "60px 110px", "", passing("an-pw-snow", [[aC(100, 120, 3, "#fff"), 0], [aC(92, 126, 2.4, "#fff"), .33], [aC(104, 112, 2, "#fff"), .66]], .9)),   // Everest carves down the slope, snow spraying
+    tracker: move(tracker, "an-pw-listen", "60px 140px"),                             // Tracker hears something: ears up, a quick look round
+  };
+
   FAN.pawpatrol = [
-    ["Ryder", "the boy leader in his orange vest with the Paw Patrol shield, pup-pad in hand, the Lookout behind", ryder],
-    ["Chase", "police pup standing at attention: blue cap and vest, police badge, saluting, megaphone popping out of his pup-pack, cones on the street", chase],
-    ["Marshall", "fire pup on his hind legs, both paws on the hose nozzle: Dalmatian spots, red helmet with gold badge, red vest and pup-pack, the water arcing high onto a burning house", marshall],
-    ["Skye", "flying pup: pink helmet with goggles, pink wings out of her pup-pack, in the clouds", skye],
-    ["Rubble", "construction bulldog standing and digging: yellow hard hat, shovel scooping dirt, crane behind", rubble],
-    ["Rocky", "recycling pup sitting: green cap and vest, recycle badge, holding up a wrench, recycling bin", rocky],
-    ["Zuma", "water-rescue Labrador surfing: orange helmet with goggles, anchor badge, crouched on a surfboard on a curling wave", zuma],
-    ["Everest", "snow husky snowboarding downhill: teal and purple gear, snowflake badge, paws out for balance, snowy mountains", everest],
-    ["Tracker", "jungle chihuahua standing alert on four legs: huge ears up, green jungle hat, compass badge, in the jungle", tracker],
+    ["Ryder", "the boy leader in his orange vest with the Paw Patrol shield, pup-pad in hand, the Lookout behind", ryder, anim.ryder],
+    ["Chase", "police pup standing at attention: blue cap and vest, police badge, saluting, megaphone popping out of his pup-pack, cones on the street", chase, anim.chase],
+    ["Marshall", "fire pup on his hind legs, both paws on the hose nozzle: Dalmatian spots, red helmet with gold badge, red vest and pup-pack, the water arcing high onto a burning house", marshall, anim.marshall],
+    ["Skye", "flying pup: pink helmet with goggles, pink wings out of her pup-pack, in the clouds", skye, anim.skye],
+    ["Rubble", "construction bulldog standing and digging: yellow hard hat, shovel scooping dirt, crane behind", rubble, anim.rubble],
+    ["Rocky", "recycling pup sitting: green cap and vest, recycle badge, holding up a wrench, recycling bin", rocky, anim.rocky],
+    ["Zuma", "water-rescue Labrador surfing: orange helmet with goggles, anchor badge, crouched on a surfboard on a curling wave", zuma, anim.zuma],
+    ["Everest", "snow husky snowboarding downhill: teal and purple gear, snowflake badge, paws out for balance, snowy mountains", everest, anim.everest],
+    ["Tracker", "jungle chihuahua standing alert on four legs: huge ears up, green jungle hat, compass badge, in the jungle", tracker, anim.tracker],
   ];
 })();
 
@@ -6494,7 +6567,11 @@ function albumParentsWire(pl) {
   const glint = (x, y, r = 3) => aSpark(x, y, r, "#fff");
 
   // a chunky toy wheel: fat black tyre, the classic red line, a chrome 5-spoke rim, bold highlights (o.mono = monster-truck treads)
-  function wheel(x, y, r, ch, o = {}) {
+  // while an own animation is drawn (FX.spin set by withFx), every wheel turns
+  let FX = {};
+  const withFx = (fx, f) => { FX = fx; try { return f(); } finally { FX = {}; } };
+  function wheel(x, y, r, ch, o = {}) { const w = wheel0(x, y, r, ch, o); return FX.spin ? `<g class="${FX.spin}" style="transform-origin:${x}px ${y}px">${w}</g>` : w; }
+  function wheel0(x, y, r, ch, o = {}) {
     const s = [], f = v => +v.toFixed(2);
     if (o.mono) {
       const n = 18;
@@ -6849,16 +6926,34 @@ function albumParentsWire(pl) {
     `<defs>${paint(pg, "#6fa8ff", "#1e5fd6", "#123f99")}${chrome(ch)}${glassG(gg)}</defs>` + place(sp, ...at) + aEdge(place(car, ...at))];
   }
 
+  /* ---- the own animations (played at holo; CSS an-hw-* in template.html) ---- */
+  const G = (cls, svg, origin) => aWrap(cls, svg, origin);
+  // speed streaks rushing past from right to left, each on its own clock
+  const streaks = ys => ys.map((y, i) => `<g class="an-hw-streak" style="animation-delay:-${(i * .17).toFixed(2)}s"><path d="M124,${y} h${18 + (i % 3) * 8}" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".85"/></g>`).join("");
+  // a car racing on the spot: wheels turning, the body rumbling, streaks flying past
+  const race = (draw, cls = "an-hw-rumble", ys = [30, 52, 74, 96, 118]) => () => { const [b, m] = withFx({ spin: "an-hw-wheel" }, draw); return [b + streaks(ys), G(cls, m)]; };
+  const anim = {
+    // the flame badge pulses and a gleam runs across its chrome
+    badge: () => { const [b, m] = hwBadge(); return [b, G("an-hw-pulse", m, "60px 80px"), `<g class="an-hw-shine"><path d="M-40,158 L0,0 H14 L-26,158Z" fill="#fff" opacity=".5"/></g>`]; },
+    twin: race(twinMill), bone: race(boneShaker), shark: race(sharkruiser), deora: race(deora), rodger: race(rodgerDodger),
+    // the monster truck bounces hard on its huge tyres
+    wrex: race(megaWrex, "an-hw-bounce", []),
+    // the racer drives right round the loop
+    loop: () => { const [b, m] = withFx({ spin: "an-hw-wheel" }, loop); return [b, G("an-hw-loop", m, "60px 72px")]; },
+    // the racer flies off the ramp, over the canyon and lands on the far side
+    jump: () => { const [b, m] = withFx({ spin: "an-hw-wheel" }, jump); return [b, G("an-hw-jump", m, "62px 66px")]; },
+  };
+
   FAN.hotwheels = [
-    ["Hot Wheels", "the red flame logo as a shiny chrome badge on chequered stripes", hwBadge],
-    ["Twin Mill", "dark-blue, two chrome blowers with intake scoops side by side on the long hood, racing up the orange track at night", twinMill],
-    ["Bone Shaker", "black hot rod with the skull grille, chrome engine and big red-line back wheels, over flames", boneShaker],
-    ["Sharkruiser", "the shark car: open jaws, teeth, gills, fin and tail, blower on its back, by the sea", sharkruiser],
-    ["Deora II", "the aqua surf wagon with two surfboards sliding out of the back, on the track by the beach", deora],
-    ["Rodger Dodger", "purple muscle car, orange stripe, a big chrome blower through the hood, chequered backdrop", rodgerDodger],
-    ["Mega-Wrex", "the T-rex monster truck: jaws open, tiny arms, huge tyres, in the arena", megaWrex],
-    ["Loop-the-loop", "a big red racer upside-down round the top of the orange loop, sparks flying", loop],
-    ["The big jump", "a big blue racer flying over the canyon between two ramps, fire from the exhaust", jump],
+    ["Hot Wheels", "the red flame logo as a shiny chrome badge on chequered stripes", hwBadge, anim.badge],
+    ["Twin Mill", "dark-blue, two chrome blowers with intake scoops side by side on the long hood, racing up the orange track at night", twinMill, anim.twin],
+    ["Bone Shaker", "black hot rod with the skull grille, chrome engine and big red-line back wheels, over flames", boneShaker, anim.bone],
+    ["Sharkruiser", "the shark car: open jaws, teeth, gills, fin and tail, blower on its back, by the sea", sharkruiser, anim.shark],
+    ["Deora II", "the aqua surf wagon with two surfboards sliding out of the back, on the track by the beach", deora, anim.deora],
+    ["Rodger Dodger", "purple muscle car, orange stripe, a big chrome blower through the hood, chequered backdrop", rodgerDodger, anim.rodger],
+    ["Mega-Wrex", "the T-rex monster truck: jaws open, tiny arms, huge tyres, in the arena", megaWrex, anim.wrex],
+    ["Loop-the-loop", "a big red racer upside-down round the top of the orange loop, sparks flying", loop, anim.loop],
+    ["The big jump", "a big blue racer flying over the canyon between two ramps, fire from the exhaust", jump, anim.jump],
   ];
 })();
 
@@ -7691,7 +7786,11 @@ function albumParentsWire(pl) {
   const r2 = v => +v.toFixed(2);
   const shadow = (x, y, rx) => En(x, y, rx, r2(rx * .1), "#000", 'opacity=".2"');
   // a tyre with a coloured rim, a hub cap and a shine
-  const wheel = (x, y, r, rim = "#c9ced6", tyre = "#26262b") => aC(x, y, r, tyre, st(1.4)) + aC(x, y, r2(r * .56), rim, st(1)) +
+  // while an own animation is drawn (FX set by withFx), the wheels turn and the road's lane marks rush by
+  let FX = {};
+  const withFx = (fx, f) => { FX = fx; try { return f(); } finally { FX = {}; } };
+  const wheel = (x, y, r, rim, tyre) => { const w = wheel0(x, y, r, rim, tyre); return FX.spin ? `<g class="${FX.spin}" style="transform-origin:${x}px ${y}px">${w}</g>` : w; };
+  const wheel0 = (x, y, r, rim = "#c9ced6", tyre = "#26262b") => aC(x, y, r, tyre, st(1.4)) + aC(x, y, r2(r * .56), rim, st(1)) +
     aC(x, y, r2(r * .2), "#eef1f4", st(.7)) +
     `<path d="M${r2(x - r * .72)},${r2(y - r * .4)} A${r2(r * .8)},${r2(r * .8)} 0 0 1 ${r2(x - r * .2)},${r2(y - r * .78)}" fill="none" stroke="#6a6a72" stroke-width="${r2(r * .12)}" stroke-linecap="round"/>`;
   // the windshield is the face: two big eyes clipped by the glass (its frame is the eyelid), optional lids over them
@@ -7717,7 +7816,7 @@ function albumParentsWire(pl) {
   const bolt = (d, c = "#ffcf1f", c2 = "#ff8f00") => P(d, c, 1.1) + Pn(d, c2, 'opacity=".35" transform="translate(0 1.4)"');
   // scenery
   const road = (y = 124, c = "#6b6b72") => Pn(`M0,${y} H120 V158 H0Z`, c) + Rn(0, y, 120, 2, "#8a8a92") +
-    [6, 34, 62, 90].map(x => Rn(x, y + 16, 16, 2.6, "#ffd54f", 'rx="1"')).join("");
+    (FX.road ? `<g class="${FX.road}">${[6, 34, 62, 90, 118, 146].map(x => Rn(x, y + 16, 16, 2.6, "#ffd54f", 'rx="1"')).join("")}</g>` : [6, 34, 62, 90].map(x => Rn(x, y + 16, 16, 2.6, "#ffd54f", 'rx="1"')).join(""));
   const mesa = (d, c = "#c8622e", c2 = "#a94a20") => Pn(d, c2) + Pn(d, c, 'transform="translate(-2.4 0)"');
   const cactus = (x, y, k = 1) => at(P("M-2,0 V-18 Q0,-21 2,-18 V0Z M2,-8 H5 V-13 Q6.5,-15 8,-13 V-6 H2Z M-2,-6 H-6 V-11 Q-7.5,-13 -9,-11 V-4 H-2Z", "#3f9a4a", .9), x, y, k);
   const desert = (sk1 = "#6ec3f0", sk2 = "#ffe7bf") => aSky(sk1, sk2) + aCloud(70, 14, .7) +
@@ -7923,16 +8022,36 @@ function albumParentsWire(pl) {
     return [back, aEdge(t.join(""))];
   }
 
+  /* ---- the own animations (played at holo; CSS an-cr-* in template.html) ---- */
+  const G = (cls, svg, origin) => aWrap(cls, svg, origin);
+  const GO = { spin: "an-cr-wheel", road: "an-cr-road" };
+  const streaks = ys => ys.map((y, i) => `<g class="an-cr-streak" style="animation-delay:-${(i * .19).toFixed(2)}s"><path d="M124,${y} h${18 + (i % 3) * 8}" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".85"/></g>`).join("");
+  // drawn with the wheels turning and the road moving, the car wrapped in its own motion
+  const go = (draw, cls, origin, extra = "") => () => { const [b, m] = withFx(GO, draw); return [b + extra, G(cls, m.replace('class="lv-drive"', 'class="an-cr-none"'), origin)]; };
+  const flowers = [[20, 30, "#ff7eb6"], [96, 22, "#ffd54f"], [64, 14, "#8ee07a"]].map(([x, y, c], i) => `<g class="an-cr-float" style="animation-delay:-${i * .9}s">${flower(x, y, 3, c)}${aC(x, y, 1.8, "#fff59d")}</g>`).join("");
+  const anim = {
+    // Ka-chow! McQueen races, wheels spinning, streaks flying, a lightning flash
+    mcqueen: go(mcqueen, "an-cr-race", "60px 120px", streaks([40, 62, 84, 106]) + `<g class="an-cr-flash"><rect width="120" height="158" fill="#fff59d"/></g>`),
+    mater: go(mater, "an-cr-rattle", "60px 130px"),                    // Mater rattles along, bouncing on his old springs
+    sally: go(sally, "an-cr-cruise", "60px 130px"),                    // Sally cruises gracefully along
+    doc: go(doc, "an-cr-drift", "60px 130px", streaks([70, 96])),      // Doc drifts sideways round the bend, the old champion's trick
+    luigi: go(luigiGuido, "an-cr-hop", "60px 140px"),                  // Luigi and Guido hop for joy: pit stop!
+    ramone: go(ramone, "an-cr-lowrider", "60px 128px"),                // Ramone's hydraulics: the lowrider bounces front and back
+    cruz: go(cruz, "an-cr-race", "60px 120px", streaks([36, 60, 84, 108])),   // Cruz races, flat out
+    mack: go(mack, "an-cr-truck", "60px 130px"),                       // Mack rolls down the highway, the road rushing past
+    fillmore: go(fillmore, "an-cr-sway", "60px 130px", flowers),        // Fillmore sways, relaxed, flowers floating up
+  };
+
   FAN.cars = [
-    ["Lightning McQueen", "Number 95, the red race car with the lightning bolt: Ka-chow!", mcqueen],
-    ["Mater", "The rusty, buck-toothed tow truck, McQueen's best friend", mater],
-    ["Sally", "The blue Porsche who runs the Cozy Cone Motel", sally],
-    ["Doc Hudson", "The Fabulous Hudson Hornet, a champion racer and the town doctor", doc],
-    ["Luigi & Guido", "The little Fiat and his forklift friend from the tyre shop: pit stop!", luigiGuido],
-    ["Ramone", "The purple lowrider with flames who paints the cars", ramone],
-    ["Cruz Ramirez", "The yellow number 51 racer who became a champion", cruz],
-    ["Mack", "The big red truck who carries McQueen to every race", mack],
-    ["Fillmore", "The relaxed flower-power bus", fillmore],
+    ["Lightning McQueen", "Number 95, the red race car with the lightning bolt: Ka-chow!", mcqueen, anim.mcqueen],
+    ["Mater", "The rusty, buck-toothed tow truck, McQueen's best friend", mater, anim.mater],
+    ["Sally", "The blue Porsche who runs the Cozy Cone Motel", sally, anim.sally],
+    ["Doc Hudson", "The Fabulous Hudson Hornet, a champion racer and the town doctor", doc, anim.doc],
+    ["Luigi & Guido", "The little Fiat and his forklift friend from the tyre shop: pit stop!", luigiGuido, anim.luigi],
+    ["Ramone", "The purple lowrider with flames who paints the cars", ramone, anim.ramone],
+    ["Cruz Ramirez", "The yellow number 51 racer who became a champion", cruz, anim.cruz],
+    ["Mack", "The big red truck who carries McQueen to every race", mack, anim.mack],
+    ["Fillmore", "The relaxed flower-power bus", fillmore, anim.fillmore],
   ];
 })();
 
@@ -8388,16 +8507,49 @@ function albumParentsWire(pl) {
   const octoA = () => [under({ seed: 21 }) + star5(96, 128, 1.3, "#ffb300") + shell(18, 140, 1.4),
     aEdge(at(56, 82, 1.45, octopus()))];
 
+  /* ---- the own animations (played at holo; CSS an-ws-* in template.html) ---- */
+  const G = (cls, svg, origin) => aWrap(cls, svg, origin);
+  // bubbles rising from the floor, each on its own clock (invisible at both ends)
+  const rising = (xs, dur = 3.2) => xs.map((x, i) => `<g class="an-ws-rise" style="animation-delay:-${f1(i * dur / xs.length)}s;animation-duration:${dur}s">${bub(x, 136, 1.6 + (i % 3) * .9)}</g>`).join("");
+  const anim = {
+    // the clownfish darts out of its anemone and back, the tentacles swaying, bubbles rising
+    clown: () => [under({ seed: 3, coral: false }) + G("an-ws-anem", anemone(60, 138, 1.15, "#ff7eb6", "#d94f9a"), "60px 140px") + rising([20, 44, 92, 106]),
+      G("an-ws-dart", aEdge(at(58, 76, 1.55, clownfish())))],
+    // the dolphin leaps out of the sea in an arc and dives back in, with a splash
+    dolphin: () => [surface({ sun: [98, 22, 11] }) + G("an-ws-splash", `<path d="M24,112 Q30,100 36,110 Q42,98 48,112" fill="#e8f7ff" ${OUT}/>` + bubbles(11, 4, 20, 60, 98, 112, 2), "36px 112px"),
+      G("an-ws-leap", aEdge(at(62, 70, 1.45, dolphin(), -28)), "60px 120px")],
+    // the whale blows: the fountain gushes up and falls, the whale rocking on the waves
+    whale: () => [surface({ sun: [100, 18, 10], wy: 100, sea: "#2a7ccc" }),
+      G("an-ws-rock", aEdge(at(62, 96, 1.2, G("an-ws-spout", spout(4, -26), "4px -22px") + whale())), "62px 110px")],
+    // the sea turtle glides along, rising and dipping, bubbles drifting up
+    turtle: () => [under({ seed: 8 }) + coral(28, 138, .9, "#ffb74d") + rising([16, 70, 100]), G("an-ws-glide", aEdge(at(54, 78, 1.45, turtle(), -6)), "54px 78px")],
+    // the crab scuttles sideways along the beach and back
+    crab: () => [surface({ sun: [20, 20, 10], wy: 78, nw: 2 }) + beach(104) + castle(96, 128, .9) + shell(22, 140, 1.2) + star5(104, 146, .9),
+      G("an-ws-scuttle", G("an-ws-tap", aEdge(at(56, 112, 1.3, crab())), "56px 120px"))],
+    // the seahorse bobs up and down in the swaying seaweed
+    horse: () => [under({ seed: 12, coral: false }) + G("an-ws-weed", weed(30, 140, 110, "#2fa36b", 6), "30px 140px") + G("an-ws-weed2", weed(96, 140, 80, "#43b581", 4), "96px 140px") +
+      coral(70, 140, .9, "#ff8a80") + rising([50, 84]), G("an-ws-bob", aEdge(at(62, 74, 1.5, seahorse())), "62px 74px")],
+    // the friendly shark swims to and fro, its fish friends darting about
+    shark: () => [under({ seed: 15 }) + G("an-ws-fish1", fishy(20, 30, 1.1, "#ffd54f")) + G("an-ws-fish2", fishy(98, 120, 1, "#ff8a65", true)) + G("an-ws-fish1", fishy(28, 112, .9, "#80deea")),
+      G("an-ws-swim", aEdge(at(62, 76, 1.38, shark())), "62px 76px")],
+    // the jellyfish pulses and rises, squeezing and opening its bell; the small ones drift
+    jelly: () => [under({ seed: 18, top: "#8be0fa", bot: "#2a5fc4" }) + G("an-ws-drift", at(18, 40, .4, jelly({ col: "#b39ddb", col2: "#9575cd", tent: "#d1c4e9" }))) +
+      G("an-ws-drift2", at(100, 104, .35, jelly({ col: "#80deea", col2: "#4dd0e1", tent: "#b2ebf2" }))), G("an-ws-pulse", aEdge(at(60, 70, 1.45, jelly())), "60px 64px")],
+    // the octopus wiggles and sways on the sea floor, the starfish turning, bubbles rising
+    octo: () => [under({ seed: 21 }) + G("an-ws-star", star5(96, 128, 1.3, "#ffb300"), "96px 128px") + shell(18, 140, 1.4) + rising([30, 60, 88, 108]),
+      G("an-ws-wiggle", aEdge(at(56, 82, 1.45, octopus())), "56px 110px")],
+  };
+
   FAN.wsea = [
-    ["Clownfish", "Orange with white stripes, peeking out of its anemone", clownA],
-    ["Dolphin", "Leaping out of the waves in the sunshine", dolA],
-    ["Whale", "A big blue whale blowing a fountain", whaleA],
-    ["Sea turtle", "Gliding over the sea floor", turtleA],
-    ["Crab", "Waving its claws on the beach by a sandcastle", crabA],
-    ["Seahorse", "Curly tail, among the seaweed", horseA],
-    ["Friendly shark", "A smiling shark with its fish friends", sharkA],
-    ["Jellyfish", "A pink jellyfish floating (it moves)", jellyA],
-    ["Octopus", "Eight wiggly arms on the sea floor", octoA],
+    ["Clownfish", "Orange with white stripes, peeking out of its anemone", clownA, anim.clown],
+    ["Dolphin", "Leaping out of the waves in the sunshine", dolA, anim.dolphin],
+    ["Whale", "A big blue whale blowing a fountain", whaleA, anim.whale],
+    ["Sea turtle", "Gliding over the sea floor", turtleA, anim.turtle],
+    ["Crab", "Waving its claws on the beach by a sandcastle", crabA, anim.crab],
+    ["Seahorse", "Curly tail, among the seaweed", horseA, anim.horse],
+    ["Friendly shark", "A smiling shark with its fish friends", sharkA, anim.shark],
+    ["Jellyfish", "A pink jellyfish floating (it moves)", jellyA, anim.jelly],
+    ["Octopus", "Eight wiggly arms on the sea floor", octoA, anim.octo],
   ];
 })();
 
@@ -8446,10 +8598,10 @@ function albumParentsWire(pl) {
   }
 
   /* ---------- the animals (drawn around 0,0) ---------- */
-  function foxChar() {
+  function foxChar(o = {}) {
     const fur1 = "#e8732f", fur2 = "#c85a1f", white = "#fff6e8", black = "#2a1a10";
-    let s = `<path d="M8,30 Q34,34 36,16 Q38,2 24,2 Q30,14 20,24Z" fill="${fur1}" ${A_OUT}/><path d="M26,10 Q34,10 34,18 Q28,16 24,10Z" fill="${white}"/>`;
-    s += aP("M-18,10 Q-24,30 -8,40 Q0,45 8,40 Q24,30 18,10 Q0,20 -18,10Z", fur1);
+    let s = aWrap(o.tail, `<path d="M8,30 Q34,34 36,16 Q38,2 24,2 Q30,14 20,24Z" fill="${fur1}" ${A_OUT}/><path d="M26,10 Q34,10 34,18 Q28,16 24,10Z" fill="${white}"/>`, "12px 28px");
+    s += aP("M-18,10 Q-24,30 -8,40 Q0,45 8,40 Q24,30 18,10 Q0,-6 -18,10Z", fur1);
     s += aP("M-9,22 Q0,28 9,22 L7,37 Q0,41 -7,37Z", white);
     s += aP("M-16,-22 L-22,-34 L-9,-28Z", fur1) + aP("M16,-22 L22,-34 L9,-28Z", fur1);
     s += aP("M-15,-22 L-19,-30 L-11,-26Z", black) + aP("M15,-22 L19,-30 L11,-26Z", black);
@@ -8477,7 +8629,7 @@ function albumParentsWire(pl) {
   }
   function fawnChar() {
     const skin = "#d9a066", white = "#f6ead2", horn = "#8a5a2e";
-    let s = aP("M-16,10 Q-22,30 -7,40 Q0,44 7,40 Q22,30 16,10 Q0,19 -16,10Z", skin);
+    let s = aP("M-16,10 Q-22,30 -7,40 Q0,44 7,40 Q22,30 16,10 Q0,-6 -16,10Z", skin);
     s += [[-8,16],[4,20],[-2,28],[9,26],[-11,32]].map(([x,y]) => aC(x,y,1.8,white)).join("");
     s += aC(-9,40,4.2,white,A_OUT) + aC(9,40,4.2,white,A_OUT);
     s += aP("M-15,-18 Q-26,-22 -23,-10 Q-20,-2 -12,-6Z", skin) + aP("M15,-18 Q26,-22 23,-10 Q20,-2 12,-6Z", skin);
@@ -8490,37 +8642,37 @@ function albumParentsWire(pl) {
     s += blush(-15,-9) + blush(15,-9);
     return s;
   }
-  function squirrelChar() {
+  function squirrelChar(o = {}) {
     const fur1 = "#a85c2e", fur2 = "#8a4a24", white = "#f3e0c0", acorn = "#c88a3e";
-    let s = `<path d="M14,20 Q36,10 30,-14 Q26,-30 8,-24 Q24,-16 20,0 Q16,16 2,22Z" fill="${fur1}" ${A_OUT}/>`;
-    s += aP("M-16,8 Q-22,28 -8,38 Q0,43 8,38 Q22,28 16,8 Q0,17 -16,8Z", fur1);
+    let s = aWrap(o.tail, `<path d="M14,20 Q36,10 30,-14 Q26,-30 8,-24 Q24,-16 20,0 Q16,16 2,22Z" fill="${fur1}" ${A_OUT}/>`, "8px 20px");
+    s += aP("M-16,8 Q-22,28 -8,38 Q0,43 8,38 Q22,28 16,8 Q0,-8 -16,8Z", fur1);
     s += aP("M-8,18 Q0,24 8,18 L6,32 Q0,36 -6,32Z", white);
     s += aC(-13,-6,7,fur1,A_OUT) + aC(13,-6,7,fur1,A_OUT);
     s += aC(0, -8, 16, fur1, A_OUT);
     s += aP("M-9,-6 Q0,3 9,-6 Q9,8 0,12 Q-9,8 -9,-6Z", white);
-    s += aC(0,20,5,acorn,A_OUT) + aP("M-5,17 Q0,12 5,17Z", "#7a5020");
+    s += aWrap(o.acorn, aC(0,20,5,acorn,A_OUT) + aP("M-5,17 Q0,12 5,17Z", "#7a5020"));
     s += aEye(-6, -8, "#2a1a10", .85) + aEye(6, -8, "#2a1a10", .85);
     s += aC(0,0,1.8,"#6b3a1e",A_OUT);
     s += blush(-12,-3) + blush(12,-3);
     return s;
   }
+  // front view: a round body wrapped in a spiky coat from ear to ear, the pale face peeking out low, little feet
   function hedgehogChar() {
     const spike = "#9c8058", spike2 = "#7a6142", face = "#ead9b5";
-    let d = "";
-    for (let i = -8; i <= 8; i++) { const x = i * 2.6, h = 14 - Math.abs(i) * .5; d += `M${x-2},-4 L${x},${-4-h} L${x+2},-4 `; }
-    let s = `<path d="${d}Z" fill="${spike}" ${A_OUT}/>`;
-    s += [-5,-1,3,7].map(i => `<path d="M${i*2.6},-6 L${i*2.6+1},${-16+Math.abs(i)}" stroke="${spike2}" stroke-width="1" opacity=".5"/>`).join("");
-    s += aP("M-20,0 Q-24,20 -8,30 Q0,34 8,30 Q24,20 20,0 Q0,10 -20,0Z", spike);
-    s += aP("M-14,6 Q0,16 14,6 Q16,20 0,26 Q-16,20 -14,6Z", face);
-    s += aEye(-6, 8, "#2a1a10", .8) + aEye(6, 8, "#2a1a10", .8);
-    s += aC(0,16,2,"#2a1a10",A_OUT);
-    s += aC(-13,30,4,spike2,A_OUT) + aC(13,30,4,spike2,A_OUT);
-    s += blush(-11,12) + blush(11,12);
+    const pts = [...Array(27)].map((_, i) => { const a = (-196 + i * 212 / 26) * Math.PI / 180, r = i % 2 ? 23 : 32; return `${r1(Math.cos(a) * r)},${r1(4 + Math.sin(a) * r)}`; });
+    let s = `<polygon points="${pts.join(" ")}" fill="${spike2}" ${A_OUT} stroke-linejoin="round"/>`;
+    s += aC(0, 6, 24, spike, A_OUT);
+    s += [-60, -35, -10, 15, 40].map(d => { const a = (d - 90) * Math.PI / 180; return `<path d="M${r1(Math.cos(a) * 12)},${r1(6 + Math.sin(a) * 12)} L${r1(Math.cos(a) * 21)},${r1(6 + Math.sin(a) * 21)}" stroke="${spike2}" stroke-width="1.4" stroke-linecap="round" opacity=".6"/>`; }).join("");
+    s += aP("M-16,4 Q-18,22 -6,28 Q0,30 6,28 Q18,22 16,4 Q8,-2 0,6 Q-8,-2 -16,4Z", face);
+    s += aEye(-6, 10, "#2a1a10", .85) + aEye(6, 10, "#2a1a10", .85);
+    s += aC(0, 19, 2.2, "#2a1a10", A_OUT) + smile(0, 22, 3);
+    s += aC(-12, 30, 4.4, spike2, A_OUT) + aC(12, 30, 4.4, spike2, A_OUT);
+    s += blush(-11, 15) + blush(11, 15);
     return s;
   }
   function bearCubChar() {
     const fur1 = "#8a5a35", fur2 = "#6b4426", face = "#e8c9a0";
-    let s = aP("M-19,8 Q-25,30 -9,40 Q0,45 9,40 Q25,30 19,8 Q0,18 -19,8Z", fur1);
+    let s = aP("M-19,8 Q-25,30 -9,40 Q0,45 9,40 Q25,30 19,8 Q0,-8 -19,8Z", fur1);
     s += aC(-11,40,4.6,fur2,A_OUT) + aC(11,40,4.6,fur2,A_OUT);
     s += aC(-15,-22,7,fur1,A_OUT) + aC(15,-22,7,fur1,A_OUT);
     s += aC(-15,-22,3.6,fur2) + aC(15,-22,3.6,fur2);
@@ -8532,11 +8684,11 @@ function albumParentsWire(pl) {
     s += blush(-14,-4) + blush(14,-4);
     return s;
   }
-  function rabbitChar() {
+  function rabbitChar(o = {}) {
     const fur1 = "#e8e2d5", fur2 = "#cfc6b4", pink = "#f5b8c6";
-    let s = aP("M-14,-18 Q-20,-46 -8,-50 Q-2,-44 -4,-18Z", fur1) + aP("M14,-18 Q20,-46 8,-50 Q2,-44 4,-18Z", fur1);
-    s += aP("M-11,-22 Q-15,-42 -8,-45 Q-4,-40 -5,-20Z", pink) + aP("M11,-22 Q15,-42 8,-45 Q4,-40 5,-20Z", pink);
-    s += aP("M-17,6 Q-23,28 -8,38 Q0,43 8,38 Q23,28 17,6 Q0,16 -17,6Z", fur1);
+    let s = aWrap(o.earL, aP("M-14,-18 Q-20,-46 -8,-50 Q-2,-44 -4,-18Z", fur1) + aP("M-11,-22 Q-15,-42 -8,-45 Q-4,-40 -5,-20Z", pink), "-9px -18px") +
+      aWrap(o.earR, aP("M14,-18 Q20,-46 8,-50 Q2,-44 4,-18Z", fur1) + aP("M11,-22 Q15,-42 8,-45 Q4,-40 5,-20Z", pink), "9px -18px");
+    s += aP("M-17,6 Q-23,28 -8,38 Q0,43 8,38 Q23,28 17,6 Q0,-10 -17,6Z", fur1);
     s += aC(-10,38,4.4,fur2,A_OUT) + aC(10,38,4.4,fur2,A_OUT);
     s += aC(0, -10, 17, fur1, A_OUT);
     s += aP("M-9,-6 Q0,3 9,-6 Q9,8 0,12 Q-9,8 -9,-6Z", "#fff6e8");
@@ -8550,11 +8702,11 @@ function albumParentsWire(pl) {
   function owl() { return [forestNight(), aEdge(at(60, 96, 1.15, owlChar()))]; }
   function fawn() { return [forestDay(), aEdge(at(60, 100, 1.1, fawnChar()))]; }
   function squirrel() { return [forestDay(), aEdge(at(60, 100, 1.15, squirrelChar()))]; }
-  function hedgehog() { return [mossyFloor(), aEdge(at(60, 112, 1.3, hedgehogChar()))]; }
+  function hedgehog() { return [mossyFloor(), aEdge(at(60, 104, 1.3, hedgehogChar()))]; }
   function bearCub() { return [forestDay(), aEdge(at(60, 100, 1.15, bearCubChar()))]; }
   function rabbit() { return [forestDay(), aEdge(at(60, 102, 1.1, rabbitChar()))]; }
   // side view, clinging to a big trunk with its claws and stiff tail, the long beak tapping the bark, chips flying
-  function woodpecker() {
+  function woodpecker(o = {}) {
     const red = "#d6392b", black = "#242424", white = "#fff", cream = "#f6efe2", bark = "#7a5536";
     let bg = forestDay() + aP("M-2,-2 H40 Q44,60 42,160 H-2Z", bark);
     bg += ["M10,0 Q14,40 9,80 Q6,120 12,160", "M24,0 Q20,50 26,96 Q29,130 24,160", "M34,10 Q37,40 34,70"].map(d => `<path d="${d}" fill="none" stroke="#5a3b22" stroke-width="1.6" stroke-linecap="round"/>`).join("");
@@ -8573,10 +8725,11 @@ function albumParentsWire(pl) {
     s += aP("M52,45 L40,49.5 L52,53Z", "#9a9a9a");
     const chips = [[36, 40, 20], [30, 58, -30], [34, 34, 60], [28, 46, 10]].map(([x, y, r]) => `<rect x="${x}" y="${y}" width="4" height="2.4" rx=".6" fill="#e0a868" ${A_OUT} transform="rotate(${r} ${x + 2} ${y + 1.2})"/>`).join("");
     const taps = `<path d="M38,42 l-5,-3 M37,50 l-6,0 M38,57 l-5,3" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>`;
+    if (o.parts) return { bg, bird: aEdge(s), chips, taps };
     return [bg, `<g transform="translate(-5 0)">${aEdge(s) + chips + taps}</g>`];
   }
   // a happy frog sitting on top of a red spotted toadstool, a fly buzzing by
-  function frog() {
+  function frog(o = {}) {
     const green = "#6cb24a", green2 = "#4e9436", belly = "#d4ecac";
     let s = aP("M48,112 Q44,136 46,146 L74,146 Q76,136 72,112Z", "#f3ead9") + aP("M44,124 Q60,132 76,124 L75,129 Q60,136 45,129Z", "#e6d8bd");
     s += aP("M18,114 Q20,82 60,79 Q100,82 102,114 Q60,122 18,114Z", "#d6392b");
@@ -8595,19 +8748,55 @@ function albumParentsWire(pl) {
     s += `<path d="M42,49 Q60,61 78,49" fill="none" stroke="${A_OL}" stroke-width="1.4" stroke-linecap="round"/>` + blush(40, 52) + blush(80, 52);
     const fly = `<path d="M84,20 q6,-8 10,0 q4,8 10,0" fill="none" stroke="#fff" stroke-width="1" stroke-dasharray="2 2"/>` +
       `<ellipse cx="102" cy="14" rx="3" ry="4.5" fill="#cfe9ff" opacity=".9" ${A_OUT}/><ellipse cx="108" cy="15" rx="3" ry="4.5" fill="#cfe9ff" opacity=".9" ${A_OUT}/>` + aC(105, 20, 3, "#333", A_OUT);
+    if (o.parts) return { frog: aEdge(s), fly };
     return [mossyFloor(), aEdge(s) + fly];
   }
 
+  /* ---- the own animations (played at holo; CSS an-wf-* in template.html) ---- */
+  const G = (cls, svg, origin) => aWrap(cls, svg, origin);
+  const R9 = aRand(9);
+  // things that each cross the card on their own (butterflies, a falling leaf), invisible at both ends, staggered
+  const travel = (cls, items, dur) => items.map(([svg, d]) => `<g class="${cls}" style="animation-delay:-${(d * dur).toFixed(2)}s">${svg}</g>`).join("");
+  const butterfly = (x, y, c) => `<g transform="translate(${x} ${y}) scale(1.7)"><g class="an-wf-flap"><path d="M0,0 Q-6,-7 -7,-1 Q-6,4 0,1Z M0,0 Q6,-7 7,-1 Q6,4 0,1Z" fill="${c}" ${A_OUT}/></g><path d="M0,-2 V3" stroke="${A_OL}" stroke-width="1.2"/></g>`;
+  const bee = `<g><ellipse cx="0" cy="0" rx="3.4" ry="2.6" fill="#ffd54f" ${A_OUT}/><path d="M-1,-2.4 V2.4 M1.4,-2.2 V2.2" stroke="${A_OL}" stroke-width=".9"/><ellipse cx="-.5" cy="-3.4" rx="2" ry="1.4" fill="#e3f2fd" opacity=".9" ${A_OUT}/></g>`;
+  const anim = {
+    // the fox wags its bushy tail and bobs
+    fox: () => [forestDay(), G("an-wf-bob", aEdge(at(60, 100, 1.15, foxChar({ tail: "an-wf-wag" }))))],
+    // the owl tilts its head from side to side, blinking, the stars twinkling
+    owl: () => [forestNight() + [[16, 20], [40, 10], [70, 16], [106, 40], [20, 50]].map(([x, y], i) => aSpark(x, y, 2.6, "#fff", "lv-tw", `animation-delay:-${(i * .35).toFixed(2)}s`)).join(""),
+      G("an-wf-tilt", aEdge(at(60, 96, 1.15, owlChar())), "60px 140px")],
+    // the fawn prances, two butterflies fluttering past
+    fawn: () => [forestDay(), G("an-wf-prance", aEdge(at(60, 100, 1.1, fawnChar())), "60px 146px"),
+      travel("an-wf-flutter", [[butterfly(-8, 50, "#ff8ab3"), 0], [butterfly(-8, 70, "#ffd54f"), .5]], 3.6)],
+    // the squirrel nibbles its acorn, the tail flicking
+    squirrel: () => [forestDay(), aEdge(at(60, 100, 1.15, squirrelChar({ tail: "an-wf-flick", acorn: "an-wf-nibble" })))],
+    // the hedgehog puffs its spikes and sniffs, an autumn leaf falling past
+    hedgehog: () => [mossyFloor(), G("an-wf-puff", aEdge(at(60, 104, 1.3, hedgehogChar())), "60px 112px"),
+      travel("an-wf-leaf", [[`<path d="M84,-6 q6,-6 12,0 q-6,6 -12,0Z" fill="#e67e22" ${A_OUT}/>`, 0], [`<path d="M30,-6 q6,-6 12,0 q-6,6 -12,0Z" fill="#f1c40f" ${A_OUT}/>`, .5]], 4)],
+    // the bear cub sways happily while two bees circle its head
+    bearCub: () => [forestDay(), G("an-wf-sway", aEdge(at(60, 100, 1.15, bearCubChar())), "60px 146px") +
+      [0, -1.6].map(d => `<g class="an-wf-orbit" style="transform-origin:60px 86px;animation-delay:${d}s"><g transform="translate(88 86)"><g class="an-wf-unspin" style="animation-delay:${d}s">${bee}</g></g></g>`).join("")],
+    // the rabbit hops, its long ears flopping
+    rabbit: () => [forestDay(), G("an-wf-hop", aEdge(at(60, 102, 1.1, rabbitChar({ earL: "an-wf-earl", earR: "an-wf-earr" }))), "60px 146px")],
+    // the woodpecker pecks the trunk three times, chips flying at each peck
+    woodpecker: () => { const p = woodpecker({ parts: 1 });
+      return [p.bg, `<g transform="translate(-5 0)">${G("an-wf-peck", p.bird, "52px 100px")}${G("an-wf-chips", p.chips + p.taps)}</g>`]; },
+    // the frog watches the fly buzz about, then its tongue shoots out and catches it; a new fly comes along
+    frog: () => { const p = frog({ parts: 1 });
+      const tongue = `<g class="an-wf-tongue" style="transform-origin:60px 54px"><path d="M60,54 L100,22" stroke="${A_OL}" stroke-width="4.4" stroke-linecap="round"/><path d="M60,54 L100,22" stroke="#ff6f91" stroke-width="2.8" stroke-linecap="round"/></g>`;
+      return [mossyFloor(), tongue + G("an-wf-gulp", p.frog, "60px 146px") + G("an-wf-fly", p.fly)]; },
+  };
+
   FAN.wforest = [
-    ["Fox", "A bushy orange tail curled by its paws, big ears listening for friends", fox],
-    ["Owl", "Perched in the moonlight, blinking its big round eyes", owl],
-    ["Fawn", "A spotted baby deer with the gentlest eyes in the forest", fawn],
-    ["Squirrel", "Puffy-tailed and holding a shiny acorn", squirrel],
-    ["Hedgehog", "A round little ball of soft spikes, peeking out with a happy face", hedgehog],
-    ["Bear cub", "A chubby honey-brown bear cub, round ears and a big smile", bearCub],
-    ["Rabbit", "Long floppy ears with pink insides, nose twitching happily", rabbit],
-    ["Woodpecker", "Red-crested and busy, tapping away on a tall tree trunk", woodpecker],
-    ["Frog", "Sitting happily on a red spotted toadstool", frog],
+    ["Fox", "A bushy orange tail curled by its paws, big ears listening for friends", fox, anim.fox],
+    ["Owl", "Perched in the moonlight, blinking its big round eyes", owl, anim.owl],
+    ["Fawn", "A spotted baby deer with the gentlest eyes in the forest", fawn, anim.fawn],
+    ["Squirrel", "Puffy-tailed and holding a shiny acorn", squirrel, anim.squirrel],
+    ["Hedgehog", "A round little ball of soft spikes, peeking out with a happy face", hedgehog, anim.hedgehog],
+    ["Bear cub", "A chubby honey-brown bear cub, round ears and a big smile", bearCub, anim.bearCub],
+    ["Rabbit", "Long floppy ears with pink insides, nose twitching happily", rabbit, anim.rabbit],
+    ["Woodpecker", "Red-crested and busy, tapping away on a tall tree trunk", woodpecker, anim.woodpecker],
+    ["Frog", "Sitting happily on a red spotted toadstool", frog, anim.frog],
   ];
 })();
 
@@ -8708,7 +8897,7 @@ function albumParentsWire(pl) {
   function penguin(o = {}) {
     const B = o.body || "#253445", H = o.head || B;
     let p = "";
-    if (o.wave) p += P("M18,-38 Q32,-48 34,-62 Q28,-60 18,-46Z", B);
+    if (o.wave) p += aWrap(o.flip, P("M18,-38 Q32,-48 34,-62 Q28,-60 18,-46Z", B), "18px -42px");
     else p += P("M18,-40 Q31,-30 27,-14 Q21,-22 17,-28Z", B);
     p += P("M-18,-40 Q-31,-30 -27,-14 Q-21,-22 -17,-28Z", B);
     p += E(-8, -2, 6.5, 3, "#ff9f1c") + E(8, -2, 6.5, 3, "#ff9f1c");
@@ -8734,31 +8923,32 @@ function albumParentsWire(pl) {
     let p = "";
     if (o.cape) p += P("M-20,-46 Q-36,-14 -32,0 L32,0 Q36,-14 20,-46Z", "#c62828") + P("M-20,-46 Q-28,-20 -26,-2 L-14,-2 Q-16,-24 -10,-44Z", "#a31515", NO);
     p += E(0, -20, 22, 20, F);
-    p += o.wave ? P("M14,-32 Q26,-42 26,-54 Q30,-60 34,-53 Q33,-38 20,-24Z", F) + E(31, -55, 3, 2.4, pad, NO) : E(19, -22, 6.5, 10, F);
+    p += o.wave ? aWrap(o.arm, P("M14,-32 Q26,-42 26,-54 Q30,-60 34,-53 Q33,-38 20,-24Z", F) + E(31, -55, 3, 2.4, pad, NO) + (o.held || ""), "17px -30px") : E(19, -22, 6.5, 10, F);
     p += E(-19, -22, 6.5, 10, F);
     p += E(-12, -6, 9, 7, F) + E(12, -6, 9, 7, F) + E(-12, -5, 4, 3, pad, NO) + E(12, -5, 4, 3, pad, NO) +
       [-16, -12, -8, 8, 12, 16].map(x => aC(x, -10, 1.3, pad)).join("");
     if (o.cape) p += P("M-18,-40 Q0,-30 18,-40 L16,-34 Q0,-26 -16,-34Z", "#fff") + [-12, -6, 0, 6, 12].map(x => aC(x, -33.5, .7, OL)).join("");
-    p += aC(-17, -62, 7, F, OUT) + aC(17, -62, 7, F, OUT) + aC(-17, -62, 3.4, "#f4c9d0") + aC(17, -62, 3.4, "#f4c9d0");
-    p += E(0, -46, 25, 21, F) + E(0, -38, 9.5, 6.8, "#fff");
-    p += eyes(0, -49, 9.5, 1.1, "#6b4223") + E(0, -41.5, 3.6, 2.6, OL) + aC(-1, -42.3, .9, "#fff") + smile(0, -37.5, 2.6) + blush(0, -40, 16);
+    p += aWrap(o.head, aC(-17, -62, 7, F, OUT) + aC(17, -62, 7, F, OUT) + aC(-17, -62, 3.4, "#f4c9d0") + aC(17, -62, 3.4, "#f4c9d0") +
+      E(0, -46, 25, 21, F) + E(0, -38, 9.5, 6.8, "#fff") +
+      eyes(0, -49, 9.5, 1.1, "#6b4223") + E(0, -41.5, 3.6, 2.6, OL) + aC(-1, -42.3, .9, "#fff") + smile(0, -37.5, 2.6) + blush(0, -40, 16), "0px -30px");
     if (o.crown) p += crown(0, -64, 9);
     return p;
   }
   function seal(o = {}) {
     const F = o.fur || "#fbfbf7";
-    let p = P("M28,-8 Q40,-20 46,-12 Q41,-7 44,0 Q36,-2 28,-2Z", F);
+    let p = aWrap(o.tail, P("M28,-8 Q40,-20 46,-12 Q41,-7 44,0 Q36,-2 28,-2Z", F), "30px -4px");
     p += P("M-28,-16 C-26,-34 2,-32 16,-24 C28,-18 34,-10 32,-2 C20,2 -18,2 -26,-2 C-30,-6 -30,-10 -28,-16Z", F);
     if (o.spots) p += [[4, -20], [14, -14], [-2, -10], [22, -8]].map(([x, y]) => E(x, y, 2.2, 1.4, o.spots, NO)).join("");
     else p += `<path d="M2,-22 q3,-2 6,0 M12,-16 q3,-2 6,0 M0,-12 q3,-2 6,0" fill="none" stroke="#c9d6e2" stroke-width=".9"/>`;
-    p += E(-16, -30, 18, 15.5, F) + P("M-4,-8 Q4,-2 0,2 Q-9,1 -12,-6Z", F);
-    p += aEye(-23, -32, "#3b2a1a", 1.05) + aEye(-9, -32, "#3b2a1a", 1.05) + E(-16, -24.5, 3, 2.1, OL) + aC(-17, -25, .7, "#fff") + smile(-16, -21.5, 2.2) + blush(-16, -24, 10, 2.1);
-    p += aC(-21, -22, .5, "#555") + aC(-22.5, -20.5, .5, "#555") + aC(-11, -22, .5, "#555") + aC(-9.5, -20.5, .5, "#555");
+    const head = E(-16, -30, 18, 15.5, F), fl = P("M-4,-8 Q4,-2 0,2 Q-9,1 -12,-6Z", F);
+    const face = aEye(-23, -32, "#3b2a1a", 1.05) + aEye(-9, -32, "#3b2a1a", 1.05) + E(-16, -24.5, 3, 2.1, OL) + aC(-17, -25, .7, "#fff") + smile(-16, -21.5, 2.2) + blush(-16, -24, 10, 2.1) +
+      aC(-21, -22, .5, "#555") + aC(-22.5, -20.5, .5, "#555") + aC(-11, -22, .5, "#555") + aC(-9.5, -20.5, .5, "#555");
+    p += o.head ? fl + aWrap(o.head, head + face, "-4px -18px") : head + fl + face;
     return p;
   }
   function fox(o = {}) {
     const F = o.fur || "#fbfbfb", IN = "#ffd0d8";
-    let p = P("M13,-6 C40,-2 46,-30 34,-46 C30,-32 27,-22 11,-18Z", F) + `<path d="M34,-46 C32,-38 30,-30 27,-25" fill="none" stroke="#dce6ef" stroke-width="1.2"/>`;
+    let p = aWrap(o.tail, P("M13,-6 C40,-2 46,-30 34,-46 C30,-32 27,-22 11,-18Z", F) + `<path d="M34,-46 C32,-38 30,-30 27,-25" fill="none" stroke="#dce6ef" stroke-width="1.2"/>`, "12px -12px");
     p += P("M-15,0 C-19,-16 -14,-34 0,-36 C14,-34 19,-16 15,0Z", F);
     p += `<path d="M-6,0 V-14 M6,0 V-14" stroke="#cfdbe6" stroke-width="1"/>` + E(-8, -1.5, 5.5, 3, F) + E(8, -1.5, 5.5, 3, F);
     p += P("M-8,-32 L-5,-24 L-2,-30 L0,-22 L2,-30 L5,-24 L8,-32Z", "#fff", NO);
@@ -8775,7 +8965,7 @@ function albumParentsWire(pl) {
     if (o.cape) p += P("M-30,-40 Q-44,-12 -40,0 L40,0 Q44,-12 30,-40Z", "#6a1b9a") + P("M-30,-40 Q-38,-16 -36,-2 L-26,-2 Q-28,-20 -22,-40Z", "#4a148c", NO);
     p += P("M-31,0 C-37,-22 -27,-56 0,-58 C27,-56 37,-22 31,0Z", F);
     p += `<path d="M-20,-12 q4,-2 8,0 M10,-18 q4,-2 8,0 M-6,-6 q4,-2 8,0" fill="none" stroke="#a96c45" stroke-width=".9"/>`;
-    p += P("M-26,-8 Q-40,-4 -38,3 Q-27,5 -18,0Z", F) + P(mirror("M-26,-8 Q-40,-4 -38,3 Q-27,5 -18,0Z"), F);
+    p += aWrap(o.flipL, P("M-26,-8 Q-40,-4 -38,3 Q-27,5 -18,0Z", F), "-20px -3px") + aWrap(o.flipR, P(mirror("M-26,-8 Q-40,-4 -38,3 Q-27,5 -18,0Z"), F), "20px -3px");
     if (o.cape) p += P("M-22,-44 Q0,-34 22,-44 L20,-38 Q0,-29 -20,-38Z", "#fff") + [-14, -7, 0, 7, 14].map(x => aC(x, -36.5, .7, OL)).join("");
     p += P("M-6,-24 L-7,-5 Q-4,-6 -2,-24Z", "#fffdf2") + P(mirror("M-6,-24 L-7,-5 Q-4,-6 -2,-24Z"), "#fffdf2");
     p += E(-7, -28, 9, 7, L) + E(7, -28, 9, 7, L) + [[-10, -29], [-6, -26], [-11, -25], [10, -29], [6, -26], [11, -25]].map(([x, y]) => aC(x, y, .6, "#7a4a2a")).join("");
@@ -8789,7 +8979,9 @@ function albumParentsWire(pl) {
     let p = "";
     if (o.fly) {
       const w = "M-17,-40 C-36,-62 -58,-54 -64,-40 C-55,-42 -51,-36 -57,-29 C-46,-32 -42,-25 -47,-19 C-34,-23 -25,-26 -17,-26Z";
-      p += P(w, F) + P(mirror(w), F) + [[-30, -44], [-40, -40], [-50, -40], [-36, -32], [-46, -30], [-28, -34]].map(([x, y]) => P(`M${x - 2},${y} l2,1.6 l2,-1.6`, "none", `stroke="${sp}" stroke-width="1"`) + P(`M${-x - 2},${y} l2,1.6 l2,-1.6`, "none", `stroke="${sp}" stroke-width="1"`)).join("");
+      const fm = [[-30, -44], [-40, -40], [-50, -40], [-36, -32], [-46, -30], [-28, -34]], mk = (x, y) => P(`M${x - 2},${y} l2,1.6 l2,-1.6`, "none", `stroke="${sp}" stroke-width="1"`);
+      if (o.wingL) p += aWrap(o.wingL, P(w, F) + fm.map(([x, y]) => mk(x, y)).join(""), "-17px -33px") + aWrap(o.wingR, P(mirror(w), F) + fm.map(([x, y]) => mk(-x, y)).join(""), "17px -33px");
+      else p += P(w, F) + P(mirror(w), F) + fm.map(([x, y]) => mk(x, y) + mk(-x, y)).join("");
     }
     p += P("M0,-62 C-22,-62 -26,-40 -24,-22 C-22,-6 -12,0 0,0 C12,0 22,-6 24,-22 C26,-40 22,-62 0,-62Z", F);
     if (!o.fly) p += P("M-22,-40 Q-30,-20 -17,-5 Q-15,-24 -19,-40Z", F) + P(mirror("M-22,-40 Q-30,-20 -17,-5 Q-15,-24 -19,-40Z"), F);
@@ -8804,7 +8996,7 @@ function albumParentsWire(pl) {
   }
   function husky(o = {}) {
     const C = "#6b7a8c", W = "#fff";
-    let p = P("M13,-14 C30,-14 35,-36 24,-40 C26,-30 20,-24 11,-22Z", C) + P("M26,-37 C27,-33 26,-30 24,-28", "none", `stroke="#fff" stroke-width="2"`);
+    let p = aWrap(o.tail, P("M13,-14 C30,-14 35,-36 24,-40 C26,-30 20,-24 11,-22Z", C) + P("M26,-37 C27,-33 26,-30 24,-28", "none", `stroke="#fff" stroke-width="2"`), "12px -18px");
     p += P("M-16,0 C-20,-18 -14,-36 0,-36 C14,-36 20,-18 16,0Z", C) + E(0, -15, 9, 13, W, NO);
     p += E(-8, -2.5, 6, 4, W) + E(8, -2.5, 6, 4, W);
     p += P("M-17,-58 L-21,-80 L-5,-66Z", C) + P("M-16,-62 L-18,-75 L-9,-66Z", "#ffc1cc", NO) + P(mirror("M-17,-58 L-21,-80 L-5,-66Z"), C) + P(mirror("M-16,-62 L-18,-75 L-9,-66Z"), "#ffc1cc", NO);
@@ -8831,7 +9023,7 @@ function albumParentsWire(pl) {
     `<path d="M-22,0 Q-16,-10 -10,-2 Q-4,-12 2,-2 Q8,-12 14,-2 Q19,-9 24,0Z" fill="#e9f7ff" stroke="#5aa9e6" stroke-width=".8"/>`);
   function snowman(o = {}) {
     let p = aL([[-13, -54], [-28, -64], [-33, -71]], "#7a4a22", 2.2) + aL([[-28, -64], [-34, -62]], "#7a4a22", 1.8) +
-      aL([[13, -54], [27, -62], [32, -70]], "#7a4a22", 2.2) + aL([[27, -62], [34, -60]], "#7a4a22", 1.8);
+      aWrap(o.arm, aL([[13, -54], [27, -62], [32, -70]], "#7a4a22", 2.2) + aL([[27, -62], [34, -60]], "#7a4a22", 1.8), "13px -54px");
     p += aC(0, -21, 22, "#fff", OUT) + aC(0, -52, 16, "#fff", OUT) + aC(0, -78, 13.5, "#fff", OUT);
     p += P("M-12,-30 Q-6,-12 8,-6", "none", `stroke="#d4e5f5" stroke-width="2.4" stroke-linecap="round"`) + P("M-9,-58 Q-6,-46 4,-42", "none", `stroke="#d4e5f5" stroke-width="2" stroke-linecap="round"`);
     p += [-58, -50, -42, -26, -16].map(y => aC(0, y, 1.9, OL)).join("");
@@ -8839,7 +9031,7 @@ function albumParentsWire(pl) {
     p += aEye(-5, -80, "#3a2a1a", .78) + aEye(5, -80, "#3a2a1a", .78) + P("M0,-75 L13,-72.5 L0,-71Z", "#ff8f1f") + blush(0, -73.5, 8.5, 1.9);
     p += [-4, -2, 0, 2, 4].map((x, i) => aC(x, -68.5 + (i === 0 || i === 4 ? -.8 : 0), .75, OL)).join("");
     if (o.crown) p += crown(0, -89, 8);
-    else p += P("M-11,-86 Q-11,-98 0,-98 Q11,-98 11,-86Z", "#1e88e5") + `<rect x="-12.5" y="-89" width="25" height="5" rx="2.5" fill="#fff" ${OUT}/>` + aC(0, -99, 3.4, "#fff", OUT);
+    else p += aWrap(o.hat, P("M-11,-86 Q-11,-98 0,-98 Q11,-98 11,-86Z", "#1e88e5") + `<rect x="-12.5" y="-89" width="25" height="5" rx="2.5" fill="#fff" ${OUT}/>` + aC(0, -99, 3.4, "#fff", OUT), "0px -87px");
     return p;
   }
 
@@ -8852,22 +9044,76 @@ function albumParentsWire(pl) {
   const branch = (y) => `<path d="M-5,${y} Q40,${y - 6} 125,${y + 4}" fill="none" stroke="${OL}" stroke-width="7" stroke-linecap="round"/><path d="M-5,${y} Q40,${y - 6} 125,${y + 4}" fill="none" stroke="#8a5a32" stroke-width="5" stroke-linecap="round"/>` +
     `<path d="M-5,${y - 3} Q40,${y - 9} 125,${y + 1}" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>` + `<path d="M92,${y + 1} l14,-14" stroke="#8a5a32" stroke-width="3" stroke-linecap="round"/>` +
     [[86, y - 12], [100, y - 16], [106, y - 6]].map(([x, yy]) => `<path d="M${x},${yy} l-4,-6 l6,3 l2,-6 l3,6 l6,-2 l-4,6Z" fill="#2e7d4f"/>`).join("");
-  const owlD = () => [aSky("#a6c9f2", "#eef6ff") + `<path d="M-5,70 L14,30 L32,70Z M90,74 L108,26 L126,74Z" fill="#2e7d4f" opacity=".45"/>` + flakes(17, 22, 2, 150) + branch(132), aEdge(G(60, 130, 1.4, owl()))];
+  const owlBack = () => aSky("#a6c9f2", "#eef6ff") + `<path d="M-5,70 L14,30 L32,70Z M90,74 L108,26 L126,74Z" fill="#2e7d4f" opacity=".45"/>` + flakes(17, 22, 2, 150) + branch(132);
+  const owlD = () => [owlBack(), aEdge(G(60, 130, 1.4, owl()))];
   const huskyD = () => [snowDay({ seed: 23, top: "#88d0ff" }) + shadow(60, 144, 26), aEdge(G(60, 144, 1.3, husky({ scarf: "#ff7043" })))];
   const sled = () => `<path d="M30,-2 H66 Q74,-2 72,-8" fill="none" stroke="${OL}" stroke-width="2.6" stroke-linecap="round"/><path d="M30,-2 H66 Q74,-2 72,-8" fill="none" stroke="#ffd54f" stroke-width="1.4" stroke-linecap="round"/>` +
     `<path d="M36,-2 V-8 M60,-2 V-8" stroke="${OL}" stroke-width="1.6"/>` + aR(32, -22, 38, 14, "#e53935", 'rx="3"') + `<path d="M34,-17 H68" stroke="#ffcdd2" stroke-width="1.2"/>`;
   const orcaD = () => [seaIce({ sea: 104 }), G(58, 104, 1, splash(0, 0, 1.1)) + aEdge(`<g transform="translate(58 82) rotate(-24) scale(1.15)">${orca()}</g>`)];
   const snowmanD = () => [snowDay({ seed: 29, sun: false, top: "#6fb6ea" }) + `<g>${flakes(31, 16, 4, 120, "lv-tw")}</g>` + shadow(60, 146, 26), aEdge(G(60, 146, 1.18, snowman()))];
+
+  /* ---- the own animations (played at holo; CSS an-wn-* in template.html) ---- */
+  const W = (cls, svg, origin) => aWrap(cls, svg, origin);
+  // falling snow: one card height of flakes drawn twice, the layer slides down by one card height (repeats exactly)
+  const fall = (seed, n, dur = 6) => { const f = flakes(seed, n, 0, 158); return `<g class="an-wn-fall" style="animation-duration:${dur}s">${f}<g transform="translate(0 -158)">${f}</g></g>`; };
+  // the sea with its waves rolling by (wider than the card, slides one wave length)
+  const movingSea = (y, c = "#2f8fd6", w = "#bfe6ff") => `<g class="an-wn-waves"><g transform="translate(-12 0)">${aWaves(y, c, w, 6, 144)}</g></g>`;
+  // a layer that slides one card width to the left, drawn twice side by side (repeats exactly)
+  const pass = (items, dur) => `<g class="an-wn-pass" style="animation-duration:${dur}s">${items}<g transform="translate(120 0)">${items}</g></g>`;
+  const pine = (x, y, s) => G(x, y, s, `<path d="M0,-30 L-9,-14 L-5,-14 L-12,0 L12,0 L5,-14 L9,-14Z" fill="#2e7d4f" ${OUT}/><path d="M0,-30 L-5,-21 Q0,-19 5,-21Z M-6,-12 Q0,-9 6,-12 L4,-14 H-4Z" fill="#fff"/>` +
+    `<rect x="-2" y="0" width="4" height="4" fill="#7a4a22" ${OUT}/>`);
+  const snowball = aC(31, -62, 4.6, "#fff", OUT) + aC(29.4, -63.6, 1.4, "#e3f0fb", NO);
+  const beachBall = `<g class="an-wn-bounce"><g class="an-wn-spin" style="transform-origin:-16px -52px">${aC(-16, -52, 6.5, "#ffeb3b", NO)}` +
+    `<path d="M-16,-58.5 A6.5,6.5 0 0 0 -16,-45.5 Q-21,-52 -16,-58.5Z" fill="#e53935"/><path d="M-16,-58.5 A6.5,6.5 0 0 1 -16,-45.5 Q-11,-52 -16,-58.5Z" fill="#1e88e5"/>` +
+    `${aC(-16, -52, 6.5, "none", OUT)}${aC(-18.5, -55, 1.3, "#fff", 'opacity=".8"')}</g></g>`;
+  const puffBall = (x, y, r) => aC(x, y, r, "#fff", `stroke="#a9c8e8" stroke-width=".8"`);
+  const anim = {
+    // the chick waddles to and fro across the snow, waving its flipper
+    penguin: () => [snowDay({ seed: 4 }) + fall(41, 18), W("an-wn-stroll", shadow(60, 144, 26) +
+      W("an-wn-waddle", aEdge(G(60, 144, 1.25, penguin({ hat: 1, wave: 1, flip: "an-wn-flip" }))), "60px 144px"))],
+    // the cub tosses a snowball high up and catches it again, watching it fly
+    bear: () => [snowDay({ seed: 7, top: "#9ad6ff" }) + fall(43, 14) + shadow(60, 142, 30),
+      aEdge(G(60, 142, 1.3, bear({ wave: 1, arm: "an-wn-throw", head: "an-wn-look", held: W("an-wn-toss", snowball) })))],
+    // the pup bounces a beach ball on its head, its tail flipper flapping, the waves rolling by
+    seal: () => [seaIce() + movingSea(96) + floe(60, 132, 50), aEdge(G(64, 128, 1.45, seal({ head: "an-wn-nod", tail: "an-wn-flap" }) + beachBall))],
+    // the fox crouches, pounces head first into a snow drift (tail wiggling), pops out and flips back
+    fox: () => [snowDay({ seed: 13, top: "#8fd0f0", sun: false }) + aSun(18, 22, 8) + fall(45, 12),
+      W("an-wn-pounce", aEdge(G(30, 144, 1, fox({ tail: "an-wn-swish" }))), "30px 106px"),
+      `<path d="M68,158 Q70,124 100,119 Q128,121 130,158Z" fill="#fff" ${OUT}/><path d="M76,150 Q90,136 116,138" fill="none" stroke="#d4e5f5" stroke-width="2.4" stroke-linecap="round"/>` +
+      W("an-wn-burst", [[-14, -4, 4], [-8, -12, 3.4], [0, -16, 4.2], [9, -12, 3.2], [15, -4, 3.8], [-20, 2, 2.6], [21, 2, 2.6]].map(([a, b, r]) => puffBall(100 + a, 120 + b, r)).join(""), "100px 122px")],
+    // the walrus claps its flippers, the floe rocking on the rolling waves
+    walrus: () => [seaIce({ sea: 104 }) + movingSea(104),
+      W("an-wn-floe", floe(60, 138, 52) + W("an-wn-hum", aEdge(G(60, 138, 1.35, walrus({ flipL: "an-wn-clapl", flipR: "an-wn-clapr" }))), "60px 138px"), "60px 142px")],
+    // the owlet spreads its wings, flaps up off the branch, glides and lands again
+    owl: () => [owlBack() + fall(47, 14, 7), W("an-wn-lift", aEdge(G(60, 130, 1.15, owl({ fly: 1, wingL: "an-wn-wingl", wingR: "an-wn-wingr" }))), "60px 130px")],
+    // the puppy pulls a sled with a waving penguin through the snow, the trees rushing past
+    husky: () => {
+      const trees = pine(14, 113, .7) + pine(56, 110, .55) + pine(98, 114, .8) +
+        [[8, 150], [44, 154], [70, 148], [104, 153]].map(([x, y]) => `<path d="M${x},${y} h12" stroke="#b8d6ee" stroke-width="2" stroke-linecap="round"/>`).join("");
+      const sledRide = `<g transform="translate(-26 140)">${G(51, -16, .42, penguin({ hat: 1, wave: 1, flip: "an-wn-flip" }))}${sled()}</g>`;
+      return [snowDay({ seed: 23, top: "#88d0ff" }) + pass(trees, 2.4),
+        W("an-wn-spray", [[4, 136, 2.6], [0, 132, 2], [8, 131, 1.8]].map(([x, y, r]) => puffBall(x, y, r)).join(""), "6px 136px") +
+        W("an-wn-sledbump", aEdge(sledRide), "24px 140px") + `<path d="M44,125 Q56,130 68,122" fill="none" stroke="${OL}" stroke-width="1.3"/>` +
+        W("an-wn-gallop", aEdge(G(80, 140, 1, husky({ scarf: "#ff7043", tail: "an-wn-wag" }))), "80px 140px")];
+    },
+    // the orca leaps out of the sea in a big arc and dives back in, splashing at both ends
+    orca: () => [seaIce({ sea: 104 }),
+      `<g class="an-wn-swimx"><g class="an-wn-swimy"><g class="an-wn-roll" style="transform-origin:60px 96px">${aEdge(`<g transform="translate(60 96) scale(1.15)">${orca()}</g>`)}</g></g></g>`,
+      movingSea(104) + W("an-wn-splash1", splash(26, 106, .9), "26px 106px") + W("an-wn-splash2", splash(94, 106, .9), "94px 106px")],
+    // the snowman lifts its hat to say hello and waves its stick arm
+    snowman: () => [snowDay({ seed: 29, sun: false, top: "#6fb6ea" }) + `<g>${flakes(31, 16, 4, 120, "lv-tw")}</g>` + fall(51, 12) + shadow(60, 146, 26),
+      aEdge(G(60, 146, 1.18, snowman({ arm: "an-wn-hello", hat: "an-wn-tip" })))],
+  };
   FAN.wsnow = [
-    ["Penguin chick", "A baby penguin in a red bobble hat, waving a flipper in the snow", penguinD],
-    ["Polar bear cub", "A fluffy white cub sitting in the snow and waving", bearD],
-    ["Seal pup", "A white fluffy seal pup on an ice floe", sealD],
-    ["Arctic fox", "A snow-white fox with a big bushy tail", foxD],
-    ["Walrus", "A chubby walrus with long tusks and a whiskery moustache", walrusD],
-    ["Snowy owl", "A round white owlet with yellow eyes on a snowy branch", owlD],
-    ["Husky puppy", "A grey and white husky puppy with blue eyes and an orange scarf", huskyD],
-    ["Orca", "A black and white orca leaping out of the icy sea", orcaD],
-    ["Snowman", "A snowman with a carrot nose and a red scarf; the snowflakes twinkle", snowmanD],
+    ["Penguin chick", "A baby penguin in a red bobble hat, waving a flipper in the snow", penguinD, anim.penguin],
+    ["Polar bear cub", "A fluffy white cub sitting in the snow and waving", bearD, anim.bear],
+    ["Seal pup", "A white fluffy seal pup on an ice floe", sealD, anim.seal],
+    ["Arctic fox", "A snow-white fox with a big bushy tail", foxD, anim.fox],
+    ["Walrus", "A chubby walrus with long tusks and a whiskery moustache", walrusD, anim.walrus],
+    ["Snowy owl", "A round white owlet with yellow eyes on a snowy branch", owlD, anim.owl],
+    ["Husky puppy", "A grey and white husky puppy with blue eyes and an orange scarf", huskyD, anim.husky],
+    ["Orca", "A black and white orca leaping out of the icy sea", orcaD, anim.orca],
+    ["Snowman", "A snowman with a carrot nose and a red scarf; the snowflakes twinkle", snowmanD, anim.snowman],
   ];
   // holo: penguin family under the northern lights; the cub grown into a king with crown and cape at sunset; a grey seal mum
   // and her pup under the moon; the fox and its kit under the northern lights; the walrus king; the owl flying past the moon
@@ -9017,16 +9263,16 @@ function albumParentsWire(pl) {
       `<path d="M54,51 Q60,56 66,51" fill="none" stroke="${OL}" stroke-width="1.2" stroke-linecap="round"/>`;
   }
   // a high-domed tortoise, raised scutes, stubby elephant legs with toenails, its head out on a wrinkly neck (card coords)
-  function tortoise() {
+  function tortoise(o = {}) {
     const S = "#a9793f", S2 = "#c99a55", SD = "#7a5324", SK = "#c9a463", SKd = "#a8844a";
     const shell = "M20,116 Q18,66 57,63 Q96,66 94,116Z", id = uid("sh");
     const hex = (x, y, r) => `<polygon points="${[0, 1, 2, 3, 4, 5].map(i => { const a = Math.PI / 3 * i; return `${f1(x + r * Math.cos(a))},${f1(y + r * .86 * Math.sin(a))}`; }).join(" ")}" fill="${S2}" stroke="${SD}" stroke-width="1.3" stroke-linejoin="round"/>`;
     const leg = (x, c) => `<path d="M${x - 7},106 Q${x - 8},122 ${x - 9},130 Q${x},134 ${x + 9},130 Q${x + 8},122 ${x + 7},106Z" fill="${c}" ${OUT}/>` +
       [-5, 0, 5].map(d => `<ellipse cx="${x + d}" cy="130" rx="2" ry="1.4" fill="#f4ead2" ${OUT}/>`).join("");
-    let s = leg(48, SKd) + leg(70, SKd);
+    let s = aWrap(o.legA, leg(48, SKd), "48px 106px") + aWrap(o.legB, leg(70, SKd), "70px 106px");
     s += `<path d="M21,112 L12,116 L21,117Z" fill="${SK}" ${OUT}/>`;
     s += `<path d="M84,108 Q90,96 98,92 L106,98 Q98,104 94,114Z" fill="${SK}" ${OUT}/><path d="M89,102 q4,1 6,-2 M91,107 q4,1 6,-2" fill="none" stroke="${SKd}" stroke-width="1" stroke-linecap="round"/>`;
-    s += leg(30, SK) + leg(84, SK);
+    s += aWrap(o.legB, leg(30, SK), "30px 106px") + aWrap(o.legA, leg(84, SK), "84px 106px");
     s += `<defs><clipPath id="${id}"><path d="${shell}"/></clipPath></defs><path d="${shell}" fill="${S}"/>`;
     s += `<g clip-path="url(#${id})">${hex(57, 80, 12)}${hex(36, 92, 11)}${hex(78, 92, 11)}${hex(57, 103, 11)}${hex(18, 104, 10)}${hex(96, 104, 10)}${hex(40, 70, 9)}${hex(74, 70, 9)}` +
       [[57, 80, 6], [36, 92, 5], [78, 92, 5], [57, 103, 5]].map(([x, y, r]) => `<ellipse cx="${x}" cy="${y}" rx="${r}" ry="${f1(r * .8)}" fill="#ddb470" opacity=".8"/>`).join("") +
@@ -9034,7 +9280,7 @@ function albumParentsWire(pl) {
       `<path d="M18,110 H96 V118 H18Z" fill="${SD}"/>${[24, 34, 44, 54, 64, 74, 84].map(x => `<path d="M${x},110 V117" stroke="#5a3b18" stroke-width="1"/>`).join("")}</g>`;
     s += `<path d="${shell}" fill="none" ${OUT} stroke-width="1.4"/>`;
     s += `<path d="M18,115 Q57,123 96,115 L96,119 Q57,127 18,119Z" fill="#e8d49a" ${OUT}/>`;
-    s += `<ellipse cx="103" cy="88" rx="12" ry="11" fill="${SK}" ${OUT}/>` + eyes(99, 108, 86, "#4a2a12", .8) + blush(97, 93, 2) + blush(111, 93, 1.8) + smile(104, 94, 2.4);
+    s += aWrap(o.head, `<ellipse cx="103" cy="88" rx="12" ry="11" fill="${SK}" ${OUT}/>` + eyes(99, 108, 86, "#4a2a12", .8) + blush(97, 93, 2) + blush(111, 93, 1.8) + smile(104, 94, 2.4), "92px 100px");
     return s;
   }
   // a sleek crested roadrunner mid-dash: long tail up, long legs, long beak
@@ -9054,22 +9300,24 @@ function albumParentsWire(pl) {
       eyes(88.5, 98.5, 52, "#2a1a0a", .9) + blush(101, 60, 1.8);
   }
   // a jerboa: huge ears, giant hind feet, tiny front paws, a long tail with a tuft
+  // a chibi jerboa sitting up on its long hind feet: round body, big head, huge pink ears, tiny paws holding a seed, the long
+  // thin tail curling behind with its black-and-white tuft
   function jerboa() {
-    const C = "#e8c48e", W = "#fff6e6", P = "#ffb3c1";
-    const ear = (cx, cy, rot) => `<ellipse cx="${cx}" cy="${cy}" rx="8.5" ry="19" fill="${C}" ${OUT} transform="rotate(${rot} ${cx} ${cy})"/>` +
-      `<ellipse cx="${cx}" cy="${cy + 2}" rx="4.8" ry="14" fill="${P}" transform="rotate(${rot} ${cx} ${cy})"/>`;
-    return aL([[46, 110], [30, 119], [16, 113], [10, 99], [12, 86]], C, 2.8) +
-      `<ellipse cx="12" cy="80" rx="5" ry="8" fill="${W}" ${OUT}/><path d="M7.4,77 Q12,68 16.6,77Z" fill="${OL}"/>` +
-      ear(62, 34, -20) +
-      aP("M46,124 L86,129 Q93,132 87,137 L44,135 Q37,130 46,124Z", C) + `<path d="M84,131 l3,3 M80,131 l2,4" stroke="${OL}" stroke-width=".9"/>` +
-      `<ellipse cx="52" cy="112" rx="16" ry="14" fill="${C}" ${OUT}/>` +
-      `<ellipse cx="64" cy="96" rx="21" ry="23" fill="${C}" ${OUT}/><ellipse cx="72" cy="102" rx="11" ry="15" fill="${W}"/>` +
-      `<path d="M44,104 Q48,98 56,100" fill="none" stroke="${OL}" stroke-width="1" opacity=".5"/>` +
-      ear(84, 32, 14) +
-      aP("M56,62 Q56,46 74,46 Q90,46 94,58 Q101,64 99,71 Q95,80 80,80 Q58,80 56,62Z", C) +
-      aC(98.5, 67, 2.2, P, OUT) + `<path d="M95,72 l9,-1 M95,74 l9,2 M94,76 l7,4" stroke="#8a6a4a" stroke-width=".7" stroke-linecap="round"/>` +
-      `<ellipse cx="80" cy="96" rx="3.2" ry="2.4" fill="${C}" ${OUT}/><ellipse cx="86" cy="97" rx="3.2" ry="2.4" fill="${C}" ${OUT}/>` +
-      eyes(72, 85, 61, "#3a2510", 1.0) + blush(66, 71, 2.2) + blush(91, 72, 1.8) + smile(89, 74.5, 2.4);
+    const C = "#e8c48e", W = "#fff6e6", P = "#ffb3c1", D = "#c9a06a";
+    const ear = (cx, cy, rot) => `<ellipse cx="${cx}" cy="${cy}" rx="7.5" ry="20" fill="${C}" ${OUT} transform="rotate(${rot} ${cx} ${cy})"/>` +
+      `<ellipse cx="${cx}" cy="${cy + 2}" rx="4.2" ry="15" fill="${P}" transform="rotate(${rot} ${cx} ${cy})"/>`;
+    return `<path d="M56,120 Q30,132 20,114 Q12,98 22,84" fill="none" stroke="${OL}" stroke-width="4.6" stroke-linecap="round"/><path d="M56,120 Q30,132 20,114 Q12,98 22,84" fill="none" stroke="${C}" stroke-width="2.6" stroke-linecap="round"/>` +
+      `<ellipse cx="24" cy="78" rx="5" ry="8.5" fill="${W}" ${OUT} transform="rotate(16 24 78)"/><path d="M19.6,76 Q22,68 28.6,73 Q25,77 19.6,76Z" fill="${OL}"/>` +
+      aP("M58,124 L92,127 Q99,130 93,135 L55,134 Q49,129 58,124Z", C) + `<path d="M90,129 l3,3 M86,129 l2,4" stroke="${OL}" stroke-width=".9"/>` +
+      `<ellipse cx="60" cy="114" rx="13" ry="14" fill="${C}" ${OUT}/>` +
+      `<ellipse cx="70" cy="102" rx="17" ry="21" fill="${C}" ${OUT}/><ellipse cx="73" cy="106" rx="9.5" ry="14" fill="${W}"/>` +
+      `<path d="M50,110 Q54,104 62,106" fill="none" stroke="${OL}" stroke-width="1" opacity=".45"/>` +
+      ear(60, 36, -16) + ear(84, 36, 16) +
+      aC(72, 68, 18, C, OUT) + `<ellipse cx="72" cy="76" rx="9" ry="6.5" fill="${W}"/>` +
+      aC(72, 74.5, 2, P, OUT) + `<path d="M65,76 l-9,-1 M65,78 l-9,2 M79,76 l9,-1 M79,78 l9,2" stroke="#8a6a4a" stroke-width=".7" stroke-linecap="round"/>` +
+      `<ellipse cx="73" cy="95" rx="3.4" ry="4.4" fill="#a1683a" ${OUT}/>` + `<ellipse cx="67" cy="96" rx="3.2" ry="2.4" fill="${C}" ${OUT}/><ellipse cx="79" cy="96" rx="3.2" ry="2.4" fill="${C}" ${OUT}/>` +
+      eyes(65, 79, 67, "#3a2510", 1.0) + blush(60, 74, 2.2) + blush(84, 74, 2.2) + smile(72, 79, 2.2) +
+      `<path d="M56,58 Q60,52 66,52" fill="none" stroke="${D}" stroke-width="1" opacity=".6"/>`;
   }
   function cactusFace(o = {}) {
     const C = o.col || "#5fae5a", D = o.dark || "#448a46";
@@ -9104,21 +9352,50 @@ function albumParentsWire(pl) {
   const cactA = () => [dunes({ sun: [102, 20, 10], c1: "#f6d79a" }), aEdge(at(58, 100, 1.9, cactusFace()))];
   const jerboaA = () => [oasis(), aEdge(jerboa())];
 
+  /* ---- the own animations (played at holo; CSS an-wd-* in template.html) ---- */
+  const G = (cls, svg, origin) => aWrap(cls, svg, origin);
+  const travel = (cls, items, dur) => items.map(([svg, d]) => `<g class="${cls}" style="animation-delay:-${(d * dur).toFixed(2)}s">${svg}</g>`).join("");
+  const twinkle = pts => pts.map(([x, y, r], i) => aSpark(x, y, r, "#fff", "lv-tw", `animation-delay:-${(i * .4).toFixed(2)}s`)).join("");
+  const anim = {
+    // the camel plods along: it rocks with each step while little cacti and tufts pass by
+    camel: () => [dunes({ sun: [58, 20, 9] }) + travel("an-wd-pass", [[bgCactus(130, 128, .7), 0], [tuft(130, 150), .33], [bgCactus(130, 112, .5, "#5e9e5f"), .66]], 4.5),
+      G("an-wd-plod", aEdge(camel()), "60px 140px")],
+    // the fennec fox tilts its head, listening, as the first stars come out over the sunset
+    fennec: () => [sunsetDunes() + twinkle([[18, 20, 3], [100, 16, 2.6], [40, 40, 2.2], [104, 60, 2]]), G("an-wd-listen", aEdge(at(52, 98, 1.6, fennec())), "52px 130px")],
+    // the meerkat pops up on lookout and looks left, then right
+    meerkat: () => [mesas({ sun: [100, 20] }) + rock, G("an-wd-pop", G("an-wd-look", aEdge(at(60, 78, 1.75, meerkat())), "60px 100px"))],
+    // the friendly scorpion scuttles from side to side, its tail swaying
+    scorpion: () => [dunes({ top: "#ffd9a0", bot: "#f3b35a", tufts: false, cactus: [106, 148, .8] }), G("an-wd-scuttle", G("an-wd-wobble", aEdge(at(58, 94, 2, scorpion())), "58px 110px"))],
+    // the gecko scurries up the warm rock wall and off the top, then comes up again from below
+    gecko: () => [rockWall(), G("an-wd-climb", G("an-wd-wiggle", aEdge(gecko()), "60px 80px"))],
+    // the tortoise walks, slow and steady: its legs step in turn and its head nods along
+    tortoise: () => [dunes({ cactus: [104, 84, 1.5] }) + aC(104, 46, 3.6, "#ff7aa8", OUT) + aC(104, 46, 1.5, "#ffe36e"),
+      aEdge(at(-10, -4, 1.08, tortoise({ legA: "an-wd-step", legB: "an-wd-step2", head: "an-wd-nod" })))],
+    // the roadrunner dashes: the road rushes past under it, dust puffing behind
+    roadrunner: () => [mesas({ road: true }) + `<rect y="126" width="120" height="16" fill="#8f969c"/>` +
+      G("an-wd-road", [0, 1, 2, 3, 4, 5, 6, 7].map(i => `<rect x="${4 + i * 32}" y="133" width="16" height="2.6" fill="#f4e27a"/>`).join("")) + speed,
+      G("an-wd-dash", aEdge(roadrunner())), travel("an-wd-dust", [[aC(40, 126, 5, "#e8d7b8", `opacity=".9"`), 0], [aC(34, 122, 4, "#e8d7b8", `opacity=".9"`), .5]], .8)],
+    // the cactus dances, swaying on its roots, its pink flower opening and closing
+    cactus: () => [dunes({ sun: [102, 20, 10], c1: "#f6d79a" }), G("an-wd-dance", aEdge(at(58, 100, 1.9, cactusFace())), "58px 138px")],
+    // the jerboa hops high on its big feet, the tufted tail swinging
+    jerboa: () => [oasis(), G("an-wd-hop", aEdge(jerboa()), "72px 134px")],
+  };
+
   FAN.wdesert = [
-    ["Camel", "A friendly two-humped camel with a red blanket, between the dunes", camelA],
-    ["Fennec fox", "Big ears, tiny fox, under a desert sunset", fennecA],
-    ["Meerkat", "Standing tall on lookout duty on a rocky mesa (it bobs up)", meerkatA],
-    ["Friendly scorpion", "Claws up and smiling, not scary at all", scorpA],
-    ["Gecko", "A spotty green gecko clinging to a warm rock wall with its sticky toes", geckoA],
-    ["Desert tortoise", "Slow and steady by a cactus", tortA],
-    ["Roadrunner", "A crested roadrunner dashing down the desert road", roadA],
-    ["Cactus with a face", "A round cactus with a little pink flower", cactA],
-    ["Jerboa", "A tiny hopping mouse with huge ears, big feet and a tufted tail, by the oasis", jerboaA],
+    ["Camel", "A friendly two-humped camel with a red blanket, between the dunes", camelA, anim.camel],
+    ["Fennec fox", "Big ears, tiny fox, under a desert sunset", fennecA, anim.fennec],
+    ["Meerkat", "Standing tall on lookout duty on a rocky mesa (it bobs up)", meerkatA, anim.meerkat],
+    ["Friendly scorpion", "Claws up and smiling, not scary at all", scorpA, anim.scorpion],
+    ["Gecko", "A spotty green gecko clinging to a warm rock wall with its sticky toes", geckoA, anim.gecko],
+    ["Desert tortoise", "Slow and steady by a cactus", tortA, anim.tortoise],
+    ["Roadrunner", "A crested roadrunner dashing down the desert road", roadA, anim.roadrunner],
+    ["Cactus with a face", "A round cactus with a little pink flower", cactA, anim.cactus],
+    ["Jerboa", "A tiny hopping mouse with huge ears, big feet and a tufted tail, by the oasis", jerboaA, anim.jerboa],
   ];
 })();
 
 /* Sticker book world page "Volcano" (the 🌋 world of the path): 9 chibi dinosaurs and the friendly volcano; sets FAN.wlava.
-   Normal = a sunny day by the volcano; holo (5 copies) = the same friend grown up / glowing in a night eruption scene.
+   Normal = a sunny day by the volcano; holo = the own animations (anim below; night() is unused, kept for later).
    The egg (8) is the living sticker: it wobbles in its nest and the baby peeks out (lv-swing on an upside-down group, so
    the egg rocks on its bottom, + lv-wink). */
 (() => {
@@ -9168,7 +9445,7 @@ function albumParentsWire(pl) {
     s += `<path d="M0,108 Q30,100 60,106 Q90,112 120,102 V158 H0Z" fill="#9ccc65"/>` +
       `<path d="M0,126 Q34,118 64,124 Q94,130 120,120 V158 H0Z" fill="#c8a165"/>`;
     if (o.lava !== false) s += `<path d="M120,128 Q96,134 80,146 Q70,154 60,158 H70 Q80,150 90,144 Q104,136 120,134Z" fill="#ff7043"/><path d="M120,130 Q98,136 84,146" fill="none" stroke="#ffeb3b" stroke-width="1.2"/>`;
-    s += rock(10, 146, 6) + rock(108, 152, 5, "#795548");
+    if (o.rocks !== false) s += rock(10, 146, 6) + rock(108, 152, 5, "#795548");
     if (o.plants !== false) s += fern(8, 112, .9) + palm(112, 108, .8, true) + fern(20, 124, .7, "#66bb6a");
     return s;
   }
@@ -9192,20 +9469,23 @@ function albumParentsWire(pl) {
   // T-Rex: o.col, o.belly, o.adult (longer snout, teeth, back spikes, roaring happily)
   function trex(o = {}) {
     const c = o.col || "#7cc552", b = o.belly || "#fff3c4", dk = o.dark || "#4e9a2a", s = [];
-    s.push(P("M-8,-34 Q-30,-38 -50,-16 Q-28,-24 -6,-18Z", c));                                     // tail
+    s.push(aWrap(o.tail, P("M-8,-34 Q-30,-38 -50,-16 Q-28,-24 -6,-18Z", c), "-8px -26px"));          // tail
     if (o.adult) s.push([[-30, -32], [-20, -38], [-10, -44], [0, -50]].map(([x, y]) => P(`M${x - 4},${y + 2} L${x},${y - 6} L${x + 4},${y + 1}Z`, "#ffb300")).join(""));
     s.push(P("M-14,-14 Q-16,-4 -12,0 H-1 Q0,-6 -2,-14Z", dk), E(-7, -1, 7, 3, dk), toes([[-11, -1], [-7, .5], [-3, 0]]));   // back leg
     s.push(E(-1, -30, 19, 18, c));                                                                 // body
     s.push(`<ellipse cx="6" cy="-26" rx="10" ry="13" fill="${b}"/>`);
     s.push(P("M2,-16 Q2,-4 6,0 H17 Q17,-8 14,-16Z", c), E(11, -1, 7.5, 3, c), toes([[7, -1], [11, .6], [15, 0]]));   // front leg
     s.push(spots([[-8, -38, 3], [-14, -28, 2.4], [-2, -44, 2]], dk));
+    s.push(P("M-6,-44 Q-2,-58 10,-62 L30,-58 Q22,-46 14,-34 Q4,-34 -6,-44Z", c), `<path d="M8,-52 Q12,-46 16,-40" fill="none" stroke="${b}" stroke-width="5" stroke-linecap="round" opacity=".8"/>`);   // neck
     // head (big, round, a short snout)
     const mouth = o.adult ? `<path d="M18,-58 Q30,-50 44,-60 Q42,-52 30,-48 Q20,-50 18,-58Z" fill="#c62828" ${OUT}/>` + P("M24,-56 l1.4,3 l1.4,-2.6 M30,-55.4 l1.4,3 l1.4,-3 M36,-56.4 l1.2,2.8 l1.4,-3", "#fff", 'stroke-width=".6"') +
       `<ellipse cx="31" cy="-51" rx="5" ry="1.8" fill="#ff8a80"/>` : smile("M20,-58 Q30,-52 40,-60") + P("M26,-56 l1.4,2.6 l1.4,-2.3Z M33,-56.6 l1.4,2.6 l1.4,-2.6Z", "#fff", 'stroke-width=".6"');
+    const h0 = s.length;
     s.push(P("M2,-62 Q0,-82 20,-84 Q38,-85 44,-72 Q48,-62 42,-58 Q30,-54 18,-56 Q6,-54 2,-62Z", c));
     s.push(`<path d="M6,-74 Q10,-82 20,-82" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity=".45"/>`);
     s.push(mouth, aC(41, -71, .9, OL), aEye(18, -69, o.iris || "#6d4c41", 1.15), blush(28, -62));
     if (!o.adult) s.push(aEye(9, -69.5, o.iris || "#6d4c41", .8).replace(/#fff"/, '#fff"'));
+    if (o.head) s.push(aWrap(o.head, s.splice(h0).join("") + (o.headX || ""), "12px -58px"));
     // tiny arms
     s.push(aL([[16, -34], [22, -32], [24, -36]], c, 3.2));
     return s.join("");
@@ -9214,11 +9494,11 @@ function albumParentsWire(pl) {
   function trike(o = {}) {
     const c = o.col || "#64b5f6", fr = o.frill || "#ff8a65", hn = o.gold ? "#ffd54f" : "#fff8e1", dk = o.dark || "#1e88e5", s = [];
     s.push(P("M-24,-22 Q-40,-20 -46,-8 Q-34,-14 -22,-12Z", c));
-    s.push(P("M-22,-12 V0 H-12 V-12Z", dk), P("M8,-12 V0 H18 V-12Z", dk));                         // far legs
+    s.push(aWrap(o.legA, P("M-22,-12 V0 H-12 V-12Z", dk) + P("M8,-12 V0 H18 V-12Z", dk)));          // far legs
     s.push(E(-4, -22, 26, 16, c));
     s.push(`<path d="M-24,-16 Q-4,-6 18,-16 Q16,-8 -2,-7 Q-20,-8 -24,-16Z" fill="#fff" opacity=".35"/>`);
     s.push(spots([[-14, -30, 3.4], [-2, -33, 2.6], [-20, -22, 2.4], [8, -30, 2.2]], dk));
-    s.push(P("M-16,-12 V2 H-5 V-12Z", c), P("M2,-12 V2 H13 V-12Z", c), toes([[-14, 1], [-10.5, 1.6], [-7, 1], [4, 1], [7.5, 1.6], [11, 1]]));
+    s.push(aWrap(o.legB, P("M-16,-12 V2 H-5 V-12Z", c) + P("M2,-12 V2 H13 V-12Z", c) + toes([[-14, 1], [-10.5, 1.6], [-7, 1], [4, 1], [7.5, 1.6], [11, 1]])));
     // frill: a scalloped half disc behind the head
     const fx = 22, fy = -36;
     s.push(`<path d="${[...Array(9)].map((_, i) => { const a = Math.PI * (.78 + i * .19); return `${i ? "L" : "M"}${f1(fx + 21 * Math.cos(a))},${f1(fy + 21 * Math.sin(a))}`; }).join(" ")} L${fx + 8},${fy + 8}Z" fill="${fr}" ${OUT}/>`);
@@ -9239,8 +9519,8 @@ function albumParentsWire(pl) {
     const plate = (x, y, h, r, i) => `<path d="M${x - 5},${y} Q${x - 6},${y - h * .6} ${x},${y - h} Q${x + 6},${y - h * .6} ${x + 5},${y}Z" fill="${Array.isArray(pl) ? pl[i % pl.length] : pl}" ${OUT} transform="rotate(${r} ${x} ${y})"/>`;
     if (o.glow) s.push(`<g opacity=".55">${[[-26, -24, 12], [-16, -34, 17], [-4, -38, 19], [8, -36, 16], [18, -28, 12]].map(([x, y, h]) => aC(x, y - h * .6, h * .55, "#ffeb3b")).join("")}</g>`);
     // tail with spikes (left)
-    s.push(P("M-28,-20 Q-44,-24 -52,-36 Q-46,-18 -26,-10Z", c));
-    s.push(P("M-48,-30 L-56,-40 L-50,-28Z", "#fff8e1"), P("M-50,-34 L-50,-46 L-46,-34Z", "#fff8e1"));
+    s.push(aWrap(o.tail, P("M-28,-20 Q-44,-24 -52,-36 Q-46,-18 -26,-10Z", c) +
+      P("M-48,-30 L-56,-40 L-50,-28Z", "#fff8e1") + P("M-50,-34 L-50,-46 L-46,-34Z", "#fff8e1"), "-27px -15px"));
     s.push(P("M-22,-12 V0 H-12 V-12Z", dk), P("M6,-12 V0 H16 V-12Z", dk));
     s.push([[-26, -24, 12, -40], [-16, -32, 17, -20], [-4, -35, 19, 0], [8, -33, 16, 18], [18, -26, 12, 36]].map(([x, y, h, r], i) => plate(x, y, h, r, i)).join(""));
     s.push(P("M-30,-14 Q-30,-38 -4,-38 Q20,-38 26,-20 Q28,-10 16,-10 H-24 Q-30,-10 -30,-14Z", c));
@@ -9248,8 +9528,10 @@ function albumParentsWire(pl) {
     s.push(spots([[-12, -28, 3], [2, -30, 2.4], [-20, -20, 2.2]], dk));
     s.push(P("M-18,-12 V2 H-7 V-12Z", c), P("M2,-12 V2 H13 V-12Z", c), toes([[-16, 1], [-12.5, 1.6], [-9, 1], [4, 1], [7.5, 1.6], [11, 1]]));
     // small head low at the right on a short neck
+    const h0 = s.length;
     s.push(P("M20,-24 Q30,-30 36,-30 Q48,-30 50,-21 Q50,-13 40,-12 Q30,-12 22,-14Z", c));
     s.push(aEye(38, -23, o.iris || "#5d4037", .85), blush(44, -16, 2), smile("M41,-15 Q45,-13 48,-16"), aC(48, -22, .7, OL));
+    if (o.head) s.push(aWrap(o.head, s.splice(h0).join("") + (o.headX || ""), "22px -19px"));
     return s.join("");
   }
   // brachiosaurus: tall neck up to the right, small head near the top (local height about 120)
@@ -9257,24 +9539,27 @@ function albumParentsWire(pl) {
     const c = o.col || "#9575cd", dk = o.dark || "#7e57c2", b = o.belly || "#d1c4e9", s = [];
     s.push(P("M-24,-30 Q-42,-30 -50,-14 Q-38,-22 -22,-20Z", c));
     s.push(P("M-22,-24 V0 H-11 V-24Z", dk), P("M6,-26 V0 H17 V-26Z", dk));
-    s.push(P("M2,-46 Q8,-80 22,-96 Q28,-102 34,-96 Q24,-78 22,-44Z", c));                           // neck
-    s.push(`<path d="M8,-50 Q14,-78 26,-92" fill="none" stroke="${b}" stroke-width="4" stroke-linecap="round" opacity=".7"/>`);
+    const nsp = [[14, -66, 2], [18, -80, 1.8]], NECK = "12px -44px";
+    s.push(aWrap(o.neck, P("M2,-46 Q8,-80 22,-96 Q28,-102 34,-96 Q24,-78 22,-44Z", c) +                // neck
+      `<path d="M8,-50 Q14,-78 26,-92" fill="none" stroke="${b}" stroke-width="4" stroke-linecap="round" opacity=".7"/>` + (o.neck ? spots(nsp, dk) : ""), NECK));
     s.push(E(-4, -34, 26, 17, c));
     s.push(`<ellipse cx="0" cy="-24" rx="18" ry="6" fill="${b}" opacity=".7"/>`);
-    s.push(spots([[-14, -42, 3.2], [-2, -45, 2.4], [-22, -34, 2.6], [14, -66, 2], [18, -80, 1.8]], dk));
+    s.push(spots([[-14, -42, 3.2], [-2, -45, 2.4], [-22, -34, 2.6], ...(o.neck ? [] : nsp)], dk));
     s.push(P("M-17,-26 V2 H-5 V-26Z", c), P("M1,-26 V2 H13 V-26Z", c), toes([[-15, 1], [-11, 1.6], [-7, 1], [3, 1], [7, 1.6], [11, 1]]));
     // head, with a bump on top
+    const h0 = s.length;
     s.push(P("M18,-100 Q16,-112 28,-114 Q34,-120 40,-112 Q50,-110 50,-102 Q50,-94 40,-94 H26 Q18,-94 18,-100Z", c));
     s.push(aEye(32, -105, o.iris || "#4e342e", .9), blush(40, -98, 2), smile("M38,-97 Q44,-95 48,-99"), aC(48, -106, .7, OL));
     if (o.leaf) s.push(`<path d="M48,-99 Q56,-104 60,-98 Q54,-94 48,-99Z" fill="#66bb6a" ${OUT}/>`);
+    if (o.neck) s.push(aWrap(o.neck, aWrap(o.head, s.splice(h0).join("") + (o.headX || ""), "26px -96px"), NECK));
     return s.join("");
   }
   // pterodactyl: wings spread, crest, beak; origin = middle of the body
   function ptero(o = {}) {
     const c = o.col || "#ff8a65", w = o.wing || "#ffccbc", dk = o.dark || "#e64a19", s = [];
     const up = o.up ? -14 : 0;
-    s.push(P(`M-6,-2 Q-24,${-18 + up} -50,${-16 + up} Q-40,${-6 + up / 2} -44,${2 + up / 3} Q-32,0 -28,8 Q-16,4 -6,6Z`, c), P(`M-8,0 Q-24,${-12 + up} -44,${-12 + up} Q-30,${-2 + up / 2} -32,4 Q-18,2 -8,4Z`, w, 'stroke="none"'));
-    s.push(P(`M6,-2 Q24,${-18 + up} 50,${-16 + up} Q40,${-6 + up / 2} 44,${2 + up / 3} Q32,0 28,8 Q16,4 6,6Z`, c), P(`M8,0 Q24,${-12 + up} 44,${-12 + up} Q30,${-2 + up / 2} 32,4 Q18,2 8,4Z`, w, 'stroke="none"'));
+    s.push(aWrap(o.wingL, P(`M-6,-2 Q-24,${-18 + up} -50,${-16 + up} Q-40,${-6 + up / 2} -44,${2 + up / 3} Q-32,0 -28,8 Q-16,4 -6,6Z`, c) + P(`M-8,0 Q-24,${-12 + up} -44,${-12 + up} Q-30,${-2 + up / 2} -32,4 Q-18,2 -8,4Z`, w, 'stroke="none"'), "-6px 2px"));
+    s.push(aWrap(o.wingR, P(`M6,-2 Q24,${-18 + up} 50,${-16 + up} Q40,${-6 + up / 2} 44,${2 + up / 3} Q32,0 28,8 Q16,4 6,6Z`, c) + P(`M8,0 Q24,${-12 + up} 44,${-12 + up} Q30,${-2 + up / 2} 32,4 Q18,2 8,4Z`, w, 'stroke="none"'), "6px 2px"));
     s.push(aL([[-5, 12], [-7, 18]], dk, 2.4), aL([[5, 12], [7, 18]], dk, 2.4));
     s.push(E(0, 2, 10, 13, c), `<ellipse cx="0" cy="6" rx="6" ry="8" fill="#fff3e0"/>`);
     // head: round, a long crest back, a long beak to the right
@@ -9288,8 +9573,8 @@ function albumParentsWire(pl) {
   // ankylosaurus: low and wide, armoured back with studs, side spikes, club tail
   function anky(o = {}) {
     const c = o.col || "#d7a55a", ar = o.armor || "#a1693a", st = o.stud || "#ffe0b2", s = [];
-    s.push(P("M-28,-14 Q-42,-16 -48,-22 Q-44,-12 -28,-8Z", c));
-    s.push(E(-50, -23, 6, 4.6, ar), P("M-55,-23 l-3,-2 l1,4Z M-50,-27.5 l0,-3 l3,2.4Z", st));
+    s.push(aWrap(o.tail, P("M-28,-14 Q-42,-16 -48,-22 Q-44,-12 -28,-8Z", c) +
+      E(-50, -23, 6, 4.6, ar) + P("M-55,-23 l-3,-2 l1,4Z M-50,-27.5 l0,-3 l3,2.4Z", st), "-28px -11px"));
     s.push(P("M-22,-10 V0 H-12 V-10Z", ar), P("M8,-10 V0 H18 V-10Z", ar));
     s.push(P("M-34,-12 Q-34,-36 -4,-38 Q26,-38 28,-14 Q28,-8 20,-8 H-28 Q-34,-8 -34,-12Z", ar));
     const R = [[-24, -18], [-16, -26], [-6, -30], [6, -28], [16, -22], [-26, -12], [-14, -16], [-2, -20], [10, -16], [20, -14], [-6, -12], [6, -10]];
@@ -9306,10 +9591,10 @@ function albumParentsWire(pl) {
     const c = o.col || "#4db6ac", f = o.feather || ["#ff7043", "#ffca28", "#ab47bc"], dk = o.dark || "#00897b", s = [];
     s.push(P("M-10,-34 Q-34,-38 -54,-44 Q-34,-28 -10,-24Z", c));
     s.push(P("M-46,-44 Q-56,-50 -60,-46 Q-54,-42 -46,-40Z", f[0]), P("M-50,-40 Q-60,-40 -62,-36 Q-56,-34 -48,-38Z", f[1]));
-    s.push(aL([[-6, -20], [-14, -10], [-24, -4]], dk, 4), E(-26, -3, 4.8, 2.4, dk));               // back leg kicking back
+    s.push(aWrap(o.legB, aL([[-6, -20], [-14, -10], [-24, -4]], dk, 4) + E(-26, -3, 4.8, 2.4, dk), "-6px -21px"));   // back leg kicking back
     s.push(E(-2, -30, 14, 10, c, 'transform="rotate(-20 -2 -30)"'));
     s.push(`<ellipse cx="4" cy="-27" rx="7" ry="5.5" fill="#e0f2f1" transform="rotate(-20 4 -27)"/>`);
-    s.push(aL([[4, -22], [10, -12], [6, -1]], c, 4.6), E(10, 0, 6, 2.6, c), toes([[7, 0], [10, 1], [13, .4]]));
+    s.push(aWrap(o.legF, aL([[4, -22], [10, -12], [6, -1]], c, 4.6) + E(10, 0, 6, 2.6, c) + toes([[7, 0], [10, 1], [13, .4]]), "4px -22px"));
     s.push(P("M4,-40 Q8,-52 16,-56 L22,-48 Q14,-44 12,-36Z", c));                                // neck
     s.push(P("M10,-58 Q12,-70 24,-70 Q36,-70 42,-62 Q44,-56 38,-54 Q28,-52 18,-52 Q10,-52 10,-58Z", c));
     s.push(P("M12,-66 Q4,-78 -2,-72 Q4,-70 6,-64Z", f[0]), P("M16,-69 Q12,-82 4,-80 Q10,-76 12,-68Z", f[1]), P("M20,-70 Q22,-82 14,-84 Q16,-78 16,-70Z", f[2]));
@@ -9337,12 +9622,13 @@ function albumParentsWire(pl) {
   }
   const nest = (gold) => P("M-30,-6 Q-32,8 0,10 Q32,8 30,-6 Q16,2 0,2 Q-16,2 -30,-6Z", gold ? "#e0a82e" : "#a1734a") +
     `<path d="M-26,-2 Q-10,6 12,0 M-22,4 Q0,10 24,2 M-28,-4 Q-20,0 -10,-2" fill="none" stroke="${gold ? "#fff59d" : "#d7b98f"}" stroke-width="1.2" stroke-linecap="round"/>`;
+  const fountain = () => `<path d="M-8,-70 Q-24,-100 -44,-112 Q-12,-104 0,-128 Q12,-104 44,-112 Q24,-100 8,-70Z" fill="#ffb300" ${OUT}/>` +
+    `<path d="M-5,-70 Q-10,-92 -20,-102 Q-4,-96 0,-112 Q4,-96 20,-102 Q10,-92 5,-70Z" fill="#fff176"/>`;
   // the volcano friend: a cone with a face, origin = middle of its base
   function volcFace(o = {}) {
     const s = [];
     if (o.erupt) {
-      s.push(`<path d="M-8,-70 Q-24,-100 -44,-112 Q-12,-104 0,-128 Q12,-104 44,-112 Q24,-100 8,-70Z" fill="#ffb300" ${OUT}/>`,
-        `<path d="M-5,-70 Q-10,-92 -20,-102 Q-4,-96 0,-112 Q4,-96 20,-102 Q10,-92 5,-70Z" fill="#fff176"/>`);
+      s.push(fountain());
     } else {
       s.push(`<g class="${o.cls || ""}">${aC(2, -82, 8, "#e0e0e0", OUT)}${aC(12, -92, 9, "#eeeeee", OUT)}${aC(4, -104, 7, "#f5f5f5", OUT)}</g>`);
     }
@@ -9360,42 +9646,88 @@ function albumParentsWire(pl) {
 
   const glowRing = (x, y, r, c) => `<circle cx="${x}" cy="${y}" r="${r}" fill="${c}" opacity=".3"/>`;
 
+
+  /* ---- the own animations (played at holo; CSS an-wl-* in template.html) ---- */
+  const W = (cls, svg, origin) => aWrap(cls, svg, origin);
+  // a layer sliding one card width to the left, drawn twice side by side (repeats exactly)
+  const pass = (items, dur) => `<g class="an-wl-pass" style="animation-duration:${dur}s">${items}<g transform="translate(120 0)">${items}</g></g>`;
+  // what rushes past a runner: ferns on the grass, stones and pebbles on the path
+  const scenery = () => fern(14, 118, .7) + fern(72, 116, .6, "#66bb6a") + rock(40, 150, 5) + rock(100, 154, 6, "#795548") +
+    [[22, 138], [60, 142], [84, 135], [110, 141]].map(([x, y]) => `<ellipse cx="${x}" cy="${y}" rx="2.4" ry="1.3" fill="#a1734a"/>`).join("");
+  const puff = (x, y, r) => aC(x, y, r, "#efe0c4", `stroke="${OL}" stroke-width=".6"`);
+  // dust kicked up behind a runner: two puffs on their own clocks
+  const dustBehind = (x, y, dur = .5) => [0, .5].map(d => `<g class="an-wl-dust" style="animation-delay:-${f1(d * dur)}s;animation-duration:${dur}s">${puff(x, y, 3.4)}${puff(x - 5, y - 3, 2.4)}</g>`).join("");
+  const leafPath = (x, y) => `<path d="M${x},${y} Q${x + 6},${y - 6} ${x + 12},${y} Q${x + 6},${y + 4} ${x},${y}Z" fill="#43a047" ${OUT}/>`;
+  const anim = {
+    // the baby T-Rex stomps twice (dust at each step), then throws its head back and roars, its tail swishing
+    trex: () => {
+      const jaw = `<path d="M19,-59 Q30,-53 41,-61 Q32,-43 19,-59Z" fill="#c62828" ${OUT}/><ellipse cx="29" cy="-51.5" rx="3.6" ry="1.5" fill="#ff8a80"/>`;
+      const arcs = [[48, 7], [53, 10], [58, 13]].map(([x, h]) => `<path d="M${x},${-60 - h} Q${x + h * .45},-60 ${x},${-60 + h}" fill="none" stroke="${OL}" stroke-width="3.4" stroke-linecap="round"/>` +
+        `<path d="M${x},${-60 - h} Q${x + h * .45},-60 ${x},${-60 + h}" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/>`).join("");
+      return [day(), aEdge(shadow(54, 140, 30) + W("an-wl-stomp", at(50, 140, 1.08, trex({ tail: "an-wl-swish", head: "an-wl-roar",
+        headX: W("an-wl-jaw", jaw) + W("an-wl-jaw", W("an-wl-ring", arcs, "44px -60px")) })), "50px 140px")) +
+        W("an-wl-thud", puff(34, 140, 3.6) + puff(28, 137, 2.6) + puff(70, 140, 3.6) + puff(76, 137, 2.6), "52px 140px")];
+    },
+    // the triceratops gallops along, the ferns and stones rushing past, dust flying behind
+    trike: () => [day({ vx: 30, sx: 100, plants: false, lava: false, rocks: false }) + pass(scenery(), 1.6),
+      dustBehind(10, 134) + aEdge(shadow(58, 136, 34) + W("an-wl-gallop", at(54, 136, 1.15, trike({ legA: "an-wl-legs", legB: "an-wl-legs2" })), "54px 136px"))],
+    // the stegosaurus bends down to bite a fern, chews it happily, its spiky tail swinging
+    stego: () => [day({ vx: 92 }), aEdge(shadow(58, 138, 32) + at(58, 138, 1, stego({ tail: "an-wl-swing", head: "an-wl-munch", headX: W("an-wl-leaf", leafPath(45, -15)) }) +
+      fern(54, 2, .45, "#43a047")))],
+    // the brachiosaurus stretches its long neck into the palm, bites off a leaf (another one flutters down) and chews
+    brachio: () => [day({ vx: 22, sx: 104, cx: 4, plants: false }) + palm(100, 70, 1.1, true) + fern(10, 120, .9) + W("an-wl-leaffall", leafPath(84, 36), "90px 36px"),
+      aEdge(shadow(48, 146, 30) + at(46, 146, 1.08, brachio({ neck: "an-wl-reach", head: "an-wl-chew", headX: W("an-wl-bite", leafPath(47, -99)) })))],
+    // the pterodactyl flaps its wings and swoops over the volcano, the clouds sailing past
+    ptero: () => [day({ vx: 60, vs: .8, sx: 100 }) + pass(aCloud(6, 40, .6) + aCloud(72, 56, .5), 5),
+      W("an-wl-soar", aEdge(at(60, 66, 1.05, ptero({ wingL: "an-wl-flapl", wingR: "an-wl-flapr" }))), "60px 66px")],
+    // the ankylosaurus swings its club tail and smashes a rock to bits; a new rock pops up
+    anky: () => {
+      const shards = [-70, -35, 0, 35, 70].map((a, i) => `<g transform="translate(13 131) rotate(${a})"><g class="an-wl-shard"><path d="M-2.6,0 L0,-3.2 L2.8,-.6 L1,2.6 L-2.2,1.8Z" fill="${i % 2 ? "#9e9e9e" : "#bdbdbd"}" ${OUT}/></g></g>`).join("");
+      return [day({ vx: 30, sx: 100, rocks: false, plants: false }) + palm(112, 108, .8, true),
+        aEdge(shadow(66, 136, 36) + W("an-wl-jolt", at(66, 136, 1, anky({ tail: "an-wl-club" })))) +
+        W("an-wl-target", rock(13, 138, 8, "#9e9e9e") + `<path d="M9,134 l3,2 l-1,2 M16,133 l-2,3" fill="none" stroke="${OL}" stroke-width=".7"/>`, "13px 138px") +
+        shards + W("an-wl-flash", aSpark(13, 127, 7, "#fff59d"), "13px 127px")];
+    },
+    // the raptor sprints, legs a blur, the ground racing past
+    raptor: () => [day({ vx: 96, vs: .9, plants: false, lava: false, rocks: false }) + pass(scenery(), .9),
+      dustBehind(26, 138, .4) + aEdge(W("an-wl-zip", `<path d="M8,96 H26 M4,104 H20 M10,112 H24" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".8"/>`) +
+        shadow(58, 140, 26) + W("an-wl-run", at(60, 140, 1.25, raptor({ legB: "an-wl-kick", legF: "an-wl-kick2" })), "60px 140px"))],
+    // the egg wobbles, the top pops up and the baby looks out wearing it as a hat, then ducks back in
+    egg: () => {
+      const ct = uid("ct"), cb = uid("cb"), zig = "L18,-34 L14,-31 L9,-37 L4,-31 L-2,-37 L-8,-30 L-12,-36 L-18,-32 L-30,-32", shell = egg();
+      const inner = `<defs><clipPath id="${ct}"><path d="M30,-34 ${zig} V-90 H30Z"/></clipPath><clipPath id="${cb}"><path d="M30,-34 ${zig} V10 H30Z"/></clipPath></defs>` +
+        W("an-wl-hatch", W("an-wl-peek", at(0, -18, .9, babyHead()), "0px -18px")) + `<g clip-path="url(#${cb})">${shell}</g>` + W("an-wl-hatch", `<g clip-path="url(#${ct})">${shell}</g>`);
+      return [day({ vx: 92, lava: false }), aEdge(shadow(60, 140, 34) + at(60, 136, 1.2, nest() + W("an-wl-wobble", inner, "0px 0px"))) +
+        aSpark(26, 84, 3.4, "#fff59d", "lv-tw") + aSpark(96, 76, 3, "#fff59d", "lv-tw", "animation-delay:-.9s")];
+    },
+    // the volcano puffs smoke, rumbles, then erupts with a gasp, spitting lava blobs, and calms down
+    volcano: () => {
+      const gasp = `<path d="M-9,-22 Q0,-8 9,-22Z" fill="#c62828" ${OUT}/><ellipse cx="0" cy="-15" rx="4" ry="2" fill="#ff8a80"/>` + E(0, -69, 14, 3.4, "#fff176");
+      const blobs = [-56, -24, 24, 56].map((a, i) => `<g transform="translate(60 60) rotate(${a})"><g class="an-wl-blob" style="animation-delay:-${f1(i % 2 * .12)}s">${aC(0, 0, f1(3.2 - i % 2 * .6), "#ff7043", `stroke="${OL}" stroke-width=".7"`)}</g></g>`).join("");
+      return [day({ vx: -60, sx: 100 }), aEdge(at(60, 140, 1.15, W("an-wl-rumble", W("an-wl-gush", fountain(), "0px -70px") + volcFace({ cls: "an-wl-smoke" }) + W("an-wl-gasp", gasp)))) + blobs];
+    },
+  };
   FAN.wlava = [
     ["Baby T-Rex", "a little T-Rex with tiny arms and a big smile",
-      () => [day(), aEdge(shadow(58, 140, 30) + at(54, 140, 1.12, trex()))],
-      () => [night(), aEdge(shadow(54, 142, 36) + at(46, 142, 1.3, trex({ adult: 1, col: "#5fae3c", dark: "#33691e" })) + at(96, 146, .55, trex()))]],
+      () => [day(), aEdge(shadow(58, 140, 30) + at(54, 140, 1.12, trex()))], anim.trex],
     ["Triceratops", "three horns and a big frill",
-      () => [day({ vx: 30, sx: 100 }), aEdge(shadow(58, 136, 34) + at(54, 136, 1.15, trike()))],
-      () => [night({ vx: 34 }), aEdge(shadow(58, 138, 36) + at(52, 138, 1.25, trike({ gold: 1, frill: "#ffb300", col: "#42a5f5" })))]],
+      () => [day({ vx: 30, sx: 100 }), aEdge(shadow(58, 136, 34) + at(54, 136, 1.15, trike()))], anim.trike],
     ["Stegosaurus", "plates on its back and a spiky tail",
-      () => [day({ vx: 92 }), aEdge(shadow(60, 138, 34) + at(62, 138, 1.12, stego()))],
-      () => [night({ vx: 30 }), aEdge(shadow(60, 140, 36) + at(62, 140, 1.2, stego({ glow: 1, plate: ["#ff5252", "#ffeb3b", "#69f0ae", "#40c4ff", "#e040fb"] })))]],
+      () => [day({ vx: 92 }), aEdge(shadow(60, 138, 34) + at(62, 138, 1.12, stego()))], anim.stego],
     ["Brachiosaurus", "the tallest neck eats from the treetops",
       () => [day({ vx: 22, sx: 104, cx: 4, plants: false }) + palm(100, 70, 1.1, true) + fern(10, 120, .9),
-        aEdge(shadow(48, 146, 30) + at(46, 146, 1.08, brachio({ leaf: 1 })))],
-      () => [night({ vx: 92 }), aEdge(shadow(46, 146, 32) + at(44, 146, 1.08, brachio({ col: "#7e57c2", dark: "#5e35b1" })) + shadow(92, 146, 12) + at(92, 146, .42, brachio({ col: "#b39ddb", dark: "#9575cd" })))]],
+        aEdge(shadow(48, 146, 30) + at(46, 146, 1.08, brachio({ leaf: 1 })))], anim.brachio],
     ["Pterodactyl", "glides high over the volcano",
-      () => [day({ vx: 60, vs: .8, sx: 100 }), aEdge(at(60, 66, 1.05, ptero()))],
-      () => [night({ vx: 60, vs: 1.1 }), aEdge(at(60, 52, 1.12, ptero({ up: 1, col: "#ff7043", wing: "#ffe082", dark: "#bf360c" })) + aSpark(18, 30, 4, "#fff59d") + aSpark(102, 34, 3.4, "#fff59d"))]],
+      () => [day({ vx: 60, vs: .8, sx: 100 }), aEdge(at(60, 66, 1.05, ptero()))], anim.ptero],
     ["Ankylosaurus", "armour on its back and a club on its tail",
-      () => [day({ vx: 30, sx: 100 }), aEdge(shadow(60, 136, 36) + at(62, 136, 1.2, anky()))],
-      () => [night({ vx: 80 }), aEdge(shadow(60, 138, 38) + at(62, 138, 1.25, anky({ armor: "#ffb300", stud: "#fff59d", col: "#e6b465" })) +
-        [[22, 92, 3.6], [96, 96, 3], [56, 82, 3.2], [36, 120, 2.4]].map(([x, y, r]) => aSpark(x, y, r, "#fffde7")).join(""))]],
+      () => [day({ vx: 30, sx: 100 }), aEdge(shadow(60, 136, 36) + at(62, 136, 1.2, anky()))], anim.anky],
     ["Velociraptor", "the fastest runner with colourful feathers",
-      () => [day({ vx: 96, vs: .9 }), aEdge(`<path d="M8,96 H26 M4,104 H20 M10,112 H24" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".8"/>` + shadow(58, 140, 26) + at(60, 140, 1.25, raptor()))],
-      () => [night({ vx: 28 }), aEdge(`<path d="M2,74 H26 M6,84 H22 M2,94 H18" stroke="#ffeb3b" stroke-width="2" stroke-linecap="round" opacity=".8"/>` + at(62, 128, 1.25, raptor({ col: "#26c6da", dark: "#00838f", feather: ["#ff5252", "#ffeb3b", "#e040fb"] }), false).replace(`translate(62 128)`, `translate(62 128) rotate(-8)`) + shadow(60, 142, 22))]],
+      () => [day({ vx: 96, vs: .9 }), aEdge(`<path d="M8,96 H26 M4,104 H20 M10,112 H24" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".8"/>` + shadow(58, 140, 26) + at(60, 140, 1.25, raptor()))], anim.raptor],
     ["Dinosaur egg", "something is wiggling inside!",
       () => [day({ vx: 92, lava: false }),
-        aEdge(shadow(60, 140, 34) + at(60, 136, 1.2, nest() + `<g transform="scale(1 -1)"><g class="lv-swing"><g transform="scale(1 -1)">${egg()}${at(0, -40, .9, `<g class="lv-wink">${aEye(-5, 0, "#6d4c41", .7)}${aEye(5, 0, "#6d4c41", .7)}</g>`)}</g></g></g>`))],
-      () => [night({ vx: 30 }), aEdge(glowRing(62, 104, 36, "#fff59d") + shadow(60, 142, 36) + at(60, 138, 1.2, nest(1) +
-        at(-20, -6, .42, egg({ shell: "#ffe082", spot: "#ffb300" })) + at(20, -6, .42, egg({ shell: "#ffe082", spot: "#ffb300" })) +
-        P("M-14,-4 Q-15,-22 0,-22 Q15,-22 14,-4 L10,-10 L6,-4 L2,-10 L-2,-4 L-6,-10 L-10,-4Z", "#fff3e0") +
-        at(0, -30, 1.25, babyHead()) + P("M-10,-45 L-6,-49 L-2,-44 L2,-50 L6,-44 L10,-48 L11,-44 Q0,-58 -11,-44Z", "#fff3e0") + aL([[-12, -18], [-18, -24]], "#7cc552", 3) + aL([[12, -18], [18, -24]], "#7cc552", 3)) +
-        aSpark(28, 78, 4, "#fffde7") + aSpark(94, 84, 3.4, "#fffde7") + aSpark(84, 64, 2.4, "#fffde7"))]],
+        aEdge(shadow(60, 140, 34) + at(60, 136, 1.2, nest() + `<g transform="scale(1 -1)"><g class="lv-swing"><g transform="scale(1 -1)">${egg()}${at(0, -40, .9, `<g class="lv-wink">${aEye(-5, 0, "#6d4c41", .7)}${aEye(5, 0, "#6d4c41", .7)}</g>`)}</g></g></g>`))], anim.egg],
     ["Volcano friend", "a happy volcano puffing little clouds",
-      () => [day({ vx: -60, sx: 100 }), aEdge(at(60, 140, 1.15, volcFace()))],
-      () => [night({ vx: -80 }), aEdge(at(60, 140, 1.05, volcFace({ erupt: 1, wink: 1 })) +
-        [[18, 30, "#ff5252"], [100, 26, "#40c4ff"], [104, 70, "#ffeb3b"], [14, 74, "#69f0ae"]].map(([x, y, c]) => `<g stroke="${c}" stroke-width="1.6" stroke-linecap="round">${[...Array(8)].map((_, i) => { const a = i * Math.PI / 4; return `<path d="M${f1(x + 3 * Math.cos(a))},${f1(y + 3 * Math.sin(a))} L${f1(x + 9 * Math.cos(a))},${f1(y + 9 * Math.sin(a))}"/>`; }).join("")}</g>` + aC(x, y, 1.6, "#fff")).join(""))]],
+      () => [day({ vx: -60, sx: 100 }), aEdge(at(60, 140, 1.15, volcFace()))], anim.volcano],
   ];
 })();
 
@@ -9507,17 +9839,18 @@ function albumParentsWire(pl) {
   }
 
   /* ---------- characters ---------- */
-  function knight() {
+  function knight(o = {}) {
     let s = aR(47, 118, 10, 18, "#b0bec5", `rx="3"`) + aR(63, 118, 10, 18, "#b0bec5", `rx="3"`) +
       aP("M44,142 Q43,133 51,133 H58 V142Z", "#6d4c41") + aP("M62,133 H69 Q77,133 76,142 H62Z", "#6d4c41");
     s += aP("M40,86 Q37,112 44,124 H76 Q83,112 80,86 Q60,78 40,86Z", "#cfd8dc");
     s += aP("M49,88 H71 V124 L60,129 L49,124Z", "#2f6fd6") + aStar(60, 104, 7, "#ffd54f");
     s += aR(42, 113, 36, 5, "#795548", `rx="2"`) + aR(57, 112.4, 6, 7, "#ffca28", `rx="1"`);
     // sword arm, raised
-    s += thick("M77,92 Q87,92 91,82", "#cfd8dc", 7.5);
-    s += aP("M89,72 V31 L92,24 L95,31 V72Z", "#eceff1") + `<path d="M92,29 V70" stroke="#b0bec5" stroke-width="1.1"/>` +
+    let a = thick("M77,92 Q87,92 91,82", "#cfd8dc", 7.5);
+    a += aP("M89,72 V31 L92,24 L95,31 V72Z", "#eceff1") + `<path d="M92,29 V70" stroke="#b0bec5" stroke-width="1.1"/>` +
       `<path d="M90.4,34 l1,-4" stroke="#fff" stroke-width="1" stroke-linecap="round"/>`;
-    s += aR(90, 75, 4, 10, "#6d4c41") + aR(82, 71, 20, 4.4, "#ffb300", `rx="2"`) + aC(92, 87, 2.6, "#ffb300", OUT) + aC(92, 80, 4.6, SKIN, OUT);
+    a += aR(90, 75, 4, 10, "#6d4c41") + aR(82, 71, 20, 4.4, "#ffb300", `rx="2"`) + aC(92, 87, 2.6, "#ffb300", OUT) + aC(92, 80, 4.6, SKIN, OUT);
+    s += aWrap(o.sword, a, "78px 92px");
     // helmet with plume, face in the open visor
     s += aP("M54,40 Q56,15 84,20 Q77,24 80,30 Q70,28 66,40Z", "#e53935") + `<path d="M60,36 Q64,24 78,23" fill="none" stroke="#ff8a80" stroke-width="1.4" stroke-linecap="round"/>`;
     s += aC(58, 60, 22, "#cfd8dc", OUT) + `<path d="M44,46 Q50,40 56,39" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" opacity=".7"/>`;
@@ -9554,11 +9887,11 @@ function albumParentsWire(pl) {
       aC(43, 32, 1.6, "#fff59d") + aC(60, 27, 1.8, "#fff59d") + aC(77, 32, 1.6, "#fff59d");
     return s + aSpark(86, 36, 4, "#fff") + aSpark(32, 44, 3, "#fff");
   }
-  function dragon() {
+  function dragon(o = {}) {
     const G = "#66bb6a", L = "#a5d6a7";
-    let s = thick("M78,128 Q100,132 104,116 Q106,106 98,102", G, 9) + aP("M98,102 L94,92 L104,96Z", "#ffb74d");
-    s += aP("M42,94 Q18,70 12,90 Q19,90 21,99 Q28,95 31,104 Q37,98 44,104Z", "#ffb74d") + aP("M78,94 Q102,70 108,90 Q101,90 99,99 Q92,95 89,104 Q83,98 76,104Z", "#ffb74d");
-    s += `<path d="M38,92 Q24,84 18,88 M82,92 Q96,84 102,88" fill="none" stroke="#e08a2c" stroke-width="1"/>`;
+    let s = aWrap(o.tail, thick("M78,128 Q100,132 104,116 Q106,106 98,102", G, 9) + aP("M98,102 L94,92 L104,96Z", "#ffb74d"), "80px 128px");
+    s += aWrap(o.wings, aP("M42,94 Q18,70 12,90 Q19,90 21,99 Q28,95 31,104 Q37,98 44,104Z", "#ffb74d") + aP("M78,94 Q102,70 108,90 Q101,90 99,99 Q92,95 89,104 Q83,98 76,104Z", "#ffb74d") +
+      `<path d="M38,92 Q24,84 18,88 M82,92 Q96,84 102,88" fill="none" stroke="#e08a2c" stroke-width="1"/>`, "60px 98px");
     s += ell(60, 112, 26, 26, G);
     s += ell(60, 116, 15, 19, "#fff3c4") + `<path d="M47,108 H73 M46,116 H74 M47,124 H73" stroke="#e6cf8a" stroke-width="1.2"/>`;
     s += ell(44, 140, 9, 6, G) + ell(76, 140, 9, 6, G) + [38, 44, 50, 70, 76, 82].map(x => aC(x, 143, 1.4, "#fff")).join("");
@@ -9571,19 +9904,20 @@ function albumParentsWire(pl) {
     s += eyes(47, 73, 59, "#ff9800", 1.05) + blush(38, 70) + blush(82, 70);
     s += `<path d="M53,78 Q60,84 67,78" fill="none" stroke="${OL}" stroke-width="1.1" stroke-linecap="round"/><path d="M57,79.6 L58.2,82.4 L59.4,80.6Z" fill="#fff" stroke="${OL}" stroke-width=".5"/>`;
     // a little puff of smoke
-    s += aC(92, 52, 4, "#eceff1", `stroke="#b0bec5" stroke-width=".8"`) + aC(98, 46, 3, "#eceff1", `stroke="#b0bec5" stroke-width=".8"`) + aC(102, 40, 2.2, "#eceff1", `stroke="#b0bec5" stroke-width=".8"`);
+    if (!o.noSmoke) s += aC(92, 52, 4, "#eceff1", `stroke="#b0bec5" stroke-width=".8"`) + aC(98, 46, 3, "#eceff1", `stroke="#b0bec5" stroke-width=".8"`) + aC(102, 40, 2.2, "#eceff1", `stroke="#b0bec5" stroke-width=".8"`);
     return s;
   }
-  function wizard() {
+  function wizard(o = {}) {
     const R = "#3949ab", R2 = "#283593";
     let s = aP("M44,84 Q38,112 28,144 H92 Q82,112 76,84Z", R);
     s += [[40, 132], [56, 124], [76, 136], [48, 108], [72, 112]].map(([x, y]) => aStar(x, y, 3.4, "#ffd54f")).join("") + `<path d="M30,140 H90" stroke="#ffd54f" stroke-width="2"/>`;
     // arms: left hand at the side, right one raises the wand
     s += thick("M46,92 Q40,102 40,110", R, 9) + aC(40, 113, 4.4, SKIN, OUT);
-    s += `<path d="M86,92 L101,56" stroke="${OL}" stroke-width="4.6" stroke-linecap="round"/><path d="M86,92 L101,56" stroke="#8d5a2b" stroke-width="2.6" stroke-linecap="round"/>`;
-    s += thick("M74,92 Q82,92 86,84", R, 9) + aC(88, 82, 4.6, SKIN, OUT);
-    s += glow(102, 50, 14, "#fff59d", .8) + `<polygon points="${aPts([...Array(10)].map((_, i) => { const r = i % 2 ? 3.4 : 8, a = -Math.PI / 2 + i * Math.PI / 5; return [102 + r * Math.cos(a), 50 + r * Math.sin(a)]; }))}" fill="#ffd54f" ${OUT}/>` +
+    let w = `<path d="M86,92 L101,56" stroke="${OL}" stroke-width="4.6" stroke-linecap="round"/><path d="M86,92 L101,56" stroke="#8d5a2b" stroke-width="2.6" stroke-linecap="round"/>`;
+    w += thick("M74,92 Q82,92 86,84", R, 9) + aC(88, 82, 4.6, SKIN, OUT);
+    w += glow(102, 50, 14, "#fff59d", .8) + `<polygon points="${aPts([...Array(10)].map((_, i) => { const r = i % 2 ? 3.4 : 8, a = -Math.PI / 2 + i * Math.PI / 5; return [102 + r * Math.cos(a), 50 + r * Math.sin(a)]; }))}" fill="#ffd54f" ${OUT}/>` +
       aSpark(92, 38, 3.4) + aSpark(110, 64, 3) + aSpark(111, 40, 2.4);
+    s += aWrap(o.wand, w, "76px 92px");
     // face and beard
     s += aC(56, 70, 15, SKIN, OUT);
     s += aP("M41,72 Q38,98 56,116 Q74,98 71,72 Q66,80 56,80 Q46,80 41,72Z", "#f5f5f5") + `<path d="M49,92 Q52,104 56,110 M63,92 Q60,104 56,110" fill="none" stroke="#cfd8dc" stroke-width="1"/>`;
@@ -9597,32 +9931,33 @@ function albumParentsWire(pl) {
     s += ell(57, 60, 27, 6, R2);
     return s;
   }
-  function horse() {
+  function horse(o = {}) {
     const W = "#fafafa", M = "#ffd54f";
-    let s = thick("M26,90 Q10,100 14,128", "#f3e2a0", 7) + thick("M26,92 Q16,108 22,126", M, 5);
-    s += aR(30, 106, 9, 32, "#eeeeee", `rx="3"`) + aR(44, 108, 9, 30, "#eeeeee", `rx="3"`) + aR(70, 108, 9, 30, "#eeeeee", `rx="3"`) + aR(83, 106, 9, 32, "#eeeeee", `rx="3"`);
-    s += [[30, 134], [44, 134], [70, 134], [83, 134]].map(([x, y]) => aR(x, y, 9, 6, "#795548", `rx="1.5"`)).join("");
+    let s = aWrap(o.tail, thick("M26,90 Q10,100 14,128", "#f3e2a0", 7) + thick("M26,92 Q16,108 22,126", M, 5), "26px 91px");
+    const leg = [o.legA, o.legB, o.legB, o.legA], hip = x => `${x + 4.5}px 108px`;
+    s += [[30, 106, 32], [44, 108, 30], [70, 108, 30], [83, 106, 32]].map(([x, y, h], i) => aWrap(leg[i], aR(x, y, 9, h, "#eeeeee", `rx="3"`), hip(x))).join("");
+    s += [[30, 134], [44, 134], [70, 134], [83, 134]].map(([x, y], i) => aWrap(leg[i], aR(x, y, 9, 6, "#795548", `rx="1.5"`), hip(x))).join("");
     s += ell(57, 100, 34, 20, W);
     // saddle cloth
     s += aP("M38,84 Q56,78 76,84 L78,112 Q72,117 66,112 Q60,117 54,112 Q48,117 42,112 Q36,117 35,112Z", "#3f51b5") +
       `<path d="M37,110 Q42,115 47,111 Q53,116 58,111 Q63,116 68,111 Q73,116 77,110" fill="none" stroke="#ffd54f" stroke-width="2"/>` + aStar(57, 97, 6, "#ffd54f");
     // neck, head, mane
-    s += aP("M66,96 Q70,72 82,54 L100,62 Q92,80 88,102Z", W);
-    s += thick("M84,44 Q76,48 78,56 Q70,62 74,70 Q66,76 70,84 Q64,90 66,96", M, 6);
-    s += aP("M86,44 L83,30 L94,40Z", W) + aP("M86.6,41 L85,34 L90.6,39Z", "#f8bbd0", `stroke="none"`);
-    s += ell(94, 60, 16, 14, W);
-    s += ell(104, 72, 10, 8.4, "#f6dede", `${OUT} transform="rotate(25 104 72)"`) + aC(108, 72, 1.4, "#8d6e63") + `<path d="M100,78 Q104,80 108,78" fill="none" stroke="${OL}" stroke-width="1" stroke-linecap="round"/>`;
-    s += `<path d="M84,64 L98,70 M86,58 Q92,72 99,76" fill="none" stroke="#e53935" stroke-width="1.6"/>` + aC(86, 64, 1.8, "#ffd54f", OUT);
-    s += eye1(94, 58, "#5d4037", .95) + blush(100, 66, 2.2);
+    let h = aP("M66,96 Q70,72 82,54 L100,62 Q92,80 88,102Z", W);
+    h += thick("M84,44 Q76,48 78,56 Q70,62 74,70 Q66,76 70,84 Q64,90 66,96", M, 6);
+    h += aP("M86,44 L83,30 L94,40Z", W) + aP("M86.6,41 L85,34 L90.6,39Z", "#f8bbd0", `stroke="none"`);
+    h += ell(94, 60, 16, 14, W);
+    h += ell(104, 72, 10, 8.4, "#f6dede", `${OUT} transform="rotate(25 104 72)"`) + aC(108, 72, 1.4, "#8d6e63") + `<path d="M100,78 Q104,80 108,78" fill="none" stroke="${OL}" stroke-width="1" stroke-linecap="round"/>`;
+    h += `<path d="M84,64 L98,70 M86,58 Q92,72 99,76" fill="none" stroke="#e53935" stroke-width="1.6"/>` + aC(86, 64, 1.8, "#ffd54f", OUT);
+    h += eye1(94, 58, "#5d4037", .95) + blush(100, 66, 2.2);
     // plume
-    s += ell(90, 32, 4, 10, "#e53935", `${OUT} transform="rotate(-20 90 32)"`) + ell(97, 33, 3.6, 9, "#42a5f5", `${OUT} transform="rotate(15 97 33)"`) +
+    h += ell(90, 32, 4, 10, "#e53935", `${OUT} transform="rotate(-20 90 32)"`) + ell(97, 33, 3.6, 9, "#42a5f5", `${OUT} transform="rotate(15 97 33)"`) +
       ell(93, 30, 3.4, 10, "#fff176", `${OUT} transform="rotate(-3 93 30)"`) + aR(89, 40, 8, 4, "#ffb300", `rx="1.4"`);
-    return s;
+    return s + aWrap(o.head, h, "76px 98px");
   }
-  function jester() {
+  function jester(o = {}) {
     const A = "#e53935", B = "#fdd835", P = "#8e24aa";
-    let s = `<path d="M28,70 Q28,30 60,26 Q92,30 92,70" fill="none" stroke="#fff" stroke-width="1.2" stroke-dasharray="3 3" opacity=".8"/>`;
-    s += aC(36, 39, 5.6, "#42a5f5", OUT) + aC(60, 26, 5.6, "#66bb6a", OUT) + aC(84, 39, 5.6, "#ff7043", OUT) +
+    let s = o.noBalls ? "" : `<path d="M28,70 Q28,30 60,26 Q92,30 92,70" fill="none" stroke="#fff" stroke-width="1.2" stroke-dasharray="3 3" opacity=".8"/>`;
+    if (!o.noBalls) s += aC(36, 39, 5.6, "#42a5f5", OUT) + aC(60, 26, 5.6, "#66bb6a", OUT) + aC(84, 39, 5.6, "#ff7043", OUT) +
       [[34, 37], [58, 24], [82, 37]].map(([x, y]) => aC(x, y, 1.5, "#fff", `opacity=".8"`)).join("");
     // legs and curly shoes
     s += aR(50, 120, 8, 16, A) + aR(62, 120, 8, 16, B);
@@ -9632,7 +9967,8 @@ function albumParentsWire(pl) {
     s += aP("M52,106 L55,101 L58,106 L55,111Z", B, `stroke="none"`) + aP("M62,106 L65,101 L68,106 L65,111Z", A, `stroke="none"`) +
       aP("M52,118 L55,113 L58,118 L55,123Z", B, `stroke="none"`) + aP("M62,118 L65,113 L68,118 L65,123Z", A, `stroke="none"`);
     // arms up to throw
-    s += thick("M46,100 Q34,94 30,76", B, 7) + thick("M74,100 Q86,94 90,76", A, 7) + aC(29, 72, 4.4, SKIN, OUT) + aC(91, 72, 4.4, SKIN, OUT);
+    s += aWrap(o.armL, thick("M46,100 Q34,94 30,76", B, 7), "46px 100px") + aWrap(o.armR, thick("M74,100 Q86,94 90,76", A, 7), "74px 100px") +
+      aWrap(o.armL, aC(29, 72, 4.4, SKIN, OUT), "46px 100px") + aWrap(o.armR, aC(91, 72, 4.4, SKIN, OUT), "74px 100px");
     // zigzag collar with bells
     s += aP("M44,94 L48,102 L52,95 L56,103 L60,95 L64,103 L68,95 L72,102 L76,94 Q60,86 44,94Z", P) + [48, 56, 64, 72].map(x => aC(x, 103, 1.8, "#ffca28", OUT)).join("");
     // head
@@ -9645,9 +9981,9 @@ function albumParentsWire(pl) {
     s += aC(32, 54, 2.8, "#ffca28", OUT) + aC(88, 54, 2.8, "#ffca28", OUT) + aC(60, 44, 2.8, "#ffca28", OUT);
     return s;
   }
-  function ghost() {
+  function ghost(o = {}) {
     let s = glow(60, 86, 52, "#d9e6ff", .55);
-    s += aP("M26,92 Q14,86 16,76 Q24,78 30,86Z", "#f4f8ff") + aP("M94,88 Q106,80 104,70 Q96,74 90,82Z", "#f4f8ff");
+    s += aWrap(o.armL, aP("M26,92 Q14,86 16,76 Q24,78 30,86Z", "#f4f8ff"), "30px 90px") + aWrap(o.armR, aP("M94,88 Q106,80 104,70 Q96,74 90,82Z", "#f4f8ff"), "90px 86px");
     s += aP("M30,134 Q26,42 60,38 Q94,42 90,134 Q85,141 80,134 Q75,141 70,134 Q65,141 60,134 Q55,141 50,134 Q45,141 40,134 Q35,141 30,134Z", "#f4f8ff");
     s += `<path d="M40,54 Q46,44 56,42" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/><path d="M80,64 Q84,96 82,124" fill="none" stroke="#cdd9f0" stroke-width="3" stroke-linecap="round"/>`;
     s += eyes(48, 72, 72, "#5b6ee1", 1.15) + blush(40, 84, 3) + blush(80, 84, 3);
@@ -9656,7 +9992,7 @@ function albumParentsWire(pl) {
     s += aP("M60,42 L50,35 L50,47Z", "#f48fb1") + aP("M60,42 L70,35 L70,47Z", "#f48fb1") + aC(60, 42, 2.6, "#ec407a", OUT);
     return s;
   }
-  function owl() {
+  function owl(o = {}) {
     const Br = "#8d6e63", D = "#6d4c41", C = "#f3e5d0";
     let s = aP("M36,58 L32,38 L48,50Z", D) + aP("M84,58 L88,38 L72,50Z", D);
     s += aP("M60,42 Q92,42 92,92 Q92,128 60,134 Q28,128 28,92 Q28,42 60,42Z", Br);
@@ -9664,10 +10000,11 @@ function albumParentsWire(pl) {
     s += [[50, 96], [60, 96], [70, 96], [46, 106], [56, 106], [66, 106], [74, 106], [52, 116], [62, 116], [70, 116], [58, 124]].map(([x, y]) =>
       `<path d="M${x - 2.6},${y} Q${x},${y + 3} ${x + 2.6},${y}" fill="none" stroke="#c4a37e" stroke-width="1.1" stroke-linecap="round"/>`).join("");
     // folded wings
-    s += aP("M30,74 Q20,104 36,126 Q42,106 40,82Z", D) + aP("M90,74 Q100,104 84,126 Q78,106 80,82Z", D);
+    s += aWrap(o.wingL, aP("M30,74 Q20,104 36,126 Q42,106 40,82Z", D), "36px 78px") + aWrap(o.wingR, aP("M90,74 Q100,104 84,126 Q78,106 80,82Z", D), "84px 78px");
     // face disc and eyes behind round glasses
     s += aC(47, 70, 14, "#d7b894", OUT) + aC(73, 70, 14, "#d7b894", OUT);
     s += eye1(47, 70, "#f5a623", 1.45) + eye1(73, 70, "#f5a623", 1.45);
+    if (o.lid) s += [47, 73].map(x => aWrap(o.lid, aC(x, 70, 9.6, "#a1887f", OUT) + `<path d="M${x - 8},73 Q${x},77 ${x + 8},73" fill="none" stroke="${D}" stroke-width="1.4" stroke-linecap="round"/>`, `${x}px 61px`)).join("");
     s += `<g fill="none" stroke="#5d4037" stroke-width="1.8"><circle cx="47" cy="71" r="11.5"/><circle cx="73" cy="71" r="11.5"/><path d="M58.5,70 Q60,67 61.5,70"/></g>`;
     s += aP("M55,80 H65 L60,89Z", "#ffa726");
     s += `<path d="M44,56 Q50,53 56,57 M64,57 Q70,53 76,56" fill="none" stroke="${D}" stroke-width="2" stroke-linecap="round"/>`;
@@ -9675,7 +10012,7 @@ function albumParentsWire(pl) {
     s += [50, 70].map(x => aP(`M${x - 6},134 Q${x - 6},128 ${x},128 Q${x + 6},128 ${x + 6},134Z`, "#ffa726")).join("");
     return s;
   }
-  function chest() {
+  function chest(o = {}) {
     let s = aP("M20,92 L26,56 Q60,46 94,56 L100,92Z", "#8d5a2b") + aP("M25,88 L30,60 Q60,52 90,60 L95,88Z", "#b71c1c");
     s += `<path d="M24,74 L96,74" stroke="#ffb300" stroke-width="3"/>`;
     // the gold pile with jewels and a little crown
@@ -9694,20 +10031,55 @@ function albumParentsWire(pl) {
     s += [...Array(9)].map((_, i) => { const t = i / 8, x = 36 + t * 14, y = 96 + Math.sin(t * Math.PI) * 10; return aC(x, y, 1.9, "#fafafa", `stroke="#9e9e9e" stroke-width=".6"`); }).join("");
     // coins spilled on the floor
     s += [[12, 142], [22, 147], [100, 144], [108, 149], [92, 149]].map(([x, y]) => ell(x, y, 5.4, 2.6, "#ffd54f", `stroke="#c79100" stroke-width=".9"`)).join("");
-    s += aSpark(40, 62, 4) + aSpark(86, 60, 3.4) + aSpark(70, 66, 2.6) + aSpark(104, 82, 3);
+    s += o.tw ? [[40, 62, 4], [86, 60, 3.4], [70, 66, 2.6], [104, 82, 3]].map(([x, y, r], i) => aSpark(x, y, r, "#fff", o.tw, `animation-delay:-${(i * .4).toFixed(1)}s`)).join("")
+      : aSpark(40, 62, 4) + aSpark(86, 60, 3.4) + aSpark(70, 66, 2.6) + aSpark(104, 82, 3);
     return s;
   }
 
+  /* ---- the own animations (played at holo; CSS an-wc-* in template.html) ---- */
+  const G = (cls, svg, origin) => aWrap(cls, svg, origin);
+  const dl = (i, step) => `animation-delay:-${(i * step).toFixed(2)}s`;
+  const heart = (x, y, k, c) => `<g transform="translate(${x} ${y}) scale(${k})"><path d="M0,3 C-7,-3 -4,-9 0,-5 C4,-9 7,-3 0,3Z" fill="${c}" ${OUT}/></g>`;
+  const anim = {
+    // the knight winds up and swings his sword, a swoosh flashing at the end of the swing
+    knight: () => [walls(), G("an-wc-lunge", aEdge(knight({ sword: "an-wc-slash" })), "60px 142px") +
+      `<g class="an-wc-swoosh"><path d="M78,20 Q108,22 120,46" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" opacity=".9"/><path d="M86,28 Q106,30 114,48" fill="none" stroke="#bfe6ff" stroke-width="2" stroke-linecap="round"/></g>`],
+    // the princess twirls round twice in her gown, then little hearts float up from her rose
+    princess: () => [hall({}), G("an-wc-twirl", aEdge(princess()), "60px 140px") +
+      [[60, 86, 1, "#ff6f91"], [52, 90, .8, "#ff8ab3"], [68, 88, .9, "#e53935"]].map(([x, y, k, c], i) => `<g class="an-wc-heart" style="${dl(i, 1.2)}">${heart(x, y, k, c)}</g>`).join("")],
+    // the baby dragon hovers, flapping its wings and wagging its tail, puffing little smoke clouds
+    dragon: () => [walls({ top: "#ffb88c", bot: "#ffe3b0", roof: "#8e24aa" }), G("an-wc-hover", aEdge(dragon({ wings: "an-wc-flap", tail: "an-wc-wag", noSmoke: 1 }))) +
+      [0, 1, 2].map(i => `<g class="an-wc-puff" style="transform-origin:86px 62px;${dl(i, .8)}">${aC(86, 62, 4.4, "#eceff1", `stroke="#b0bec5" stroke-width=".8"`)}</g>`).join("")],
+    // the wizard swishes his wand and a burst of stars pops out of its tip
+    wizard: () => [night({ side: "left", seed: 11 }), aEdge(wizard({ wand: "an-wc-wave" })) +
+      [[-80, "#ffd54f"], [-30, "#fff"], [20, "#ff8ab3"], [70, "#ffd54f"], [-130, "#9be7ff"], [125, "#fff"]].map(([a, c]) =>
+        `<g transform="translate(102 50) rotate(${a})"><g class="an-wc-burst">${aStar(0, 0, 5, c)}</g></g>`).join("")],
+    // the white horse trots on the drawbridge, nodding its head and swishing its tail
+    horse: () => [moat(), G("an-wc-trot", aEdge(horse({ legA: "an-wc-legA", legB: "an-wc-legB", tail: "an-wc-swish", head: "an-wc-nod" })))],
+    // the jester juggles: three balls go round and round, his hands tossing them in turn
+    jester: () => { const c = [[0, "#42a5f5"], [120, "#66bb6a"], [240, "#ff7043"]].map(([a, col]) => { const x = f1(60 + 31 * Math.cos(a * Math.PI / 180)), y = f1(66 + 31 * Math.sin(a * Math.PI / 180));
+        return aC(x, y, 5.6, col, OUT) + aC(f1(x - 2), f1(y - 2), 1.5, "#fff", `opacity=".8"`); }).join("");
+      return [hall({ b1: "#6a1b9a", b2: "#2e7d32", carpet: "#6a1b9a" }), G("an-wc-juggle", aEdge(c), "60px 66px") + aEdge(jester({ noBalls: 1, armL: "an-wc-tossL", armR: "an-wc-tossR" }))]; },
+    // the ghost floats about waving its arms, fades away... and pops back: boo!
+    ghost: () => [night({ side: "right", top: "#24164a", bot: "#5b3f8f", hill: "#2a2244", seed: 19 }), G("an-wc-boo", aEdge(ghost({ armL: "an-wc-gwL", armR: "an-wc-gwR" })), "60px 96px")],
+    // the owl flaps its wings and hops on the sill twice, then blinks behind its glasses
+    owl: () => [towerWindow(), G("an-wc-hoot", aEdge(owl({ wingL: "an-wc-owlL", wingR: "an-wc-owlR", lid: "an-wc-blink" })))],
+    // gold coins spin up out of the chest and drop back on the pile, the jewels sparkling
+    chest: () => [hall({ top: "#6d5a4a", bot: "#3e3029", b1: "#c62828", b2: "#c62828", floor: "#4e3b31", carpet: "#7b1f1f", torch: true }), aEdge(chest({ tw: "lv-tw" })) +
+      [["L", 0], ["R", .6], ["L", 1.2], ["R", 1.8]].map(([d, t], i) => `<g class="an-wc-coin${d}" style="animation-delay:-${t}s"><g class="an-wc-spin" style="transform-origin:${56 + i * 3}px 78px">` +
+        ell(56 + i * 3, 78, 6.6, 6.6, "#ffd54f", `stroke="#c79100" stroke-width="1.1"`) + ell(56 + i * 3, 78, 3.8, 3.8, "none", `stroke="#ffb300" stroke-width="1"`) + `</g></g>`).join("")],
+  };
+
   FAN.wcastle = [
-    ["Brave knight", "A little knight in shining armour with a sword and a shield", () => [walls(), aEdge(knight())]],
-    ["Princess", "A princess with a golden crown, holding a red rose", () => [hall({}), aEdge(princess())]],
-    ["Baby dragon", "A small, friendly green dragon puffing a little smoke", () => [walls({ top: "#ffb88c", bot: "#ffe3b0", roof: "#8e24aa" }), aEdge(dragon())]],
-    ["Wizard", "A wizard in a starry hat waving his magic wand", () => [night({ side: "left", seed: 11 }), aEdge(wizard())]],
-    ["White horse", "A white horse with a feather plume on the drawbridge", () => [moat(), aEdge(horse())]],
-    ["Jester", "A funny jester juggling three balls", () => [hall({ b1: "#6a1b9a", b2: "#2e7d32", carpet: "#6a1b9a" }), aEdge(jester())]],
-    ["Castle ghost", "A cute little ghost with a pink bow (it floats)", () => [night({ side: "right", top: "#24164a", bot: "#5b3f8f", hill: "#2a2244", seed: 19 }), aEdge(`<g class="lv-float">${ghost()}</g>`)]],
-    ["Wise owl", "A wise owl with round glasses in a tower window", () => [towerWindow(), aEdge(owl())]],
-    ["Treasure chest", "A treasure chest full of gold, jewels and pearls", () => [hall({ top: "#6d5a4a", bot: "#3e3029", b1: "#c62828", b2: "#c62828", floor: "#4e3b31", carpet: "#7b1f1f", torch: true }), aEdge(chest())]],
+    ["Brave knight", "A little knight in shining armour with a sword and a shield", () => [walls(), aEdge(knight())], anim.knight],
+    ["Princess", "A princess with a golden crown, holding a red rose", () => [hall({}), aEdge(princess())], anim.princess],
+    ["Baby dragon", "A small, friendly green dragon puffing a little smoke", () => [walls({ top: "#ffb88c", bot: "#ffe3b0", roof: "#8e24aa" }), aEdge(dragon())], anim.dragon],
+    ["Wizard", "A wizard in a starry hat waving his magic wand", () => [night({ side: "left", seed: 11 }), aEdge(wizard())], anim.wizard],
+    ["White horse", "A white horse with a feather plume on the drawbridge", () => [moat(), aEdge(horse())], anim.horse],
+    ["Jester", "A funny jester juggling three balls", () => [hall({ b1: "#6a1b9a", b2: "#2e7d32", carpet: "#6a1b9a" }), aEdge(jester())], anim.jester],
+    ["Castle ghost", "A cute little ghost with a pink bow (it floats)", () => [night({ side: "right", top: "#24164a", bot: "#5b3f8f", hill: "#2a2244", seed: 19 }), aEdge(`<g class="lv-float">${ghost()}</g>`)], anim.ghost],
+    ["Wise owl", "A wise owl with round glasses in a tower window", () => [towerWindow(), aEdge(owl())], anim.owl],
+    ["Treasure chest", "A treasure chest full of gold, jewels and pearls", () => [hall({ top: "#6d5a4a", bot: "#3e3029", b1: "#c62828", b2: "#c62828", floor: "#4e3b31", carpet: "#7b1f1f", torch: true }), aEdge(chest())], anim.chest],
   ];
 })();
 
@@ -9946,8 +10318,8 @@ function albumParentsWire(pl) {
   function rover(o = {}) {
     const s = [];
     s.push(`<path d="M-22,-6 L-11,-16 L0,-6 M0,-6 L11,-16 L22,-6" stroke="${OL}" stroke-width="3.6" fill="none" stroke-linejoin="round"/><path d="M-22,-6 L-11,-16 L0,-6 M0,-6 L11,-16 L22,-6" stroke="#b0bec5" stroke-width="1.8" fill="none" stroke-linejoin="round"/>`);
-    [-22, 0, 22].forEach(x => s.push(aC(x, -6.5, 6.6, "#37474f", OUT), aC(x, -6.5, 3, "#90a4ae", `stroke="${OL}" stroke-width=".8"`),
-      [0, 1, 2, 3, 4, 5].map(i => { const a = i * Math.PI / 3; return `<path d="M${f1(x + 4.6 * Math.cos(a))},${f1(-6.5 + 4.6 * Math.sin(a))} L${f1(x + 6.4 * Math.cos(a))},${f1(-6.5 + 6.4 * Math.sin(a))}" stroke="#78909c" stroke-width="1.2"/>`; }).join("")));
+    [-22, 0, 22].forEach(x => s.push(aWrap(o.wheel, [aC(x, -6.5, 6.6, "#37474f", OUT), aC(x, -6.5, 3, "#90a4ae", `stroke="${OL}" stroke-width=".8"`),
+      [0, 1, 2, 3, 4, 5].map(i => { const a = i * Math.PI / 3; return `<path d="M${f1(x + 4.6 * Math.cos(a))},${f1(-6.5 + 4.6 * Math.sin(a))} L${f1(x + 6.4 * Math.cos(a))},${f1(-6.5 + 6.4 * Math.sin(a))}" stroke="#78909c" stroke-width="1.2"/>`; }).join("")].join(""), `${x}px -6.5px`)));
     // the antenna dish at the back, the body box (gold foil front), the solar panel on top
     s.push(`<path d="M-20,-30 V-40" stroke="${OL}" stroke-width="2"/><g transform="rotate(-30 -20 -42)"><path d="M-29,-42 Q-20,-34 -11,-42Z" fill="#eceff1" ${OUT}/></g>` + aC(-20, -43, 1.6, "#ff5252", OUT));
     s.push(`<rect x="-26" y="-28" width="52" height="15" rx="3" fill="#eceff1" ${OUT}/><rect x="-22" y="-25" width="20" height="9" rx="1.5" fill="#ffca28" ${OUT}/>` +
@@ -9982,16 +10354,51 @@ function albumParentsWire(pl) {
       aSpark(30, 118, 3, "#fff59d") + aSpark(98, 120, 2.4, "#fff59d")];
   }
 
+  /* ---- the own animations (played at holo; CSS an-wp-* in template.html) ---- */
+  const G = (cls, svg, origin) => aWrap(cls, svg, origin);
+  const twinkle = (pts) => pts.map(([x, y, r], i) => aSpark(x, y, r, "#fff", "lv-tw", `animation-delay:-${(i * .37).toFixed(2)}s`)).join("");
+  // something circling a planet: a flat orbit (the outer group squashes a circle), the body kept round by counter-squashing
+  const orbit = (cx, cy, r, body, squash = .35, cls = "an-wp-orbit", dur = "") => `<g transform="translate(${cx} ${cy}) scale(1 ${squash})"><g class="${cls}"${dur ? ` style="animation-duration:${dur}"` : ""}><g transform="translate(${r} 0) scale(1 ${f1(1 / squash)})">${body}</g></g></g>`;
+  const sat = `<g><rect x="-2.6" y="-2" width="5.2" height="4" rx="1" fill="#eceff1" ${OUT}/><rect x="-9" y="-1.4" width="5.4" height="2.8" fill="#42a5f5" ${OUT}/><rect x="3.6" y="-1.4" width="5.4" height="2.8" fill="#42a5f5" ${OUT}/></g>`;
+  const anim = {
+    // the astronaut tumbles slowly head over heels, drifting among the twinkling stars
+    astronaut: () => { const [bg, m] = astronaut();
+      return [bg + twinkle([[20, 60, 3], [100, 30, 3.4], [30, 120, 2.6], [104, 92, 2.2]]), G("an-wp-tumble", m.replace('class="lv-float"', 'class="an-wp-drift"'), "58px 82px")]; },
+    // lift-off: the rocket rumbles, its flame roars, it shoots up off the card in a puff of smoke and comes back down to land
+    rocket: () => { const [bg] = rocketPad();
+      const flame = `<g class="an-wp-flame" style="transform-origin:64px 128px"><path d="M57,128 Q64,152 71,128Z" fill="#ff9800" ${OUT}/><path d="M60,128 Q64,144 68,128Z" fill="#ffeb3b"/></g>`;
+      const smoke = [[44, 132, 8, 0], [84, 132, 8, .2], [54, 138, 6, .1], [74, 138, 6, .3]].map(([x, y, r, d]) => `<g class="an-wp-smoke" style="transform-origin:${x}px ${y}px;animation-delay:${d}s">${aC(x, y, r, "#eceff1", `opacity=".9"`)}</g>`).join("");
+      return [bg, aEdge(`<rect x="44" y="128" width="40" height="7" rx="2" fill="#90a4ae" ${OUT}/>`) + G("an-wp-launch", G("an-wp-shake", flame + aEdge(`<g transform="translate(64 89) scale(1.12)">${rocket()}</g>`))) + smoke]; },
+    // the Moon glows and smiles while a little satellite circles it (behind it on the far side)
+    moon: () => [space(31, { neb: ["#3949ab", "#8e24aa"] }) + G("an-wp-glow", glow(60, 76, 58, "#fff8e1", .3), "60px 76px"),
+      orbit(60, 76, 52, sat, .3, "an-wp-orbit an-wp-back") + aEdge(moonFace(60, 76, 40)) + orbit(60, 76, 52, sat, .3, "an-wp-orbit an-wp-front")],
+    // Saturn rocks gently, a tiny moon circling round its rings
+    saturn: () => [space(41, { neb: ["#7e57c2", "#ef6c00"], nebOp: .35 }), G("an-wp-tilt", aEdge(saturn()), "60px 78px") + orbit(60, 78, 54, aC(0, 0, 3.4, "#ffe0b2", OUT), .3, "an-wp-orbit", "5s")],
+    // the Earth sways happily as the Moon goes round it
+    earth: () => [space(51, { neb: ["#00b0ff", "#651fff"] }), G("an-wp-sway", aEdge(earth(60, 78, 36)), "60px 78px") + orbit(60, 78, 50, aC(0, 0, 5, "#e0e0e0", OUT), .32, "an-wp-orbit", "6s")],
+    // the friendly alien bounces and waves, its antennae boinging
+    alien: () => { const [bg, m] = alienD(); return [bg, G("an-wp-boing", m, "60px 142px")]; },
+    // the UFO hovers, its beam pulsing, and beams a cow up and back down
+    ufo: () => { const [bg, m] = ufoD();
+      return [bg + `<g class="an-wp-beam">${beam(60, 76, 7, 30, 132, "#fff59d", .45)}</g>`,
+        G("an-wp-cow", `<g transform="translate(60 118) scale(1.1)">${cow()}</g>`, "60px 118px") + G("an-wp-hover", m)]; },
+    // the rover drives along the red ground, wheels turning, rocking over the bumps
+    rover: () => { const [bg] = roverD();
+      return [bg, G("an-wp-drive", aEdge(`<g transform="translate(58 136) scale(1.4)">${G("an-wp-rock", rover({ wheel: "an-wp-wheel" }), "0px -6px")}</g>`) + shadow(58, 137, 40, .25))]; },
+    // the shooting star zooms across the sky and comes round again
+    star: () => { const [bg, m] = shootingStar(); return [bg + twinkle([[20, 30, 3], [100, 110, 3]]), G("an-wp-zoom", m)]; },
+  };
+
   FAN.wspace = [
-    ["Astronaut", "a kid astronaut in a white suit and round helmet, floating and waving among the stars", astronaut],
-    ["Rocket", "the red and white rocket on its launch pad, a little pilot at the window", rocketPad],
-    ["The Moon", "the smiling full Moon with its craters", moon],
-    ["Saturn", "the ringed planet with a happy face", saturnD],
-    ["Planet Earth", "our blue and green home planet, smiling", earthD],
-    ["Friendly alien", "a little green alien with two antennae and big eyes, waving hello", alienD],
-    ["UFO", "a flying saucer with a baby alien in its glass dome, shining its beam", ufoD],
-    ["Mars rover", "the robot rover with six wheels, a solar panel and big camera eyes, exploring red Mars", roverD],
-    ["Shooting star", "a smiling star with a rainbow tail zooming through space", shootingStar],
+    ["Astronaut", "a kid astronaut in a white suit and round helmet, floating and waving among the stars", astronaut, anim.astronaut],
+    ["Rocket", "the red and white rocket on its launch pad, a little pilot at the window", rocketPad, anim.rocket],
+    ["The Moon", "the smiling full Moon with its craters", moon, anim.moon],
+    ["Saturn", "the ringed planet with a happy face", saturnD, anim.saturn],
+    ["Planet Earth", "our blue and green home planet, smiling", earthD, anim.earth],
+    ["Friendly alien", "a little green alien with two antennae and big eyes, waving hello", alienD, anim.alien],
+    ["UFO", "a flying saucer with a baby alien in its glass dome, shining its beam", ufoD, anim.ufo],
+    ["Mars rover", "the robot rover with six wheels, a solar panel and big camera eyes, exploring red Mars", roverD, anim.rover],
+    ["Shooting star", "a smiling star with a rainbow tail zooming through space", shootingStar, anim.star],
   ];
 })();
 
@@ -10011,7 +10418,7 @@ function albumParentsWire(pl) {
   const line = (d, w = 1.2, c = OL, x = "") => `<path d="${d}" fill="none" stroke="${c}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" ${x}/>`;
   const at = (s, x, y, k = 1, a = 0) => `<g transform="translate(${x} ${y}) rotate(${a}) scale(${k})">${s}</g>`;
   const r2 = v => +v.toFixed(2);
-  const sparks = (pts, c = "#fff") => pts.map(([x, y, r]) => aSpark(x, y, r, c)).join("");
+  const sparks = (pts, c = "#fff", cls = "") => pts.map(([x, y, r], i) => cls ? aSpark(x, y, r, c, cls, `animation-delay:-${(i * .37).toFixed(2)}s`) : aSpark(x, y, r, c)).join("");
   const shadow = (x, y, rx) => En(x, y, rx, r2(rx * .16), "#000", 'opacity=".22"');
   const blush = (x, y, r = 3.4) => En(x, y, r, r2(r * .6), "#ff7a9c", 'opacity=".6"');
   // an eye with a white sclera, a coloured iris, a pupil and two highlights
@@ -10148,32 +10555,32 @@ function albumParentsWire(pl) {
       floor(96, "#f0d9b5", "#b58863") + shadow(60, 146, 34),
     aEdge(king(WH))];
   }
-  function bQueen() {
-    return [sky("#ff8fc8", "#ffe6f3") + sparks([[18, 50, 4], [102, 40, 5], [96, 70, 3], [24, 82, 3]]) +
+  function bQueen(o = {}) {
+    return [sky("#ff8fc8", "#ffe6f3") + sparks([[18, 50, 4], [102, 40, 5], [96, 70, 3], [24, 82, 3]], "#fff", o.tw) +
       floor(96, "#eeeed2", "#769656") + shadow(60, 146, 34),
-    aEdge(queen(BL))];
+    aWrap(o.twirl, aEdge(queen(BL)), "60px 146px")];
   }
-  function wRook() {
+  function wRook(o = {}) {
     return [sky("#5bb8ff", "#d8f0ff") + aCloud(84, 16, .9) + aCloud(4, 44, .7) +
-      Pn("M0,98 Q30,84 60,92 T120,88 V110 H0Z", "#7cc95a") + floor(100, "#dee3e6", "#8ca2ad") + shadow(60, 146, 34),
-    aEdge(rook(WH))];
+      Pn("M0,98 Q30,84 60,92 T120,88 V110 H0Z", "#7cc95a") + floor(100, "#dee3e6", "#8ca2ad") + (o.move ? "" : shadow(60, 146, 34)),
+    aWrap(o.move, (o.move ? shadow(60, 146, 34) : "") + aEdge(rook(WH)), "60px 146px")];
   }
-  function bKnight() {
-    return [sky("#ff9a4a", "#ffe08a") + aSun(96, 30, 13) + floor(98, "#f0d9b5", "#b58863") + shadow(60, 146, 36),
-    aEdge(knight(BL, "#6c5c84"))];
+  function bKnight(o = {}) {
+    return [sky("#ff9a4a", "#ffe08a") + aSun(96, 30, 13) + floor(98, "#f0d9b5", "#b58863") + (o.leap ? "" : shadow(60, 146, 36)),
+    (o.leap ? aWrap(o.shadow, shadow(60, 146, 36), "60px 146px") : "") + aWrap(o.leap, aEdge(knight(BL, "#6c5c84")), "60px 146px")];
   }
-  function wBishop() {
+  function wBishop(o = {}) {
     const win = Pn("M60,8 C82,8 96,26 96,52 V96 H24 V52 C24,26 38,8 60,8Z", "#3a2a6a") +
       Pn("M60,14 C78,14 90,30 90,52 V96 H30 V52 C30,30 42,14 60,14Z", "#7fd3ff") +
       Pn("M30,52 H90 V64 H30Z", "#ffcf3a", 'opacity=".8"') + Pn("M30,64 L60,14 L90,64Z", "#ff7aa8", 'opacity=".55"') + Pn("M30,96 L60,52 L90,96Z", "#8be38b", 'opacity=".6"');
-    return [sky("#2f2560", "#7a5bb5") + win + floor(96, "#e8dcf8", "#8a6cc2") + shadow(60, 146, 34),
-    aEdge(bishop(WH))];
+    return [sky("#2f2560", "#7a5bb5") + win + floor(96, "#e8dcf8", "#8a6cc2") + (o.move ? "" : shadow(60, 146, 34)),
+    aWrap(o.move, (o.move ? shadow(60, 146, 34) : "") + aEdge(bishop(WH)), "60px 146px")];
   }
-  function bPawn() {
+  function bPawn(o = {}) {
     return [sky("#16204a", "#4a5ba8") + aC(98, 24, 10, "#fff3c4") + aC(103, 20, 9, "#2a376e") +
       stars([[22, 54, 2.4], [44, 14, 2], [70, 28, 2.8], [88, 60, 2.2], [12, 84, 2], [108, 82, 2.6], [36, 36, 1.6]]) +
-      floor(98, "#c9d4ec", "#5a6aa8") + shadow(60, 146, 34),
-    aEdge(pawn(BL))];
+      floor(98, "#c9d4ec", "#5a6aa8") + (o.move ? "" : shadow(60, 146, 34)),
+    aWrap(o.move, (o.move ? shadow(60, 146, 34) : "") + aEdge(pawn(BL)), "60px 146px")];
   }
 
   /* ---------------- the scenes ---------------- */
@@ -10195,29 +10602,72 @@ function albumParentsWire(pl) {
     return [sky("#9fe0ff", "#e8f8ff") + aCloud(86, 8, .7) + aCloud(2, 44, .6) + floor(yh, "#eeeed2", "#769656", o) + marks + trail,
     aEdge(at(pawn(WH), 24.4, 85, .46) + at(pawn(WH), 52.4, 85, .46) + at(knight(BL, "#6c5c84"), 20, 2, .66, -8))];
   }
-  function handshake() {
+  function handshake(o = {}) {
     const wall = sky("#f6d39a", "#f9e6c4") + [0, 1, 2, 3, 4, 5].map(i => Pn(`M${i * 22 + 6},0 V100 H${i * 22 + 14} V0Z`, "#f2c37f", 'opacity=".45"')).join("") +
       P("M74,6 H112 V44 H74Z", "#1d2a5a", 1.8) + line("M93,6 V44 M74,25 H112", 2, "#8a5a2b") + aC(102, 15, 4, "#fff3c4") + stars([[82, 34, 1.8], [104, 36, 1.6], [84, 13, 1.4]]) +
       line("M46,0 V14", 1.2) + aC(46, 26, 9, "#fff3c4", 'opacity=".6"') + P("M34,26 L40,14 H52 L58,26Z", "#ff9f43", 1.2);
     const table = P("M-2,96 H122 V158 H-2Z", "#a0612f", 1.2) + Pn("M-2,96 H122 V100 H-2Z", "#c27c40");
     const board = P("M10,104 H110 L124,160 H-4Z", "#6b3e1e", 1.2) + floor(46, "#f0d9b5", "#b58863", { R: 8, S: 13, zn: 1, zf: 2.2, j0: -4, j1: 4, Yb: 156 });
     const kL = at(king(WH, { r: 0 }), -10, 38, .7), kR = at(king(BL, { l: 0 }), 46, 38, .7);
-    const shake = `<g class="lv-wave">${aL([[42, 114], [56, 106]], WH.b, 5.4)}${aL([[78, 114], [64, 106]], BL.b, 5.4)}` +
+    const shake = `<g class="${o.shake || "lv-wave"}"${o.shake ? ' style="transform-origin:60px 108px"' : ""}>${aL([[42, 114], [56, 106]], WH.b, 5.4)}${aL([[78, 114], [64, 106]], BL.b, 5.4)}` +
       aC(56.5, 105, 5.6, WH.b, st(1.2)) + aC(63.5, 105, 5.6, BL.b, st(1.2)) + line("M60,100 V110", 1, OL) + `</g>`;
     return [wall + table + board,
-    aEdge(kL + kR + shake + sparks([[60, 88, 4, ""], [48, 92, 2.4], [72, 92, 2.4]], "#ffd21f"))];
+    aEdge(aWrap(o.kings, kL + kR) + shake + (o.pop ? "" : sparks([[60, 88, 4, ""], [48, 92, 2.4], [72, 92, 2.4]], "#ffd21f")))];
   }
 
+  /* ---- the own animations (played at holo; CSS an-ch-* in template.html) ---- */
+  const G = (cls, svg, origin) => aWrap(cls, svg, origin);
+  const pop = (pts, c, cls) => pts.map(([x, y, r], i) => `<g class="${cls}" style="transform-origin:${x}px ${y}px;animation-delay:-${(i * .3).toFixed(1)}s">${aSpark(x, y, r, c)}</g>`).join("");
+  const anim = {
+    // the king waves his golden sceptre, swaying happily, the cross on his crown glinting
+    king: () => { const [b] = wKing();
+      const sc = `<g class="an-ch-sceptre" style="transform-origin:85px 112px">` + line("M83,124 L97,64", 5.4, OL) + line("M83,124 L97,64", 3, "#ffcf3a") +
+        line("M98,55 V45 M94,49 H102", 4.4, OL) + line("M98,55 V45 M94,49 H102", 2.2, "#ffcf3a") + aC(98, 59, 5.4, "#ffcf3a", st(1.2)) + aC(96.4, 57.4, 1.6, "#fff8d0") +
+        aC(85, 110, 5.6, WH.b, st(1.2)) + `</g>`;
+      return [b, G("an-ch-sway", aEdge(king(WH, { r: 0 }) + sc) + aSpark(66, 10, 5, "#fff", "lv-tw"), "60px 146px")]; },
+    // the queen twirls round twice, sparkles flashing on the points of her crown
+    queen: () => { const [b, c] = bQueen({ tw: "lv-tw", twirl: "an-ch-twirl" });
+      return [b, c + pop([[35, 33, 4.6], [60, 18, 5.4], [85, 33, 4.6], [49, 27, 3.6], [71, 27, 3.6]], "#fff", "an-ch-glint")]; },
+    // the rook slides straight along the row to one side, then all the way to the other
+    rook: () => wRook({ move: "an-ch-slide" }),
+    // the knight crouches and leaps high, landing with a bounce
+    knight: () => bKnight({ leap: "an-ch-leap", shadow: "an-ch-shrink" }),
+    // the bishop glides along a diagonal, away and back, then along the other one
+    bishop: () => wBishop({ move: "an-ch-diag" }),
+    // the pawn steps forward, one square and another, then starts again
+    pawn: () => bPawn({ move: "an-ch-step" }),
+    // the crown comes down on the pawn, a flash: it's a queen, who jumps for joy; then she's a pawn again for the next time
+    promotion: () => { const [b] = promotion();
+      const top = crown(60, 36, 1.15) + sparks([[34, 22, 3.4, "#fff"], [86, 22, 3.6], [96, 50, 2.6], [26, 52, 2.6]], "#fff") + line("M44,32 L38,26 M76,32 L82,26 M60,14 V8", 1.6, "#fff");
+      return [b, G("an-ch-pawnout", aEdge(at(pawn(BL, { o: 1 }), 15, 48, .75))) + G("an-ch-queenin", aEdge(at(queen(BL), 15, 48, .75)), "60px 157px") +
+        G("an-ch-crown", aEdge(top), "60px 53px") + `<g class="an-ch-flash" style="transform-origin:60px 92px">${aC(60, 92, 20, "#fff8d0", 'opacity=".85"')}${aSpark(60, 92, 36, "#fff")}</g>`]; },
+    // the knight jumps its L (two squares forward, one to the side) over the pawns, and back again; on a flat board with
+    // big squares (on the perspective floor the pieces were tiny and the knight landed hidden behind the pawns)
+    knightJump: () => { const cx = c => 24 + 36 * c, by = r => 62 + 30 * r, kK = .4, kP = .32;     // squares 36 x 30, a piece's base 11 below a square's centre
+      let board = Pn("M0,36 H120 V158 H0Z", "#5d3b1e");
+      for (let r = 0; r < 4; r++) for (let c = -1; c < 4; c++) board += Pn(`M${6 + 36 * c},${36 + 30 * r} h36 v30 h-36Z`, (r + c) % 2 ? "#769656" : "#eeeed2");
+      const marks = Pn("M78,126 h36 v30 h-36Z", "#ffd21f", 'opacity=".75"') + Pn("M42,66 h36 v30 h-36Z", "#4cd964", 'opacity=".8"') +
+        line("M96,141 V81 H60", 3, "#fff", 'stroke-dasharray="1 5"') + line("M66,76 L60,81 L66,86", 2.4, "#fff");
+      const piece = (svg, c, r, k) => at(svg, r2(cx(c) - 60 * k), r2(by(r) - 146 * k), k);
+      const kn = aEdge(piece(knight(BL, "#6c5c84"), 2, 3, kK)), org = `${cx(2)}px ${by(3)}px`;
+      const pawns = aEdge([[2, 1], [1, 2], [2, 2]].map(([c, r]) => piece(pawn(WH), c, r, kP)).join(""));
+      return [sky("#9fe0ff", "#e8f8ff") + aCloud(70, 6, .7) + aCloud(-4, 14, .6) + board + marks,
+        G("an-ch-kjB", kn, org) + pawns + G("an-ch-kjF", kn, org)]; },
+    // the two kings shake hands, up and down, and bob along; then the stars pop
+    handshake: () => { const [b, c] = handshake({ shake: "an-ch-pump", kings: "an-ch-kbob", pop: 1 });
+      return [b, c + pop([[60, 88, 4], [48, 92, 2.6], [72, 92, 2.6]], "#ffd21f", "an-ch-pop")]; },
+  };
+
   FAN.chess = [
-    ["White King", "The most important piece: the cross on his crown. Keep him safe!", wKing],
-    ["Black Queen", "The strongest piece: she moves any way, as far as she likes", bQueen],
-    ["White Rook", "The little castle tower: straight lines, up, down and sideways", wRook],
-    ["Black Knight", "The horse: jumps in an L, even over other pieces", bKnight],
-    ["White Bishop", "The bishop with the slit in his hat: slides along the diagonals", wBishop],
-    ["Black Pawn", "Small but brave: one step forward, takes diagonally", bPawn],
-    ["Pawn becomes Queen", "A pawn that reaches the last row can become a queen!", promotion],
-    ["Knight's jump", "Two squares forward, one to the side: the knight jumps over everyone", knightJump],
-    ["Good game!", "The two kings shake hands after the game", handshake],
+    ["White King", "The most important piece: the cross on his crown. Keep him safe!", wKing, anim.king],
+    ["Black Queen", "The strongest piece: she moves any way, as far as she likes", bQueen, anim.queen],
+    ["White Rook", "The little castle tower: straight lines, up, down and sideways", wRook, anim.rook],
+    ["Black Knight", "The horse: jumps in an L, even over other pieces", bKnight, anim.knight],
+    ["White Bishop", "The bishop with the slit in his hat: slides along the diagonals", wBishop, anim.bishop],
+    ["Black Pawn", "Small but brave: one step forward, takes diagonally", bPawn, anim.pawn],
+    ["Pawn becomes Queen", "A pawn that reaches the last row can become a queen!", promotion, anim.promotion],
+    ["Knight's jump", "Two squares forward, one to the side: the knight jumps over everyone", knightJump, anim.knightJump],
+    ["Good game!", "The two kings shake hands after the game", handshake, anim.handshake],
   ];
 })();
 
@@ -10330,19 +10780,17 @@ function albumParentsWire(pl) {
     return s;
   }
   // baby elephant: warm grey, big floppy pink-lined ears, trunk up spraying water, happy
-  function elephantChar() {
+  function elephantChar(o = {}) {
     const skin = "#b7a99a", skin2 = "#9f9080", pink = "#f6b7c6", water = "#6fb8dc", waterL = "#c3e8f7";
     let s = "";
-    s += aP("M-18,-24 Q-44,-20 -42,8 Q-40,32 -18,30 Q-9,28 -11,8 Q-13,-10 -18,-24Z", skin);
-    s += aP("M18,-24 Q44,-20 42,8 Q40,32 18,30 Q9,28 11,8 Q13,-10 18,-24Z", skin);
-    s += aP("M-20,-14 Q-34,-10 -32,8 Q-30,24 -18,22 Q-13,20 -15,6 Q-16,-4 -20,-14Z", pink);
-    s += aP("M20,-14 Q34,-10 32,8 Q30,24 18,22 Q13,20 15,6 Q16,-4 20,-14Z", pink);
+    s += aWrap(o.earL, aP("M-18,-24 Q-44,-20 -42,8 Q-40,32 -18,30 Q-9,28 -11,8 Q-13,-10 -18,-24Z", skin) + aP("M-20,-14 Q-34,-10 -32,8 Q-30,24 -18,22 Q-13,20 -15,6 Q-16,-4 -20,-14Z", pink), "-14px -10px");
+    s += aWrap(o.earR, aP("M18,-24 Q44,-20 42,8 Q40,32 18,30 Q9,28 11,8 Q13,-10 18,-24Z", skin) + aP("M20,-14 Q34,-10 32,8 Q30,24 18,22 Q13,20 15,6 Q16,-4 20,-14Z", pink), "14px -10px");
     s += aP("M-21,10 Q-27,32 -11,42 Q0,47 11,42 Q27,32 21,10 Q0,20 -21,10Z", skin);
     s += aC(-11,43,5,skin2,A_OUT) + aC(11,43,5,skin2,A_OUT);
     s += aC(0, -10, 21, skin, A_OUT);
     s += `<path d="M2,8 Q10,-2 6,-16 Q2,-28 9,-36 Q13,-41 10,-46" fill="none" stroke="${skin}" stroke-width="7.4" stroke-linecap="round" ${A_OUT}/>`;
-    s += `<path d="M9,-46 q-2,-5 1,-9 M9,-46 q4,-3 7,-2" fill="none" stroke="${water}" stroke-width="1.6" stroke-linecap="round"/>`;
-    s += aC(10, -52, 2.4, water) + aC(16, -56, 1.7, waterL) + aC(3, -57, 1.6, waterL) + aC(10, -62, 1.3, water);
+    s += aWrap(o.spray, `<path d="M9,-46 q-2,-5 1,-9 M9,-46 q4,-3 7,-2" fill="none" stroke="${water}" stroke-width="1.6" stroke-linecap="round"/>` +
+      aC(10, -52, 2.4, water) + aC(16, -56, 1.7, waterL) + aC(3, -57, 1.6, waterL) + aC(10, -62, 1.3, water), "10px -46px");
     s += aEye(-8, -14, "#2a1a10", 1, 1) + aEye(8, -14, "#2a1a10", 1, 1);
     s += aP("M-6,2 Q0,7 6,2 L4.5,5.5 Q0,8.4 -4.5,5.5Z", "#7a4a3a");
     s += blush(-15,-4) + blush(15,-4);
@@ -10396,18 +10844,22 @@ function albumParentsWire(pl) {
     s += blush(-13,-2) + blush(13,-2);
     return s;
   }
+  // a silverback standing on his knuckles: wide shoulders, long strong arms, a lighter chest, the tall crested head with a
+  // heavy brow, a flat nose and a gentle smile
   function gorillaChar() {
-    const fur1 = "#3a3a3a", fur2 = "#2a2a2a", face = "#6b5544";
-    let s = aP("M-24,2 Q-30,30 -12,44 Q0,51 12,44 Q30,30 24,2 Q0,16 -24,2Z", fur1);
-    s += aC(-14,44,6,fur2,A_OUT) + aC(14,44,6,fur2,A_OUT);
-    s += `<path d="M-24,10 Q-34,18 -30,30 Q-27,36 -20,33" fill="${fur1}" ${A_OUT}/>` + `<path d="M24,10 Q34,18 30,30 Q27,36 20,33" fill="${fur1}" ${A_OUT}/>`;
-    s += aC(-8,34,4,fur2,A_OUT) + aC(8,34,4,fur2,A_OUT);
-    s += aC(-17,-8,7,fur1,A_OUT) + aC(17,-8,7,fur1,A_OUT);
-    s += aC(0, -8, 18, fur1, A_OUT);
-    s += aP("M-11,-10 Q0,-16 11,-10 Q13,-2 9,2 L-9,2 Q-13,-2 -11,-10Z", face);
-    s += aEye(-6, -8, "#2a1a10", .85) + aEye(6, -8, "#2a1a10", .85);
-    s += aP("M-3,0 Q0,2.4 3,0 L2,2 Q0,3.6 -2,2Z", "#2a1a10");
-    s += smile(0, 6, 5);
+    const fur1 = "#3a3a3a", fur2 = "#262626", chest = "#5a5550", face = "#6b5544", skin = "#4a3c32";
+    let s = aC(-10, 45, 6.5, fur2, A_OUT) + aC(10, 45, 6.5, fur2, A_OUT);
+    s += aP("M-25,-12 Q-32,18 -16,40 Q0,47 16,40 Q32,18 25,-12 Q0,-24 -25,-12Z", fur1);
+    s += aP("M-15,-2 Q-8,-8 0,-3 Q8,-8 15,-2 Q16,14 6,19 Q0,21 -6,19 Q-16,14 -15,-2Z", chest) + `<path d="M0,-3 V14" stroke="${fur2}" stroke-width="1" opacity=".6"/>`;
+    s += aP("M-22,-10 Q-41,0 -39,40 L-27,43 Q-27,14 -15,2Z", fur1) + aP("M22,-10 Q41,0 39,40 L27,43 Q27,14 15,2Z", fur1);
+    s += `<path d="M-30,10 Q-34,22 -33,34 M30,10 Q34,22 33,34" fill="none" stroke="${fur2}" stroke-width="1.2" opacity=".7"/>`;
+    s += [-33, 33].map(x => `<ellipse cx="${x}" cy="45" rx="8" ry="4.6" fill="${skin}" ${A_OUT}/>` + [-4, 0, 4].map(d => `<path d="M${x + d},42.6 v3" stroke="${A_OL}" stroke-width=".7"/>`).join("")).join("");
+    s += aP("M-16,-18 Q-17,-44 0,-50 Q17,-44 16,-18 Q15,-6 0,-4 Q-15,-6 -16,-18Z", fur1);
+    s += aP("M-11,-26 Q0,-31 11,-26 Q14,-14 8,-9 Q0,-6 -8,-9 Q-14,-14 -11,-26Z", face);
+    s += aP("M-13,-28 Q0,-34 13,-28 L12,-24.5 Q0,-29.5 -12,-24.5Z", fur2);
+    s += aEye(-5, -21, "#3a2510", .7) + aEye(5, -21, "#3a2510", .7);
+    s += `<ellipse cx="0" cy="-14" rx="5.2" ry="3.2" fill="${skin}" ${A_OUT}/>` + aC(-2, -13.6, 1, A_OL) + aC(2, -13.6, 1, A_OL);
+    s += smile(0, -9.4, 3.6) + blush(-9, -14, 2) + blush(9, -14, 2);
     return s;
   }
   function hippoChar() {
@@ -10447,16 +10899,42 @@ function albumParentsWire(pl) {
   function hippo() { return [riverJungle(), aEdge(at(60, 104, 1.25, hippoChar()))]; }
   function penguin() { return [beach(), aEdge(at(60, 96, 1.25, penguinChar()))]; }
 
+  /* ---- the own animations (played at holo; CSS an-jg-* in template.html). The sloth keeps its living swing: the owner
+     found its holo perfect as it is ---- */
+  const G = (cls, svg, origin) => aWrap(cls, svg, origin);
+  const travel = (cls, items, dur) => items.map(([svg, d]) => `<g class="${cls}" style="animation-delay:-${(d * dur).toFixed(2)}s">${svg}</g>`).join("");
+  const arcs = (x, y, dir, c = "#fff") => [0, 1, 2].map(i => `<path d="M${x + dir * (4 + i * 5)},${y - 6 - i * 3} q${dir * 4},${6 + i * 3} 0,${12 + i * 6}" fill="none" stroke="${c}" stroke-width="2" stroke-linecap="round"/>`).join("");
+  const anim = {
+    // the lion wakes and ROARS: the mane puffs, roar waves burst out to both sides
+    lion: () => [savanna(), G("an-jg-roar", aEdge(at(60, 94, 1.3, lionChar())), "60px 100px"), G("an-jg-waves", arcs(84, 96, 1, "#a0522d") + arcs(36, 96, -1, "#a0522d"))],
+    // the baby elephant flaps its ears and sprays a fountain of water from its trunk
+    elephant: () => [riverJungle(), G("an-jg-nod", aEdge(at(60, 100, 1.15, elephantChar({ earL: "an-jg-flapl", earR: "an-jg-flapr", spray: "an-jg-spray" }))), "60px 140px")],
+    // the giraffe sways its long neck and nods
+    giraffe: () => [savanna(), G("an-jg-sway", aEdge(at(58, 90, 1.02, giraffeChar())), "58px 140px")],
+    // the zebra trots across the plain, the grass tufts passing by
+    zebra: () => [savanna() + travel("an-jg-pass", [[`<path d="M128,146 l2,-7 l2,7 l2,-6 l2,6" fill="none" stroke="#5a8a2c" stroke-width="1.4"/>`, 0], [`<path d="M128,132 l2,-6 l2,6 l2,-5 l2,5" fill="none" stroke="#5a8a2c" stroke-width="1.4"/>`, .5]], 1.6),
+      G("an-jg-trot", aEdge(at(60, 100, 1.2, zebraChar())), "60px 140px")],
+    // the monkey swings on a vine from the top of the card
+    monkey: () => [canopy(), G("an-jg-swing", `<path d="M60,-4 V64" stroke="#3e7b2c" stroke-width="3" stroke-linecap="round"/>` + aEdge(at(60, 100, 1.25, monkeyChar())), "60px -4px")],
+    // the gorilla beats its chest, thump thump, and grins
+    gorilla: () => [canopy(), G("an-jg-beat", aEdge(at(60, 98, 1.15, gorillaChar())), "60px 120px"), G("an-jg-thump", arcs(92, 100, 1, "#ffeb3b") + arcs(28, 100, -1, "#ffeb3b"))],
+    // the hippo bobs in the river, ripples spreading round it
+    hippo: () => [riverJungle(), [0, 1.2].map(d => `<g class="an-jg-ripple" style="transform-origin:60px 128px;animation-delay:-${d}s"><ellipse cx="60" cy="128" rx="34" ry="5" fill="none" stroke="#fff" stroke-width="1.6"/></g>`).join("") +
+      G("an-jg-bob", aEdge(at(60, 104, 1.25, hippoChar())))],
+    // the penguin waddles from side to side
+    penguin: () => [beach(), G("an-jg-waddle", G("an-jg-tilt", aEdge(at(60, 96, 1.25, penguinChar())), "60px 136px"))],
+  };
+
   FAN.jungle = [
-    ["Lion", "A golden mane and a happy roar, napping in the warm savanna sun", lion],
+    ["Lion", "A golden mane and a happy roar, napping in the warm savanna sun", lion, anim.lion],
     ["Sloth", "Hanging from a jungle branch, sleepy eyes and a slow smile", sloth],
-    ["Elephant", "A playful baby elephant sprays water from its trunk by the jungle river", elephant],
-    ["Giraffe", "The tallest friend in the savanna, with gentle eyes and brown patches", giraffe],
-    ["Zebra", "Black and white stripes, trotting across the grassy plain", zebra],
-    ["Monkey", "Swinging through the treetops with a cheeky grin", monkey],
-    ["Gorilla", "A big gentle gorilla standing tall in the jungle", gorilla],
-    ["Hippo", "Cooling off with just its head and back above the river", hippo],
-    ["Penguin", "Waddling happily on the rocky beach", penguin],
+    ["Elephant", "A playful baby elephant sprays water from its trunk by the jungle river", elephant, anim.elephant],
+    ["Giraffe", "The tallest friend in the savanna, with gentle eyes and brown patches", giraffe, anim.giraffe],
+    ["Zebra", "Black and white stripes, trotting across the grassy plain", zebra, anim.zebra],
+    ["Monkey", "Swinging through the treetops with a cheeky grin", monkey, anim.monkey],
+    ["Gorilla", "A big gentle gorilla standing tall in the jungle", gorilla, anim.gorilla],
+    ["Hippo", "Cooling off with just its head and back above the river", hippo, anim.hippo],
+    ["Penguin", "Waddling happily on the rocky beach", penguin, anim.penguin],
   ];
 })();
 
@@ -10732,16 +11210,37 @@ function albumParentsWire(pl) {
     aEdge(live)];
   }
 
+  /* ---- the own animations (played at holo; CSS an-wm-* in template.html): each mascot does its own celebration ---- */
+  const G = (cls, svg, origin) => aWrap(cls, svg, origin);
+  const R3 = aRand(3);
+  const confettiRain = cols => { let c = ""; for (let i = 0; i < 18; i++) { const x = r2(R3() * 120), y = r2(R3() * 158), r = Math.floor(R3() * 180);
+    c += `<rect x="${x}" y="${y}" width="3.4" height="2" fill="${cols[i % cols.length]}" transform="rotate(${r} ${x} ${y})"/>`; }
+    return `<g class="an-wm-rain">${c}<g transform="translate(0 -158)">${c}</g></g>`; };
+  const notes = (x, y) => [0, 1, 2].map(i => `<g class="an-wm-note" style="animation-delay:-${i * .6}s"><path d="M${x},${y} v-9 l6,-2 v9" fill="none" stroke="${OL}" stroke-width="1.4"/>${aC(x - 1.6, y, 2, OL)}${aC(x + 4.4, y - 2, 2, OL)}</g>`).join("");
+  // the mascot's own drawing, with the whole character moving in the given way
+  const move = (draw, cls, origin, over = "") => () => { const [b, m] = draw(); return [b, G(cls, m, origin), over]; };
+  const anim = {
+    willie: move(willie, "an-wm-hop", "60px 146px", confettiRain(["#d0202e", "#fff", "#1e3d8f"])),     // Willie jumps for joy, confetti in red, white and blue
+    naranjito: move(naranjito, "an-wm-roll", "60px 146px"),                                              // Naranjito rocks and rolls like a bouncing orange
+    pique: move(pique, "an-wm-dance", "60px 146px", notes(96, 52)),                                      // Pique dances to the mariachi music
+    striker: move(striker, "an-wm-wag", "60px 146px"),                                                    // Striker wiggles with excitement, a happy dog
+    footix: move(footix, "an-wm-crow", "60px 146px", notes(92, 40)),                                     // Footix stretches up and crows
+    zakumi: move(zakumi, "an-wm-dance", "60px 146px", confettiRain(["#ffd400", "#2e9e4f", "#e33b2c"])),  // Zakumi dances
+    fuleco: move(fuleco, "an-wm-hop", "60px 146px"),                                                      // Fuleco bounces on the spot
+    zabivaka: move(zabivaka, "an-wm-run", "60px 146px"),                                                  // Zabivaka jogs on the spot, warming up
+    laeeb: () => { const [b, m] = laeeb(); return [b, G("an-wm-swoop", m, "60px 80px")]; },              // La'eeb swoops round in a loop, floating as ever
+  };
+
   FAN.wcmascots = [
-    ["World Cup Willie", "England 1966: the very first World Cup mascot, a lion in a Union Jack shirt", willie],
-    ["Naranjito", "Spain 1982: a smiling orange with green leaves", naranjito],
-    ["Pique", "Mexico 1986: a jalapeño pepper with a big sombrero and a moustache", pique],
-    ["Striker", "USA 1994: a happy dog in a stars-and-stripes kit", striker],
-    ["Footix", "France 1998: the blue rooster, France's bird", footix],
-    ["Zakumi", "South Africa 2010: a leopard with green hair", zakumi],
-    ["Fuleco", "Brazil 2014: a three-banded armadillo with a blue shell", fuleco],
-    ["Zabivaka", "Russia 2018: a wolf with sporty orange goggles", zabivaka],
-    ["La'eeb", "Qatar 2022: a floating headdress full of fun", laeeb],
+    ["World Cup Willie", "England 1966: the very first World Cup mascot, a lion in a Union Jack shirt", willie, anim.willie],
+    ["Naranjito", "Spain 1982: a smiling orange with green leaves", naranjito, anim.naranjito],
+    ["Pique", "Mexico 1986: a jalapeño pepper with a big sombrero and a moustache", pique, anim.pique],
+    ["Striker", "USA 1994: a happy dog in a stars-and-stripes kit", striker, anim.striker],
+    ["Footix", "France 1998: the blue rooster, France's bird", footix, anim.footix],
+    ["Zakumi", "South Africa 2010: a leopard with green hair", zakumi, anim.zakumi],
+    ["Fuleco", "Brazil 2014: a three-banded armadillo with a blue shell", fuleco, anim.fuleco],
+    ["Zabivaka", "Russia 2018: a wolf with sporty orange goggles", zabivaka, anim.zabivaka],
+    ["La'eeb", "Qatar 2022: a floating headdress full of fun", laeeb, anim.laeeb],
   ];
 })();
 
@@ -10988,15 +11487,45 @@ function albumParentsWire(pl) {
   }
   const ballGlow = (c = "#ffffff") => glow(60, 88, 62, c, .35);
 
+  /* ---- the own animations (played at holo; CSS an-cp-* in template.html). Al Rihla keeps its living spin (the owner
+     liked its holo as it is) ---- */
+  const G = (cls, svg, origin) => aWrap(cls, svg, origin);
+  const R5 = aRand(5);
+  const confetti = cols => { let c = ""; for (let i = 0; i < 20; i++) { const x = f1(R5() * 120), y = f1(R5() * 158), r = Math.floor(R5() * 180);
+    c += `<rect x="${x}" y="${y}" width="3.4" height="2" fill="${cols[i % cols.length]}" transform="rotate(${r} ${x} ${y})"/>`; } return c; };
+  // a layer falling down the card for ever: two copies 158 apart
+  const rain = svg => `<g class="an-cp-rain">${svg}<g transform="translate(0 -158)">${svg}</g></g>`;
+  const shine = `<g class="an-cp-shine"><path d="M-40,158 L0,0 H14 L-26,158Z" fill="#fff" opacity=".5"/></g>`;
+  const flashes = pts => pts.map(([x, y], i) => `<g class="an-cp-flash" style="transform-origin:${x}px ${y}px;animation-delay:-${f1(i * .55)}s">${aSpark(x, y, 6, "#fff")}</g>`).join("");
+  const GOLD = ["#ffd54f", "#ffffff", "#4caf50", "#e53935", "#42a5f5"];
+  const anim = {
+    // the World Cup is lifted high, again and again, as confetti rains down
+    worldCup: () => [stadium({ seed: 3 }), G("an-cp-lift", aEdge(worldCup())), rain(confetti(GOLD)) + shine],
+    // the Jules Rimet trophy turns slowly in its glass cabinet, a light gleaming across the glass
+    jules: () => [cabinet(), G("an-cp-turn", aEdge(julesRimet()), "60px 90px"), shine + flashes([[30, 40], [94, 60]])],
+    // the big-ears cup rocks from side to side in the celebration, fireworks over the stadium
+    bigEars: () => [stadium({ stars: true, top: "#06123a", bot: "#1d3b8c", seed: 8 }) + flashes([[22, 24], [98, 18], [60, 12], [30, 56]]), G("an-cp-rock", aEdge(bigEars()), "60px 130px"), shine],
+    // the Euro cup goes up and down on the podium, cameras flashing
+    euro: () => [podium({ py: 140 }) + flashes([[16, 30], [104, 40], [22, 100], [100, 96]]), G("an-cp-lift", aEdge(euro())), shine],
+    // the Copa América trophy gleams, a streamer of confetti falling
+    copa: () => [pitch({ seed: 11 }), G("an-cp-bob", aEdge(copaAmerica())), rain(confetti(["#ffd54f", "#74acdf", "#fff", "#e53935"])) + shine],
+    // the winner's medal swings on its ribbon, glinting
+    medal: () => [podium({ top: "#1e5bb8", bot: "#7fd3ff", seed: 21 }), G("an-cp-swing", aEdge(medal()), "60px 0px"), shine],
+    // the Telstar bounces on the pitch, spinning, squashing as it lands
+    telstar: () => [pitch({ seed: 14, shadow: true }), G("an-cp-bounce", G("an-cp-squash", aEdge(ballGlow() + ball(60, 88, 48, telstar(60, 88, 48), { spin: "an-cp-roll" })), "60px 136px"))],
+    // the Tango turns slowly in the cabinet, its triads rolling round
+    tango: () => [cabinet({ top: "#2a4f8f", bot: "#14264a" }), aEdge(ballGlow() + ball(60, 92, 48, tango(60, 92, 48), { spin: "an-cp-roll" })), shine],
+  };
+
   FAN.trophies = [
-    ["World Cup trophy", "The golden FIFA World Cup: two figures holding up the world, green bands at the base", () => [stadium({ seed: 3 }), aEdge(worldCup())]],
-    ["Jules Rimet trophy", "The first World Cup trophy: a golden winged figure holding up a cup", () => [cabinet(), aEdge(julesRimet())]],
-    ["Champions League cup", "The silver \"big ears\" cup with its huge handles", () => [stadium({ stars: true, top: "#06123a", bot: "#1d3b8c", seed: 8 }), aEdge(bigEars())]],
-    ["Euro trophy", "The silver Henri Delaunay cup of the European Championship", () => [podium({ py: 140 }), aEdge(euro())]],
-    ["Copa América trophy", "The tall silver Copa América trophy on its wooden base", () => [pitch({ seed: 11 }), aEdge(copaAmerica())]],
-    ["Winner's medal", "A shiny gold medal with a star on a ribbon", () => [podium({ top: "#1e5bb8", bot: "#7fd3ff", seed: 21 }), aEdge(medal())]],
-    ["Telstar 1970", "The black and white ball of the 1970 World Cup", () => [pitch({ seed: 14, shadow: true }), aEdge(ballGlow() + ball(60, 88, 48, telstar(60, 88, 48)))]],
-    ["Tango 1978", "The 1978 World Cup ball with its black triads", () => [cabinet({ top: "#2a4f8f", bot: "#14264a" }), aEdge(ballGlow() + ball(60, 92, 48, tango(60, 92, 48)))]],
+    ["World Cup trophy", "The golden FIFA World Cup: two figures holding up the world, green bands at the base", () => [stadium({ seed: 3 }), aEdge(worldCup())], anim.worldCup],
+    ["Jules Rimet trophy", "The first World Cup trophy: a golden winged figure holding up a cup", () => [cabinet(), aEdge(julesRimet())], anim.jules],
+    ["Champions League cup", "The silver \"big ears\" cup with its huge handles", () => [stadium({ stars: true, top: "#06123a", bot: "#1d3b8c", seed: 8 }), aEdge(bigEars())], anim.bigEars],
+    ["Euro trophy", "The silver Henri Delaunay cup of the European Championship", () => [podium({ py: 140 }), aEdge(euro())], anim.euro],
+    ["Copa América trophy", "The tall silver Copa América trophy on its wooden base", () => [pitch({ seed: 11 }), aEdge(copaAmerica())], anim.copa],
+    ["Winner's medal", "A shiny gold medal with a star on a ribbon", () => [podium({ top: "#1e5bb8", bot: "#7fd3ff", seed: 21 }), aEdge(medal())], anim.medal],
+    ["Telstar 1970", "The black and white ball of the 1970 World Cup", () => [pitch({ seed: 14, shadow: true }), aEdge(ballGlow() + ball(60, 88, 48, telstar(60, 88, 48)))], anim.telstar],
+    ["Tango 1978", "The 1978 World Cup ball with its black triads", () => [cabinet({ top: "#2a4f8f", bot: "#14264a" }), aEdge(ballGlow() + ball(60, 92, 48, tango(60, 92, 48)))], anim.tango],
     ["Al Rihla 2022", "The colourful ball of the 2022 World Cup (it spins)", () => [stadium({ seed: 17, top: "#2a0f4a", bot: "#7a1f5a" }), aEdge(ballGlow("#fff3c4") + ball(60, 82, 48, alRihla(60, 82, 48), { spin: "lv-spin" }))]],
   ];
 })();
@@ -11021,7 +11550,13 @@ function albumParentsWire(pl) {
     `<ellipse cx="${x}" cy="${f1(y + w * .5)}" rx="${f1(w * .42)}" ry="${f1(w * .22)}" fill="#ff8a80"/>`;
   // a white glint on a window
   const shine = (x, y, l = 6) => `<path d="M${x},${y} l${f1(l * .55)},${f1(-l)}" stroke="#fff" stroke-width="1.8" stroke-linecap="round" opacity=".75"/>`;
-  const wheel = (x, y, r, hub = "#cfd8dc") => aC(x, y, r, "#263238", OUT) + aC(x, y, f1(r * .55), hub, `stroke="${OL}" stroke-width=".9"`) +
+  // while an own animation is drawn (FX set by withFx), wheels turn, light domes flash and smoke puffs drift up
+  let FX = {};
+  const withFx = (fx, f) => { FX = fx; try { return f(); } finally { FX = {}; } };
+  const spinAt = (x, y, svg) => FX.spin ? `<g class="${FX.spin}" style="transform-origin:${x}px ${y}px">${svg}</g>` : svg;
+  const puffs = list => list.map(([x, y, r, attrs], i) => FX.puff ? `<g class="${FX.puff}" style="transform-origin:${x}px ${y}px;animation-delay:-${f1(i * .4)}s">${aC(x, y, r, "#fff", attrs)}</g>` : aC(x, y, r, "#fff", attrs)).join("");
+  const wheel = (x, y, r, hub = "#cfd8dc") => spinAt(x, y, wheel0(x, y, r, hub));
+  const wheel0 = (x, y, r, hub) => aC(x, y, r, "#263238", OUT) + aC(x, y, f1(r * .55), hub, `stroke="${OL}" stroke-width=".9"`) +
     aC(x, y, f1(r * .18), "#607d8b") +
     `<path d="M${f1(x - r * .72)},${f1(y - r * .3)} A${f1(r * .78)},${f1(r * .78)} 0 0 1 ${f1(x - r * .25)},${f1(y - r * .74)}" stroke="#fff" stroke-width="1.3" fill="none" opacity=".35" stroke-linecap="round"/>`;
   // the dark wheel arch cut into the body
@@ -11029,7 +11564,7 @@ function albumParentsWire(pl) {
   const headlight = (x, y, r = 3) => aC(x, y, r, "#fff59d", OUT) + aC(x - r * .3, y - r * .3, f1(r * .35), "#fff");
   // flashing-light bar: dark base and coloured domes
   const lightbar = (x, y, cols) => aR(x, y + 5, cols.length * 10 + 4, 3.4, "#455a64", `rx="1.5"`) +
-    cols.map((c, i) => `<path d="M${x + 2 + i * 10},${y + 5.4} Q${x + 2 + i * 10},${y} ${x + 7 + i * 10},${y} Q${x + 12 + i * 10},${y} ${x + 12 + i * 10},${y + 5.4}Z" fill="${c}" ${OUT}/>` +
+    cols.map((c, i) => (FX.flash ? `<g class="${FX.flash}${i % 2 ? "2" : ""}">` : "") + `<path d="M${x + 2 + i * 10},${y + 5.4} Q${x + 2 + i * 10},${y} ${x + 7 + i * 10},${y} Q${x + 12 + i * 10},${y} ${x + 12 + i * 10},${y + 5.4}Z" fill="${c}" ${OUT}/>` + (FX.flash ? "</g>" : "") +
       aC(x + 5 + i * 10, y + 2.2, 1, "#fff", `opacity=".8"`)).join("");
 
   /* ---------- backdrops ---------- */
@@ -11130,7 +11665,7 @@ function albumParentsWire(pl) {
   }
   function tractor() {
     const G = "#43a047", R = "#e53935";
-    return `<path d="M80,72 V52" stroke="#546e7a" stroke-width="4" stroke-linecap="round"/>` + aC(84, 44, 4, "#eceff1", `opacity=".9"`) + aC(92, 36, 5.5, "#eceff1", `opacity=".8"`) +
+    return `<path d="M80,72 V52" stroke="#546e7a" stroke-width="4" stroke-linecap="round"/>` + (FX.puff ? puffs([[84, 44, 4, `opacity=".9"`], [92, 36, 5.5, `opacity=".8"`]]).replace(/fill="#fff"/g, 'fill="#eceff1"') : aC(84, 44, 4, "#eceff1", `opacity=".9"`) + aC(92, 36, 5.5, "#eceff1", `opacity=".8"`)) +
       aP("M18,100 L18,50 Q18,44 24,44 L58,44 Q64,44 64,50 L64,100Z", G) + aR(12, 37, 58, 8, "#fafafa", `rx="3"`) +
       aP("M24,52 L58,52 L58,84 L24,84Z", GLASS) + shine(52, 62, 6) +
       aP("M60,72 L104,74 Q114,76 114,86 L114,112 L60,112Z", G) +
@@ -11192,10 +11727,11 @@ function albumParentsWire(pl) {
   }
   function steamTrain() {
     const BL = "#1e63c4", R = "#e53935", K = "#263238";
-    const rw = (x, y, r) => aC(x, y, r, K, OUT) + aC(x, y, f1(r - 2.4), R, `stroke="${OL}" stroke-width=".8"`) +
+    const rw = (x, y, r) => spinAt(x, y, rw0(x, y, r));
+    const rw0 = (x, y, r) => aC(x, y, r, K, OUT) + aC(x, y, f1(r - 2.4), R, `stroke="${OL}" stroke-width=".8"`) +
       [0, 45, 90, 135].map(a => `<path d="M${f1(x - (r - 3) * Math.cos(a * Math.PI / 180))},${f1(y - (r - 3) * Math.sin(a * Math.PI / 180))} L${f1(x + (r - 3) * Math.cos(a * Math.PI / 180))},${f1(y + (r - 3) * Math.sin(a * Math.PI / 180))}" stroke="#b71c1c" stroke-width="1.6"/>`).join("") +
       aC(x, y, f1(r * .25), "#fdd835", OUT);
-    return [[82, 44, 6], [72, 33, 8], [56, 26, 9.5], [40, 34, 7]].map(([x, y, r]) => aC(x, y, r, "#fff", `stroke="#cfd8dc" stroke-width="1.2" opacity=".95"`)).join("") +
+    return puffs([[82, 44, 6], [72, 33, 8], [56, 26, 9.5], [40, 34, 7]].map(([x, y, r]) => [x, y, r, `stroke="#cfd8dc" stroke-width="1.2" opacity=".95"`])) +
       aP("M8,112 L8,56 L44,56 L44,112Z", BL) + aP("M3,56 Q3,48 11,48 L41,48 Q49,48 49,56Z", R) +
       aR(15, 62, 22, 18, GLASS, `rx="3"`) + shine(31, 68, 5) +
       aR(40, 74, 56, 36, BL, `rx="4"`) + [56, 78].map(x => `<rect x="${x}" y="74" width="3.4" height="36" fill="#fdd835" ${OUT}/>`).join("") +
@@ -11214,16 +11750,54 @@ function albumParentsWire(pl) {
   /* ---------- the stickers ---------- */
   const heliSky = () => sky("#7fd0f6", "#cdeeff") + aCloud(40, 16, .7) + aCloud(86, 126, .6) +
     `<path d="M0,138 Q40,128 80,138 Q100,143 120,134 V158 H0Z" fill="#8fc35e"/>` + house(8, 156, 20, 14, "#f2c9a0", "#7a2a1e");
+  /* ---- the own animations (played at holo; CSS an-vh-* in template.html) ---- */
+  const G = (cls, svg, origin) => aWrap(cls, svg, origin);
+  const DRIVE = { spin: "an-vh-wheel", flash: "an-vh-flash", puff: "an-vh-puff" };
+  // the street rolling past: the houses and the lane marks scroll left, a copy 120 to the right closes the loop
+  function streetGo(o = {}) {
+    let s = sky(o.top || "#bfe6ff", o.bot || "#eaf7ff") + aCloud(40, 14, .6) + aCloud(88, 22, .55);
+    const row = house(2, 104, 30, 46, o.c1 || "#f2c9a0") + house(42, 104, 28, 38, o.c2 || "#f5e0a8") + house(82, 104, 32, 52, o.c3 || "#c9e0f0");
+    s += G("an-vh-scroll", row + `<g transform="translate(120 0)">${row}</g>`);
+    s += `<rect y="104" width="120" height="8" fill="#e0e0e0"/><rect y="112" width="120" height="46" fill="#8f969c"/>`;
+    s += G("an-vh-scroll2", [...Array(10)].map((_, i) => `<rect x="${2 + i * 26}" y="146" width="14" height="3" fill="#f4e27a"/>`).join(""));
+    return s;
+  }
+  const drive = (o, draw) => [streetGo(o), G("an-vh-bump", withFx(DRIVE, () => aEdge(draw())))];
+  function railsGo() {
+    let s = sky("#bfe6ff", "#eafbe0") + aSun(104, 18, 9) + `<path d="M0,104 Q40,96 80,104 Q100,108 120,100 V158 H0Z" fill="#8fc35e"/>`;
+    s += `<rect y="138" width="120" height="20" fill="#9c8255"/>`;
+    s += G("an-vh-sleepers", [...Array(11)].map((_, i) => `<rect x="${-2 + i * 15}" y="141" width="9" height="15" fill="#6d4c2a" transform="skewX(-14)" ${OUT}/>`).join(""));
+    s += `<rect y="139" width="120" height="3.4" fill="#6b7076" ${OUT}/><rect y="150" width="120" height="3.4" fill="#6b7076" ${OUT}/>`;
+    return s;
+  }
+  const anim = {
+    fire: () => drive({ c3: "#e2b0a0" }, fireEngine),          // racing to help: lights flashing, wheels turning, the street rushing by
+    police: () => drive({}, policeCar),
+    ambulance: () => drive({ c1: "#dfe8ea" }, ambulance),
+    bus: () => drive({ c2: "#f0d9b0" }, schoolBus),
+    // the tractor chugs along the field, puffing smoke, bouncing over the furrows
+    tractor: () => [farm(), G("an-vh-chug", withFx(DRIVE, () => aEdge(tractor())), "60px 140px")],
+    // the digger rocks back and forth, digging, clods of earth flying
+    digger: () => [site(), G("an-vh-dig", aEdge(digger()), "60px 140px") +
+      [[24, 120, 0], [30, 116, .3], [18, 118, .6]].map(([x, y, d]) => `<g class="an-vh-clod" style="animation-delay:-${d}s">${aC(x, y, 2.6, "#8d6e3f", OUT)}</g>`).join("")],
+    rubbish: () => drive({ c2: "#dfe8c8" }, rubbishTruck),
+    // the helicopter hovers and tilts as the clouds drift past
+    heli: () => [sky("#7fd0f6", "#cdeeff") + [[16, .7, 0], [60, .6, .33], [104, .5, .66]].map(([y, k, d]) => `<g class="an-vh-cloud" style="animation-delay:-${f1(d * 5)}s">${aCloud(124, y, k)}</g>`).join("") +
+      `<path d="M0,138 Q40,128 80,138 Q100,143 120,134 V158 H0Z" fill="#8fc35e"/>` + house(8, 156, 20, 14, "#f2c9a0", "#7a2a1e"), G("an-vh-hover", aEdge(helicopter()), "70px 80px")],
+    // the steam train chuffs along the rails: wheels turning, sleepers rushing by, puffs of steam
+    train: () => [railsGo(), G("an-vh-chuff", withFx(DRIVE, () => aEdge(steamTrain())))],
+  };
+
   FAN.vehicles = [
-    ["Fire engine", "Big red fire engine with a long ladder on top and flashing lights", () => [street({ c3: "#e2b0a0" }), aEdge(fireEngine())]],
-    ["Police car", "Blue and white police car with a gold star and flashing lights", () => [street({}), aEdge(policeCar())]],
-    ["Ambulance", "White ambulance with a red cross, ready to help", () => [street({ c1: "#dfe8ea" }), aEdge(ambulance())]],
-    ["School bus", "Big yellow school bus full of happy children", () => [street({ c2: "#f0d9b0" }), aEdge(schoolBus())]],
-    ["Tractor", "Green tractor with a huge back wheel, puffing on the farm", () => [farm(), aEdge(tractor())]],
-    ["Digger", "Yellow digger on tracks, its long arm and bucket ready to scoop", () => [site(), aEdge(digger())]],
-    ["Rubbish truck", "Green rubbish truck collecting the bins (a banana peel peeks out)", () => [street({ c2: "#dfe8c8" }), aEdge(rubbishTruck())]],
-    ["Helicopter", "Red helicopter flying over the houses (its tail rotor spins)", () => [heliSky(), aEdge(helicopter())]],
-    ["Steam train", "Blue steam engine puffing along the rails on big red wheels", () => [rails(), aEdge(steamTrain())]],
+    ["Fire engine", "Big red fire engine with a long ladder on top and flashing lights", () => [street({ c3: "#e2b0a0" }), aEdge(fireEngine())], anim.fire],
+    ["Police car", "Blue and white police car with a gold star and flashing lights", () => [street({}), aEdge(policeCar())], anim.police],
+    ["Ambulance", "White ambulance with a red cross, ready to help", () => [street({ c1: "#dfe8ea" }), aEdge(ambulance())], anim.ambulance],
+    ["School bus", "Big yellow school bus full of happy children", () => [street({ c2: "#f0d9b0" }), aEdge(schoolBus())], anim.bus],
+    ["Tractor", "Green tractor with a huge back wheel, puffing on the farm", () => [farm(), aEdge(tractor())], anim.tractor],
+    ["Digger", "Yellow digger on tracks, its long arm and bucket ready to scoop", () => [site(), aEdge(digger())], anim.digger],
+    ["Rubbish truck", "Green rubbish truck collecting the bins (a banana peel peeks out)", () => [street({ c2: "#dfe8c8" }), aEdge(rubbishTruck())], anim.rubbish],
+    ["Helicopter", "Red helicopter flying over the houses (its tail rotor spins)", () => [heliSky(), aEdge(helicopter())], anim.heli],
+    ["Steam train", "Blue steam engine puffing along the rails on big red wheels", () => [rails(), aEdge(steamTrain())], anim.train],
   ];
 })();
 
@@ -11305,9 +11879,10 @@ function albumParentsWire(pl) {
   }
 
   // Benfica: bifana, a pork-steak roll with mustard
-  function bifana() {
+  // o (here and below) = hooks for the sticker's own animation (js/fan/teamown_a.js); without it the plain picture
+  function bifana(o = {}) {
     const bg = radial("#ff5a5a", "#b0001a") + En(60, 116, 52, 13, "#fff", 'opacity=".95"') + En(60, 116, 40, 9, "#f1f1f1") + aFlagAt("slb");
-    const t = [];
+    const t = [], lid = o.lid || (s => s);
     t.push(P("M12,92 Q12,112 34,114 H86 Q108,112 108,92Z", "#d79c55"));
     // pork slices: two wavy layers
     let w1 = "M8,95", w2 = "M10,88";
@@ -11315,13 +11890,12 @@ function albumParentsWire(pl) {
     for (let x = 10; x < 110; x += 12.5) w2 += ` Q${n(x + 6.25)},80 ${n(x + 12.5)},88`;
     t.push(P(w1 + " L112,90 L8,90Z", "#b8653a", 1.2), P(w2 + " L110,96 L10,96Z", "#c97a4a", 1.2));
     t.push(line("M18,92 Q30,88 40,92 M66,93 Q80,89 92,93", 1.4, "#e7a07a"));
-    t.push(P("M12,90 C12,58 38,46 60,46 C82,46 108,58 108,90 Q60,96 12,90Z", "#e7b268"));
-    t.push(Pn("M22,72 C26,58 42,52 56,51", "none", `stroke="#fff3d6" stroke-width="3" stroke-linecap="round" opacity=".8"`));
-    t.push(line("M44,52 Q60,49 76,52", 1.2, "#b77a35"));
+    t.push(lid(P("M12,90 C12,58 38,46 60,46 C82,46 108,58 108,90 Q60,96 12,90Z", "#e7b268") +
+      Pn("M22,72 C26,58 42,52 56,51", "none", `stroke="#fff3d6" stroke-width="3" stroke-linecap="round" opacity=".8"`) +
+      line("M44,52 Q60,49 76,52", 1.2, "#b77a35")));
     // mustard zigzag peeking out
     t.push(line("M16,90 L22,95 L28,89 L34,95 L40,89 L46,95 L52,89 L58,95 L64,89 L70,95 L76,89 L82,95 L88,89 L94,95 L100,90", 2.6, "#ffcc00"));
-    [[34, 60], [48, 56], [72, 57], [86, 63], [62, 62], [40, 66]].forEach(([x, y]) => t.push(En(x, y, 1.6, 1, "#fff8e8", 'opacity=".9"')));
-    t.push(face(60, 74, 1.1));
+    t.push(lid([[34, 60], [48, 56], [72, 57], [86, 63], [62, 62], [40, 66]].map(([x, y]) => En(x, y, 1.6, 1, "#fff8e8", 'opacity=".9"')).join("") + face(60, 74, 1.1)));
     t.push(sparks([[104, 40, 4.5], [16, 50, 3.5]]));
     return [bg, aEdge(t.join(""))];
   }
@@ -11352,13 +11926,13 @@ function albumParentsWire(pl) {
   }
 
   // Cape Verde: cachupa, the corn-and-bean stew, in a clay pot with a fried egg
-  function cachupa() {
+  function cachupa(o = {}) {
     const bg = aSky("#7fd3ff", "#d8f4ff") + aSun(98, 18, 10) + aCloud(8, 14, .8) + aWaves(48, "#2fa3d6", "#c8efff", 3) +
       Pn("M0,70 Q60,62 120,70 V158 H0Z", "#c48a52") + line("M0,90 H120 M0,112 H120 M0,134 H120", .8, "#a06a38", 'opacity=".55"') + aFlagAt("cv");
     const t = [];
     t.push(shadow(60, 120, 40));
     // steam
-    t.push(line("M44,38 q-5,-6 0,-12 q5,-6 0,-12 M60,34 q-5,-6 0,-12 q5,-6 0,-12 M76,38 q-5,-6 0,-12 q5,-6 0,-12", 2.2, "#fff", 'opacity=".85"'));
+    t.push(o.steam ? o.steam(line) : line("M44,38 q-5,-6 0,-12 q5,-6 0,-12 M60,34 q-5,-6 0,-12 q5,-6 0,-12 M76,38 q-5,-6 0,-12 q5,-6 0,-12", 2.2, "#fff", 'opacity=".85"'));
     // handles, pot, rim
     t.push(E(16, 80, 6, 8, "#9a4626"), E(104, 80, 6, 8, "#9a4626"));
     t.push(P("M18,68 C14,92 30,118 60,118 C90,118 106,92 102,68Z", "#b4572d"));
@@ -11389,7 +11963,7 @@ function albumParentsWire(pl) {
   function mussel(x, y, a = 0) {
     return at(E(0, 0, 6, 3.6, "#2b2f45", .9) + En(0, -.4, 4.3, 2.3, "#ff9f4a") + En(-1.2, -1, 1.5, .7, "#ffd0a0"), x, y, 1, a);
   }
-  function paella() {
+  function paella(o = {}) {
     const bg = radial("#ffe27a", "#f08a1c", ".45") + Rn(0, 112, 120, 46, "#c0392b") + line("M0,118 H120", 2.5, "#ffcc33") + aFlagAt("es");
     const t = [];
     t.push(shadow(60, 118, 50));
@@ -11403,7 +11977,8 @@ function albumParentsWire(pl) {
     t.push(clip("M15,88 A45,18 0 0 1 105,88 A45,18 0 0 1 15,88Z", rice.join("") +
       [[30, 82], [44, 98], [78, 99], [92, 86], [70, 76], [52, 76]].map(([x, y]) => aC(x, y, 1.8, "#5cb531", st(.5))).join("") +
       [[36, 92, -20], [84, 80, 25], [64, 100, 10], [48, 82, -40]].map(([x, y, a]) => at(R(-5, -1.2, 10, 2.4, "#e53935", .5, 'rx="1.2"'), x, y, 1, a)).join("")));
-    t.push(shrimp(30, 90, -10), shrimp(88, 92, 20), shrimp(42, 76, -30), shrimp(80, 77, 30));
+    const hop = o.shrimp || (s => s);
+    t.push(hop(shrimp(30, 90, -10), 0), hop(shrimp(88, 92, 20), 1), hop(shrimp(42, 76, -30), 2), hop(shrimp(80, 77, 30), 3));
     t.push(mussel(24, 84, -15), mussel(96, 85, 15), mussel(56, 101, 0), mussel(70, 72, 5));
     // lemon wedge
     t.push(P("M64,102 Q74,92 84,100 Q74,108 64,102Z", "#fff176", 1) + line("M66,101 Q74,96 82,100", .7, "#e8c400"));
@@ -11413,14 +11988,14 @@ function albumParentsWire(pl) {
   }
 
   // France: a croissant in front of a baguette, under a bakery awning
-  function croissant() {
+  function croissant(o = {}) {
     let aw = "";
     for (let i = 0; i < 8; i++) aw += Pn(`M${i * 15},0 H${i * 15 + 15} V22 Q${i * 15 + 7.5},30 ${i * 15},22Z`, ["#1f4fa8", "#fff", "#e53935", "#fff"][i % 4]);
     const bg = aSky("#fff3dc", "#f6e2bf") + aw + line("M0,24 H120", 1, "#c7a777") + counter(114, "#b97a43", "#8f5a2c") + aFlagAt("fr");
     const t = [];
     // baguette, slanted
-    t.push(at(R(-56, -11, 112, 22, "#d8923a", 1.4, 'rx="11"') + [-36, -18, 0, 18, 36].map(x => P(`M${x - 6},-5 Q${x},-9 ${x + 6},-3 Q${x},-2 ${x - 6},-5Z`, "#f6cf8a", .8)).join("") +
-      Pn("M-46,-6 Q-20,-10 20,-8", "none", `stroke="#f8dba6" stroke-width="2.2" stroke-linecap="round" opacity=".7"`), 64, 58, 1, 32));
+    t.push((o.baguette || (s => s))(at(R(-56, -11, 112, 22, "#d8923a", 1.4, 'rx="11"') + [-36, -18, 0, 18, 36].map(x => P(`M${x - 6},-5 Q${x},-9 ${x + 6},-3 Q${x},-2 ${x - 6},-5Z`, "#f6cf8a", .8)).join("") +
+      Pn("M-46,-6 Q-20,-10 20,-8", "none", `stroke="#f8dba6" stroke-width="2.2" stroke-linecap="round" opacity=".7"`), 64, 58, 1, 32)));
     // croissant: segments from the tips in to the fat middle
     const seg = (x, y, rx, ry, a) => E(x, y, rx, ry, "#e3a13f", 1.3, `transform="rotate(${a} ${n(x)} ${n(y)})"`) +
       En(x - rx * .2, y - ry * .45, rx * .5, ry * .18, "#ffd890", `transform="rotate(${a} ${n(x)} ${n(y)})" opacity=".8"`);
@@ -11435,7 +12010,8 @@ function albumParentsWire(pl) {
   }
 
   // Italy: a Margherita pizza with one slice pulled out
-  function pizza() {
+  function pizza(o = {}) {
+    const tbW = (k, v, ...a) => o[k] ? o[k](v, ...a) : v;      // o.<part>(svg): that part on its own (js/fan/teamown_b.js)
     let checks = "";
     for (let r = 0; r < 12; r++) for (let c = 0; c < 9; c++) if ((r + c) % 2) checks += Rn(c * 14, r * 14, 14, 14, "#e53935", 'opacity=".85"');
     const bg = Rn(0, 0, 120, 158, "#fff") + checks + aFlagAt("it");
@@ -11454,11 +12030,11 @@ function albumParentsWire(pl) {
     [[1.5, 30], [2.4, 34], [3.3, 36], [4.2, 32], [5.1, 36]].forEach(([a, r]) => t.push(aC(C[0] + (r + 7) * Math.cos(a), C[1] + (r + 7) * Math.sin(a), 1.3, "#a8642a")));
     t.push(tops(C, [[1.6, 26, "m"], [2.6, 18, "m"], [3.5, 28, "m"], [4.4, 20, "m"], [5.3, 28, "m"], [5.9, 14, "m"], [3.6, 8, "m"], [2.1, 30, "b"], [3.0, 26, "b"], [4.0, 30, "b"], [4.9, 14, "b"], [5.7, 31, "b"]]));
     // cheese strings across the gap
-    t.push(line(`M${pt(C, 22, a1 + .05)} Q${pt(C, 26, am)} ${pt(C2, 22, a1 + .05)}`, 1.6, "#fff4c8"), line(`M${pt(C, 30, a2 - .06)} Q${pt(C, 33, am)} ${pt(C2, 30, a2 - .06)}`, 1.4, "#fff4c8"));
-    t.push(P(sl(C2, Rr), "#e2a24e"));
-    t.push(Pn(sl(C2, Rr - 6).replace(/^M[^L]+/, `M${n(C2[0] + 3 * Math.cos(am))},${n(C2[1] + 3 * Math.sin(am))} `), "#d8392a"));
-    t.push(tops(C2, [[am - .18, 36, "m"], [am + .2, 16, "b"]]));
-    t.push(face(C2[0] + 24 * Math.cos(am), C2[1] + 24 * Math.sin(am) - 1, .72));
+    t.push(tbW("string", line(`M${pt(C, 22, a1 + .05)} Q${pt(C, 26, am)} ${pt(C2, 22, a1 + .05)}`, 1.6, "#fff4c8"), C, 22, a1 + .05, am), tbW("string", line(`M${pt(C, 30, a2 - .06)} Q${pt(C, 33, am)} ${pt(C2, 30, a2 - .06)}`, 1.4, "#fff4c8"), C, 30, a2 - .06, am));
+    t.push(tbW("slice", P(sl(C2, Rr), "#e2a24e") +
+      Pn(sl(C2, Rr - 6).replace(/^M[^L]+/, `M${n(C2[0] + 3 * Math.cos(am))},${n(C2[1] + 3 * Math.sin(am))} `), "#d8392a") +
+      tops(C2, [[am - .18, 36, "m"], [am + .2, 16, "b"]]) +
+      face(C2[0] + 24 * Math.cos(am), C2[1] + 24 * Math.sin(am) - 1, .72), am));
     t.push(sparks([[104, 22, 4.5], [14, 24, 3.5]]));
     return [bg, aEdge(t.join(""))];
   }
@@ -11486,11 +12062,12 @@ function albumParentsWire(pl) {
   }
 
   // Netherlands: a stroopwafel warming on a Delft-blue mug
-  function stroopwafel() {
+  function stroopwafel(o = {}) {
+    const tbW = (k, v, ...a) => o[k] ? o[k](v, ...a) : v;      // o.<part>(svg): that part on its own (js/fan/teamown_b.js)
     const bg = radial("#ffb04a", "#f06a00", ".45") + Rn(0, 118, 120, 40, "#a8693a") + Rn(0, 118, 120, 2.5, "#7d4a24") + aFlagAt("nl");
     const t = [];
     t.push(shadow(60, 128, 34));
-    t.push(line("M48,40 q-5,-6 0,-12 q5,-6 0,-12 M72,40 q-5,-6 0,-12 q5,-6 0,-12", 2.2, "#fff", 'opacity=".85"'));
+    t.push(tbW("steam", line("M48,40 q-5,-6 0,-12 q5,-6 0,-12 M72,40 q-5,-6 0,-12 q5,-6 0,-12", 2.2, "#fff", 'opacity=".85"')));
     // mug
     t.push(rope("M88,90 Q104,90 102,104 Q100,116 86,114", 4, "#fafafa"));
     t.push(P("M32,80 L34,122 Q60,130 86,122 L88,80Z", "#fafafa"));
@@ -11504,7 +12081,7 @@ function albumParentsWire(pl) {
     for (let i = -60; i <= 60; i += 8) grid.push(line(`M${60 + i - 20},58 L${60 + i + 20},88 M${60 + i + 20},58 L${60 + i - 20},88`, 1.2, "#b9772c", 'opacity=".8"'));
     t.push(clip("M16,72 A44,13 0 0 1 104,72 A44,13 0 0 1 16,72Z", grid.join("")));
     t.push(E(60, 72, 44, 13, "none", 1.4));
-    t.push(P("M36,82 Q36,90 39,90 Q42,90 41,83Z", "#9a4f12", .9) + P("M80,83 Q80,93 83,93 Q86,93 85,82Z", "#9a4f12", .9));
+    t.push(tbW("drip", P("M36,82 Q36,90 39,90 Q42,90 41,83Z", "#9a4f12", .9), 38.5, 82) + tbW("drip", P("M80,83 Q80,93 83,93 Q86,93 85,82Z", "#9a4f12", .9), 82.5, 82));
     t.push(Pn("M26,68 Q40,62 56,61", "none", `stroke="#fff3d6" stroke-width="2.4" stroke-linecap="round" opacity=".7"`));
     t.push(face(60, 72, .8));
     t.push(sparks([[104, 30, 4.5], [14, 40, 3.5]]));
@@ -11514,14 +12091,14 @@ function albumParentsWire(pl) {
   /* ================= NATIONAL THINGS ================= */
 
   // Portugal: the yellow tram 28 climbing a Lisbon street
-  function tram() {
-    const road = x => n(115.5 - .176 * (x - 65.6));
-    const houses = [[-2, 28, "#f6c4a8"], [24, 22, "#fff1c9"], [46, 18, "#bfe0f2"], [70, 12, "#f9d5e0"], [94, 8, "#ffe0a3"]].map(([x, top, c]) =>
+  function tram(o = {}) {
+    const road = x => n(115.5 - .176 * (x - 65.6)), wrap = (k, s) => o[k] ? o[k](s) : s;
+    const houses = (o.houses || [[-2, 28, "#f6c4a8"], [24, 22, "#fff1c9"], [46, 18, "#bfe0f2"], [70, 12, "#f9d5e0"], [94, 8, "#ffe0a3"]]).map(([x, top, c]) =>
       R(x, top + 14, 26, 120 - top, c, 1) + P(`M${x - 2},${top + 14} L${x + 13},${top + 2} L${x + 28},${top + 14}Z`, "#d9663a", 1) +
       [0, 1].map(r => [0, 1].map(k => R(x + 5 + k * 10, top + 22 + r * 16, 6, 9, "#5b8fb5", .8)).join("")).join("")).join("");
-    const bg = aSky("#8fd3ff", "#e4f6ff") + aCloud(70, 6, .7) + houses +
-      Pn(`M0,${road(0)} L120,${road(120)} V158 H0Z`, "#d6cfc2") +
-      [10, 22, 34].map(d => line(`M0,${n(road(0) + d)} L120,${n(road(120) + d)}`, .7, "#b5ab9a", 'opacity=".8"')).join("") +
+    const bg = aSky("#8fd3ff", "#e4f6ff") + aCloud(70, 6, .7) + wrap("houseRow", houses) +
+      wrap("road", Pn(`M0,${road(0)} L120,${road(120)} V158 H0Z`, "#d6cfc2") +
+      [10, 22, 34].map(d => line(`M0,${n(road(0) + d)} L120,${n(road(120) + d)}`, .7, "#b5ab9a", 'opacity=".8"')).join("")) +
       line(`M0,${n(road(0) + 3)} L120,${n(road(120) + 3)} M0,${n(road(0) + 7)} L120,${n(road(120) + 7)}`, 1.4, "#8a8278") +
       line("M0,31.6 L120,10.5", .9, "#333") + aFlagAt("pt");
     const Y = "#f8c01b", t = [];
@@ -11541,13 +12118,14 @@ function albumParentsWire(pl) {
   }
 
   // Benfica: the eagle Vitória flying over the stadium
-  function eagle() {
+  function eagle(o = {}) {
     const bg = radial("#ff4d4d", "#9e0016", ".4") + Pn("M0,128 Q60,108 120,128 V158 H0Z", "#5a0010", 'opacity=".55"') +
       [16, 34, 52, 70, 88, 106].map(x => aC(x, 122 - Math.abs(60 - x) * -.08 - 6, 2, "#ffe9a0")).join("") + aFlagAt("slb");
     const BR = "#6b3f1f", t = [];
     const wing = P("M52,74 C40,58 22,44 4,36 C8,44 10,48 8,52 L17,54 L12,60 L22,61 L19,68 L30,68 L29,75 L42,78Z", BR) +
       line("M14,48 L30,58 M22,46 L36,60 M30,48 L42,64", 1, "#9a6a3e", 'opacity=".8"') + Pn("M8,52 L17,54 L12,60 L22,61 L19,68 L30,68 L29,75", "none", `stroke="#a8784a" stroke-width="1.6" opacity=".7"`);
-    t.push(wing, mir(wing));
+    const w = o.wing ? o.wing(wing) : wing;
+    t.push(w, mir(w));
     t.push(P("M50,102 L44,122 L52,119 L60,126 L68,119 L76,122 L70,102Z", "#fff"));
     t.push(E(60, 86, 16, 21, BR));
     t.push(P("M52,104 l-3,6 m3,-6 l0,6 m0,-6 l3,6", "none", 1.3) + P("M68,104 l-3,6 m3,-6 l0,6 m0,-6 l3,6", "none", 1.3));
@@ -11564,13 +12142,13 @@ function albumParentsWire(pl) {
   }
 
   // Vitória SC: Afonso Henriques, the first king, with sword and shield
-  function afonso() {
+  function afonso(o = {}) {
     const bg = aSky("#ffd9a8", "#fff3dd") + aSun(96, 30, 12) + aCloud(10, 22, .8) +
       Pn("M0,108 Q40,94 80,104 T120,100 V158 H0Z", "#7cc36a") + Pn("M0,124 Q50,112 120,122 V158 H0Z", "#5aa84a") + aFlagAt("vsc");
     const t = [];
     t.push(shadow(62, 128, 30));
     // cape
-    t.push(P("M44,74 Q34,100 30,124 Q62,130 94,124 Q88,100 78,74Z", "#c62828"));
+    t.push((o.cape || (s => s))(P("M44,74 Q34,100 30,124 Q62,130 94,124 Q88,100 78,74Z", "#c62828")));
     // legs and boots
     t.push(R(50, 104, 8, 16, "#9aa5ab", 1.2) + R(64, 104, 8, 16, "#9aa5ab", 1.2));
     t.push(E(53, 122, 7, 4, "#6b3e1f") + E(69, 122, 7, 4, "#6b3e1f"));
@@ -11581,10 +12159,10 @@ function albumParentsWire(pl) {
     t.push(Rn(58.5, 78, 5, 30, "#1f4fa8") + Rn(50, 86, 23, 5, "#1f4fa8"));
     t.push(R(47, 97, 28, 4, "#7a4a22", 1, 'rx="1"') + R(58, 96.5, 6, 5, "#ffc107", .8));
     // sword arm, raised: grip in the hand, blade up
-    t.push(rope("M48,80 L36,72", 6, "#9aa5ab"));
-    t.push(P("M27,64 L13,24 L17,22 L31,62Z", "#e6edf1", 1.2) + line("M29,62 L15,23", .7, "#aab6bc"));
-    t.push(R(-7, -1.6, 14, 3.2, "#ffc107", 1, 'transform="translate(30 65) rotate(-20)"') + R(-1.6, 0, 3.2, 9, "#7a4a22", 1, 'transform="translate(31 66) rotate(-20)"'));
-    t.push(aC(33, 71, 4.4, "#ffd9b8", st(1.2)));
+    t.push((o.arm || (s => s))(rope("M48,80 L36,72", 6, "#9aa5ab") +
+      P("M27,64 L13,24 L17,22 L31,62Z", "#e6edf1", 1.2) + line("M29,62 L15,23", .7, "#aab6bc") +
+      R(-7, -1.6, 14, 3.2, "#ffc107", 1, 'transform="translate(30 65) rotate(-20)"') + R(-1.6, 0, 3.2, 9, "#7a4a22", 1, 'transform="translate(31 66) rotate(-20)"') +
+      aC(33, 71, 4.4, "#ffd9b8", st(1.2))));
     // shield
     const sh = "M72,80 H100 V96 Q100,112 86,120 Q72,112 72,96Z";
     t.push(P(sh, "#fafafa", 1.5) + clip(sh, Rn(83.5, 78, 5, 44, "#1f4fa8") + Rn(70, 92, 32, 5, "#1f4fa8")) + Pn(sh, "none", `stroke="#b0bec5" stroke-width="2.5" transform="translate(86 99) scale(.9) translate(-86 -99)"`) + P(sh, "none", 1.5));
@@ -11601,16 +12179,17 @@ function albumParentsWire(pl) {
   }
 
   // Cape Verde: baby sea turtles scurrying to the sea
-  function turtleChar() {
-    return P("M-12,4 L-21,10 L-9,8Z", "#5aa86a", 1.1) +
-      P("M3,4 C9,9 16,14 20,12 C17,7 12,3 6,2Z", "#5aa86a", 1.1) +
+  function turtleChar(o = {}) {
+    const fl = o.flipper || (s => s);
+    return fl(P("M-12,4 L-21,10 L-9,8Z", "#5aa86a", 1.1), 0) +
+      fl(P("M3,4 C9,9 16,14 20,12 C17,7 12,3 6,2Z", "#5aa86a", 1.1), 1) +
       P("M-15,5 C-15,-11 13,-13 15,5Z", "#3f8f4a") +
       line("M-8,4 L-6,-5 L2,-7 L8,-2 L9,4 M-6,-5 L-11,-1 M2,-7 L1,-10 M8,-2 L12,-2", 1, "#9ed27a") +
       R(-16, 3, 32, 4, "#2c6b36", 1.1, 'rx="2"') +
       E(20, -2, 7.5, 6.5, "#7fc28a", 1.2) + aEye(21.5, -3.5, "#3a2a1a", .42) +
       P("M21.5,1.5 Q24,3.4 26,1.4Z", "#c0392b", .6) + En(17, 1, 1.8, 1, "#ff8aa0", 'opacity=".6"');
   }
-  function turtles() {
+  function turtles(o = {}) {
     const shore = "M0,74 Q40,62 70,60 T120,52";
     const bg = aSky("#ffb38a", "#ffe7c4") + aSun(26, 36, 13) + Pn("M0,34 H120 V60 Q90,56 70,60 Q40,62 0,74Z", "#2a9fd0") +
       line("M6,44 h10 M40,40 h14 M84,42 h12 M60,50 h10 M14,56 h12", 1.2, "#fff", 'opacity=".7"') +
@@ -11619,7 +12198,7 @@ function albumParentsWire(pl) {
       [[54, 134, 66, 118], [22, 110, 30, 98], [82, 88, 89, 78]].map(([x1, y1, x2, y2]) => {
         let s = ""; for (let k = 0; k <= 4; k++) { const x = x1 + (x2 - x1) * k / 4, y = y1 + (y2 - y1) * k / 4; s += En(x - 3, y, 1.4, .9, "#c9a466") + En(x + 3, y + 1, 1.4, .9, "#c9a466"); } return s;
       }).join("") + aStar(100, 140, 4, "#ff9e80") + aFlagAt("cv");
-    const t = at(turtleChar(), 78, 104, 1.25, -28) + at(turtleChar(), 42, 86, .95, -32) + at(turtleChar(), 98, 66, .8, -24);
+    const t = o.turtles ? o.turtles(turtleChar, at) : at(turtleChar(), 78, 104, 1.25, -28) + at(turtleChar(), 42, 86, .95, -32) + at(turtleChar(), 98, 66, .8, -24);
     return [bg, aEdge(t + sparks([[110, 30, 3.5], [70, 24, 3]], "#fff"))];
   }
 
@@ -11635,7 +12214,7 @@ function albumParentsWire(pl) {
     if (o.band) g.push(P("M-7.4,-36 Q0,-40 7.4,-36 L7.6,-33.6 Q0,-37.6 -7.6,-33.6Z", "#ffc107", .8));
     return at(g.join(""), x, y, k);
   }
-  function castells() {
+  function castells(o = {}) {
     let bunt = "";
     for (let i = 0; i < 10; i++) bunt += P(`M${i * 12},${10 + (i % 2)} L${i * 12 + 12},${10 + ((i + 1) % 2)} L${i * 12 + 6},${20}Z`, i % 2 ? "#ffcc00" : "#d32f2f", .6);
     const bg = aSky("#8fd3ff", "#d8f1ff") + R(-2, 26, 124, 140, "#f2d8a7", 1) +
@@ -11645,7 +12224,8 @@ function albumParentsWire(pl) {
     const t = [];
     t.push(casteller(36, 132), casteller(84, 132), casteller(60, 132));
     t.push(casteller(48, 108, 1, "#d32f2f", { band: 1 }), casteller(72, 108, 1, "#d32f2f", { band: 1 }));
-    t.push(casteller(60, 84, .9, "#d32f2f", { noArms: 1 }));
+    const third = casteller(60, 84, .9, "#d32f2f", { noArms: 1 });
+    if (!o.top) t.push(third);
     // the enxaneta on top: a small kid with a helmet, one hand up
     const e = [];
     e.push(rope("M52,62 L58,47 M68,62 L62,47", 4, "#fafafa"));
@@ -11654,34 +12234,36 @@ function albumParentsWire(pl) {
     e.push(R(53, 35, 14, 13, "#d32f2f", 1.2, 'rx="3"') + R(53, 44, 14, 3, "#1b1b1b", .9));
     e.push(head(60, 28, 7, { hair: "#5a3214", iris: "#3a2614" }));
     e.push(P("M52.6,27 C52,18 68,18 67.4,27Z", "#fafafa", 1.1) + line("M55,22 Q60,19 65,22", .8, "#bbb"));
-    t.push(e.join(""));
+    t.push(o.top ? o.top(e, third) : e.join(""));
     t.push(sparks([[102, 38, 4], [18, 30, 3.5]], "#fff"));
     return [bg, aEdge(t.join(""))];
   }
 
   // France: a Tour de France rider in the yellow jersey among sunflowers
-  function cyclist() {
-    const flowers = [[8, 92], [22, 88], [100, 90], [112, 86], [94, 80], [14, 80], [108, 98]].map(([x, y]) =>
+  function cyclist(o = {}) {
+    const wrap = (k, s) => o[k] ? o[k](s) : s;
+    const flowers = (o.flowerAt || [[8, 92], [22, 88], [100, 90], [112, 86], [94, 80], [14, 80], [108, 98]]).map(([x, y]) =>
       line(`M${x},${y} V${y + 10}`, 1.2, "#3c8f2a") + [...Array(8)].map((_, i) => En(x + 3.4 * Math.cos(i * .785), y + 3.4 * Math.sin(i * .785), 2.2, 1.2, "#ffcc00", `transform="rotate(${i * 45} ${n(x + 3.4 * Math.cos(i * .785))} ${n(y + 3.4 * Math.sin(i * .785))})"`)).join("") + aC(x, y, 2.2, "#6b3e1f")).join("");
     const bg = aSky("#7fcfff", "#dff4ff") + aCloud(70, 12, .8) + aSun(20, 20, 9) +
-      Pn("M0,72 Q30,60 60,68 T120,62 V158 H0Z", "#9bd36a") + Pn("M0,84 Q50,74 120,84 V158 H0Z", "#6fbf4a") + flowers +
-      Rn(0, 112, 120, 30, "#7d7d82") + line("M4,127 H18 M30,127 H44 M56,127 H70 M82,127 H96 M108,127 H120", 2, "#fff") + Rn(0, 142, 120, 16, "#6fbf4a") + aFlagAt("fr");
+      Pn("M0,72 Q30,60 60,68 T120,62 V158 H0Z", "#9bd36a") + Pn("M0,84 Q50,74 120,84 V158 H0Z", "#6fbf4a") + wrap("flowers", flowers) +
+      Rn(0, 112, 120, 30, "#7d7d82") + (o.dashes ? o.dashes(line) : line("M4,127 H18 M30,127 H44 M56,127 H70 M82,127 H96 M108,127 H120", 2, "#fff")) + Rn(0, 142, 120, 16, "#6fbf4a") + aFlagAt("fr");
     const t = [];
     t.push(line("M4,74 H18 M2,84 H14 M6,96 H16", 1.8, "#fff", 'opacity=".9"'));
     const wheel = (x, y) => aC(x, y, 14, "none", `stroke="${OL}" stroke-width="4.2"`) + aC(x, y, 14, "none", 'stroke="#2b2b2b" stroke-width="2.6"') +
       [0, 1, 2, 3, 4, 5].map(i => line(`M${n(x + 13 * Math.cos(i * 1.047))},${n(y + 13 * Math.sin(i * 1.047))} L${n(x - 13 * Math.cos(i * 1.047))},${n(y - 13 * Math.sin(i * 1.047))}`, .5, "#999")).join("") + aC(x, y, 2, "#ccc", st(.8));
-    t.push(wheel(34, 112), wheel(88, 112));
+    const wh = o.wheel || (s => s), leg = (d, x, y) => rope(d, 5.5, "#ffd9b8") + E(x, y, 3.6, 2.2, "#fff", .9);
+    t.push(wh(wheel(34, 112), 34, 112), wh(wheel(88, 112), 88, 112));
     // frame
     t.push(rope("M34,112 L58,112 L50,90 Z M58,112 L80,88 L50,90 M80,88 L88,112", 2.6, "#e53935"));
     t.push(rope("M80,88 L82,82 L90,82 Q94,84 92,88", 2, "#333"));
     t.push(R(44, 86.5, 12, 3.4, "#222", .9, 'rx="1.5"'));
     t.push(aC(58, 112, 3.4, "#555", st(1)));
     // rider: far leg, body, near leg, arm, head
-    t.push(rope("M54,88 L62,100 L54,108", 5.5, "#ffd9b8"), E(53, 109, 3.6, 2.2, "#fff", .9));
+    t.push(o.farLeg ? o.farLeg(leg) : leg("M54,88 L62,100 L54,108", 53, 109));
     t.push(P("M46,90 Q48,82 54,80 L60,90 Q54,94 46,90Z", "#1b1b1b", 1.2));
     t.push(P("M50,84 C54,70 66,62 76,64 L80,72 C72,74 64,80 58,90Z", "#ffd500", 1.3));
     t.push(line("M56,78 C62,72 68,68 76,67", 1.4, "#e0b000"));
-    t.push(rope("M54,88 L66,98 L64,114", 5.5, "#ffd9b8"), E(65, 115, 3.6, 2.2, "#fff", .9));
+    t.push(o.nearLeg ? o.nearLeg(leg) : leg("M54,88 L66,98 L64,114", 65, 115));
     t.push(R(50, 86, 10, 6, "#1b1b1b", 1, 'rx="2"'));
     t.push(rope("M72,68 L84,82", 4.6, "#ffd500") + aC(86, 83, 3, "#ffd9b8", st(1)));
     t.push(head(82, 54, 13, { hair: "#6b3e1f", dx: 2.5, iris: "#3a5f8a" }));
@@ -11692,17 +12274,18 @@ function albumParentsWire(pl) {
   }
 
   // Italy: a gondola in a Venice canal
-  function gondola() {
+  function gondola(o = {}) {
+    const tbW = (k, v, ...a) => o[k] ? o[k](v, ...a) : v;      // o.<part>(svg): that part on its own (js/fan/teamown_b.js)
     const house = (x, w, top, c, win) => R(x, top, w, 110 - top, c, 1) + Rn(x - 1, top - 3, w + 2, 4, "#8a4a2a") +
       [0, 1, 2].map(r => [...Array(Math.floor(w / 9))].map((_, k) => aArch(x + 3 + k * 9, top + 6 + r * 17, 5, 10, win)).join("")).join("");
     const pole = (x, c) => R(x - 1.6, 70, 3.2, 52, "#fff", .9) + [0, 1, 2, 3].map(i => Rn(x - 1.6, 72 + i * 12, 3.2, 5, c)).join("") + aC(x, 69, 2.4, "#ffc107", st(.8));
     const bg = aSky("#ffd9a8", "#cdeefc") + aCloud(46, 10, .7) +
       house(-2, 30, 26, "#e08a5a", "#5a3a2a") + house(28, 18, 50, "#f6d38a", "#4a4a5a") + house(92, 30, 20, "#d0573f", "#5a3a2a") + house(74, 18, 44, "#f3b7a0", "#4a4a5a") +
-      Rn(0, 104, 120, 54, "#2e9c9a") + [112, 124, 136, 148].map((y, i) => line(`M${i % 2 * 10},${y} q6,-3 12,0 t12,0 M${50 + i % 2 * 8},${y + 4} q6,-3 12,0 t12,0 M${88 - i * 4},${y - 2} q6,-3 12,0`, 1.1, "#bff0ec", 'opacity=".7"')).join("") +
+      Rn(0, 104, 120, 54, "#2e9c9a") + tbW("ripple", [112, 124, 136, 148].map((y, i) => line(`M${i % 2 * 10},${y} q6,-3 12,0 t12,0 M${50 + i % 2 * 8},${y + 4} q6,-3 12,0 t12,0 M${88 - i * 4},${y - 2} q6,-3 12,0`, 1.1, "#bff0ec", 'opacity=".7"')).join("")) +
       pole(48, "#1f4fa8") + pole(80, "#e53935") + En(62, 122, 50, 5, "#0d4a49", 'opacity=".4"') + aFlagAt("it");
     const t = [];
     // oar behind the hull
-    t.push(rope("M42,74 L72,128", 2.2, "#b97a43") + P("M68,120 L76,134 L72,136 L64,122Z", "#b97a43", 1));
+    t.push(tbW("oar", rope("M42,74 L72,128", 2.2, "#b97a43") + P("M68,120 L76,134 L72,136 L64,122Z", "#b97a43", 1)));
     // hull
     t.push(P("M10,92 Q16,110 32,111 L90,109 Q104,106 110,86 Q106,112 92,118 L32,120 Q14,118 10,92Z", "#1b1b1b"));
     t.push(line("M14,100 Q20,110 32,111 L90,109 Q102,106 108,92", 1.4, "#ffc107"));
@@ -11722,14 +12305,15 @@ function albumParentsWire(pl) {
   }
 
   // Germany: Neuschwanstein, the fairy-tale castle in the mountains
-  function castle() {
+  function castle(o = {}) {
+    const tbW = (k, v, ...a) => o[k] ? o[k](v, ...a) : v;      // o.<part>(svg): that part on its own (js/fan/teamown_b.js)
     const fir = (x, y, k) => at(Pn("M0,-14 L7,0 H-7Z", "#2e6b3a") + Pn("M0,-8 L8,6 H-8Z", "#2e6b3a") + Rn(-1, 6, 2, 3, "#5a3a2a"), x, y, k);
     const bg = aSky("#8fd0ff", "#e8f7ff") + aCloud(6, 16, .7) +
       Pn("M-10,84 L22,40 L44,72 L70,30 L104,76 L130,50 V158 H-10Z", "#8aa2b8") + Pn("M22,40 L30,51 L26,50 L20,54 L15,50Z M70,30 L80,44 L74,42 L68,47 L62,42Z", "#fff") +
       Pn("M0,104 Q40,90 70,98 T120,92 V158 H0Z", "#5aa84a") + Pn("M0,124 Q60,112 120,124 V158 H0Z", "#3f8f3a") +
       [[8, 108, 1], [18, 112, .9], [104, 104, 1.1], [114, 110, .9], [94, 116, .8]].map(([x, y, k]) => fir(x, y, k)).join("") + aFlagAt("de");
     const W = "#f4efe6", S = "#5f7d95", t = [];
-    const win = (x, y, w = 3, h = 5) => P(`M${x},${y + h} V${y + w / 2} A${w / 2},${w / 2} 0 0 1 ${x + w},${y + w / 2} V${y + h}Z`, "#2f4a6a", .6);
+    const win = (x, y, w = 3, h = 5) => tbW("win", P(`M${x},${y + h} V${y + w / 2} A${w / 2},${w / 2} 0 0 1 ${x + w},${y + w / 2} V${y + h}Z`, "#2f4a6a", .6));
     const cone = (x, y, w, h, c = S) => P(`M${x - 1},${y} L${x + w / 2},${y - h} L${x + w + 1},${y}Z`, c, 1.1);
     t.push(P("M34,126 Q38,114 48,112 L98,110 Q108,114 110,126Z", "#9a9c96") + line("M50,118 l6,4 M80,116 l8,5 M94,120 l5,-3", .8, "#6b6d68"));
     // tall tower at the back right
@@ -11749,7 +12333,8 @@ function albumParentsWire(pl) {
   }
 
   // Netherlands: skating on a frozen canal between gabled houses
-  function skating() {
+  function skating(o = {}) {
+    const tbW = (k, v, ...a) => o[k] ? o[k](v, ...a) : v;      // o.<part>(svg): that part on its own (js/fan/teamown_b.js)
     const gable = (x, w, top, c) => P(`M${x},92 V${top + 10} H${x + 3} V${top + 5} H${x + 6} V${top} H${x + w - 6} V${top + 5} H${x + w - 3} V${top + 10} H${x + w} V92Z`, c, 1) +
       [0, 1, 2].map(r => [0, 1].map(k => R(x + 4 + k * (w - 13), top + 14 + r * 14, 5, 8, "#fff7d6", .7)).join("")).join("") + P(`M${x + w / 2 - 2},${top + 6} h4 v5 h-4Z`, "#fff", .6);
     const bg = aSky("#bcdcf2", "#eef7fd") +
@@ -11760,10 +12345,10 @@ function albumParentsWire(pl) {
     const t = [];
     t.push(En(64, 128, 30, 3, "#5a8aa8", 'opacity=".3"'));
     // back leg stretched out behind, with its skate
-    t.push(rope("M58,96 L44,106 L34,112", 7, "#1f3c6e"));
-    t.push(at(E(0, 0, 5, 3, "#5a3a2a", 1) + line("M-8,4 H8 Q11,4 11,1", 1.4, "#9aa5ab"), 33, 112, 1, 24));
+    t.push(tbW("backleg", rope("M58,96 L44,106 L34,112", 7, "#1f3c6e") +
+      at(E(0, 0, 5, 3, "#5a3a2a", 1) + line("M-8,4 H8 Q11,4 11,1", 1.4, "#9aa5ab"), 33, 112, 1, 24)));
     // scarf tail flying back
-    t.push(P("M56,64 Q42,58 30,64 L32,70 Q44,66 56,70Z", "#ff7a00", 1.2) + line("M36,64 V70 M42,62 V68", 1, "#fff"));
+    t.push(tbW("scarf", P("M56,64 Q42,58 30,64 L32,70 Q44,66 56,70Z", "#ff7a00", 1.2) + line("M36,64 V70 M42,62 V68", 1, "#fff")));
     // body: coat, arms behind the back
     t.push(P("M54,64 Q68,60 76,68 L74,98 Q62,102 52,96Z", "#2e7ad1"));
     t.push(rope("M58,70 Q50,82 56,88", 5.5, "#2e7ad1") + aC(57, 89, 3, "#e53935", st(1)));
@@ -11858,7 +12443,8 @@ function albumParentsWire(pl) {
   /* ================= FOOD ================= */
 
   // Switzerland: cheese fondue, a red pot on its burner, a bread cube dipped on a long fork
-  function fondue() {
+  function fondue(o = {}) {
+    const tbW = (k, v, ...a) => o[k] ? o[k](v, ...a) : v;      // o.<part>(svg): that part on its own (js/fan/teamown_b.js)
     const bg = aSky("#ffe6b8", "#fff6e2") + gingham(112) + aFlagAt("ch");
     const t = [];
     t.push(shadow(60, 132, 38));
@@ -11877,31 +12463,32 @@ function albumParentsWire(pl) {
     // a second bread cube bobbing in the cheese
     t.push(P("M70,80 L72,74 L82,74 L84,80Z", "#e3b26a", 1.1) + Pn("M71,80 Q77,82 83,80", "none", 'stroke="#ffd54f" stroke-width="2"'));
     // cheese strings from the dipped bread down into the pot
-    t.push(line("M47,70 Q46,76 48,81 M53,71 Q55,76 54,81 M59,70 Q60,75 61,80", 2.2, "#ffc93c"));
+    t.push(tbW("strings", line("M47,70 Q46,76 48,81 M53,71 Q55,76 54,81 M59,70 Q60,75 61,80", 2.2, "#ffc93c")));
     // the fork: handle from the top right, tines in the bread
-    t.push(rope("M108,30 L66,58", 2.2, "#bdbdbd"));
-    t.push(rope("M108,30 L96,38", 4.2, "#c62828"));
-    t.push(P("M44,54 L66,52 L68,66 L46,70Z", "#e8b56b", 1.3));
-    t.push(P("M45,63 L67,60 L68,66 Q64,72 60,68 Q56,74 52,69 Q48,73 46,70Z", "#ffd54f", 1.1));
-    t.push(Pn("M48,56 L60,55", "none", 'stroke="#fff3d6" stroke-width="2" stroke-linecap="round" opacity=".8"'));
+    t.push(tbW("fork", rope("M108,30 L66,58", 2.2, "#bdbdbd") +
+      rope("M108,30 L96,38", 4.2, "#c62828") +
+      P("M44,54 L66,52 L68,66 L46,70Z", "#e8b56b", 1.3) +
+      P("M45,63 L67,60 L68,66 Q64,72 60,68 Q56,74 52,69 Q48,73 46,70Z", "#ffd54f", 1.1) +
+      Pn("M48,56 L60,55", "none", 'stroke="#fff3d6" stroke-width="2" stroke-linecap="round" opacity=".8"')));
     t.push(face(60, 97, 1.15));
     t.push(sparks([[100, 104, 4], [18, 62, 3.5], [104, 56, 3]], "#fff"));
     return [bg, aEdge(t.join(""))];
   }
 
   // England: fish and chips in a paper cone with a lemon wedge
-  function fishChips() {
+  function fishChips(o = {}) {
+    const tbW = (k, v, ...a) => o[k] ? o[k](v, ...a) : v;      // o.<part>(svg): that part on its own (js/fan/teamown_b.js)
     const bg = aSky("#9ed8ff", "#e8f7ff") + aCloud(76, 10, .7) + Pn("M0,100 H120 V112 H0Z", "#3d8fd1") +
       line("M6,104 q4,-3 8,0 M40,106 q4,-3 8,0 M86,104 q4,-3 8,0", 1, "#fff", 'opacity=".7"') + wood(112, "#d7b48a", "#b8915f") + aFlagAt("en");
     const t = [];
     t.push(shadow(66, 134, 22));
     // the fish, leaning out of the cone to the left
     const fish = "M-34,0 C-32,-12 -16,-18 0,-16 C12,-15 20,-10 26,-6 L38,-16 Q40,-4 36,0 Q40,6 38,16 L26,6 C18,12 6,16 -8,16 C-24,16 -36,10 -34,0Z";
-    t.push(at(P(fish, "#e8a23a", 1.4) + clip(fish, [[-26, -8, 5], [-14, -12, 6], [0, -10, 5], [12, -6, 5], [-20, 8, 6], [-4, 10, 5], [10, 6, 5], [24, 0, 4]].map(([x, y, r]) => aC(x, y, r, "#f5bd5a", 'opacity=".8"')).join("")) +
-      hl("M-26,-6 Q-16,-14 -2,-13", 2.6) + face(-6, 1, 1.05), 44, 56, 1, 26));
+    t.push(tbW("fish", at(P(fish, "#e8a23a", 1.4) + clip(fish, [[-26, -8, 5], [-14, -12, 6], [0, -10, 5], [12, -6, 5], [-20, 8, 6], [-4, 10, 5], [10, 6, 5], [24, 0, 4]].map(([x, y, r]) => aC(x, y, r, "#f5bd5a", 'opacity=".8"')).join("")) +
+      hl("M-26,-6 Q-16,-14 -2,-13", 2.6) + face(-6, 1, 1.05), 44, 56, 1, 26)));
     // chips on the right
-    [[64, 34, 6], [74, 36, 14], [84, 42, 24], [70, 46, 8], [92, 52, 32], [60, 46, -2]].forEach(([x, y, a]) =>
-      t.push(at(R(-3.5, 0, 7, 32, "#ffcf4d", 1.1, 'rx="1.5"') + Rn(-2, 2, 2, 22, "#fff2b8", 'opacity=".8"'), x, y, 1, a)));
+    [[64, 34, 6], [74, 36, 14], [84, 42, 24], [70, 46, 8], [92, 52, 32], [60, 46, -2]].forEach(([x, y, a], i) =>
+      t.push(tbW("chip", at(R(-3.5, 0, 7, 32, "#ffcf4d", 1.1, 'rx="1.5"') + Rn(-2, 2, 2, 22, "#fff2b8", 'opacity=".8"'), x, y, 1, a), i)));
     // the paper cone (newspaper)
     const cone = "M30,74 L102,66 L70,138Z";
     t.push(P(cone, "#f7f3e8", 1.4));
@@ -11921,7 +12508,8 @@ function albumParentsWire(pl) {
     for (let i = -40; i <= 40; i += 6) grid += `M${i},-40 L${i + 40},0 M${i},0 L${i + 40},-40 `;
     return P(HEART, c, 1.3) + clip(HEART, line(grid, 1, "#c98a2e", 'opacity=".7"')) + P(HEART, "none", 1.3);
   }
-  function waffles() {
+  function waffles(o = {}) {
+    const tbW = (k, v, ...a) => o[k] ? o[k](v, ...a) : v;      // o.<part>(svg): that part on its own (js/fan/teamown_b.js)
     const bg = radial("#e3f2ff", "#6fa8dc", ".35") + E(60, 116, 56, 14, "#fff", 1.2) + En(60, 115, 44, 9, "#eef4fa") + aFlagAt("no");
     const t = [];
     // the flower of hearts behind (one heart missing at the bottom)
@@ -11931,12 +12519,12 @@ function albumParentsWire(pl) {
     t.push(at(E(0, 0, 7, 5, "#fafafa", 1.1) + En(-2, -1.6, 3, 1.4, "#fff"), 62, 52));
     // the front heart
     t.push(shadow(62, 133, 30));
-    t.push(at(heartW(), 62, 134, 1.45));
+    t.push(tbW("front", at(heartW(), 62, 134, 1.45) +
     // jam and cream on top
-    t.push(P("M38,90 Q36,82 46,82 Q54,78 58,86 Q62,94 54,96 Q52,104 48,98 Q40,100 38,90Z", "#d81b46", 1.2) + En(45, 86, 3.2, 1.6, "#ff8aa8", 'opacity=".8"'));
-    t.push(P("M66,90 Q64,80 74,80 Q82,78 84,86 Q88,94 78,96 Q70,98 66,90Z", "#fffdf6", 1.2) + Pn("M70,86 Q75,82 80,85", "none", 'stroke="#e6dccb" stroke-width="1.2"'));
-    t.push(aC(55, 78, 4.2, "#e53950", st(1)) + Pn("M53,74 L55,76 L57,74", "none", 'stroke="#3c8f2a" stroke-width="1.6" stroke-linecap="round"'));
-    t.push(face(62, 112, 1.1));
+      P("M38,90 Q36,82 46,82 Q54,78 58,86 Q62,94 54,96 Q52,104 48,98 Q40,100 38,90Z", "#d81b46", 1.2) + En(45, 86, 3.2, 1.6, "#ff8aa8", 'opacity=".8"') +
+      P("M66,90 Q64,80 74,80 Q82,78 84,86 Q88,94 78,96 Q70,98 66,90Z", "#fffdf6", 1.2) + Pn("M70,86 Q75,82 80,85", "none", 'stroke="#e6dccb" stroke-width="1.2"') +
+      tbW("berry", aC(55, 78, 4.2, "#e53950", st(1)) + Pn("M53,74 L55,76 L57,74", "none", 'stroke="#3c8f2a" stroke-width="1.6" stroke-linecap="round"')) +
+      face(62, 112, 1.1)));
     t.push(sparks([[104, 40, 4.5], [16, 52, 3.5], [104, 100, 3]], "#fff"));
     return [bg, aEdge(t.join(""))];
   }
@@ -12009,7 +12597,8 @@ function albumParentsWire(pl) {
       line("M0,-13 L-9,2 M0,-13 L-3,4 M0,-13 L4,4 M0,-13 L10,2", .8, "#c8bca8") + aC(0, -13, 2, "#f3ead8", st(.8)) +
       hl("M-11,-2 Q-9,-7 -5,-9", 1.8, .9);
   }
-  function steamer() {
+  function steamer(o = {}) {
+    const m = o.mv || ((k, s) => s);       // o.mv(key, svg) wraps the parts that move at holo (js/fan/teamown_c.js)
     const bg = radial("#ff7a5c", "#b3121b", ".4") + [[16, 40], [104, 30], [100, 78], [14, 88]].map(([x, y]) => aC(x, y, 1.6, "#ffd54f", 'opacity=".8"')).join("") +
       wood(118, "#7b3f1d", "#5c2d12") + aFlagAt("cn");
     const t = [];
@@ -12022,13 +12611,13 @@ function albumParentsWire(pl) {
     t.push(En(60, 93, 40, 12.5, "#b98d4c"));
     t.push(En(60, 95, 37, 10.5, "#d7f0c4", 'opacity=".55"'));
     // dumplings: three behind, the big one in front with the face
-    t.push(at(dumpling(), 36, 90, .9), at(dumpling(), 84, 90, .9), at(dumpling(), 60, 84, .8));
+    t.push(at(dumpling(), 36, 90, .9), at(dumpling(), 84, 90, .9), m("back", at(dumpling(), 60, 84, .8)));
     t.push(at(dumpling(), 60, 96, 1.55));
     t.push(face(60, 98, .9));
     // chopsticks resting on the rim
-    t.push(rope("M96,70 L114,40", 2.4, "#c0392b"), rope("M102,72 L117,44", 2.4, "#c0392b"));
+    t.push(m("chop", rope("M96,70 L114,40", 2.4, "#c0392b") + rope("M102,72 L117,44", 2.4, "#c0392b")));
     // steam
-    t.push(line("M44,64 Q38,56 44,48 Q50,40 44,32 M62,60 Q56,50 62,42 Q68,34 62,26 M78,64 Q72,56 78,48 Q84,40 78,34", 3, "#fff", 'opacity=".8"'));
+    t.push(m("steam", line("M44,64 Q38,56 44,48 Q50,40 44,32 M62,60 Q56,50 62,42 Q68,34 62,26 M78,64 Q72,56 78,48 Q84,40 78,34", 3, "#fff", 'opacity=".8"')));
     t.push(sparks([[104, 100, 3.5], [20, 64, 3]], "#ffe082"));
     return [bg, aEdge(t.join(""))];
   }
@@ -12045,14 +12634,15 @@ function albumParentsWire(pl) {
       [0, 1, 2, 3, 4, 5].map(i => aC(x + r * .62 * Math.cos(i), y + r * .62 * Math.sin(i), .9, "#e8e8e0")).join("") +
       aC(x, y, r * .36, core, st(.9)) + (core === "#ff8a3d" ? aC(x - r * .1, y - r * .12, r * .12, "#ffc49a") : "");
   }
-  function sushi() {
+  function sushi(o = {}) {
+    const m = o.mv || ((k, s) => s);       // o.mv(key, svg) wraps the parts that move at holo (js/fan/teamown_c.js)
     const bg = radial("#fff6f2", "#f2a7a0", ".38") + Rn(0, 108, 120, 50, "#e9d6b4") + Rn(0, 108, 120, 2.5, "#c9b38a") + aFlagAt("jp");
     const t = [];
     // the geta board
     t.push(R(8, 72, 106, 42, "#c8935a", 1.4, 'rx="3"') + R(16, 112, 12, 12, "#a87340", 1.1) + R(94, 112, 12, 12, "#a87340", 1.1));
     t.push(line("M10,84 H112 M10,98 H112", .8, "#a87340", 'opacity=".6"'));
     // maki in a row at the back, a salmon nigiri behind
-    t.push(maki(26, 66, 12, "#ff8a3d"), maki(48, 62, 12, "#d81b46"), maki(94, 64, 12, "#7cbf4a"));
+    t.push(maki(26, 66, 12, "#ff8a3d"), maki(48, 62, 12, "#d81b46"), m("maki", maki(94, 64, 12, "#7cbf4a")));
     t.push(at(nigiri("#d83a3a"), 78, 72, .8));
     // the big nigiri (salmon) in front with the face
     t.push(at(nigiri("#ff9a6a", "#ffe2cf"), 56, 96, 1.5));
@@ -12060,7 +12650,7 @@ function albumParentsWire(pl) {
     // ginger and wasabi
     t.push(P("M90,92 Q100,84 106,92 Q100,98 90,92Z", "#ffc6c6", 1) + P("M96,102 Q100,96 106,100 Q104,106 96,102Z", "#9ccc3c", 1));
     // chopsticks
-    t.push(rope("M30,46 L112,30", 2.2, "#3a2a20"), rope("M34,52 L114,38", 2.2, "#3a2a20"));
+    t.push(m("chop", rope("M30,46 L112,30", 2.2, "#3a2a20") + rope("M34,52 L114,38", 2.2, "#3a2a20")));
     t.push(sparks([[18, 92, 3], [104, 54, 3.5]], "#fff"));
     return [bg, aEdge(t.join(""))];
   }
@@ -12072,12 +12662,13 @@ function albumParentsWire(pl) {
       [0, 1, 2, 3, 4, 5, 6, 7].map(i => aC(x + r * .7 * Math.cos(i * .8), y + r * .7 * Math.sin(i * .8), r * .03 + .6, "#e6e6de")).join("") +
       f.map(([c, dx, dy]) => R(x + dx * r * .9 - r * .12, y + dy * r * .9 - r * .12, r * .24, r * .24, c, .7, 'rx="1"')).join("");
   }
-  function kimbap() {
+  function kimbap(o = {}) {
+    const m = o.mv || ((k, s) => s);       // o.mv(key, svg) wraps the parts that move at holo (js/fan/teamown_c.js)
     const bg = radial("#f4fbff", "#9fc9ee", ".38") + wood(114, "#e8d0a8", "#c8a776") + aFlagAt("kr");
     const t = [];
     t.push(E(60, 120, 54, 11, "#fff", 1.3) + En(60, 119, 44, 7, "#eef2f5"));
     // a row of slices going back
-    t.push(kimSlice(94, 58, 15), kimSlice(80, 72, 19));
+    t.push(m("slice", kimSlice(94, 58, 15)), kimSlice(80, 72, 19));
     // sesame seeds
     [[104, 82, 0], [108, 92, 1], [26, 70, 2], [34, 62, 3]].forEach(([x, y, i]) => t.push(En(x, y, 1.6, .9, "#fff8e0", st(.4) + ` transform="rotate(${i * 40} ${x} ${y})"`)));
     // the big slice in front
@@ -12096,7 +12687,8 @@ function albumParentsWire(pl) {
   /* ================= NATIONAL THINGS ================= */
 
   // Switzerland: an alpine cow with a big bell and a flower crown, green alps behind (no Matterhorn)
-  function cow() {
+  function cow(o = {}) {
+    const tbW = (k, v, ...a) => o[k] ? o[k](v, ...a) : v;      // o.<part>(svg): that part on its own (js/fan/teamown_b.js)
     const bg = aSky("#8fd3ff", "#e6f7ff") + aCloud(78, 12, .7) +
       Pn("M0,70 L22,40 L38,58 L56,30 L78,60 L96,42 L120,66 V100 H0Z", "#9fb4c8") +
       Pn("M17,47 L22,40 L27,46 L24,44 L21,48Z M50,38 L56,30 L62,38 L58,36 L55,40Z M92,47 L96,42 L101,48 L97,46Z", "#fff") +
@@ -12107,13 +12699,14 @@ function albumParentsWire(pl) {
     // body sitting, legs, tail
     const body = "M34,96 Q32,130 60,132 Q88,130 86,96 Q60,86 34,96Z";
     t.push(P(body, "#fff", 1.4) + clip(body, E(42, 116, 10, 8, "#7a4a2a", 0) + E(80, 104, 9, 11, "#7a4a2a", 0)) + P(body, "none", 1.4));
-    t.push(rope("M86,118 Q100,118 102,104", 2, "#fff") + P("M99,100 Q104,96 106,102 Q104,108 100,105Z", "#7a4a2a", 1));
+    t.push(tbW("tail", rope("M86,118 Q100,118 102,104", 2, "#fff") + P("M99,100 Q104,96 106,102 Q104,108 100,105Z", "#7a4a2a", 1)));
     t.push(E(44, 130, 9, 5, "#fff") + E(76, 130, 9, 5, "#fff") + E(44, 132.5, 7, 2.8, "#4a3426", 1) + E(76, 132.5, 7, 2.8, "#4a3426", 1));
     // collar and the bell
     t.push(P("M38,92 Q60,104 82,92 L82,98 Q60,110 38,98Z", "#c62828", 1.2) + [44, 52, 68, 76].map(x => aC(x, n(97 + (1 - Math.abs(60 - x) / 22) * 4), 1.3, "#fff")).join(""));
-    t.push(P("M50,104 Q50,96 60,96 Q70,96 70,104 L74,118 Q60,122 46,118Z", "#f2b51e", 1.4) + aC(60, 120, 3, "#9a6a10", st(1)) +
-      R(57, 92, 6, 5, "#c9901a", 1) + hl("M54,104 Q54,99 58,98", 2, .7));
-    // head: ears, horns, face, muzzle
+    t.push(tbW("bell", P("M50,104 Q50,96 60,96 Q70,96 70,104 L74,118 Q60,122 46,118Z", "#f2b51e", 1.4) + aC(60, 120, 3, "#9a6a10", st(1)) +
+      R(57, 92, 6, 5, "#c9901a", 1) + hl("M54,104 Q54,99 58,98", 2, .7)));
+    // head: ears, horns, face, muzzle (and the flower crown: o.head gets them all)
+    const hd0 = t.length;
     t.push(P("M30,52 Q16,48 14,56 Q22,62 32,60Z", "#fff", 1.3) + P("M90,52 Q104,48 106,56 Q98,62 88,60Z", "#fff", 1.3) +
       En(20, 56, 4, 2, "#ffb3c1") + En(100, 56, 4, 2, "#ffb3c1"));
     t.push(P("M38,40 Q30,34 32,24 Q38,30 44,36Z", "#f3e6c8", 1.2) + P("M82,40 Q90,34 88,24 Q82,30 76,36Z", "#f3e6c8", 1.2));
@@ -12128,49 +12721,54 @@ function albumParentsWire(pl) {
     t.push(line("M36,42 Q60,26 84,42", 2.4, "#3c8f2a"));
     fl.forEach(([x, y, c]) => { for (let i = 0; i < 5; i++) t.push(aC(x + 3 * Math.cos(i * 1.257), y + 3 * Math.sin(i * 1.257), 2.4, c, st(.7))); t.push(aC(x, y, 1.7, "#ffb300")); });
     t.push(P("M58,24 Q54,18 60,16 Q66,18 62,24Z M60,24 L60,30", "#fff", .9));
+    t.splice(hd0, t.length - hd0, tbW("head", t.slice(hd0).join("")));
     t.push(sparks([[108, 82, 3.5], [12, 74, 3]], "#fff"));
     return [bg, aEdge(t.join(""))];
   }
 
   // England: a red double-decker bus on a London street of terraced houses
-  function bus() {
+  function bus(o = {}) {
+    const tbW = (k, v, ...a) => o[k] ? o[k](v, ...a) : v;      // o.<part>(svg): that part on its own (js/fan/teamown_b.js)
     const houses = [[0, "#c96b4b"], [30, "#e1c9a3"], [60, "#b5584a"], [90, "#d9b98f"]].map(([x, c]) =>
       Rn(x, 26, 30, 90, c) + line(`M${x},26 V116`, .8, "#7a4a3a", 'opacity=".5"') + Rn(x, 22, 30, 5, "#8a8a8a") +
       [0, 1, 2].map(r => Rn(x + 7, 34 + r * 22, 16, 13, "#eaf4fb") + line(`M${x + 15},${34 + r * 22} V${47 + r * 22}`, .8, "#fff")).join("")).join("");
-    const bg = aSky("#bfe3ff", "#eef8ff") + aCloud(84, 4, .6) + houses + Rn(0, 112, 120, 8, "#cfcac0") +
-      Rn(0, 120, 120, 38, "#6d6f74") + line("M0,140 H14 M30,140 H50 M66,140 H86 M102,140 H120", 2, "#fff") + aFlagAt("en");
+    const bg = aSky("#bfe3ff", "#eef8ff") + aCloud(84, 4, .6) + tbW("street", houses) + Rn(0, 112, 120, 8, "#cfcac0") +
+      Rn(0, 120, 120, 38, "#6d6f74") + tbW("street", line("M0,140 H14 M30,140 H50 M66,140 H86 M102,140 H120", 2, "#fff")) + aFlagAt("en");
     const RED = "#d6211f", t = [];
     t.push(shadow(60, 129, 50));
-    t.push(R(10, 36, 100, 86, RED, 1.5, 'rx="7"'));
-    t.push(Rn(12, 37, 96, 4, "#ff5a52", 'opacity=".7"'));
+    const body = [];
+    body.push(R(10, 36, 100, 86, RED, 1.5, 'rx="7"'));
+    body.push(Rn(12, 37, 96, 4, "#ff5a52", 'opacity=".7"'));
     // upper deck windows
-    for (let i = 0; i < 5; i++) t.push(R(15 + i * 18, 44, 15, 18, "#bfe4f7", 1.1, 'rx="2"') + line(`M${17 + i * 18},58 L${25 + i * 18},46`, 1.2, "#fff", 'opacity=".8"'));
+    for (let i = 0; i < 5; i++) body.push(R(15 + i * 18, 44, 15, 18, "#bfe4f7", 1.1, 'rx="2"') + line(`M${17 + i * 18},58 L${25 + i * 18},46`, 1.2, "#fff", 'opacity=".8"'));
     // cream band between the decks
-    t.push(R(10, 67, 100, 6, "#f4ead2", 1.1));
+    body.push(R(10, 67, 100, 6, "#f4ead2", 1.1));
     // lower deck: windows, the open platform at the back (left), the driver's window at the front (right)
-    for (let i = 0; i < 4; i++) t.push(R(30 + i * 15, 78, 12, 18, "#bfe4f7", 1.1, 'rx="2"'));
-    t.push(R(14, 78, 12, 34, "#3d2a26", 1.1, 'rx="1.5"') + rope("M20,80 V110", 1.6, "#f2b51e"));
-    t.push(R(92, 78, 14, 18, "#bfe4f7", 1.1, 'rx="2"') + R(92, 47, 14, 6, "#222", .9) + Rn(94, 49, 10, 2, "#ffd54a"));
-    t.push(R(10, 112, 100, 6, "#222", 1.1));
-    t.push(aC(106, 106, 3.4, "#fff8c4", st(1)) + aC(14, 106, 2.4, "#ff6b4a", st(.8)));
-    t.push(R(40, 102, 30, 4, "#f2b51e", .9, 'rx="1"'));
+    for (let i = 0; i < 4; i++) body.push(R(30 + i * 15, 78, 12, 18, "#bfe4f7", 1.1, 'rx="2"'));
+    body.push(R(14, 78, 12, 34, "#3d2a26", 1.1, 'rx="1.5"') + rope("M20,80 V110", 1.6, "#f2b51e"));
+    body.push(R(92, 78, 14, 18, "#bfe4f7", 1.1, 'rx="2"') + R(92, 47, 14, 6, "#222", .9) + Rn(94, 49, 10, 2, "#ffd54a"));
+    body.push(R(10, 112, 100, 6, "#222", 1.1));
+    body.push(aC(106, 106, 3.4, "#fff8c4", st(1)) + aC(14, 106, 2.4, "#ff6b4a", st(.8)));
+    body.push(R(40, 102, 30, 4, "#f2b51e", .9, 'rx="1"'));
+    t.push(tbW("body", body.join("")));
     const wheel = x => aC(x, 120, 9, "#2b2b2b", st(1.3)) + aC(x, 120, 4, "#bdbdbd", st(.9)) + aC(x, 120, 1.4, "#666");
     t.push(Pn("M24,116 A12,12 0 0 1 48,116Z M78,116 A12,12 0 0 1 102,116Z", "#1a1a1a"));
-    t.push(wheel(36), wheel(90));
+    t.push(tbW("wheel", wheel(36), 36, 120), tbW("wheel", wheel(90), 90, 120));
     t.push(sparks([[112, 30, 3.5]], "#fff"));
     return [bg, aEdge(t.join(""))];
   }
 
   // Norway: a Viking ship with a dragon prow, a striped sail and a row of shields
-  function viking() {
-    const bg = aSky("#ffb877", "#ffe9c9") + aSun(30, 72, 12) + aCloud(84, 18, .7) + aWaves(98, "#2f7fc1", "#7cc3f0", 3) + aFlagAt("no");
+  function viking(o = {}) {
+    const tbW = (k, v, ...a) => o[k] ? o[k](v, ...a) : v;      // o.<part>(svg): that part on its own (js/fan/teamown_b.js)
+    const bg = aSky("#ffb877", "#ffe9c9") + aSun(30, 72, 12) + aCloud(84, 18, .7) + tbW("waves", aWaves(98, "#2f7fc1", "#7cc3f0", 3)) + aFlagAt("no");
     const t = [];
     // oars
-    [26, 40, 54, 68, 82].forEach(x => t.push(rope(`M${x},100 L${x - 10},124`, 1.8, "#b07a40")));
+    [26, 40, 54, 68, 82].forEach(x => t.push(tbW("oar", rope(`M${x},100 L${x - 10},124`, 1.8, "#b07a40"), x, 100)));
     // mast and the striped sail
     t.push(rope("M60,96 V20", 3, "#8a5a2b"));
     const sail = "M32,28 H88 Q92,56 86,80 Q60,74 34,80 Q28,56 32,28Z";
-    t.push(P(sail, "#fff", 1.4) + clip(sail, [36, 52, 68, 84].map(x => Rn(x - 4, 20, 8, 70, "#d32f2f")).join("") + Rn(56, 20, 0, 0, "none")) + P(sail, "none", 1.4));
+    t.push(tbW("sail", P(sail, "#fff", 1.4) + clip(sail, [36, 52, 68, 84].map(x => Rn(x - 4, 20, 8, 70, "#d32f2f")).join("") + Rn(56, 20, 0, 0, "none")) + P(sail, "none", 1.4)));
     t.push(rope("M30,28 H90", 2.4, "#8a5a2b"));
     // hull with planks, the tail curl at the back and the dragon at the front
     const hull = "M14,84 Q20,108 52,110 H76 Q104,108 106,84 Z";
@@ -12188,43 +12786,44 @@ function albumParentsWire(pl) {
   }
 
   // Brazil: a carnival dancer with a big feather headdress
-  function samba() {
+  function samba(o = {}) {
+    const m = o.mv || ((k, s) => s);       // o.mv(key, svg) wraps the parts that move at holo (js/fan/teamown_c.js)
     const confetti = [[14, 40, "#ffd23f"], [100, 24, "#3ec7ff"], [108, 70, "#ff5a8a"], [12, 92, "#7cdb5a"], [96, 110, "#ffd23f"], [20, 64, "#ff5a8a"], [104, 96, "#3ec7ff"]]
       .map(([x, y, c], i) => Rn(x - 2.5, y - 1.2, 5, 2.4, c, `transform="rotate(${i * 37} ${x} ${y})"`)).join("");
-    const bg = radial("#b84fd6", "#3a0f6b", ".4") + confetti + Pn("M0,124 Q60,116 120,124 V158 H0Z", "#2b0a4f", 'opacity=".6"') + aFlagAt("br");
+    const bg = radial("#b84fd6", "#3a0f6b", ".4") + m("conf", confetti) + Pn("M0,124 Q60,116 120,124 V158 H0Z", "#2b0a4f", 'opacity=".6"') + aFlagAt("br");
     const t = [];
     // the feather fan behind the head
     const FC = ["#1fa64a", "#ffd23f", "#2a6bd6", "#ff5a8a", "#1fa64a", "#ffd23f", "#2a6bd6", "#ff5a8a", "#1fa64a"];
     for (let i = 0; i < 9; i++) {
       const a = -152 + i * 15.5, r = a * Math.PI / 180, x = 60 + 30 * Math.cos(r), y = 56 + 30 * Math.sin(r);
-      t.push(E(x, y, 9, 25, FC[i], 1.2, `transform="rotate(${n(a + 90)} ${n(x)} ${n(y)})"`) + line(`M60,56 L${n(60 + 50 * Math.cos(r))},${n(56 + 50 * Math.sin(r))}`, .8, "#fff", 'opacity=".6"'));
+      t.push(m("up", E(x, y, 9, 25, FC[i], 1.2, `transform="rotate(${n(a + 90)} ${n(x)} ${n(y)})"`) + line(`M60,56 L${n(60 + 50 * Math.cos(r))},${n(56 + 50 * Math.sin(r))}`, .8, "#fff", 'opacity=".6"')));
     }
     t.push(shadow(60, 134, 22));
     // legs: one straight, one bent in a samba step
     t.push(rope("M56,110 L52,130", 5, "#c68b5e"), rope("M64,110 L74,120 L70,130", 5, "#c68b5e"));
     t.push(E(50, 132, 5, 2.6, "#ffd23f", 1) + E(70, 132, 5, 2.6, "#ffd23f", 1));
     // arms raised
-    t.push(rope("M52,80 L40,70 L34,56", 4.4, "#c68b5e"), rope("M68,80 L80,70 L86,56", 4.4, "#c68b5e"));
-    t.push(aC(34, 54, 3.6, "#c68b5e", st(1.1)) + aC(86, 54, 3.6, "#c68b5e", st(1.1)));
+    t.push(m("up", m("armL", rope("M52,80 L40,70 L34,56", 4.4, "#c68b5e"))), m("up", m("armR", rope("M68,80 L80,70 L86,56", 4.4, "#c68b5e"))));
+    t.push(m("up", m("armL", aC(34, 54, 3.6, "#c68b5e", st(1.1)))) + m("up", m("armR", aC(86, 54, 3.6, "#c68b5e", st(1.1)))));
     // sparkly costume: top, belt, fringed skirt
-    t.push(P("M50,78 Q60,74 70,78 L68,98 Q60,100 52,98Z", "#ffd23f", 1.3));
-    t.push(P("M48,98 Q60,102 72,98 L84,118 Q60,124 36,118Z", "#1fa64a", 1.3));
-    for (let x = 40; x <= 80; x += 5) t.push(line(`M${x},${n(116 + (1 - Math.abs(60 - x) / 24) * 3)} l${n((x - 60) * .08)},7`, 1.6, "#ffd23f"));
-    t.push(R(48, 96, 24, 4, "#2a6bd6", 1, 'rx="1.5"'));
-    [[55, 84], [64, 86], [58, 92], [44, 110], [60, 112], [74, 108]].forEach(([x, y]) => t.push(aSpark(x, y, 2.2, "#fff")));
+    t.push(m("up", P("M50,78 Q60,74 70,78 L68,98 Q60,100 52,98Z", "#ffd23f", 1.3)));
+    t.push(m("skirt", P("M48,98 Q60,102 72,98 L84,118 Q60,124 36,118Z", "#1fa64a", 1.3)));
+    for (let x = 40; x <= 80; x += 5) t.push(m("skirt", line(`M${x},${n(116 + (1 - Math.abs(60 - x) / 24) * 3)} l${n((x - 60) * .08)},7`, 1.6, "#ffd23f")));
+    t.push(m("skirt", R(48, 96, 24, 4, "#2a6bd6", 1, 'rx="1.5"')));
+    [[55, 84], [64, 86], [58, 92], [44, 110], [60, 112], [74, 108]].forEach(([x, y]) => t.push(m(y > 100 ? "skirt" : "up", aSpark(x, y, 2.2, "#fff"))));
     // head with a jewel band
-    t.push(head(60, 58, 15, { skin: "#c68b5e", hair: "#2a1a10", iris: "#3a2210" }));
-    t.push(P("M45,50 Q60,40 75,50 L74,54 Q60,45 46,54Z", "#ffd23f", 1.1) + aC(60, 45.5, 2.6, "#ff5a8a", st(.8)));
-    t.push(P("M44,62 Q40,70 44,78 Q47,70 46,62Z M76,62 Q80,70 76,78 Q73,70 74,62Z", "#2a1a10", 1));
+    t.push(m("up", head(60, 58, 15, { skin: "#c68b5e", hair: "#2a1a10", iris: "#3a2210" })));
+    t.push(m("up", P("M45,50 Q60,40 75,50 L74,54 Q60,45 46,54Z", "#ffd23f", 1.1) + aC(60, 45.5, 2.6, "#ff5a8a", st(.8))));
+    t.push(m("up", P("M44,62 Q40,70 44,78 Q47,70 46,62Z M76,62 Q80,70 76,78 Q73,70 74,62Z", "#2a1a10", 1)));
     t.push(sparks([[16, 20, 3.5], [104, 44, 4]], "#ffe082"));
     return [bg, aEdge(t.join(""))];
   }
 
   // Argentina: Magellanic penguins on a Patagonian beach
-  function penguin(k = 1, flip = false) {
+  function penguin(k = 1, flip = false, m = (q, s) => s) {
     const B = "#1d1d24", t = [];
     t.push(E(-8, 30, 7, 3, "#ff9eb0", 1.1) + E(8, 30, 7, 3, "#ff9eb0", 1.1));
-    t.push(P("M-19,-6 Q-30,8 -27,20 Q-22,17 -17,8Z", B, 1.2) + P("M19,-6 Q30,8 27,20 Q22,17 17,8Z", B, 1.2));
+    t.push(m("flipL", P("M-19,-6 Q-30,8 -27,20 Q-22,17 -17,8Z", B, 1.2)) + m("flipR", P("M19,-6 Q30,8 27,20 Q22,17 17,8Z", B, 1.2)));
     t.push(E(0, 6, 20, 26, B, 1.4));
     t.push(E(0, 12, 15, 20, "#fff", 1));
     // black throat, a white band, then the black horseshoe across the chest and down both flanks, a few belly spots
@@ -12240,15 +12839,16 @@ function albumParentsWire(pl) {
     const s = t.join("");
     return `<g transform="scale(${flip ? -k : k} ${k})">${s}</g>`;
   }
-  function penguins() {
+  function penguins(o = {}) {
+    const m = o.mv || ((k, s) => s);       // o.mv(key, svg) wraps the parts that move at holo (js/fan/teamown_c.js)
     const bg = aSky("#8fd3ff", "#e6f7ff") + aCloud(12, 34, .7) + aCloud(84, 14, .8) +
       Pn("M66,70 L84,52 L98,64 L110,50 L120,58 V78 H66Z", "#9a8a7a") +
-      aWaves(74, "#3a8fd0", "#8fd0f5", 2) + Pn("M0,98 Q40,90 80,96 T120,92 V158 H0Z", "#ecd9a8") + Pn("M0,98 Q40,90 80,96 T120,92", "none", 'stroke="#fff" stroke-width="2.4" opacity=".8"') +
+      m("waves", aWaves(74, "#3a8fd0", "#8fd0f5", 2)) + Pn("M0,98 Q40,90 80,96 T120,92 V158 H0Z", "#ecd9a8") + Pn("M0,98 Q40,90 80,96 T120,92", "none", 'stroke="#fff" stroke-width="2.4" opacity=".8"') +
       E(98, 130, 10, 6, "#9e9e9e", 1) + E(16, 118, 6, 3.5, "#b0a090", 1) + aFlagAt("ar");
     const t = [];
     t.push(shadow(72, 130, 24), shadow(36, 128, 14));
-    t.push(at(penguin(1), 72, 94, 1.15));
-    t.push(at(penguin(1, true), 36, 108, .66));
+    t.push(m("big", at(penguin(1, false, (k, s) => m(k + "1", s)), 72, 94, 1.15)));
+    t.push(m("small", at(penguin(1, true, (k, s) => m(k + "2", s)), 36, 108, .66)));
     t.push(sparks([[108, 96, 3.5], [48, 22, 3.5]], "#fff"));
     return [bg, aEdge(t.join(""))];
   }
@@ -12258,22 +12858,24 @@ function albumParentsWire(pl) {
     return at(line("M0,-16 V-10", 1.2) + E(0, 0, 11, 10, "#e53935", 1.3) + line("M-5,-9 Q-8,0 -5,9 M5,-9 Q8,0 5,9", .9, "#b71c1c") +
       R(-5, -12, 10, 3, "#ffc107", 1) + R(-5, 9, 10, 3, "#ffc107", 1) + line("M0,12 V20", 1.6, "#ffc107"), x, y, k);
   }
-  function dragonDance() {
-    const bg = radial("#d7263d", "#5c0712", ".4") + lantern(100, 18, .8) + lantern(14, 50, .7) + lantern(106, 108, .7) +
+  function dragonDance(o = {}) {
+    const m = o.mv || ((k, s) => s);       // o.mv(key, svg) wraps the parts that move at holo (js/fan/teamown_c.js)
+    const bg = radial("#d7263d", "#5c0712", ".4") + m("lan1", lantern(100, 18, .8)) + m("lan2", lantern(14, 50, .7)) + m("lan3", lantern(106, 108, .7)) +
       Pn("M0,126 H120 V158 H0Z", "#3a0a10", 'opacity=".6"') + aFlagAt("cn");
     const t = [];
     // poles
-    [[30, 96], [52, 106], [74, 92]].forEach(([x, y]) => t.push(rope(`M${x},${y} L${x},132`, 2.4, "#c98a3a")));
+    [[30, 96], [52, 106], [74, 92]].forEach(([x, y]) => t.push(m("body", rope(`M${x},${y} L${x},132`, 2.4, "#c98a3a"))));
     // the body: a thick red wave with gold scales and a white fringe
     const bd = "M20,100 C26,82 40,82 48,96 C56,112 70,108 76,90";
-    t.push(rope(bd, 18, "#e53935", "round"));
-    t.push(Pn(bd, "none", 'stroke="#ffc107" stroke-width="7" stroke-dasharray="4 4" stroke-linecap="round" opacity=".9" transform="translate(0 -3)"'));
-    t.push(line("M14,108 l-2,6 M22,110 l0,6 M38,104 l-1,6 M48,112 l0,6 M58,116 l1,6 M68,110 l2,6", 2, "#fff"));
-    t.push(P("M14,100 Q6,94 8,86 Q14,92 18,90 Q14,84 18,80 Q22,88 24,94Z", "#ffc107", 1.2));
+    t.push(m("body", rope(bd, 18, "#e53935", "round")));
+    t.push(m("body", Pn(bd, "none", 'stroke="#ffc107" stroke-width="7" stroke-dasharray="4 4" stroke-linecap="round" opacity=".9" transform="translate(0 -3)"')));
+    t.push(m("body", line("M14,108 l-2,6 M22,110 l0,6 M38,104 l-1,6 M48,112 l0,6 M58,116 l1,6 M68,110 l2,6", 2, "#fff")));
+    t.push(m("body", m("tail", P("M14,100 Q6,94 8,86 Q14,92 18,90 Q14,84 18,80 Q22,88 24,94Z", "#ffc107", 1.2))));
     // the head, facing us: mane, horns, face, big snout, open mouth, whiskers
     const hx = 78, hy = 62;
     let mn = "";
     for (let i = 0; i < 22; i++) { const a = i * Math.PI / 11, r = i % 2 ? 26 : 34; mn += `${i ? "L" : "M"}${n(hx + r * Math.cos(a))},${n(hy + 2 + r * .95 * Math.sin(a))} `; }
+    const t0 = t.length;
     t.push(P(mn + "Z", "#ffb300", 1.3));
     t.push(E(hx, hy + 2, 27, 25, "#fff4d6", 1.1));
     t.push(P(`M${hx - 12},${hy - 18} Q${hx - 20},${hy - 34} ${hx - 30},${hy - 38} Q${hx - 20},${hy - 26} ${hx - 19},${hy - 15}Z M${hx + 12},${hy - 18} Q${hx + 20},${hy - 34} ${hx + 30},${hy - 38} Q${hx + 20},${hy - 26} ${hx + 19},${hy - 15}Z`, "#ffd54f", 1.2));
@@ -12289,18 +12891,20 @@ function albumParentsWire(pl) {
       P(`M${hx - 13},${hy + 15.5} L${hx - 11},${hy + 20} L${hx - 9},${hy + 16.5}Z M${hx + 13},${hy + 15.5} L${hx + 11},${hy + 20} L${hx + 9},${hy + 16.5}Z`, "#fff", .7));
     t.push(En(hx - 17, hy + 4, 3.4, 2, "#ff9aa8", 'opacity=".7"') + En(hx + 17, hy + 4, 3.4, 2, "#ff9aa8", 'opacity=".7"'));
     t.push(line(`M${hx - 14},${hy + 10} Q${hx - 30},${hy + 8} ${hx - 34},${hy + 20} Q${hx - 36},${hy + 28} ${hx - 28},${hy + 28} M${hx + 14},${hy + 10} Q${hx + 30},${hy + 8} ${hx + 34},${hy + 22}`, 1.8, "#ffc107"));
+    t.splice(t0, t.length - t0, m("head", t.slice(t0).join("")));
     t.push(sparks([[30, 24, 4], [60, 14, 3], [16, 78, 3]], "#ffe082"));
     return [bg, aEdge(t.join(""))];
   }
 
   // Japan: the Shinkansen bullet train racing past green fields
-  function shinkansen() {
-    const bg = aSky("#7fcfff", "#e2f5ff") + aCloud(16, 40, .8) + aCloud(84, 20, .7) +
+  function shinkansen(o = {}) {
+    const m = o.mv || ((k, s) => s);       // o.mv(key, svg) wraps the parts that move at holo (js/fan/teamown_c.js)
+    const bg = aSky("#7fcfff", "#e2f5ff") + m("clouds", aCloud(16, 40, .8) + aCloud(84, 20, .7)) +
       Pn("M0,88 Q40,78 80,86 T120,82 V158 H0Z", "#9bd36a") + Pn("M0,108 H120 V158 H0Z", "#6fbf4a") +
-      [0, 1, 2].map(i => line(`M${i * 40},${120 + i * 4} l30,-6`, 1, "#4e9a3a", 'opacity=".6"')).join("") +
-      Rn(0, 98, 120, 6, "#b8bcc2") + Rn(0, 104, 120, 3, "#7d8288") + [10, 50, 90].map(x => Rn(x, 107, 7, 30, "#b8bcc2")).join("") + aFlagAt("jp");
+      m("ticks", [0, 1, 2].map(i => line(`M${i * 40},${120 + i * 4} l30,-6`, 1, "#4e9a3a", 'opacity=".6"')).join("")) +
+      Rn(0, 98, 120, 6, "#b8bcc2") + Rn(0, 104, 120, 3, "#7d8288") + m("posts", [10, 50, 90].map(x => Rn(x, 107, 7, 30, "#b8bcc2")).join("")) + aFlagAt("jp");
     const t = [];
-    t.push(line("M4,60 H18 M2,72 H12 M6,84 H16", 1.8, "#fff", 'opacity=".9"'));
+    t.push(m("speed", line("M4,60 H18 M2,72 H12 M6,84 H16", 1.8, "#fff", 'opacity=".9"')));
     // body and the long duck-bill nose
     const body = "M14,62 H64 C86,62 104,70 114,86 Q116,92 108,94 H14 Q10,94 10,90 V66 Q10,62 14,62Z";
     t.push(P(body, "#fbfbfd", 1.5));
@@ -12311,11 +12915,12 @@ function albumParentsWire(pl) {
     t.push(aC(108, 89, 1.8, "#fff8c4", st(.7)));
     t.push(hl("M16,64 H62", 1.8, .9));
     t.push(sparks([[104, 44, 4], [30, 108, 3]], "#fff"));
-    return [bg, aEdge(`<g transform="rotate(-6 60 79)">${t.join("")}</g>`)];
+    return [bg, aEdge(m("train", `<g transform="rotate(-6 60 79)">${t.join("")}</g>`))];
   }
 
   // South Korea: a taekwondo kid in a white dobok kicking a board in two
-  function taekwondo() {
+  function taekwondo(o = {}) {
+    const m = o.mv || ((k, s) => s);       // o.mv(key, svg) wraps the parts that move at holo (js/fan/teamown_c.js)
     const mat = [...Array(4)].map((_, r) => [...Array(6)].map((_, c) => Rn(c * 20, 112 + r * 12, 20, 12, (r + c) % 2 ? "#e53950" : "#2f6fd6")).join("")).join("");
     const bg = aSky("#fff2dc", "#ffe0b8") + Rn(0, 28, 120, 6, "#c98b55") + Rn(0, 34, 120, 78, "#f6e6c8") +
       line("M0,60 H120", 1, "#d9c29a") + mat + Rn(0, 112, 120, 2, "#000", 'opacity=".2"') + aFlagAt("kr");
@@ -12325,12 +12930,12 @@ function albumParentsWire(pl) {
     t.push(rope("M42,96 L40,130", 9, "#fff"));
     t.push(E(40, 132, 6, 3, "#ffd9b8", 1.1));
     // kicking leg up to the right, the foot in the board
-    t.push(rope("M48,94 L96,66", 9, "#fff"));
-    t.push(P("M94,60 Q104,58 106,64 Q104,70 96,72Z", "#ffd9b8", 1.1));
+    t.push(m("leg", rope("M48,94 L96,66", 9, "#fff")));
+    t.push(m("leg", P("M94,60 Q104,58 106,64 Q104,70 96,72Z", "#ffd9b8", 1.1)));
     // the board breaking in two, splinters
-    t.push(at(R(-6, -14, 12, 14, "#e2b36a", 1.2) + line("M-3,-12 V-2 M2,-12 V-2", .7, "#b9873e"), 106, 56, 1, 24));
-    t.push(at(R(-6, 0, 12, 14, "#e2b36a", 1.2) + line("M-3,2 V12 M2,2 V12", .7, "#b9873e"), 110, 72, 1, -18));
-    t.push(line("M98,44 L94,38 M108,42 L110,34 M116,62 L119,60", 1.6, "#fff"));
+    t.push(m("boardT", at(R(-6, -14, 12, 14, "#e2b36a", 1.2) + line("M-3,-12 V-2 M2,-12 V-2", .7, "#b9873e"), 106, 56, 1, 24)));
+    t.push(m("boardB", at(R(-6, 0, 12, 14, "#e2b36a", 1.2) + line("M-3,2 V12 M2,2 V12", .7, "#b9873e"), 110, 72, 1, -18)));
+    t.push(m("splint", line("M98,44 L94,38 M108,42 L110,34 M116,62 L119,60", 1.6, "#fff")));
     // jacket (dobok) with the black V collar and belt
     t.push(P("M30,64 Q42,58 56,64 L58,96 Q44,100 30,96Z", "#fff", 1.4));
     t.push(P("M38,62 L44,76 L50,62 L47,61 L44,70 L41,61Z", "#1d1d1d", 1));
@@ -12367,6 +12972,678 @@ function albumParentsWire(pl) {
     jp: ["Shinkansen", "The super-fast bullet train with its long nose", shinkansen],
     kr: ["Taekwondo", "A big kick in a white dobok: the board breaks in two!", taekwondo],
   });
+})();
+
+/* Own animations shared by all 17 teams, one per kind of team sticker (A_OWN[kind] = (team, st) => [backdrop,
+   character, over?], played at holo; stkAnim in album.js), and the special page's (A_OWN["sp_" + key]). CSS: the an-tk-* block in template.html. The figures are drawn
+   as on the plain card (aParts) but from a copy of their pose without the ball, so the ball can move on its own. */
+(() => {
+  "use strict";
+  const f1 = v => +(+v).toFixed(1);
+  const g = (cls, svg, style = "") => `<g class="${cls}"${style ? ` style="${style}"` : ""}>${svg}</g>`;
+  // a pose without its ball (the ball is drawn apart), made once: "kickNB", "keeperNB"…
+  const noBall = pose => { const k = pose + "NB"; if (!A_POSES[k]) A_POSES[k] = { ...A_POSES[pose], ball: undefined }; return k; };
+  // a figure-coordinate point of a team figure on the card (aParts: translate(2 18.6) scale(1.16), the pose's dy)
+  const at = (st, x, y) => { const dy = A_POSES[st.pose].dy || 0; return [f1(2 + 1.16 * x), f1(18.6 + 1.16 * (y + dy))]; };
+  const fig = st => aEdge(`<g transform="translate(2 18.6) scale(1.16)">${aFigure({ ...st, pose: noBall(st.pose) })}</g>`);
+  const ballOf = (st, r) => { const [k, x, y, rr] = A_POSES[st.pose].ball, [cx, cy] = at(st, x, y), R = f1(rr * 1.16 * (r || 1));
+    return [cx, cy, R, k === "b" ? aBasketball(cx, cy, R) : aFootball(cx, cy, R)]; };
+  // the card's backdrop with its rays turning slowly behind the figure (A_RAYS is part of aParts' backdrop)
+  const back = st => { const b = aParts(st)[0]; return b.includes(A_RAYS) ? b.replace(A_RAYS, g("an-tk-rays", A_RAYS, "transform-origin:60px 72px")) : b; };
+  const spinBall = (cx, cy, ball, cls = "an-tk-spin") => g(cls, ball, `transform-origin:${cx}px ${cy}px`);
+  const confetti = (cols, seed) => { const R = aRand(seed); let s = "";
+    for (let i = 0; i < 22; i++) { const x = f1(R() * 120), y = f1(R() * 158), c = cols[i % cols.length], a = Math.floor(R() * 180);
+      s += `<rect x="${x}" y="${y}" width="3.4" height="2" fill="${c}" transform="rotate(${a} ${x} ${y})"/>`; }
+    return s; };
+  // a layer falling down the card for ever: two copies 158 apart
+  const rain = svg => g("an-tk-rain", svg + `<g transform="translate(0 -158)">${svg}</g>`);
+
+  Object.assign(A_OWN, {
+    // the badge turns once like a coin in the light, a shine sweeping across it
+    badge: t => {
+      const [b, main] = A_YSCENES.badge(t);
+      return [b, g("an-tk-coin", main, "transform-origin:60px 80px"), g("an-tk-shine", `<path d="M-30,158 L10,0 H26 L-14,158Z" fill="#fff" opacity=".55"/>`)];
+    },
+    // the keeper crouches, leaps and catches the ball flying in from the right, holds it up, then it's gone
+    keeper: (t, st) => {
+      const [cx, cy, , ball] = ballOf(st);
+      return [back(st), g("an-tk-leap", fig(st)) + g("an-tk-catch", aEdge(spinBall(cx, cy, ball, "an-tk-spin2")), `transform-origin:${cx}px ${cy}px`)];
+    },
+    // the striker leans back and kicks: the ball flies off to the top corner and a new one pops up at his foot
+    player: (t, st) => {
+      const [cx, cy, , ball] = ballOf(st), [hx, hy] = at(st, 50, 78);
+      return [back(st), g("an-tk-kick", fig(st), `transform-origin:${hx}px ${hy}px`) + g("an-tk-shot", aEdge(spinBall(cx, cy, ball)), `transform-origin:${cx}px ${cy}px`)];
+    },
+    // the bicycle kick: the ball shoots out of the burst and off the card, the burst flashes, a new ball drops in
+    comic: t => {
+      const [b, main] = A_YSCENES.comic(t, { noBall: 1 }), p = A_POSES.kick.ball, [cx, cy] = aComicAt(p[1], p[2]).map(f1), R = f1(p[3] * A_COMIC.K);
+      const burst = b.match(/<polygon[^>]*fill="#fff"[^>]*\/><polygon[^>]*fill="#ffeb3b"[^>]*\/>/);
+      const b2 = burst ? b.replace(burst[0], g("an-tk-burst", burst[0], "transform-origin:84px 32px")) : b;
+      return [b2, g("an-tk-bike", main, `transform-origin:60px 90px`) + g("an-tk-fly", aEdge(spinBall(cx, cy, aFootball(cx, cy, R))), `transform-origin:${cx}px ${cy}px`)];
+    },
+    // basketball: dribbling = the ball bounces between hand and floor (squashing on the floor); shooting = the ball arcs off
+    // to the hoop and a new one comes back to the hands
+    bb: (t, st) => {
+      const [cx, cy, , ball] = ballOf(st), dribble = st.pose === "dribble";
+      const b = dribble ? g("an-tk-dribble", g("an-tk-squash", aEdge(ball), `transform-origin:${cx}px ${f1(cy + 9)}px`)) : g("an-tk-hoop", aEdge(spinBall(cx, cy, ball)), `transform-origin:${cx}px ${cy}px`);
+      const over = dribble ? "" : g("an-tk-hoopfx", aSpark(104, 14, 6, "#fff59d") + aSpark(94, 26, 4, "#fff"));
+      return [back(st), g(dribble ? "an-tk-bob" : "an-tk-jump", fig(st)) + b, over];
+    },
+    // the mascot hops and cheers, the ball bouncing beside it, confetti raining in the team's colours
+    mascot: (t, st) => {
+      const [cx, cy, , ball] = ballOf(st);
+      return [back(st), g("an-tk-hop", fig(st), `transform-origin:60px 140px`) + g("an-tk-bounce", aEdge(ball)),
+        rain(confetti([...aYCols(t), "#ffeb3b", "#e040fb"], 3 + t.length))];
+    },
+    // the team photo: the captain lifts the cup up and down, camera flashes pop in the crowd, confetti rains
+    photo: t => {
+      const [b, main] = A_YSCENES.photo(t, { lift: "an-tk-lift" });
+      const flashes = [[18, 20, 0], [52, 12, .5], [92, 26, 1.1], [74, 8, 1.6], [34, 34, 2.1]].map(([x, y, d]) =>
+        `<g class="an-tk-flash" style="transform-origin:${x}px ${y}px;animation-delay:-${d}s">${aSpark(x, y, 6, "#fff")}${aC(x, y, 2.6, "#fff")}</g>`).join("");
+      return [b + flashes, main, rain(confetti([...aYCols(t), "#ffeb3b"], 11 + t.length)) + g("an-tk-pop", `<rect width="120" height="158" fill="#fff"/>`)];
+    },
+    // match night: the floodlights blaze and dim, fireworks burst over the stadium, camera flashes twinkle in the stands
+    stadium: t => {
+      const [b, main] = A_YSCENES.stadium(t), cols = [...aYCols(t), "#ffeb3b"];
+      const beams = g("an-tk-beam", `<polygon points="10,40 0,40 30,110 50,110" fill="#fffde7" opacity=".3"/><polygon points="110,40 120,40 90,110 70,110" fill="#fffde7" opacity=".3"/>`);
+      const fw = [[30, 26, 0, cols[0]], [88, 18, .9, cols[1 % cols.length]], [62, 34, 1.7, "#ffeb3b"]].map(([x, y, d, c]) =>
+        `<g class="an-tk-fw" style="transform-origin:${x}px ${y}px;animation-delay:-${d}s">${[...Array(10)].map((_, i) => { const a = i * Math.PI / 5;
+          return `<path d="M${f1(x + 3 * Math.cos(a))},${f1(y + 3 * Math.sin(a))} L${f1(x + 11 * Math.cos(a))},${f1(y + 11 * Math.sin(a))}" stroke="${c}" stroke-width="1.8" stroke-linecap="round"/>`; }).join("")}${aC(x, y, 1.6, "#fff")}</g>`).join("");
+      const tw = [[16, 96], [104, 92], [30, 120], [92, 122], [60, 70]].map(([x, y], i) => aSpark(x, y, 3.4, "#fff", "lv-tw", `animation-delay:-${(i * .37).toFixed(2)}s`)).join("");
+      return [b + fw, beams + main + tw];
+    },
+  });
+
+  /* ---- the special page ---- */
+  const EDGE = '<g filter="url(#aWhiteEdge)">';
+  const split = m => { const i = m.indexOf(EDGE); return i < 0 ? ["", m] : [m.slice(0, i), m.slice(i)]; };
+  // streaks / bubbles that each travel and fade on their own (seamless: invisible at both ends), staggered
+  const travel = (cls, items, dur) => items.map(([svg, d]) => `<g class="${cls}" style="animation-delay:-${f1(d * dur)}s">${svg}</g>`).join("");
+  const R7 = aRand(7);
+  Object.assign(A_OWN, {
+    // the rook keeper leaps and catches the shot flying in from the right
+    sp_rook: () => { const [b, m] = A_SPECIALS.rook({ noBall: 1 }), [frame, rook] = split(m);
+      return [b, frame + g("an-tk-leap", rook) + g("an-tk-catch", aEdge(spinBall(104, 36, aFootball(104, 36, 7.5), "an-tk-spin2")), "transform-origin:104px 36px")]; },
+    // the ball buddy bounces high and lands with a squash (still winking, thumbs up)
+    sp_buddy: () => { const [b, m] = A_SPECIALS.buddy(); return [b, g("an-tk-hop", m, "transform-origin:60px 128px")]; },
+    // the referee bobs, blows the whistle (sound rings) and flashes the yellow card, then the red one
+    sp_referee: () => { const [b, m, top = ""] = A_SPECIALS.referee();
+      const glow = (cls, x, c) => g(cls, aC(x, 38, 16, c, `opacity=".9"`) + aSpark(x - 9, 26, 4, "#fff"), `transform-origin:${x}px 38px`);
+      const toot = [0, 1, 2].map(i => `<path d="M${72 + i * 5},${57 - i * 2} q${4 + i * 2},${6 + i} 0,${12 + i * 4}" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/>`).join("");
+      return [b + glow("an-tk-glowa", 35.6, "#ffeb3b") + glow("an-tk-glowb", 84.4, "#ff5252"), g("an-tk-bob", m), top + g("an-tk-toot", toot)]; },
+    // the King and Queen dance, swaying in turn
+    sp_royals: () => A_SPECIALS.royals({ king: "an-tk-sway", queen: "an-tk-sway2" }),
+    // the rocket ball zooms through space: it spins and rumbles, the flames flicker, stars streak past
+    sp_rocket: () => { const [b, m] = A_SPECIALS.rocket(), [flames, ball] = split(m);
+      const streaks = travel("an-tk-whoosh", [...Array(7)].map((_, i) => { const x = f1(30 + R7() * 100), y = f1(-10 + R7() * 90);
+        return [`<path d="M${x},${y} l-14,20" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>`, i / 7]; }), 1.2);
+      return [b + streaks, g("an-tk-rumble", g("an-tk-flame", flames, "transform-origin:78px 54px") + spinBall(78, 54, ball))]; },
+    // the octopus keeper sways in the current, bubbles rising past
+    sp_octopus: () => { const [b, m] = A_SPECIALS.octopus();
+      const bub = travel("an-tk-bubble", [[14, 3], [34, 2], [88, 3.5], [104, 2.4], [58, 2], [70, 3]].map(([x, r], i) => [aC(x, 130, r, "none", `stroke="#e1f5fe" stroke-width="1"`), i / 6]), 3);
+      return [b, g("an-tk-sway3", m, "transform-origin:60px 132px"), bub]; },
+    // the robot runs: bouncing along, the ball rolling at its foot, neon bits rushing past
+    sp_robot: () => { const b = A_SPECIALS.robot()[0], st = { pose: "run" }, [cx, cy] = at(st, 77, 104), R = f1(8 * 1.16);
+      const bits = travel("an-tk-bits", [[22, 0], [48, .3], [70, .55], [84, .8], [36, .15], [60, .65]].map(([y, d]) => [`<rect x="118" y="${y}" width="3" height="3" fill="#00e5ff"/>`, d]), 1.4);
+      return [b + bits, g("an-tk-run", aEdge(aFig({ shirt: "#ff7043", trim: "#263238", shorts: "#263238", socks: "#ff7043", boots: "#263238", head: "robot", pose: noBall("run"), num: 8 }))) +
+        aEdge(spinBall(cx, cy, aFootball(cx, cy, R)))]; },
+    // the golden ball turns slowly on its stand, its glow pulsing, sparkles twinkling
+    sp_goldball: () => { const [b, m] = A_SPECIALS.goldball({ spin: "an-tk-turn" });
+      return [b + g("an-tk-glow", aC(60, 62, 46, "#ffe082", `opacity=".35"`), "transform-origin:60px 62px"), m,
+        [[24, 30, 0], [96, 26, .6], [98, 92, 1.2], [20, 88, .9]].map(([x, y, d]) => aSpark(x, y, 5, "#fff", "lv-tw", `animation-delay:-${d}s`)).join("")]; },
+    // the golden boot swings back and kicks a ball off the card
+    sp_goldboot: () => { const [b, m] = A_SPECIALS.goldboot({ kick: "an-tk-bootkick" });
+      return [b, m + g("an-tk-shot", aEdge(spinBall(106, 70, aFootball(106, 70, 6.5))), "transform-origin:106px 70px")]; },
+  });
+})();
+
+/* Team own animations, part a: the landmark / food / national thing of some teams (A_TOWN[team] = { land, food, thing }:
+   (team, st) => [backdrop, character, over?], played at holo; stkAnim in album.js). */
+/* pt slb vsc cv es fr. Each one redraws the plain picture through its hooks (A_LAND[team](o) in album.js, the draw
+   functions' o in countries1.js) and adds its moving parts; CSS an-ta-* in template.html (transform and opacity only) */
+(() => {
+  const OL = A_OL, o7 = `stroke="${OL}" stroke-width=".7"`;
+  const n2 = v => +(+v).toFixed(2);
+  const G = (cls, s, st = "") => `<g class="${cls}"${st ? ` style="${st}"` : ""}>${s}</g>`;
+  const org = (x, y) => `transform-origin:${x}px ${y}px`;
+  const box = o => `transform-box:fill-box;transform-origin:${o}`;
+  const dl = d => `animation-delay:-${d}s`;
+  const at = (s, x, y, k = 1, a = 0) => `<g transform="translate(${x} ${y})${a ? ` rotate(${a})` : ""}${k !== 1 ? ` scale(${k})` : ""}">${s}</g>`;
+  const ln = (d, w, c, x = "") => `<path d="${d}" fill="none" stroke="${c}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"${x ? " " + x : ""}/>`;
+  const rope = (d, w, c) => ln(d, w + 2.4, OL) + ln(d, w, c);
+  // flowing water: aWaves' lines slide one wave (10) to the left over a still copy of the water
+  const waves = (y, c, w, k) => `<rect y="${y}" width="120" height="${158 - y}" fill="${c}"/>` + G("an-ta-wave", aWaves(y, c, w, k));
+  // rising steam wisps [x, y (bottom), delay]; edge = a faint darker rim for light backdrops
+  const steam = (pts, edge = "") => pts.map(([x, y, d]) => { const p = `M${x},${y} q-3,-4 0,-8 q3,-4 0,-8`;
+    return G("an-ta-steam", (edge ? ln(p, 3.6, edge, 'opacity=".35"') : "") + ln(p, 2.2, "#fff", 'opacity=".95"'), dl(d)); }).join("");
+  const pop = (pts, r, c) => pts.map(([x, y, d]) => G("an-ta-bubble", aC(x, y, r, c, o7) + aC(x - r * .3, y - r * .3, r * .3, "#fff"), `${box("50% 50%")};${dl(d)}`)).join("");
+
+  /* ================= Portugal ================= */
+  // a caravel with the red cross on its sail (waterline at 0)
+  const caravel = () => `<path d="M-2,-3 V-31 M10,-3 V-21" stroke="${OL}" stroke-width="1.4"/>` +
+    aP("M-13,-28 Q-2,-25 9,-28 L10,-9 Q-2,-12 -14,-9Z", "#fffaf0") + `<path d="M-2.2,-25 V-12 M-8,-18.5 H4" stroke="#d32f2f" stroke-width="2.6"/>` +
+    aP("M11,-20 L11,-6 L20,-6Z", "#fffaf0") + `<path d="M-2,-31 L5,-29 L-2,-27Z" fill="#d32f2f"/>` +
+    aP("M-19,-4 L19,-4 Q17,4 10,6 H-11 Q-17,4 -19,-4Z", "#8d5a2b") + `<path d="M-16,0 H16" stroke="#5d3a1a" stroke-width="1"/>`;
+  // a cinnamon shaker, cap up at 0,0
+  const shaker = () => aR(-7, 3, 14, 19, "#fafafa", 'rx="3"') + `<rect x="-7" y="9" width="14" height="7" fill="#8d5524"/>` +
+    aR(-8, -2, 16, 6, "#b0bec5", 'rx="2"') + [-4, 0, 4].map(x => aC(x, 1, .9, "#455a64")).join("");
+  A_TOWN.pt = {
+    // Torre de Belém: the Tagus flows and a caravel sails past, rocking on the waves
+    land: t => { const [bg, main] = A_LAND.pt({ waves });
+      return [bg, main + G("an-ta-sail", G("an-ta-rock", at(caravel(), 60, 141), org(60, 141))), aYFlag(t)]; },
+    // pastel de nata: the cinnamon shaker taps, cinnamon falls on the custard, the warm tart steams
+    food: () => { const [bg, main] = FAN.food.pt[2]();
+      const cinn = [[59, 52, 0], [62, 51, .25], [65, 53, .5], [61, 54, .75], [64, 50, 1], [58, 51, 1.2]].map(([x, y, d]) => G("an-ta-fall", aC(x, y, 1.2, "#8a4a14"), dl(d))).join("");
+      return [bg, main + steam([[40, 82, 0], [52, 79, .8], [62, 82, 1.6]], "#9fb4d8") + cinn + G("an-ta-shake", aEdge(at(shaker(), 64, 46, 1.4, -150)), org(71, 34))]; },
+    // tram 28: the houses, the poles and the track roll down past the tram as it climbs; the tram rattles
+    thing: () => {
+      const cols = ["#f6c4a8", "#fff1c9", "#bfe0f2", "#f9d5e0", "#ffe0a3"], road = x => 115.5 - .176 * (x - 65.6), wire = x => 31.6 - .176 * x;
+      const houses = []; for (let k = -1; k <= 10; k++) houses.push([-2 + 24 * k, n2(28 - 4.224 * k), cols[(k + 5) % 5]]);
+      const poles = [8, 68, 128, 188].map(x => `<path d="M${x},${n2(wire(x) - 3)} V${n2(road(x) + 2)} M${x - 3},${n2(wire(x) + 1)} H${x + 3}" stroke="#555" stroke-width="1.6"/>`).join("");
+      let ties = "", specks = "";
+      for (let i = 0; i < 34; i++) { const x = -16 + 8 * i, y = road(x); ties += `<path d="M${x + 1},${n2(y + 1.6)} L${x - 1},${n2(y + 8.4)}" stroke="#7a6f62" stroke-width="1.3"/>`; }
+      for (let r = 0; r < 4; r++) for (let i = 0; i < 11; i++) { const x = -14 + 24 * i + (r % 2) * 12; specks += `<ellipse cx="${x}" cy="${n2(road(x) + 15 + r * 9)}" rx="2.2" ry="1" fill="#bfb5a2"/>`; }
+      const [bg, main] = FAN.thing.pt[2]({ houses, houseRow: s => G("an-ta-climb", s + poles), road: s => s + G("an-ta-climb", ties + specks) });
+      return [bg, G("an-ta-bump", main)];
+    },
+  };
+
+  /* ================= Benfica ================= */
+  // a small car on the bridge deck (wheels on 0), facing right (or left)
+  const car = (c, left) => { const s = `<rect x="0" y="-5" width="13" height="4" rx="1.5" fill="${c}" ${o7}/><path d="M3,-5 L4.5,-8 H9.5 L11,-5Z" fill="${c}" ${o7}/>` +
+    `<rect x="5.4" y="-7.3" width="3.4" height="2" fill="#bbdefb"/>` + aC(3.2, -1, 1.4, "#333") + aC(9.8, -1, 1.4, "#333"); return left ? `<g transform="matrix(-1 0 0 1 13 0)">${s}</g>` : s; };
+  // a Tagus ferry (cacilheiro), waterline at 0
+  const ferry = () => `<rect x="-11" y="-8" width="18" height="5" fill="#fafafa" ${o7}/>` + [-8, -4, 0, 4].map(x => `<rect x="${x - 1}" y="-7" width="2" height="2" fill="#4fc3f7"/>`).join("") +
+    `<rect x="1" y="-12" width="3" height="4" fill="#ef6c00" ${o7}/>` + `<path d="M-17,-3 H17 L13,3 H-13Z" fill="#ef6c00" ${o7}/><path d="M-15,-.5 H15" stroke="#fff" stroke-width="1"/>`;
+  // a bifana steam puff from under the lid
+  const wisp = (x, y) => ln(`M${x},${y} q-3,-4 0,-8 q3,-4 0,-8`, 2.4, "#fff", 'opacity=".95"');
+  A_TOWN.slb = {
+    // Ponte 25 de Abril: cars drive both ways over the bridge, an orange ferry crosses the Tagus below
+    land: t => { const [bg, main] = A_LAND.slb();
+      const cars = G("an-ta-carL", at(car("#42a5f5", 1), 0, 93.4, 1.2)) + G("an-ta-carR", at(car("#fdd835"), 0, 94, 1.2)) + G("an-ta-carR", at(car("#fafafa"), 0, 94, 1.2), dl(1.7));
+      return [bg + G("an-ta-ferry", G("an-ta-rock", at(ferry(), 60, 125, 1.3), org(60, 125))), main + cars, aYFlag(t)]; },
+    // bifana: the top bun lifts like a mouth, steam puffs out of the juicy pork, the bun shuts again
+    food: () => { const [bg, main] = FAN.food.slb[2]({ lid: s => G("an-ta-lid", s, org(14, 90)) });
+      return [bg, main + [[56, 86, 0], [74, 84, .12], [92, 82, .24]].map(([x, y, d]) => G("an-ta-puff", wisp(x, y), dl(d))).join("")]; },
+    // the eagle Vitória flaps its wings and rises with each beat
+    thing: () => { const [bg, main] = FAN.thing.slb[2]({ wing: s => G("an-ta-flap", s, box("100% 90%")) });
+      return [bg, G("an-ta-soar", main)]; },
+  };
+
+  /* ================= Vitória SC ================= */
+  // a little knight with a Portuguese pennant, feet at 0, facing right; legs step (an-ta-legA / legB)
+  const knight = () => {
+    const leg = (x, cls) => G(cls, `<rect x="${x - 1.6}" y="-8" width="3.2" height="7" fill="#9aa5ab" ${o7}/><ellipse cx="${x + .8}" cy="-.8" rx="2.4" ry="1.3" fill="#6b3e1f" ${o7}/>`, box("50% 0%"));
+    return leg(-1.8, "an-ta-legA") + `<path d="M-6,-5 V-35" stroke="#7a4a22" stroke-width="1.3"/><path d="M-7.2,-34.5 L-6,-38 L-4.8,-34.5Z" fill="#cfd8dc" ${o7}/>` +
+      `<path d="M-6,-33.6 L3,-31.4 L-6,-29.2Z" fill="#046A38"/><path d="M-6,-31.4 L3,-31.4 L-6,-29.2Z" fill="#DA291C"/>` +
+      leg(1.8, "an-ta-legB") + `<path d="M-5.5,-7 L-4.5,-18 H4.5 L5.5,-7Z" fill="#fafafa" ${o7}/><rect x="-.9" y="-17" width="1.8" height="9" fill="#1f4fa8"/><rect x="-4" y="-14.6" width="8" height="1.8" fill="#1f4fa8"/>` +
+      `<rect x="-5" y="-10" width="10" height="1.6" fill="#7a4a22"/>` + aC(-6, -14, 1.7, "#ffd9b8", o7) +
+      aC(0, -22.5, 4.4, "#ffd9b8", o7) + `<path d="M-4.8,-22.5 Q-4.8,-28.6 0,-29.4 Q4.8,-28.6 4.8,-22.5Z" fill="#cfd8dc" ${o7}/><rect x="-4.8" y="-24.4" width="9.6" height="1.5" fill="#ffc107"/>` +
+      `<rect x="1.4" y="-23" width=".9" height="3" fill="#90a4ae"/>` + aC(3, -21.4, .8, OL) +
+      `<path d="M3,-17.5 H9.5 V-13 Q9.5,-9 6.25,-7.5 Q3,-9 3,-13Z" fill="#fafafa" ${o7}/><path d="M6.25,-17 V-8.2 M3.4,-13.4 H9.1" stroke="#1f4fa8" stroke-width="1.3"/>`;
+  };
+  // a sugar sieve, centre 0,0, handle to the right
+  const sieve = () => rope("M12,-1 L30,-9", 2.2, "#b0bec5") + `<ellipse cx="0" cy="0" rx="13" ry="4.6" fill="#eceff1" ${A_OUT}/>` +
+    `<path d="M-8,-3 L-8,3 M-4,-4 V4 M0,-4.4 V4.4 M4,-4 V4 M8,-3 V3 M-11,-1.5 H11 M-11,1.5 H11" stroke="#90a4ae" stroke-width=".5"/>` +
+    `<ellipse cx="0" cy="0" rx="13" ry="4.6" fill="none" stroke="#b0bec5" stroke-width="1.6"/><ellipse cx="0" cy="0" rx="14" ry="5.4" fill="none" ${A_OUT}/>`;
+  A_TOWN.vsc = {
+    // Guimarães castle: the flag flutters on the keep while a little knight marches past with his pennant
+    land: t => {
+      const flag = (x, y, cols) => { const s = aFlagPole(x, y, cols), i = s.indexOf("/>") + 2; return s.slice(0, i) + G("an-ta-flag", s.slice(i), org(x, y + 3.5)); };
+      const [bg, main] = A_LAND.vsc({ flag });
+      return [bg, main + G("an-ta-march", at(knight(), 0, 126, 1.3)), aYFlag(t)]; },
+    // toucinho-do-céu: a sieve shakes and snowy sugar falls on the cake
+    food: () => { const [bg, main] = FAN.food.vsc[2]();
+      const sugar = [[36, 47, 0], [42, 49, .3], [48, 47, .6], [54, 49, .9], [39, 51, 1.15], [51, 51, .45], [45, 46, .75], [57, 46, 1.05]].map(([x, y, d]) =>
+        G("an-ta-fall", aC(x, y, 1.6, "#fff", `stroke="#bfae8e" stroke-width=".6"`), dl(d))).join("");
+      return [bg, main + sugar + G("an-ta-sift", aEdge(at(sieve(), 46, 39, 1.2, -8)))]; },
+    // Afonso Henriques swings his sword up for victory, a glint runs up the blade, his cape sways
+    thing: () => { const [bg, main] = FAN.thing.vsc[2]({
+      arm: s => G("an-ta-sword", s + aSpark(29, 62, 3.4, "#fff", "an-ta-glint"), org(48, 80)), cape: s => G("an-ta-cape", s, org(61, 74)) });
+      return [bg, main]; },
+  };
+
+  /* ================= Cape Verde ================= */
+  A_TOWN.cv = {
+    // Pico do Fogo: smoke puffs roll out of the crater, little lava drops spit out, the sea flows
+    land: t => {
+      const blob = G("an-ta-lava", aC(61, 34, 1.9, "#ff9800", o7));
+      const smoke = () => `<ellipse cx="62" cy="36" rx="8" ry="2.2" fill="#ff7043" class="an-ta-glow"/>` + blob + `<g transform="matrix(-1 0 0 1 124 0)">${G("an-ta-lava", aC(61, 34, 1.6, "#ffb300", o7), dl(.8))}</g>` +
+        [0, .8, 1.6, 2.4].map(d => G("an-ta-smoke", aC(62, 30, 6.5, "#eceff1"), `${box("50% 50%")};${dl(d)}`)).join("");
+      const [bg, main] = A_LAND.cv({ waves, smoke });
+      return [bg, main, aYFlag(t)]; },
+    // cachupa: a wooden spoon stirs, the stew bubbles, steam rises
+    food: () => {
+      const st = line => [["M44,38 q-5,-6 0,-12 q5,-6 0,-12", 0], ["M60,34 q-5,-6 0,-12 q5,-6 0,-12", .8], ["M76,38 q-5,-6 0,-12 q5,-6 0,-12", 1.6]]
+        .map(([d, k]) => G("an-ta-steam", line(d, 2.2, "#fff", 'opacity=".85"'), dl(k))).join("");
+      const [bg, main] = FAN.food.cv[2]({ steam: st });
+      const spoon = G("an-ta-stir", aEdge(`<ellipse cx="80" cy="67" rx="4.4" ry="1.5" fill="#5a3a1a" opacity=".55"/>` + rope("M80,66 L100,27", 3.4, "#c8925a")), org(80, 66));
+      return [bg, main + pop([[36, 65, 0], [66, 72, .5], [88, 68, 1], [46, 70, 1.3]], 2, "#c79a5a") + spoon]; },
+    // baby sea turtles: they paddle their flippers and scurry across the beach to the sea
+    thing: () => {
+      const flipper = (s, i) => G("an-ta-paddle", s, box(i ? "15% 10%" : "80% 0%") + (i ? "" : ";" + dl(.35)));
+      const turtles = (tc, at1) => [[-20, 112, .8, "an-ta-swim", 2.3], [-40, 136, .95, "an-ta-run", 1.15], [-30, 162, 1.25, "an-ta-run", 0]]
+        .map(([x, y, k, cls, d]) => G(cls, at1(tc({ flipper }), x, y, k, -26), dl(d))).join("");
+      const [bg, main] = FAN.thing.cv[2]({ turtles });
+      return [bg, main, aFlagAt("cv")]; },      // the flag again on top: the turtles run under it
+  };
+
+  /* ================= Spain ================= */
+  // a tower crane on the right: the trolley runs along the jib, the cable lifts a stone block and lowers it behind the towers
+  const crane = () => { const Y = "#f9a825";
+    let lat = "M110,128"; for (let i = 1; i <= 12; i++) lat += ` L${i % 2 ? 116 : 110},${128 - i * 8}`;
+    let jl = "M66,24"; for (let x = 70; x <= 122; x += 4) jl += ` L${x},${(x - 66) / 4 % 2 ? 28 : 24}`;
+    return `<path d="M113,24 V13 M113,13 L68,24 M113,13 L122,24" stroke="${OL}" stroke-width=".8" fill="none"/>` +
+      rope(`M110,26 V128 M116,26 V128 ${lat}`, 1.5, Y) + rope(`M64,24 H122 M64,28 H122 ${jl}`, 1.2, Y) +
+      `<rect x="103" y="28" width="7" height="7" fill="${Y}" ${o7}/><rect x="104.2" y="29.2" width="4.6" height="3" fill="#bbdefb"/>` +
+      G("an-ta-trolley", `<rect x="105" y="27.5" width="6" height="3.5" fill="#455a64" ${o7}/>` + G("an-ta-cable", `<rect x="107.5" y="31" width="1" height="87" fill="${OL}"/>`, box("50% 0%")) +
+        G("an-ta-block", `<path d="M108,118 L104,121 M108,118 L112,121" stroke="${OL}" stroke-width=".8"/><rect x="103" y="121" width="10" height="7" fill="#e0bf8f" ${A_OUT}/><path d="M103,124.5 H113 M108,121 V124.5" stroke="#b08a5a" stroke-width=".6"/>`));
+  };
+  // the enxaneta (the top child) from the castells hook's parts; wave = her raised arm waves
+  const kid = (e, wave) => e[0] + (wave ? G("an-ta-hi", e[1], org(64, 40)) : e[1]) + e.slice(2).join("");
+  A_TOWN.es = {
+    // the Sagrada Família, still being built: a crane hoists a stone block onto it; the star on top turns
+    land: t => { const [bg, main] = A_LAND.es({ star: s => G("an-ta-star", s, box("50% 50%")) });
+      return [bg + crane(), main, aYFlag(t)]; },
+    // paella: the shrimps hop in the sizzling pan, the rice pops, steam rises
+    food: () => { const [bg, main] = FAN.food.es[2]({ shrimp: (s, i) => G("an-ta-hop", s, dl(i * .4)) });
+      return [bg, main + pop([[26, 92, 0], [52, 94, .4], [74, 86, .8], [98, 92, 1.2], [62, 78, .2], [38, 82, 1]], 1.4, "#fff3b0") + steam([[36, 66, 0], [60, 62, .8], [84, 66, 1.6]], "#e08a1c")]; },
+    // castells: the smallest climbs up from behind the tower, waves at the top, climbs down again
+    thing: () => { const [bg, main] = FAN.thing.es[2]({ top: (e, third) => G("an-ta-kidB", G("an-ta-up", kid(e))) + third + G("an-ta-kidF", G("an-ta-up", kid(e, 1))) });
+      return [bg, main]; },
+  };
+
+  /* ================= France ================= */
+  const cab = (x, y) => `<rect x="${x - 2.8}" y="${y - 3.4}" width="5.6" height="6.8" rx="1" fill="#ffd54f" ${o7}/><rect x="${x - 1.7}" y="${y - 2.3}" width="3.4" height="2.6" fill="#bbdefb"/>`;
+  // the pedalling legs: 6 frames shown in turn (an-ta-pedal), the crank turning clockwise as the bike rides right
+  const pedal = (leg, far) => {
+    const H = [54, 88], C = [58, 112], L1 = 15.6, L2 = 16.1, T = 1.4;
+    return [0, 1, 2, 3, 4, 5].map(k => {
+      const a = (18 + 60 * k + (far ? 180 : 0)) * Math.PI / 180, f = [C[0] + 6 * Math.cos(a), C[1] + 6 * Math.sin(a)];
+      const dx = f[0] - H[0], dy = f[1] - H[1], d = Math.min(Math.hypot(dx, dy), L1 + L2 - .01), b0 = Math.atan2(dy, dx), b = Math.acos((L1 * L1 + d * d - L2 * L2) / (2 * L1 * d));
+      const k1 = [H[0] + L1 * Math.cos(b0 - b), H[1] + L1 * Math.sin(b0 - b)], k2 = [H[0] + L1 * Math.cos(b0 + b), H[1] + L1 * Math.sin(b0 + b)], kn = k1[0] > k2[0] ? k1 : k2;
+      const crank = ln(`M${C[0]},${C[1]} L${n2(f[0])},${n2(f[1])}`, 1.8, "#333");
+      return G("an-ta-pedal", crank + leg(`M54,88 L${n2(kn[0])},${n2(kn[1])} L${n2(f[0])},${n2(f[1])}`, n2(f[0] + 1), n2(f[1] + 1)), k ? dl(n2((6 - k) * T / 6)) : "");
+    }).join("");
+  };
+  A_TOWN.fr = {
+    // the Eiffel Tower: the lifts ride up and down (the middle and the left leg), the beacon on top sweeps round
+    land: t => { const [bg, main] = A_LAND.fr();
+      const beam = G("an-ta-beam", `<path d="M60,15 L120,9 L120,21Z" fill="#fff9c4" opacity=".75"/>`, org(60, 15));
+      const lifts = `<path d="M60,24 V62 M31,127 L46,99" stroke="#4e342e" stroke-width=".9"/>` + G("an-ta-lift", cab(60, 58)) + G("an-ta-lift2", cab(31, 124), dl(1.4));
+      return [bg + beam, main + lifts + aC(60, 15, 2.4, "#fff59d", `class="an-ta-lamp" ${o7}`), aYFlag(t)]; },
+    // the baguette snaps in two with a shower of crumbs (and mends again); the croissant steams
+    food: () => {
+      const baguette = s => { const L = aU("tacl"), R = aU("tacr");
+        const half = id => `<g transform="translate(64 58) rotate(32)"><g clip-path="url(#${id})"><g transform="rotate(-32) translate(-64 -58)">${s}</g></g></g>`;
+        const crumbs = [-160, -125, -95, -65, -30, 20, 160].map((a, i) => `<g transform="rotate(${a} 64 58)">${G("an-ta-crumb", aC(64, 58, i % 2 ? 1.2 : 1.6, i % 2 ? "#f6cf8a" : "#d8923a", o7))}</g>`).join("");
+        return `<defs><clipPath id="${L}"><rect x="-70" y="-30" width="70" height="60"/></clipPath><clipPath id="${R}"><rect x="0" y="-30" width="70" height="60"/></clipPath></defs>` +
+          G("an-ta-snapL", half(L), org(64, 58)) + G("an-ta-snapR", half(R), org(64, 58)) + crumbs + aSpark(64, 52, 6, "#fff", "an-ta-crack"); };
+      const [bg, main] = FAN.food.fr[2]({ baguette });
+      return [bg, main + steam([[50, 78, 0], [62, 75, .8], [72, 79, 1.6]], "#b46d22")]; },
+    // the Tour de France: the road and the sunflowers race past, the wheels spin, the legs pedal
+    thing: () => {
+      const flowerAt = []; for (let j = 0; j < 4; j++) for (const [x, y] of [[6, 92], [20, 86], [34, 96]]) flowerAt.push([x + 52 * j, y]);
+      let dd = ""; for (let x = -48; x <= 160; x += 26) dd += `M${x},127 H${x + 14} `;
+      const [bg, main] = FAN.thing.fr[2]({ flowerAt, flowers: s => G("an-ta-ride", s), dashes: line => G("an-ta-ride", line(dd.trim(), 2, "#fff")),
+        wheel: (s, x, y) => G("an-ta-wheel", s, org(x, y)), farLeg: leg => pedal(leg, 1), nearLeg: leg => pedal(leg, 0) });
+      return [bg, main]; },
+  };
+})();
+
+/* Team own animations, part b: the landmark / food / national thing of some teams (A_TOWN[team] = { land, food, thing }:
+   (team, st) => [backdrop, character, over?], played at holo; stkAnim in album.js).
+   Teams it de nl ch en no. The drawings themselves stay in A_LAND (album.js) and FAN.food / FAN.thing
+   (js/fan/countries1.js, countries2.js): each takes an options object that hands back one part (the windmill's sails,
+   the fondue fork…) to be wrapped in an animated group here; without options the drawing is unchanged.
+   CSS: an-tb-* in template.html (transform and opacity only). */
+(() => {
+  "use strict";
+  const OL = A_OL;
+  // an animated group: class an-tb-<c>, optional transform origin (card units) and delay (s)
+  const G = (c, s, ox, oy, d) => `<g class="an-tb-${c}"${ox != null || d ? ` style="${ox != null ? `transform-origin:${ox}px ${oy}px;` : ""}${d ? `animation-delay:-${d}s` : ""}"` : ""}>${s}</g>`;
+  const at = (x, y, s) => `<g transform="translate(${x} ${y})">${s}</g>`;
+  const stroke = (d, c, w, x = "") => `<path d="${d}" fill="none" stroke="${c}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" ${x}/>`;
+  // a bird crossing the sky (off-card to off-card), flapping
+  const bird = (y, d, c = "#3e2723", k = 1) => G("fly", at(0, y, `<g transform="scale(${k})">${G("flap", stroke("M-5,0 Q-2.5,-3.5 0,0 Q2.5,-3.5 5,0", c, 1.3))}</g>`), null, null, d);
+  // a steam wisp rising and fading
+  const steam = (x, y, d = 0, w = 2) => G("steam", stroke(`M${x},${y} q-3,-4 0,-8 q3,-4 0,-8`, "#fff", w, 'opacity=".9"'), null, null, d);
+  // the land's own parts + the small flag on top (aSceneParts adds it to the plain land)
+  const land = (t, back, main, over = "") => [back, main, over + aYFlag(t)];
+
+  /* ---------- Italy ---------- */
+  const it = {
+    // the Colosseum: swallows fly past, the sun's rays turn
+    land: t => {
+      const [b, m] = A_LAND.it();
+      const rays = [...Array(8)].map((_, i) => { const a = i * Math.PI / 4, c = Math.cos(a), s = Math.sin(a);
+        return stroke(`M${(96 + 11.5 * c).toFixed(2)},${(22 + 11.5 * s).toFixed(2)} L${(96 + 15.5 * c).toFixed(2)},${(22 + 15.5 * s).toFixed(2)}`, "#ffb300", 1.6); }).join("");
+      return land(t, b + G("rays", rays, 96, 22) + bird(18, 0, "#3e2723", 1.6) + bird(32, 1.2, "#4e342e", 1.2) + bird(10, 2.3, "#3e2723", 1.4), m);
+    },
+    // pizza: the slice is pulled out, the cheese strings stretch, steam rises
+    food: () => {
+      const [b, m] = FAN.food.it[2]({
+        slice: s => G("pull", s),         // pulled 10 more along am = 42.5deg (CSS antbpull)
+        string: (s, C, r, a, am) => {
+          const x = (C[0] + r * Math.cos(a)).toFixed(2), y = (C[1] + r * Math.sin(a)).toFixed(2), deg = (am * 180 / Math.PI).toFixed(2);
+          // stretched along the pull: scaleX((9 + 10) / 9) in a frame turned to the pull's direction
+          return `<g transform="rotate(${deg} ${x} ${y})">${G("strx", `<g transform="rotate(${-deg} ${x} ${y})">${s}</g>`, x, y)}</g>`;
+        },
+      });
+      return [b, m, steam(36, 26, 0) + steam(52, 22, 1.1) + steam(70, 24, .6)];
+    },
+    // the gondola rocks on the water, the gondolier rows, the ripples move
+    thing: () => {
+      const [b, m] = FAN.thing.it[2]({ oar: s => G("oar", s, 43, 75), ripple: s => G("ripple", s) });
+      return [b, G("rock", m, 60, 112)];
+    },
+  };
+
+  /* ---------- Germany ---------- */
+  const boom = (x, y, c, d) => G("boom", [...Array(12)].map((_, i) => { const a = i * Math.PI / 6, cs = Math.cos(a), sn = Math.sin(a);
+    return stroke(`M${(x + 4 * cs).toFixed(2)},${(y + 4 * sn).toFixed(2)} L${(x + 12 * cs).toFixed(2)},${(y + 12 * sn).toFixed(2)}`, c, 2) + aC(+(x + 15 * cs).toFixed(2), +(y + 15 * sn).toFixed(2), 1.5, c); }).join("") + aC(x, y, 2.2, "#fff"), x, y, d);
+  const de = {
+    // the Brandenburg Gate: the quadriga's horses gallop, fireworks burst over Berlin
+    land: t => {
+      const [b, m] = A_LAND.de({ horse: (h, i) => G("gallop", h, 41 + i * 11 + (i % 2), 40, i * .2) });
+      return land(t, b + boom(44, 18, "#e53935", 0) + boom(98, 18, "#ffc107", .8) + boom(76, 26, "#e040fb", 1.6), m);
+    },
+    // the pretzel: a salt shaker shakes, salt falls on it
+    food: () => {
+      const [b, m] = FAN.food.de[2]();
+      const shaker = aEdge(`<g transform="translate(92 22) rotate(35)">` +
+        `<path d="M-7,-16 H7 L8,6 H-8Z" fill="#e3f2fd" stroke="${OL}" stroke-width="1.3" stroke-linejoin="round"/>` +
+        `<path d="M-9,6 H9 Q9,14 0,14 Q-9,14 -9,6Z" fill="#b0bec5" stroke="${OL}" stroke-width="1.3" stroke-linejoin="round"/>` +
+        aC(-3, 10, .9, OL) + aC(3, 10, .9, OL) + aC(0, 12, .9, OL) + `<rect x="-5" y="-12" width="10" height="14" fill="#fff" opacity=".9"/>` +
+        `<path d="M-4,-13 V2" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity=".9"/></g>`);
+      const salt = [[82, 0], [86, .3], [79, .55], [88, .8], [84, 1.05]].map(([x, d]) =>
+        G("salt", `<rect x="${x - 1.4}" y="38" width="2.8" height="2.4" rx=".5" fill="#fff" stroke="${OL}" stroke-width=".5"/>`, null, null, d)).join("");
+      return [b, m, salt + G("shake", shaker, 92, 22)];
+    },
+    // Neuschwanstein: night falls, the moon and the stars come out, the windows light up
+    thing: () => {
+      const [b, m] = FAN.thing.de[2]({ win: s => s + G("dusk", s.replace('fill="#2f4a6a"', 'fill="#ffd54a"')) });
+      const stars = [[14, 12], [40, 8], [58, 20], [108, 40], [26, 30], [112, 12]].map(([x, y]) => aSpark(x, y, 2.4, "#fff")).join("");
+      const moon = `<path d="M103,14 A8,8 0 1 0 112,26 A6.5,6.5 0 0 1 103,14Z" fill="#fff8d0"/>`;
+      return [b + G("dusk", `<rect width="120" height="158" fill="#1a2150" opacity=".62"/>` + stars + moon), m];
+    },
+  };
+
+  /* ---------- Netherlands ---------- */
+  const nl = {
+    // the windmill's sails turn
+    land: t => { const [b, m] = A_LAND.nl({ sails: s => G("sails", s, 60, 46) }); return land(t, b, m); },
+    // stroopwafel: steam rises from the hot chocolate, the caramel drips
+    food: () => {
+      const drop = (x, y, d) => G("drop", aC(x, y, 1.8, "#9a4f12", `stroke="${OL}" stroke-width=".7"`), null, null, d);
+      const [b, m] = FAN.food.nl[2]({
+        steam: s => G("steam", s) + G("steam", s, null, null, 1.2),
+        drip: (s, x, y) => G("drip", s, x, y, x > 60 ? 1 : 0) + drop(x + (x > 60 ? .5 : 0), y + (x > 60 ? 12 : 9), x > 60 ? 1 : 0),
+      });
+      return [b, m];
+    },
+    // the skater skates across the canal and back, pushing off, the scarf flying
+    thing: () => {
+      const [b, m] = FAN.thing.nl[2]({ backleg: s => G("kick", s, 58, 96), scarf: s => G("scarf", s, 56, 66) });
+      return [b, G("skx", G("skf", G("skb", m, 72, 124), 62, 0))];
+    },
+  };
+
+  /* ---------- Switzerland ---------- */
+  const ch = {
+    // the Matterhorn: a cable car goes up and down, smoke rises from the chalet
+    land: t => {
+      const [b, m] = A_LAND.ch();
+      const car = `<path d="M0,0 V4" stroke="${OL}" stroke-width="1"/>` + aC(0, 0, 1.4, "#616161", A_OUT) +
+        `<rect x="-5" y="4" width="10" height="8" rx="1.5" fill="#e53935" ${A_OUT}/><rect x="-3.5" y="5.5" width="7" height="3" fill="#e3f2fd"/>`;
+      const over = stroke("M-4,108 L50,54", "#37474f", .9) + `<rect x="46" y="50" width="8" height="6" fill="#eceff1" ${A_OUT}/>` +
+        at(8, 96, G("car", G("sway", car, 0, 0))) +
+        `<rect x="103" y="98" width="3.4" height="6" fill="#5d4037" ${A_OUT}/>` +
+        [0, 1.2].map(d => G("smoke", aC(104.7, 95, 2.4, "#eceff1", 'opacity=".9"'), null, null, d)).join("");
+      return land(t, b, m, over);
+    },
+    // fondue: the fork dips the bread into the cheese and pulls it out with long strings
+    food: () => {
+      const id = aU("tbfd");
+      const bub = (x, y, d) => G("bubble", aC(x, y, 1.6, "#ffe082", `stroke="${OL}" stroke-width=".6"`), null, null, d);
+      const [b, m] = FAN.food.ch[2]({
+        strings: s => bub(46, 83, 0) + bub(76, 84, .8) + bub(62, 86, 1.5) + G("stry", s, 54, 81),
+        fork: s => `<defs><clipPath id="${id}"><rect width="120" height="80"/></clipPath></defs><g clip-path="url(#${id})">${G("dip", s)}</g>`,
+      });
+      return [b, m, steam(32, 76, 0) + steam(88, 76, 1.3)];
+    },
+    // the cow: the bell swings and rings, the head tilts, the tail swishes
+    thing: () => {
+      const ding = (x, d) => G("ding", stroke(x < 60 ? `M${x},104 q-4,4 0,8 M${x - 4},102 q-6,6 0,12` : `M${x},104 q4,4 0,8 M${x + 4},102 q6,6 0,12`, "#ffd54a", 1.6), null, null, d);
+      const [b, m] = FAN.thing.ch[2]({ bell: s => G("bell", s, 60, 93), tail: s => G("tail", s, 86, 118), head: s => G("head", s, 60, 88) });
+      return [b, m, ding(42, 0) + ding(78, 1.2)];
+    },
+  };
+
+  /* ---------- England ---------- */
+  const en = {
+    // Big Ben: the clock hands go round, the bell rings out on the hour, a boat passes on the Thames
+    land: t => {
+      const [b, m] = A_LAND.en({
+        hands: (x, y) => G("hour", `<path d="M${x},${y} L${x + 3.5},${y + 1.5}" stroke="${OL}" stroke-width="1.4" stroke-linecap="round"/>`, x, y) +
+          G("min", `<path d="M${x},${y} V${y - 5.5}" stroke="${OL}" stroke-width="1.1" stroke-linecap="round"/>`, x, y) + aC(x, y, .9, OL),
+      });
+      const bong = G("bong", stroke("M30,26 q-4,6 0,12 M26,24 q-6,8 0,16 M58,26 q4,6 0,12 M62,24 q6,8 0,16", "#ffd54a", 1.8), 44, 32);
+      const boat = G("boat", `<path d="M-14,130 H14 L10,136 H-10Z" fill="#fafafa" ${A_OUT}/><rect x="-9" y="125" width="16" height="5" fill="#e53935" ${A_OUT}/>` +
+        `<rect x="-6" y="126.4" width="3" height="2.2" fill="#e3f2fd"/><rect x="-1" y="126.4" width="3" height="2.2" fill="#e3f2fd"/>`);
+      return land(t, b, m, bong + boat);
+    },
+    // fish and chips: the fish wiggles, the chips hop, steam rises
+    food: () => {
+      const [b, m] = FAN.food.en[2]({ fish: s => G("wig", s, 52, 66), chip: (s, i) => G("hop", s, null, null, i * .25) });
+      return [b, m, steam(70, 30, 0) + steam(86, 34, .9) + steam(60, 34, 1.7)];
+    },
+    // the double-decker bus drives: the street scrolls past, the wheels turn, the bus bounces
+    thing: () => {
+      const [b, m] = FAN.thing.en[2]({
+        // the houses (and the road's dashes) twice, 120 apart; lamp posts on the houses' layer tower over the bus roof
+        street: s => { if (s.includes("<rect")) s += [18, 78].map(x => `<rect x="${x - 1.2}" y="16" width="2.4" height="98" fill="#37474f"/>` +
+          `<path d="M${x - 4},16 H${x + 4} L${x + 2.6},8 H${x - 2.6}Z" fill="#ffe082" ${A_OUT}/><rect x="${x - 4.5}" y="5.5" width="9" height="2.6" rx="1" fill="#37474f"/>`).join("");
+          return G("scroll", s + `<g transform="translate(120 0)">${s}</g>`); },
+        body: s => G("bob", s),
+        wheel: (s, x, y) => G("wheel", s + [0, 1, 2].map(i => { const a = i * 2 * Math.PI / 3;
+          return aC(+(x + 6.6 * Math.cos(a)).toFixed(2), +(y + 6.6 * Math.sin(a)).toFixed(2), 1.1, "#757575") + aC(+(x + 2.6 * Math.cos(a + 1)).toFixed(2), +(y + 2.6 * Math.sin(a + 1)).toFixed(2), .7, "#555"); }).join(""), x, y),
+      });
+      return [b, m];
+    },
+  };
+
+  /* ---------- Norway ---------- */
+  // the wave lines of aWaves move on by one wave (the rect under them stays)
+  const waveRoll = s => { const i = s.indexOf("/>") + 2; return s.slice(0, i) + G("roll", s.slice(i)); };
+  const no = {
+    // the fjord: a sailing boat crosses the water, the waves roll, a gull flies
+    land: t => {
+      const [b, m] = A_LAND.no({ waves: waveRoll });
+      const boat = G("boat", `<g transform="translate(0 114) scale(1.5) translate(0 -114)">` + G("boatbob", `<path d="M-9,110 H9 L6,115 H-6Z" fill="#8d5a2b" ${A_OUT}/><path d="M0,110 V96" stroke="${OL}" stroke-width="1"/>` +
+        `<path d="M1,97 L8,108 H1Z" fill="#fff" ${A_OUT}/><path d="M-1,99 L-6,108 H-1Z" fill="#ffcdd2" ${A_OUT}/>`, 0, 112) + `</g>`);
+      return land(t, b + boat + bird(24, .7, "#455a64", 1.6), m);
+    },
+    // heart waffles: the front heart beats, the strawberry hops
+    food: () => {
+      const [b, m] = FAN.food.no[2]({ front: s => G("beat", s, 62, 110), berry: s => G("berry", s, 55, 82) });
+      return [b, m];
+    },
+    // the Viking ship: rows across the waves, the sail fills, the ship rocks
+    thing: () => {
+      const [b, m] = FAN.thing.no[2]({ waves: waveRoll, oar: (s, x, y) => G("row", s, x, y), sail: s => G("billow", s, 60, 28) });
+      return [b, G("rock2", m, 60, 104)];
+    },
+  };
+
+  Object.assign(A_TOWN, { it, de, nl, ch, en, no });
+})();
+
+/* Team own animations, part c: the landmark / food / national thing of some teams (A_TOWN[team] = { land, food, thing }:
+   (team, st) => [backdrop, character, over?], played at holo; stkAnim in album.js). */
+/* br ar cn jp kr. The drawings are the plain ones (A_LAND[team] in album.js, FAN.food / FAN.thing in countries2.js) called
+   with o.mv(key, svg), which wraps their moving parts in an animated <g> (CSS an-tc-* in template.html); what the plain
+   picture doesn't have (cars, a panda, a spoon…) is added here. Only transform and opacity move (the old iPad). */
+(() => {
+  "use strict";
+  const OL = A_OL, ow = (w = 1) => `stroke="${OL}" stroke-width="${w}" stroke-linejoin="round" stroke-linecap="round"`;
+  const g = (cls, s, style = "") => `<g class="${cls}"${style ? ` style="${style}"` : ""}>${s}</g>`;
+  const at = (x, y, s) => `<g transform="translate(${x} ${y})">${s}</g>`;
+  const org = (x, y) => `transform-origin:${x}px ${y}px`;
+  const dl = d => `animation-delay:-${d}s`;
+  const stick = (d, w, c) => `<path d="${d}" fill="none" stroke="${OL}" stroke-width="${w + 2}" stroke-linecap="round"/><path d="${d}" fill="none" stroke="${c}" stroke-width="${w}" stroke-linecap="round"/>`;
+  // aWaves' sea: the rect stays, the wave lines scroll (they repeat every 10 px)
+  const waves = (s, extra = "") => s.replace(/^(<rect[^>]*\/>)([\s\S]*)$/, (_, r, l) => r + g("an-tc-waves", l) + extra);
+  const land = (t, mv) => { const [b, m, o = ""] = A_LAND[t]({ mv }); return [b, m, o]; };
+  const fan = (kind, t, mv) => FAN[kind][t][2]({ mv });
+
+  // Brazil, Sugarloaf cable car + a sailboat; Buenos Aires taxis; a panda on the Great Wall…
+  const boat = at(0, 141, g("an-tc-sail", g("an-tc-rock", `<g transform="scale(1.3)"><path d="M-9,-3 H9 L6,1 H-6Z" fill="#e53935" ${ow(.8)}/><path d="M0,-3 V-17" ${ow(.9)}/>` +
+    `<path d="M1,-16 L9,-4 H1Z" fill="#fff" ${ow(.8)}/><path d="M-1,-14 L-7,-4 H-1Z" fill="#ffd54f" ${ow(.8)}/></g>`, org(0, 0))));
+  const cabin = (x, y, c) => `<path d="M${x},${y} v2.6" ${ow(.8)}/><rect x="${x - 3.5}" y="${y + 2.6}" width="7" height="5.4" rx="1.2" fill="${c}" ${ow(.8)}/>` +
+    `<rect x="${x - 2.4}" y="${y + 3.5}" width="4.8" height="2" rx=".5" fill="#e1f5fe"/>`;
+  function taxi(rear) {        // a Buenos Aires taxi (black, yellow roof), front or back, standing on 0,0
+    return `<rect x="-11" y="-2.5" width="5" height="3.5" rx="1" fill="#111"/><rect x="6" y="-2.5" width="5" height="3.5" rx="1" fill="#111"/>` +
+      `<path d="M-8,-11 L-6,-17 H6 L8,-11Z" fill="#ffd600" ${ow(.9)}/><path d="M-6,-11.6 L-4.7,-15.6 H4.7 L6,-11.6Z" fill="${rear ? "#90a4ae" : "#b3e5fc"}"/>` +
+      `<rect x="-12" y="-11.5" width="24" height="10" rx="2.4" fill="#212121" ${ow(.9)}/><rect x="-2.6" y="-19.4" width="5.2" height="2.4" rx=".6" fill="#fff" ${ow(.6)}/>` +
+      (rear ? aC(-8.4, -7, 1.9, "#ff1744") + aC(8.4, -7, 1.9, "#ff1744") + `<rect x="-4" y="-6.4" width="8" height="3" fill="#ffd600"/>`
+        : aC(-8.2, -6.6, 2, "#fff59d", ow(.5)) + aC(8.2, -6.6, 2, "#fff59d", ow(.5)) + `<rect x="-4" y="-7.6" width="8" height="2.4" rx=".6" fill="#616161"/>`);
+  }
+  function panda() {          // walking right, feet on 0,0
+    const leg = (x, d) => g("an-tc-leg", `<ellipse cx="${x}" cy="-2.6" rx="1.9" ry="2.8" fill="#212121"/>`, `${org(x, -5)};${d}`);
+    return leg(-2.2, "") + leg(2.4, dl(.26)) + `<ellipse cx="0" cy="-7.6" rx="4.8" ry="5" fill="#fff" ${ow(.9)}/>` +
+      `<ellipse cx="2.6" cy="-8" rx="1.6" ry="3" fill="#212121" transform="rotate(-20 2.6 -8)"/>` + aC(.6, -15, 4.8, "#fff", ow(.9)) +
+      aC(-2.4, -18.8, 1.7, "#212121") + aC(3.2, -19, 1.7, "#212121") +
+      `<ellipse cx="0" cy="-15.2" rx="1.2" ry="1.6" fill="#212121"/><ellipse cx="3.6" cy="-15.2" rx="1.2" ry="1.6" fill="#212121"/>` +
+      aC(.2, -15.4, .5, "#fff") + aC(3.8, -15.4, .5, "#fff") + aC(5.2, -13.2, .8, "#212121") + `<path d="M-4.6,-8 L-5.4,-4" ${ow(1.6)}/>`;
+  }
+  const petal = `<ellipse cx="0" cy="0" rx="3" ry="1.9" fill="#f8bbd0" ${ow(.4)}/><path d="M-1.4,0 H1" stroke="#fce4ec" stroke-width=".7"/>`;
+
+  A_TOWN.br = {
+    // the cable car climbs the Sugarloaf (and comes back), a sailboat crosses the bay, the waves roll
+    land: t => { const [b, m] = land(t, (k, s) => k === "waves" ? waves(s, boat) : k === "car" ? g("an-tc-car", cabin(81, 89.4, "#e53935")) : s);
+      return [b, m, aYFlag(t)]; },
+    // a sprinkle shaker shakes above the big brigadeiro, sprinkles rain down on it
+    food: t => {
+      const [b, m] = fan("food", t), C = ["#ff5a8a", "#ffd23f", "#3ec7ff", "#7cdb5a", "#fff", "#ff5a8a"];
+      const jar = `<rect x="-6.5" y="-15" width="13" height="18" rx="3" fill="#e3f2fd" ${ow(1.1)}/>` +
+        [[-3, -10, 30], [1.5, -11, -40], [-1, -6, 70], [3, -5, 10], [-3.4, -2, -20], [1, -1, 50]].map(([x, y, a], i) =>
+          `<rect x="${x - 1.4}" y="${y - .6}" width="2.8" height="1.2" rx=".6" fill="${C[i]}" transform="rotate(${a} ${x} ${y})"/>`).join("") +
+        `<path d="M-4,-13 V-3" stroke="#fff" stroke-width="1.4" stroke-linecap="round" opacity=".8"/>` +
+        `<rect x="-7.4" y="3" width="14.8" height="5.4" rx="1.6" fill="#ff5a8a" ${ow(1.1)}/>` + [-4, -1.3, 1.3, 4].map(x => aC(x, 7, .6, OL)).join("");
+      const fall = [[55, .0], [59, .45], [63, .2], [57, .65], [66, .35], [61, .8]].map(([x, d], i) => at(x, 39, g("an-tc-spr",
+        `<rect x="-2" y="-.8" width="4" height="1.6" rx=".8" fill="${C[i]}" transform="rotate(${i * 50} 0 0)"/>`, dl(d)))).join("");
+      return [b, m + fall + at(60, 26, g("an-tc-shake", aEdge(`<g transform="scale(1.35)">${jar}</g>`), org(0, -5))), ""];
+    },
+    // the samba dancer dances: hips one way, shoulders the other, arms waving, confetti falling
+    thing: t => {
+      const mv = (k, s) => k === "conf" ? s.split(/(?=<rect)/).map((r, i) => g("an-tc-conf", r, dl((i * .49).toFixed(2)))).join("")
+        : k === "up" ? g("an-tc-up", s, org(60, 100)) : k === "skirt" ? g("an-tc-skirt", s, org(60, 98))
+        : k === "armL" ? g("an-tc-arm", s, org(52, 80)) : k === "armR" ? g("an-tc-arm", s, `${org(68, 80)};${dl(.4)}`) : s;
+      const [b, m] = fan("thing", t, mv);
+      return [b, m, ""];
+    },
+  };
+
+  A_TOWN.ar = {
+    // taxis drive down the Avenida 9 de Julio: one coming at us, one driving away; the lane marks run past
+    land: t => {
+      const id = aU("tcdash");
+      const [b, m] = land(t, (k, s) => k === "dash" ? `<defs><clipPath id="${id}"><rect x="57" y="118" width="6" height="40"/></clipPath></defs>` +
+        `<g clip-path="url(#${id})">${g("an-tc-dash", s.replace("M60,118", "M60,108"))}</g>` : s);
+      return [b, m, g("an-tc-carout", taxi(true), dl(1.3)) + g("an-tc-carin", taxi(false)) + aYFlag(t)];
+    },
+    // a spoon dips into the chimichurri and drizzles it on the big empanada, which steams
+    food: t => {
+      const [b, m] = fan("food", t);
+      const spoon = stick("M2,-3 L15,-29", 2.4, "#cfd8dc") + `<ellipse cx="0" cy="0" rx="5.6" ry="3.2" fill="#e0e0e0" ${ow(1)}/>` +
+        g("an-tc-sauce", `<ellipse cx="0" cy="-.4" rx="4.2" ry="2.1" fill="#4e8a2a"/>` + aC(-1.4, -.8, .7, "#c62828") + aC(1.6, -.2, .6, "#c62828"));
+      const drop = (x, d) => at(x, 75, g("an-tc-drop", `<path d="M0,-2 Q1.6,.6 0,1.8 Q-1.6,.6 0,-2Z" fill="#4e8a2a" ${ow(.5)}/>`, dl(d)));
+      const driz = g("an-tc-driz", [[70, 85, 2.4], [74.5, 83, 1.8], [67, 82.5, 1.6], [72, 88, 1.3]].map(([x, y, r]) => `<ellipse cx="${x}" cy="${y}" rx="${r}" ry="${r * .6}" fill="#4e8a2a" ${ow(.5)}/>`).join("") + aC(71, 84.6, .7, "#c62828"));
+      const steam = [[48, 0], [62, 1.1]].map(([x, d]) => at(x, 70, g("an-tc-steam", `<path d="M0,0 Q-3,-5 0,-10 Q3,-15 0,-20" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>`, dl(d)))).join("");
+      return [b, m + steam + driz + drop(71, 0) + drop(69.5, .12) + at(98, 104, g("an-tc-spoon", aEdge(spoon), org(0, 0))), ""];
+    },
+    // the big penguin waddles and flaps its flippers, the little one waddles beside it; the waves roll in
+    thing: t => {
+      const mv = (k, s) => k === "waves" ? waves(s) : k === "big" ? g("an-tc-wad", s, org(72, 128.5)) : k === "small" ? g("an-tc-wad", s, `${org(36, 128)};${dl(.45)}`)
+        : k === "flipL1" ? g("an-tc-flapl", s, org(-18, -5)) : k === "flipR1" ? g("an-tc-flapr", s, org(18, -5))
+        : k === "flipL2" ? g("an-tc-flapl", s, `${org(-18, -5)};${dl(.9)}`) : k === "flipR2" ? g("an-tc-flapr", s, `${org(18, -5)};${dl(.9)}`) : s;
+      const [b, m] = fan("thing", t, mv);
+      return [b, m, ""];
+    },
+  };
+
+  A_TOWN.cn = {
+    // a little panda walks along the Great Wall, up and down the hills
+    land: t => { const [b, m] = land(t); return [b, m, g("an-tc-walk", g("an-tc-bob", `<g transform="scale(1.5)">${panda()}</g>`)) + aYFlag(t)]; },
+    // the chopsticks lift a dumpling out of the steamer and put it back, steam puffs rise
+    food: t => {
+      const mv = (k, s) => {
+        if (k === "back") return g("an-tc-lift", s);
+        if (k === "chop") return g("an-tc-chop", s);
+        if (k !== "steam") return s;
+        const d = s.match(/d="([^"]+)"/)[1];
+        return d.split(/(?=M)/).map((p, i) => g("an-tc-steam", s.replace(d, p.trim()), dl((i * .8).toFixed(1)))).join("");
+      };
+      const [b, m] = fan("food", t, mv);
+      return [b, m, ""];
+    },
+    // the dragon dances: its body goes up and down on the poles, the head bobs and turns, the tail flicks, lanterns swing
+    thing: t => {
+      const L = { lan1: [100, 5.2, 0], lan2: [14, 38.8, .5], lan3: [106, 96.8, .9] };
+      const mv = (k, s) => L[k] ? g("an-tc-lan", s, `${org(L[k][0], L[k][1])};${dl(L[k][2])}`) : k === "body" ? g("an-tc-dbody", s)
+        : k === "tail" ? g("an-tc-dtail", s, org(20, 96)) : k === "head" ? g("an-tc-dhead", s, org(78, 86)) : s;
+      const [b, m] = fan("thing", t, mv);
+      return [b, m, ""];
+    },
+  };
+
+  A_TOWN.jp = {
+    // cherry petals fall from the swaying branch past Mt Fuji and the pagoda
+    land: t => {
+      const [b, m] = land(t, (k, s) => k === "branch" ? g("an-tc-sway", s, org(126, 10)) : s);
+      const pet = [[96, 16, 0], [106, 22, .5], [88, 28, 1], [112, 14, 1.5], [92, 34, 2], [100, 26, 2.5], [108, 18, 3]]
+        .map(([x, y, d], i) => at(x, y, g(i % 2 ? "an-tc-petal2" : "an-tc-petal", petal, dl(d)))).join("");
+      return [b, m, pet + aYFlag(t)];
+    },
+    // the chopsticks swing down, pick up a maki roll, lift it, and put it back
+    food: t => {
+      const [b, m] = fan("food", t, (k, s) => k === "maki" ? g("an-tc-maki", s) : k === "chop" ? g("an-tc-hashi", s, org(32, 49)) : s);
+      return [b, m, ""];
+    },
+    // the bullet train races: posts and fields rush past, clouds drift, speed lines streak, the train hums
+    thing: t => {
+      const rep = (s, w) => s + `<g transform="translate(${w} 0)">${s}</g>`;
+      const mv = (k, s) => k === "clouds" ? g("an-tc-cloud", rep(s, 140)) : k === "ticks" || k === "posts" ? g("an-tc-scroll", rep(s, 120))
+        : k === "speed" ? g("an-tc-speed", s) : k === "train" ? g("an-tc-rumble", s) : s;
+      const [b, m] = fan("thing", t, mv);
+      return [b, m, ""];
+    },
+  };
+
+  A_TOWN.kr = {
+    // the Namsan cable car rides up to the tower and back, the tower's red light blinks
+    land: t => {
+      const [b, m] = land(t);
+      const cable = `<path d="M6,110 L46,92" ${ow(.7)}/>` + aR(0, 108, 11, 16, "#eceff1") + aR(-1, 106, 13, 3, "#37474f") +
+        aR(41, 90, 10, 18, "#eceff1") + aR(40, 88, 12, 3, "#37474f") + `<rect x="2.5" y="112" width="6" height="4" fill="#90caf9"/><rect x="43.5" y="94" width="5" height="4" fill="#90caf9"/>`;
+      return [b + cable + g("an-tc-gond", cabin(12, 107.3, "#ffca28")), m, g("an-tc-blink", aC(60, 6, 2, "#ff1744", ow(.6))) + aYFlag(t)];
+    },
+    // silver chopsticks come, pick up a kimbap slice and carry it away (eaten!); a new slice pops into its place
+    food: t => {
+      const [b, m] = fan("food", t, (k, s) => k === "slice" ? g("an-tc-kslice", s) : s);
+      const chop = at(94, 46, g("an-tc-kchop", aEdge(stick("M-2,0 L22,-40", 2.2, "#cfd8dc") + stick("M3,1 L30,-37", 2.2, "#b0bec5"))));
+      return [b, m + chop, ""];
+    },
+    // the kick: the leg swings up, the board breaks in two with a POW, then a new board
+    thing: t => {
+      const mv = (k, s) => k === "leg" ? g("an-tc-kick", s, org(48, 94)) : k === "boardT" ? g("an-tc-bt", s, org(106, 56))
+        : k === "boardB" ? g("an-tc-bb", s, org(110, 72)) : k === "splint" ? g("an-tc-splint", s) : s;
+      const [b, m] = fan("thing", t, mv);
+      const pts = [...Array(16)].map((_, i) => { const r = i % 2 ? 5 : 11, a = i * Math.PI / 8; return `${(104 + r * Math.cos(a)).toFixed(1)},${(64 + r * Math.sin(a)).toFixed(1)}`; }).join(" ");
+      return [b, m, g("an-tc-pow", `<polygon points="${pts}" fill="#ffeb3b" stroke="#ff9800" stroke-width="1.4" stroke-linejoin="round" opacity=".95"/>`)];
+    },
+  };
 })();
 
 /* ================= coach: your own games vs the repertoire, timed answers, playing out the plan ================= */

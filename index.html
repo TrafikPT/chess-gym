@@ -576,7 +576,7 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
 @keyframes lvpulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
 .lv-swing { animation: lvswing 2s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 0; }
 @keyframes lvswing { 0%, 100% { transform: rotate(-6deg); } 50% { transform: rotate(6deg); } }
-/* a sticker's own animation (tier 4): swing on a rope from a pivot set inline (transform-origin), the backdrop drifting
+/* a sticker's own animation (holo): swing on a rope from a pivot set inline (transform-origin), the backdrop drifting
    against it, speed lines at the bottom of the arc */
 .lv-pend { animation: lvpend 1.7s ease-in-out infinite alternate; }
 @keyframes lvpend { from { transform: rotate(-9deg); } to { transform: rotate(11deg); } }
@@ -584,7 +584,7 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
 @keyframes lvdrift { from { transform: translateX(3px); } to { transform: translateX(-3px); } }
 .lv-streak { opacity: 0; animation: lvstreak 1.7s ease-in-out infinite alternate; }
 @keyframes lvstreak { 0%, 30% { opacity: 0; } 50% { opacity: .9; } 70%, 100% { opacity: 0; } }
-/* the Marvel page's own animations (tier 4, js/fan/marvel.js: milesVenom … antmanWalk); transform and opacity only */
+/* the Marvel page's own animations (holo, js/fan/marvel.js: milesVenom … antmanWalk); transform and opacity only */
 .an-mv-moon { animation: anmvmoon 3.2s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
 @keyframes anmvmoon { 0%, 100% { transform: scale(1); opacity: .75; } 50% { transform: scale(1.1); opacity: 1; } }
 .an-mv-camo { animation: anmvcamo 3.2s linear infinite; }
@@ -655,7 +655,7 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
 @keyframes anmvgrass { from { transform: translateX(0); } to { transform: translateX(-120px); } }
 .an-mv-wave { animation: anmvwave 1.4s ease-in-out infinite alternate; }
 @keyframes anmvwave { from { transform: rotate(-16deg); } to { transform: rotate(10deg); } }
-/* the DC page's own animations (tier 4, js/fan/dc.js; transform-origin set inline where it's a point of the drawing) */
+/* the DC page's own animations (holo, js/fan/dc.js; transform-origin set inline where it's a point of the drawing) */
 .an-dc-billow { animation: andcbillow 2.2s ease-in-out infinite; }
 @keyframes andcbillow { 0%, 100% { transform: scale(1, 1) skewX(0deg); } 50% { transform: scale(1.1, 1.04) skewX(-6deg); } }
 .an-dc-sweep { animation: andcsweep 3s ease-in-out infinite alternate; }
@@ -722,6 +722,714 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
 @keyframes andcbeam { 0%, 100% { transform: scaleX(.28); } 16% { transform: scaleX(1.12); } 26%, 55% { transform: scaleX(1); } }
 .an-dc-ringglow { animation: andcringglow 2.2s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
 @keyframes andcringglow { 0%, 100% { transform: scale(.9); opacity: .7; } 15% { transform: scale(1.5); opacity: 1; } 40% { transform: scale(1); opacity: .9; } }
+/* team own animations, played at holo: the shared kinds (js/fan/teamanim.js, an-tk-*) */
+.an-tk-rays { animation: antkrays 24s linear infinite; } @keyframes antkrays { to { transform: rotate(360deg); } }
+.an-tk-spin, .an-tk-spin2 { animation: antkspin .9s linear infinite; } @keyframes antkspin { to { transform: rotate(360deg); } }
+.an-tk-coin { animation: antkcoin 3.2s ease-in-out infinite; }
+@keyframes antkcoin { 0%, 50%, 66%, 82%, 100% { transform: scaleX(1); } 58%, 74% { transform: scaleX(.06); } }
+.an-tk-shine { animation: antkshine 3.2s ease-in-out infinite; } @keyframes antkshine { 0% { transform: translateX(-30px); } 40%, 100% { transform: translateX(170px); } }
+.an-tk-leap { animation: antkleap 2.6s ease-in-out infinite; }
+@keyframes antkleap { 0%, 100% { transform: translateY(0); } 20% { transform: translateY(4px); } 38%, 60% { transform: translateY(-8px); } 75% { transform: translateY(0); } }
+.an-tk-catch { animation: antkcatch 2.6s ease-out infinite; }
+@keyframes antkcatch { 0% { transform: translate(60px, -30px); opacity: 1; } 38%, 60% { transform: translate(0, -8px); opacity: 1; } 75% { transform: translate(0, 0); opacity: 1; } 86% { opacity: 0; } 100% { transform: translate(0, 0); opacity: 0; } }
+.an-tk-kick { animation: antkkick 2.4s ease-in-out infinite; }
+@keyframes antkkick { 0%, 40%, 100% { transform: rotate(0); } 15% { transform: rotate(-4deg); } 25% { transform: rotate(5deg); } }
+.an-tk-shot { animation: antkshot 2.4s linear infinite; }
+@keyframes antkshot { 0%, 24% { transform: translate(0, 0) scale(1); opacity: 1; } 50% { transform: translate(40px, -150px) scale(.5); opacity: 1; }
+  51%, 80% { transform: translate(0, 0) scale(.3); opacity: 0; } 88% { transform: translate(0, 0) scale(1.12); opacity: 1; } 94%, 100% { transform: translate(0, 0) scale(1); opacity: 1; } }
+.an-tk-fly { animation: antkfly 2.2s linear infinite; }
+@keyframes antkfly { 0%, 14% { transform: translate(0, 0) scale(1); opacity: 1; } 45% { transform: translate(70px, -70px) scale(.6); opacity: 1; }
+  46%, 80% { transform: translate(0, -30px) scale(1); opacity: 0; } 92%, 100% { transform: translate(0, 0) scale(1); opacity: 1; } }
+.an-tk-burst { animation: antkburst 2.2s ease-out infinite; } @keyframes antkburst { 0%, 10%, 34%, 100% { transform: scale(1); } 18% { transform: scale(1.14); } }
+.an-tk-bike { animation: antkbike 2.2s ease-in-out infinite; } @keyframes antkbike { 0%, 30%, 100% { transform: rotate(0); } 8% { transform: rotate(-3deg); } 15% { transform: rotate(3deg); } }
+.an-tk-dribble { animation: antkdribble .9s ease-in infinite alternate; } @keyframes antkdribble { from { transform: translateY(-28px); } to { transform: translateY(0); } }
+.an-tk-squash { animation: antksquash 1.8s linear infinite; }
+@keyframes antksquash { 0%, 44%, 56%, 100% { transform: scale(1); } 50% { transform: scale(1.16, .8); } }
+.an-tk-bob { animation: antkbob .9s ease-in-out infinite alternate; } @keyframes antkbob { to { transform: translateY(1.6px); } }
+.an-tk-hoop { animation: antkhoop 2.4s linear infinite; }
+@keyframes antkhoop { 0%, 20% { transform: translate(0, 0) scale(1); opacity: 1; } 50% { transform: translate(52px, -34px) scale(.6); opacity: 1; }
+  51%, 80% { transform: translate(0, 0) scale(.3); opacity: 0; } 90%, 100% { transform: translate(0, 0) scale(1); opacity: 1; } }
+.an-tk-hoopfx { opacity: 0; animation: antkhoopfx 2.4s infinite; } @keyframes antkhoopfx { 0%, 46%, 64%, 100% { opacity: 0; } 52% { opacity: 1; } }
+.an-tk-jump { animation: antkjump 2.4s ease-in-out infinite; } @keyframes antkjump { 0%, 30%, 100% { transform: translateY(0); } 15% { transform: translateY(-6px); } }
+.an-tk-hop { animation: antkhop 1.2s ease-in-out infinite; }
+@keyframes antkhop { 0%, 100% { transform: translateY(0) scale(1); } 15% { transform: translateY(0) scale(1.05, .93); } 45% { transform: translateY(-10px) scale(.97, 1.04); } 75% { transform: translateY(0) scale(1.04, .95); } }
+.an-tk-bounce { animation: antkbounce .6s ease-out infinite alternate; } @keyframes antkbounce { from { transform: translateY(0); } to { transform: translateY(-11px); } }
+.an-tk-rain { animation: antkrain 5s linear infinite; } @keyframes antkrain { to { transform: translateY(158px); } }
+.an-tk-lift { animation: antklift .8s ease-in-out infinite alternate; } @keyframes antklift { to { transform: translateY(-5px); } }
+.an-tk-flash { opacity: 0; animation: antkflash 2.6s infinite; }
+@keyframes antkflash { 0%, 14%, 100% { opacity: 0; transform: scale(.4); } 4% { opacity: 1; transform: scale(1.4); } }
+.an-tk-pop { opacity: 0; animation: antkpop 2.6s infinite; } @keyframes antkpop { 0%, 9%, 18%, 100% { opacity: 0; } 12% { opacity: .35; } }
+.an-tk-beam { animation: antkbeam 1.8s ease-in-out infinite alternate; } @keyframes antkbeam { from { opacity: .15; } to { opacity: 1; } }
+.an-tk-fw { opacity: 0; animation: antkfw 2.6s ease-out infinite; }
+@keyframes antkfw { 0% { opacity: 0; transform: scale(.1); } 10% { opacity: 1; } 50% { opacity: 1; transform: scale(1.2); } 70%, 100% { opacity: 0; transform: scale(1.3); } }
+.an-tk-glowa, .an-tk-glowb { opacity: 0; animation: antkglow 2.4s infinite; } .an-tk-glowb { animation-delay: -1.2s; }
+@keyframes antkglow { 0%, 46%, 100% { opacity: 0; transform: scale(.6); } 10%, 36% { opacity: 1; transform: scale(1.1); } }
+.an-tk-toot { opacity: 0; animation: antktoot .6s ease-out infinite; } @keyframes antktoot { 0% { opacity: 0; transform: translateX(-3px); } 40% { opacity: 1; } 100% { opacity: 0; transform: translateX(4px); } }
+.an-tk-sway { animation: antksway 1.4s ease-in-out infinite alternate; } .an-tk-sway2 { animation: antksway 1.4s ease-in-out infinite alternate-reverse; }
+@keyframes antksway { from { transform: rotate(-7deg); } to { transform: rotate(7deg); } }
+.an-tk-rumble { animation: antkrumble .24s linear infinite; } @keyframes antkrumble { 0%, 100% { transform: translate(0, 0); } 25% { transform: translate(1px, -1px); } 50% { transform: translate(-1px, 0); } 75% { transform: translate(0, 1px); } }
+.an-tk-flame { animation: antkflame .3s ease-in-out infinite alternate; } @keyframes antkflame { from { transform: scale(1); opacity: 1; } to { transform: scale(1.06); opacity: .8; } }
+.an-tk-whoosh { opacity: 0; animation: antkwhoosh 1.2s linear infinite; } @keyframes antkwhoosh { 0% { opacity: 0; transform: translate(0, 0); } 20%, 70% { opacity: .9; } 100% { opacity: 0; transform: translate(-40px, 58px); } }
+.an-tk-sway3 { animation: antksway3 2.4s ease-in-out infinite alternate; } @keyframes antksway3 { from { transform: rotate(-3.5deg); } to { transform: rotate(3.5deg); } }
+.an-tk-bubble { opacity: 0; animation: antkbubble 3s ease-in infinite; } @keyframes antkbubble { 0% { opacity: 0; transform: translateY(0); } 15%, 75% { opacity: 1; } 100% { opacity: 0; transform: translateY(-120px); } }
+.an-tk-bits { opacity: 0; animation: antkbits 1.4s linear infinite; } @keyframes antkbits { 0% { opacity: 0; transform: translateX(0); } 15%, 80% { opacity: .9; } 100% { opacity: 0; transform: translateX(-124px); } }
+.an-tk-run { animation: antkrun .32s ease-in-out infinite alternate; } @keyframes antkrun { from { transform: translateY(0); } to { transform: translateY(-3px); } }
+.an-tk-turn { animation: antkturn 5s linear infinite; } @keyframes antkturn { to { transform: rotate(360deg); } }
+.an-tk-glow { animation: antkglowp 1.8s ease-in-out infinite alternate; } @keyframes antkglowp { from { transform: scale(.9); opacity: .5; } to { transform: scale(1.08); opacity: 1; } }
+.an-tk-bootkick { animation: antkbootkick 2.4s ease-in-out infinite; } @keyframes antkbootkick { 0%, 40%, 100% { transform: rotate(0); } 12% { transform: rotate(-12deg); } 24% { transform: rotate(7deg); } }
+/* end of an-tk */
+/* the forest page's own animations (js/fan/wforest.js, an-wf-*) */
+.an-wf-bob { animation: anwfbob 1.2s ease-in-out infinite alternate; } @keyframes anwfbob { to { transform: translateY(-2px); } }
+.an-wf-wag { animation: anwfwag .6s ease-in-out infinite alternate; } @keyframes anwfwag { from { transform: rotate(-12deg); } to { transform: rotate(10deg); } }
+.an-wf-tilt { animation: anwftilt 1.8s ease-in-out infinite alternate; } @keyframes anwftilt { from { transform: rotate(-7deg); } to { transform: rotate(7deg); } }
+.an-wf-prance { animation: anwfprance 1.1s ease-in-out infinite; }
+@keyframes anwfprance { 0%, 100% { transform: translateY(0) scale(1); } 15% { transform: translateY(0) scale(1.04, .95); } 50% { transform: translateY(-11px) rotate(-4deg) scale(.98, 1.03); } 85% { transform: translateY(0) scale(1.03, .96); } }
+.an-wf-flutter { opacity: 0; animation: anwfflutter 3.6s linear infinite; }
+@keyframes anwfflutter { 0% { opacity: 0; transform: translate(0, 0); } 10%, 85% { opacity: 1; } 25% { transform: translate(34px, -10px); } 50% { transform: translate(64px, 6px); } 75% { transform: translate(98px, -8px); } 100% { opacity: 0; transform: translate(136px, 2px); } }
+.an-wf-flap { animation: anwfflap .18s linear infinite alternate; } @keyframes anwfflap { to { transform: scaleX(.25); } }
+.an-wf-flick { animation: anwfflick 1.6s ease-in-out infinite; } @keyframes anwfflick { 0%, 60%, 100% { transform: rotate(0); } 70% { transform: rotate(14deg); } 80% { transform: rotate(-6deg); } 90% { transform: rotate(8deg); } }
+.an-wf-nibble { animation: anwfnibble .5s ease-in-out infinite alternate; } @keyframes anwfnibble { from { transform: translateY(0); } to { transform: translateY(-6px); } }
+.an-wf-puff { animation: anwfpuff 1.4s ease-in-out infinite; } @keyframes anwfpuff { 0%, 100% { transform: scale(1); } 40% { transform: scale(1.07, 1.05); } 55% { transform: scale(.98, 1.02); } }
+.an-wf-leaf { opacity: 0; animation: anwfleaf 4s ease-in-out infinite; }
+@keyframes anwfleaf { 0% { opacity: 0; transform: translate(0, 0) rotate(0); } 10%, 85% { opacity: 1; } 33% { transform: translate(-16px, 50px) rotate(90deg); } 66% { transform: translate(8px, 100px) rotate(200deg); } 100% { opacity: 0; transform: translate(-10px, 150px) rotate(300deg); } }
+.an-wf-sway { animation: anwfsway 1.6s ease-in-out infinite alternate; } @keyframes anwfsway { from { transform: rotate(-4deg); } to { transform: rotate(4deg); } }
+.an-wf-orbit { animation: anwforbit 3.2s linear infinite; } @keyframes anwforbit { to { transform: rotate(360deg); } }
+.an-wf-unspin { animation: anwfunspin 3.2s linear infinite; } @keyframes anwfunspin { to { transform: rotate(-360deg); } }
+.an-wf-hop { animation: anwfhop .9s ease-in-out infinite; }
+@keyframes anwfhop { 0%, 100% { transform: translateY(0) scale(1); } 15% { transform: translateY(0) scale(1.05, .94); } 50% { transform: translateY(-12px) scale(.97, 1.04); } 85% { transform: translateY(0) scale(1.04, .95); } }
+.an-wf-earl { animation: anwfearl .9s ease-in-out infinite; } .an-wf-earr { animation: anwfearr .9s ease-in-out infinite; }
+@keyframes anwfearl { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(-16deg); } } @keyframes anwfearr { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(16deg); } }
+.an-wf-peck { animation: anwfpeck 1.8s ease-in-out infinite; }
+@keyframes anwfpeck { 0%, 10%, 20%, 30%, 100% { transform: rotate(0); } 5%, 15%, 25% { transform: rotate(-9deg); } }
+.an-wf-chips { opacity: 0; animation: anwfchips 1.8s infinite; } @keyframes anwfchips { 0%, 4% { opacity: 0; transform: translate(4px, 0); } 8% { opacity: 1; } 34% { opacity: 1; transform: translate(-3px, -2px); } 44%, 100% { opacity: 0; transform: translate(-6px, 4px); } }
+.an-wf-tongue { animation: anwftongue 3s ease-in-out infinite; } @keyframes anwftongue { 0%, 54%, 66%, 100% { transform: scale(0); } 59%, 61% { transform: scale(1); } }
+.an-wf-gulp { animation: anwfgulp 3s ease-in-out infinite; } @keyframes anwfgulp { 0%, 62%, 76%, 100% { transform: scale(1); } 68% { transform: scale(1.05, .95); } }
+.an-wf-fly { animation: anwffly 3s ease-in-out infinite; }
+@keyframes anwffly { 0% { transform: translate(30px, -20px); opacity: 0; } 10% { opacity: 1; } 20% { transform: translate(-8px, 8px); } 32% { transform: translate(4px, -6px); } 44% { transform: translate(-10px, 4px); } 56%, 60% { transform: translate(-5px, 6px); opacity: 1; } 61%, 100% { transform: translate(-5px, 6px); opacity: 0; } }
+
+/* the desert page's own animations (js/fan/wdesert.js, an-wd-*) */
+.an-wd-pass { opacity: 0; animation: anwdpass 4.5s linear infinite; } @keyframes anwdpass { 0% { opacity: 0; transform: translateX(0); } 8%, 88% { opacity: 1; } 100% { opacity: 0; transform: translateX(-160px); } }
+.an-wd-plod { animation: anwdplod .9s ease-in-out infinite alternate; } @keyframes anwdplod { from { transform: translateY(0) rotate(-1.5deg); } to { transform: translateY(-2.5px) rotate(1.5deg); } }
+.an-wd-listen { animation: anwdlisten 2.4s ease-in-out infinite; } @keyframes anwdlisten { 0%, 100% { transform: rotate(0); } 30%, 45% { transform: rotate(-8deg); } 70%, 85% { transform: rotate(7deg); } }
+.an-wd-pop { animation: anwdpop 3s ease-in-out infinite; } @keyframes anwdpop { 0%, 100% { transform: translateY(8px); } 20%, 80% { transform: translateY(-4px); } }
+.an-wd-look { animation: anwdlook 3s steps(1) infinite; } @keyframes anwdlook { 0%, 40% { transform: scaleX(1); } 40.01%, 70% { transform: scaleX(-1); } 70.01%, 100% { transform: scaleX(1); } }
+.an-wd-scuttle { animation: anwdscuttle 2.4s ease-in-out infinite alternate; } @keyframes anwdscuttle { from { transform: translateX(-10px); } to { transform: translateX(10px); } }
+.an-wd-wobble { animation: anwdwobble .3s linear infinite alternate; } @keyframes anwdwobble { from { transform: rotate(-2deg) translateY(0); } to { transform: rotate(2deg) translateY(-1px); } }
+.an-wd-climb { animation: anwdclimb 4.4s ease-in-out infinite; } @keyframes anwdclimb { 0% { transform: translateY(150px); } 28%, 70% { transform: translateY(0); } 100% { transform: translateY(-165px); } }
+.an-wd-wiggle { animation: anwdwiggle .4s ease-in-out infinite alternate; } @keyframes anwdwiggle { from { transform: rotate(-4deg); } to { transform: rotate(4deg); } }
+.an-wd-step { animation: anwdstep 1.2s ease-in-out infinite alternate; } .an-wd-step2 { animation: anwdstep 1.2s ease-in-out infinite alternate-reverse; }
+@keyframes anwdstep { from { transform: rotate(-9deg); } to { transform: rotate(9deg); } }
+.an-wd-nod { animation: anwdnod 1.2s ease-in-out infinite alternate; } @keyframes anwdnod { from { transform: rotate(-4deg) translateX(-1px); } to { transform: rotate(5deg) translateX(2px); } }
+.an-wd-road { animation: anwdroad .5s linear infinite; } @keyframes anwdroad { to { transform: translateX(-32px); } }
+.an-wd-dash { animation: anwddash .25s ease-in-out infinite alternate; } @keyframes anwddash { to { transform: translateY(-2px); } }
+.an-wd-dust { opacity: 0; animation: anwddust .8s ease-out infinite; } @keyframes anwddust { 0% { opacity: .9; transform: translate(0, 0) scale(.5); } 100% { opacity: 0; transform: translate(-26px, -6px) scale(1.4); } }
+.an-wd-dance { animation: anwddance 1s ease-in-out infinite alternate; } @keyframes anwddance { from { transform: rotate(-7deg) scale(1, 1); } to { transform: rotate(7deg) scale(1.03, .97); } }
+.an-wd-hop { animation: anwdhop 1.1s ease-in-out infinite; }
+@keyframes anwdhop { 0%, 100% { transform: translateY(0) scale(1); } 14% { transform: translateY(0) scale(1.06, .92); } 48% { transform: translateY(-14px) scale(.96, 1.04) rotate(-4deg); } 84% { transform: translateY(0) scale(1.05, .94); } }
+/* the sea page's own animations (js/fan/wsea.js, an-ws-*) */
+.an-ws-rise { opacity: 0; animation: anwsrise 3.2s ease-in infinite; } @keyframes anwsrise { 0% { opacity: 0; transform: translateY(0); } 12%, 75% { opacity: 1; } 100% { opacity: 0; transform: translateY(-120px); } }
+.an-ws-anem { animation: anwsanem 2s ease-in-out infinite alternate; } @keyframes anwsanem { from { transform: rotate(-3deg) scaleY(.97); } to { transform: rotate(3deg) scaleY(1.03); } }
+.an-ws-dart { animation: anwsdart 3s ease-in-out infinite; }
+@keyframes anwsdart { 0%, 100% { transform: translate(0, 14px) scale(.85); } 30% { transform: translate(-14px, -6px) scale(1); } 55% { transform: translate(12px, -10px) scale(1); } 80% { transform: translate(4px, 4px) scale(.95); } }
+.an-ws-leap { animation: anwsleap 2.6s ease-in-out infinite; }
+@keyframes anwsleap { 0% { transform: translate(-30px, 60px) rotate(-30deg); opacity: 0; } 10% { opacity: 1; } 50% { transform: translate(0, -6px) rotate(0); } 88% { opacity: 1; } 100% { transform: translate(34px, 60px) rotate(40deg); opacity: 0; } }
+.an-ws-splash { animation: anwssplash 2.6s ease-out infinite; } @keyframes anwssplash { 0%, 100% { transform: scale(1.25); opacity: 1; } 30%, 80% { transform: scale(.4); opacity: 0; } }
+.an-ws-rock { animation: anwsrock 2.4s ease-in-out infinite alternate; } @keyframes anwsrock { from { transform: rotate(-3deg) translateY(0); } to { transform: rotate(3deg) translateY(2px); } }
+.an-ws-spout { animation: anwsspout 2.4s ease-out infinite; } @keyframes anwsspout { 0%, 100% { transform: scale(.2); opacity: 0; } 10% { opacity: 1; } 35% { transform: scale(1.25); opacity: 1; } 70% { transform: scale(1); opacity: .6; } 90% { opacity: 0; } }
+.an-ws-glide { animation: anwsglide 3.2s ease-in-out infinite; } @keyframes anwsglide { 0%, 100% { transform: translate(-6px, 4px) rotate(4deg); } 50% { transform: translate(6px, -6px) rotate(-4deg); } }
+.an-ws-scuttle { animation: anwsscuttle 2.4s ease-in-out infinite alternate; } @keyframes anwsscuttle { from { transform: translateX(-16px); } to { transform: translateX(14px); } }
+.an-ws-tap { animation: anwstap .2s linear infinite alternate; } @keyframes anwstap { from { transform: translateY(0) rotate(-2deg); } to { transform: translateY(-1.5px) rotate(2deg); } }
+.an-ws-weed { animation: anwsweed 2.2s ease-in-out infinite alternate; } .an-ws-weed2 { animation: anwsweed 1.8s ease-in-out infinite alternate-reverse; }
+@keyframes anwsweed { from { transform: rotate(-5deg); } to { transform: rotate(5deg); } }
+.an-ws-bob { animation: anwsbob 1.6s ease-in-out infinite alternate; } @keyframes anwsbob { from { transform: translateY(-5px) rotate(-3deg); } to { transform: translateY(6px) rotate(3deg); } }
+.an-ws-fish1 { animation: anwsfish 2.6s ease-in-out infinite alternate; } .an-ws-fish2 { animation: anwsfish 2.1s ease-in-out infinite alternate-reverse; }
+@keyframes anwsfish { from { transform: translate(-6px, 2px); } to { transform: translate(10px, -4px); } }
+.an-ws-swim { animation: anwsswim 2.8s ease-in-out infinite alternate; } @keyframes anwsswim { from { transform: translate(-8px, 2px) rotate(-3deg); } to { transform: translate(8px, -3px) rotate(3deg); } }
+.an-ws-drift { animation: anwsdrift 3s ease-in-out infinite alternate; } .an-ws-drift2 { animation: anwsdrift 2.4s ease-in-out infinite alternate-reverse; }
+@keyframes anwsdrift { from { transform: translateY(4px); } to { transform: translateY(-8px); } }
+.an-ws-pulse { animation: anwspulse 1.4s ease-in-out infinite; }
+@keyframes anwspulse { 0%, 100% { transform: translateY(2px) scale(1.06, .9); } 40% { transform: translateY(-6px) scale(.94, 1.08); } 70% { transform: translateY(-3px) scale(1, 1); } }
+.an-ws-star { animation: anwsstar 6s linear infinite; } @keyframes anwsstar { to { transform: rotate(360deg); } }
+.an-ws-wiggle { animation: anwswiggle 1.2s ease-in-out infinite alternate; } @keyframes anwswiggle { from { transform: rotate(-4deg) scale(1.03, .97); } to { transform: rotate(4deg) scale(.97, 1.03); } }
+/* the space page's own animations (js/fan/wspace.js, an-wp-*) */
+.an-wp-tumble { animation: anwptumble 9s linear infinite; } @keyframes anwptumble { to { transform: rotate(360deg); } }
+.an-wp-drift { animation: anwpdrift 3s ease-in-out infinite alternate; } @keyframes anwpdrift { from { transform: translate(-4px, 4px); } to { transform: translate(4px, -6px); } }
+.an-wp-launch { animation: anwplaunch 4s ease-in-out infinite; }
+@keyframes anwplaunch { 0%, 30% { transform: translateY(0); } 55%, 70% { transform: translateY(-190px); } 92%, 100% { transform: translateY(0); } }
+.an-wp-shake { animation: anwpshake .12s linear infinite alternate; } @keyframes anwpshake { from { transform: translateX(-.8px); } to { transform: translateX(.8px); } }
+.an-wp-flame { animation: anwpflame .15s linear infinite alternate; } @keyframes anwpflame { from { transform: scale(.85, .8); } to { transform: scale(1.1, 1.25); } }
+.an-wp-smoke { opacity: 0; animation: anwpsmoke 4s ease-out infinite; }
+@keyframes anwpsmoke { 0%, 24% { opacity: 0; transform: scale(.3); } 32% { opacity: 1; transform: scale(1); } 50% { opacity: 0; transform: scale(1.8) translateY(-4px); } 86% { opacity: 0; transform: scale(.3); } 94% { opacity: .8; transform: scale(1); } 100% { opacity: 0; transform: scale(1.4); } }
+.an-wp-glow { animation: anwpglow 2s ease-in-out infinite alternate; } @keyframes anwpglow { from { opacity: .6; transform: scale(.95); } to { opacity: 1; transform: scale(1.06); } }
+.an-wp-orbit { animation: anwporbit 4s linear infinite; } @keyframes anwporbit { to { transform: rotate(360deg); } }
+.an-wp-back { animation: anwporbit 4s linear infinite, anwpback 4s steps(1) infinite; } .an-wp-front { animation: anwporbit 4s linear infinite, anwpfront 4s steps(1) infinite; }
+@keyframes anwpback { 0% { opacity: 1; } 50% { opacity: 0; } } @keyframes anwpfront { 0% { opacity: 0; } 50% { opacity: 1; } }
+.an-wp-tilt { animation: anwptilt 2.6s ease-in-out infinite alternate; } @keyframes anwptilt { from { transform: rotate(-7deg); } to { transform: rotate(7deg); } }
+.an-wp-sway { animation: anwpsway 3s ease-in-out infinite alternate; } @keyframes anwpsway { from { transform: rotate(-5deg) translateY(2px); } to { transform: rotate(5deg) translateY(-2px); } }
+.an-wp-boing { animation: anwpboing 1s ease-in-out infinite; }
+@keyframes anwpboing { 0%, 100% { transform: translateY(0) scale(1) rotate(0); } 15% { transform: scale(1.06, .93); } 45% { transform: translateY(-10px) scale(.96, 1.05) rotate(-4deg); } 75% { transform: translateY(0) scale(1.04, .96) rotate(3deg); } }
+.an-wp-beam { animation: anwpbeam 3.6s ease-in-out infinite; } @keyframes anwpbeam { 0%, 100% { opacity: .1; } 20%, 70% { opacity: 1; } }
+.an-wp-cow { animation: anwpcow 3.6s ease-in-out infinite; }
+@keyframes anwpcow { 0%, 10% { transform: translateY(0) rotate(0) scale(1); opacity: 1; } 55% { transform: translateY(-40px) rotate(20deg) scale(.75); opacity: 1; } 65% { transform: translateY(-48px) rotate(30deg) scale(.6); opacity: 0; } 80% { transform: translateY(-10px) rotate(0) scale(.9); opacity: 0; } 92%, 100% { transform: translateY(0) rotate(0) scale(1); opacity: 1; } }
+.an-wp-hover { animation: anwphover 1.8s ease-in-out infinite alternate; } @keyframes anwphover { from { transform: translate(-3px, 2px) rotate(-3deg); } to { transform: translate(3px, -3px) rotate(3deg); } }
+.an-wp-drive { animation: anwpdrive 3.2s ease-in-out infinite alternate; } @keyframes anwpdrive { from { transform: translateX(-12px); } to { transform: translateX(12px); } }
+.an-wp-wheel { animation: anwpwheel 1.6s linear infinite; } @keyframes anwpwheel { to { transform: rotate(360deg); } }
+.an-wp-rock { animation: anwprock .5s ease-in-out infinite alternate; } @keyframes anwprock { from { transform: rotate(-1.5deg); } to { transform: rotate(1.5deg) translateY(-.6px); } }
+.an-wp-zoom { animation: anwpzoom 3.6s ease-in-out infinite; }
+@keyframes anwpzoom { 0% { transform: translate(-130px, 90px); opacity: 0; } 5% { opacity: 1; } 22% { transform: translate(0, 0); } 30% { transform: translate(-3px, 2px); } 38% { transform: translate(3px, -2px); } 46% { transform: translate(-3px, 2px); } 54% { transform: translate(3px, -2px); } 62% { transform: translate(-3px, 2px); } 70% { transform: translate(0, 0); } 96% { opacity: 1; } 100% { transform: translate(130px, -90px); opacity: 0; } }
+/* the jungle page's own animations (js/fan/jungle.js, an-jg-*) */
+.an-jg-roar { animation: anjgroar 2.4s ease-in-out infinite; } @keyframes anjgroar { 0%, 30%, 100% { transform: scale(1) rotate(0); } 40% { transform: scale(1.08) rotate(-3deg); } 50% { transform: scale(1.08) rotate(3deg); } 60% { transform: scale(1.06) rotate(-2deg); } 75% { transform: scale(1) rotate(0); } }
+.an-jg-waves { opacity: 0; animation: anjgwaves 2.4s ease-out infinite; } @keyframes anjgwaves { 0%, 34% { opacity: 0; transform: scale(.6); } 44% { opacity: 1; } 75%, 100% { opacity: 0; transform: scale(1.3); } }
+.an-jg-nod { animation: anjgnod 2s ease-in-out infinite alternate; } @keyframes anjgnod { from { transform: rotate(-2deg); } to { transform: rotate(2deg); } }
+.an-jg-flapl { animation: anjgflapl .8s ease-in-out infinite alternate; } .an-jg-flapr { animation: anjgflapr .8s ease-in-out infinite alternate; }
+@keyframes anjgflapl { from { transform: rotate(6deg); } to { transform: rotate(-12deg); } } @keyframes anjgflapr { from { transform: rotate(-6deg); } to { transform: rotate(12deg); } }
+.an-jg-spray { animation: anjgspray 1s ease-out infinite; } @keyframes anjgspray { 0% { transform: scale(.2); opacity: 0; } 20% { opacity: 1; } 70% { transform: scale(1.5) translateY(-4px); opacity: 1; } 100% { transform: scale(1.8) translateY(-6px); opacity: 0; } }
+.an-jg-sway { animation: anjgsway 2.4s ease-in-out infinite alternate; } @keyframes anjgsway { from { transform: rotate(-5deg); } to { transform: rotate(5deg); } }
+.an-jg-pass { opacity: 0; animation: anjgpass 1.6s linear infinite; } @keyframes anjgpass { 0% { opacity: 0; transform: translateX(0); } 10%, 88% { opacity: 1; } 100% { opacity: 0; transform: translateX(-150px); } }
+.an-jg-trot { animation: anjgtrot .4s ease-in-out infinite alternate; } @keyframes anjgtrot { from { transform: translateY(0) rotate(-1.5deg); } to { transform: translateY(-4px) rotate(1.5deg); } }
+.an-jg-swing { animation: anjgswing 2s ease-in-out infinite alternate; } @keyframes anjgswing { from { transform: rotate(-14deg); } to { transform: rotate(14deg); } }
+.an-jg-beat { animation: anjgbeat 1.6s ease-in-out infinite; } @keyframes anjgbeat { 0%, 50%, 100% { transform: scale(1); } 12%, 32% { transform: scale(1.06, 1.03); } 22%, 42% { transform: scale(.98, 1); } }
+.an-jg-thump { opacity: 0; animation: anjgthump 1.6s ease-out infinite; } @keyframes anjgthump { 0%, 8% { opacity: 0; transform: scale(.7); } 14% { opacity: 1; } 50%, 100% { opacity: 0; transform: scale(1.3); } }
+.an-jg-ripple { opacity: 0; animation: anjgripple 2.4s ease-out infinite; } @keyframes anjgripple { 0% { opacity: .9; transform: scale(.6); } 100% { opacity: 0; transform: scale(1.4); } }
+.an-jg-bob { animation: anjgbob 1.2s ease-in-out infinite alternate; } @keyframes anjgbob { from { transform: translateY(2px); } to { transform: translateY(-4px); } }
+.an-jg-waddle { animation: anjgwaddle 1.2s ease-in-out infinite alternate; } @keyframes anjgwaddle { from { transform: translateX(-8px); } to { transform: translateX(8px); } }
+.an-jg-tilt { animation: anjgtilt .3s ease-in-out infinite alternate; } @keyframes anjgtilt { from { transform: rotate(-8deg); } to { transform: rotate(8deg); } }
+/* the trophies page's own animations (js/fan/trophies.js, an-cp-*) */
+.an-cp-rain { animation: ancprain 5s linear infinite; } @keyframes ancprain { to { transform: translateY(158px); } }
+.an-cp-shine { animation: ancpshine 3s ease-in-out infinite; } @keyframes ancpshine { 0% { transform: translateX(-20px); } 45%, 100% { transform: translateX(180px); } }
+.an-cp-flash { opacity: 0; animation: ancpflash 2.2s infinite; } @keyframes ancpflash { 0%, 16%, 100% { opacity: 0; transform: scale(.4); } 6% { opacity: 1; transform: scale(1.4); } }
+.an-cp-lift { animation: ancplift 1.6s ease-in-out infinite; } @keyframes ancplift { 0%, 100% { transform: translateY(4px); } 45%, 60% { transform: translateY(-12px); } }
+.an-cp-turn { animation: ancpturn 3.2s ease-in-out infinite; } @keyframes ancpturn { 0%, 100% { transform: scaleX(1); } 25% { transform: scaleX(.82); } 50% { transform: scaleX(-1); } 75% { transform: scaleX(-.82); } }
+.an-cp-rock { animation: ancprock 1s ease-in-out infinite alternate; } @keyframes ancprock { from { transform: rotate(-7deg); } to { transform: rotate(7deg); } }
+.an-cp-bob { animation: ancpbob 2s ease-in-out infinite alternate; } @keyframes ancpbob { from { transform: translateY(2px); } to { transform: translateY(-5px); } }
+.an-cp-swing { animation: ancpswing 1.6s ease-in-out infinite alternate; } @keyframes ancpswing { from { transform: rotate(-10deg); } to { transform: rotate(10deg); } }
+.an-cp-bounce { animation: ancpbounce .9s ease-in infinite alternate; } @keyframes ancpbounce { from { transform: translateY(-16px); } to { transform: translateY(4px); } }
+.an-cp-squash { animation: ancpsquash 1.8s linear infinite; } @keyframes ancpsquash { 0%, 44%, 56%, 100% { transform: scale(1); } 50% { transform: scale(1.06, .92); } }
+.an-cp-roll { animation: ancproll 5s linear infinite; transform-box: fill-box; transform-origin: center; } @keyframes ancproll { to { transform: rotate(360deg); } }
+/* the vehicles page's own animations (js/fan/vehicles.js, an-vh-*) */
+.an-vh-scroll { animation: anvhscroll 3s linear infinite; } @keyframes anvhscroll { to { transform: translateX(-120px); } }
+.an-vh-scroll2 { animation: anvhscroll2 .6s linear infinite; } @keyframes anvhscroll2 { to { transform: translateX(-26px); } }
+.an-vh-sleepers { animation: anvhsleep .4s linear infinite; } @keyframes anvhsleep { to { transform: translateX(-15px); } }
+.an-vh-wheel { animation: anvhwheel .6s linear infinite; } @keyframes anvhwheel { to { transform: rotate(360deg); } }
+.an-vh-flash { animation: anvhflash .5s steps(1) infinite; } .an-vh-flash2 { animation: anvhflash .5s steps(1) infinite reverse; }
+@keyframes anvhflash { 0% { opacity: 1; } 50% { opacity: .25; } }
+.an-vh-bump { animation: anvhbump .35s ease-in-out infinite alternate; } @keyframes anvhbump { from { transform: translateY(0); } to { transform: translateY(-1.6px); } }
+.an-vh-puff { opacity: 0; animation: anvhpuff 1.6s ease-out infinite; } @keyframes anvhpuff { 0% { opacity: 0; transform: translate(0, 8px) scale(.4); } 20% { opacity: 1; } 100% { opacity: 0; transform: translate(-10px, -14px) scale(1.5); } }
+.an-vh-chug { animation: anvhchug .3s ease-in-out infinite alternate; } @keyframes anvhchug { from { transform: translateY(0) rotate(-.8deg); } to { transform: translateY(-1.8px) rotate(.8deg); } }
+.an-vh-dig { animation: anvhdig 1.6s ease-in-out infinite; } @keyframes anvhdig { 0%, 100% { transform: rotate(0); } 30% { transform: rotate(-4deg); } 55% { transform: rotate(3deg); } }
+.an-vh-clod { opacity: 0; animation: anvhclod 1.6s ease-out infinite; } @keyframes anvhclod { 0%, 40% { opacity: 0; transform: translate(0, 0); } 50% { opacity: 1; } 100% { opacity: 0; transform: translate(-12px, -26px); } }
+.an-vh-cloud { animation: anvhcloud 5s linear infinite; } @keyframes anvhcloud { from { transform: translateX(0); } to { transform: translateX(-160px); } }
+.an-vh-hover { animation: anvhhover 1.6s ease-in-out infinite alternate; } @keyframes anvhhover { from { transform: translateY(2px) rotate(-3deg); } to { transform: translateY(-4px) rotate(2deg); } }
+.an-vh-chuff { animation: anvhchuff .25s ease-in-out infinite alternate; } @keyframes anvhchuff { from { transform: translateY(0); } to { transform: translateY(-1.2px); } }
+/* the World Cup mascots' own animations (js/fan/wcmascots.js, an-wm-*) */
+.an-wm-rain { animation: anwmrain 5s linear infinite; } @keyframes anwmrain { to { transform: translateY(158px); } }
+.an-wm-note { opacity: 0; animation: anwmnote 1.8s ease-out infinite; } @keyframes anwmnote { 0% { opacity: 0; transform: translate(0, 0); } 20% { opacity: 1; } 100% { opacity: 0; transform: translate(10px, -26px); } }
+.an-wm-hop { animation: anwmhop 1s ease-in-out infinite; }
+@keyframes anwmhop { 0%, 100% { transform: translateY(0) scale(1); } 15% { transform: translateY(0) scale(1.05, .94); } 48% { transform: translateY(-12px) scale(.97, 1.04); } 82% { transform: translateY(0) scale(1.04, .95); } }
+.an-wm-roll { animation: anwmroll 1.4s ease-in-out infinite; }
+@keyframes anwmroll { 0%, 100% { transform: rotate(0) translateY(0); } 25% { transform: rotate(-10deg) translateY(-6px); } 50% { transform: rotate(0) translateY(0); } 75% { transform: rotate(10deg) translateY(-6px); } }
+.an-wm-dance { animation: anwmdance .9s ease-in-out infinite alternate; } @keyframes anwmdance { from { transform: rotate(-7deg) translateX(-3px); } to { transform: rotate(7deg) translateX(3px); } }
+.an-wm-wag { animation: anwmwag .35s ease-in-out infinite alternate; } @keyframes anwmwag { from { transform: rotate(-3deg) translateY(0); } to { transform: rotate(3deg) translateY(-2px); } }
+.an-wm-crow { animation: anwmcrow 1.8s ease-in-out infinite; } @keyframes anwmcrow { 0%, 60%, 100% { transform: scale(1, 1); } 20%, 45% { transform: scale(.97, 1.08) rotate(-3deg); } }
+.an-wm-run { animation: anwmrun .32s ease-in-out infinite alternate; } @keyframes anwmrun { from { transform: translateY(0) rotate(-2deg); } to { transform: translateY(-4px) rotate(2deg); } }
+.an-wm-swoop { animation: anwmswoop 3.6s ease-in-out infinite; }
+@keyframes anwmswoop { 0%, 100% { transform: translate(0, 0) rotate(0); } 25% { transform: translate(-14px, -8px) rotate(-8deg); } 50% { transform: translate(0, -14px) rotate(0); } 75% { transform: translate(14px, -8px) rotate(8deg); } }
+/* the castle page's own animations (js/fan/wcastle.js, an-wc-*) */
+.an-wc-slash { animation: anwcslash 1.6s ease-in-out infinite; } @keyframes anwcslash { 0%, 100% { transform: rotate(0); } 30% { transform: rotate(-16deg); } 44% { transform: rotate(28deg); } 58% { transform: rotate(22deg); } 80% { transform: rotate(2deg); } }
+.an-wc-lunge { animation: anwclunge 1.6s ease-in-out infinite; } @keyframes anwclunge { 0%, 100% { transform: rotate(0); } 30% { transform: rotate(-2deg); } 44% { transform: rotate(3deg); } 70% { transform: rotate(0); } }
+.an-wc-swoosh { opacity: 0; animation: anwcswoosh 1.6s linear infinite; } @keyframes anwcswoosh { 0%, 40% { opacity: 0; } 46% { opacity: 1; } 62%, 100% { opacity: 0; } }
+.an-wc-twirl { animation: anwctwirl 3.6s ease-in-out infinite; } @keyframes anwctwirl { 0% { transform: translateY(0) scaleX(1); } 8% { transform: translateY(-3px) scaleX(-1); } 16% { transform: translateY(0) scaleX(1); } 24% { transform: translateY(-3px) scaleX(-1); } 32%, 100% { transform: translateY(0) scaleX(1); } }
+.an-wc-heart { opacity: 0; animation: anwcheart 3.6s ease-out infinite; } @keyframes anwcheart { 0% { opacity: 0; transform: translate(0, 0) scale(.5); } 12% { opacity: 1; } 40% { transform: translate(-6px, -30px) scale(1); } 70% { opacity: 1; transform: translate(5px, -52px) scale(1.1); } 90%, 100% { opacity: 0; transform: translate(-2px, -66px) scale(1.1); } }
+.an-wc-hover { animation: anwchover 1.2s ease-in-out infinite alternate; } @keyframes anwchover { from { transform: translateY(1px); } to { transform: translateY(-5px); } }
+.an-wc-flap { animation: anwcflap .3s ease-in-out infinite alternate; } @keyframes anwcflap { from { transform: scale(1, 1); } to { transform: scale(.72, 1.08); } }
+.an-wc-wag { animation: anwcwag .8s ease-in-out infinite alternate; } @keyframes anwcwag { from { transform: rotate(-8deg); } to { transform: rotate(10deg); } }
+.an-wc-puff { opacity: 0; animation: anwcpuff 2.4s ease-out infinite; } @keyframes anwcpuff { 0% { opacity: 0; transform: translate(0, 0) scale(.3); } 15% { opacity: 1; } 70% { opacity: .8; } 100% { opacity: 0; transform: translate(22px, -40px) scale(1.5); } }
+.an-wc-wave { animation: anwcwave 2s ease-in-out infinite; } @keyframes anwcwave { 0%, 100% { transform: rotate(0); } 15% { transform: rotate(-22deg); } 35% { transform: rotate(14deg); } 50% { transform: rotate(0); } }
+.an-wc-burst { opacity: 0; animation: anwcburst 2s ease-out infinite; } @keyframes anwcburst { 0%, 36% { opacity: 0; transform: translateX(0) scale(.3); } 44% { opacity: 1; transform: translateX(8px) scale(1.1); } 80%, 100% { opacity: 0; transform: translateX(38px) scale(.7); } }
+.an-wc-trot { animation: anwctrot .5s ease-in-out infinite; } @keyframes anwctrot { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+.an-wc-legA { animation: anwcleg .5s ease-in-out infinite alternate; } .an-wc-legB { animation: anwcleg .5s ease-in-out infinite alternate-reverse; }
+@keyframes anwcleg { from { transform: rotate(-14deg); } to { transform: rotate(14deg); } }
+.an-wc-nod { animation: anwcnod 1s ease-in-out infinite alternate; } @keyframes anwcnod { from { transform: rotate(-3deg); } to { transform: rotate(5deg); } }
+.an-wc-swish { animation: anwcswish .7s ease-in-out infinite alternate; } @keyframes anwcswish { from { transform: rotate(-10deg); } to { transform: rotate(10deg); } }
+.an-wc-juggle { animation: anwcjuggle 2.4s linear infinite; } @keyframes anwcjuggle { to { transform: rotate(360deg); } }
+.an-wc-tossL { animation: anwctoss .4s ease-in-out infinite alternate; } .an-wc-tossR { animation: anwctoss2 .4s ease-in-out infinite alternate-reverse; }
+@keyframes anwctoss { from { transform: rotate(6deg); } to { transform: rotate(-8deg); } } @keyframes anwctoss2 { from { transform: rotate(-6deg); } to { transform: rotate(8deg); } }
+.an-wc-boo { animation: anwcboo 4s ease-in-out infinite; } @keyframes anwcboo { 0%, 100% { opacity: 1; transform: translate(0, 0) scale(1); } 15% { transform: translate(-10px, -6px) scale(1); } 30% { transform: translate(8px, -10px) scale(1); } 40% { opacity: 1; transform: translate(0, -4px) scale(1); } 50% { opacity: .06; transform: translate(0, -6px) scale(.9); } 60% { opacity: .06; transform: translate(0, 0) scale(.9); } 66% { opacity: 1; transform: translate(0, 0) scale(1.18); } 74% { transform: translate(0, 0) scale(.96); } 82% { transform: translate(0, 0) scale(1); } }
+.an-wc-gwL { animation: anwcgwl .5s ease-in-out infinite alternate; } @keyframes anwcgwl { from { transform: rotate(-15deg); } to { transform: rotate(20deg); } }
+.an-wc-gwR { animation: anwcgwr .5s ease-in-out infinite alternate-reverse; } @keyframes anwcgwr { from { transform: rotate(15deg); } to { transform: rotate(-20deg); } }
+.an-wc-hoot { animation: anwchoot 3s ease-in-out infinite; } @keyframes anwchoot { 0%, 20%, 54%, 100% { transform: translateY(0); } 32% { transform: translateY(-10px); } 38% { transform: translateY(-6px); } 46% { transform: translateY(-11px); } }
+.an-wc-owlL { animation: anwcowll 3s ease-in-out infinite; } @keyframes anwcowll { 0%, 20%, 54%, 100% { transform: rotate(0); } 28% { transform: rotate(45deg); } 36% { transform: rotate(12deg); } 44% { transform: rotate(45deg); } }
+.an-wc-owlR { animation: anwcowlr 3s ease-in-out infinite; } @keyframes anwcowlr { 0%, 20%, 54%, 100% { transform: rotate(0); } 28% { transform: rotate(-45deg); } 36% { transform: rotate(-12deg); } 44% { transform: rotate(-45deg); } }
+.an-wc-blink { animation: anwcblink 3s linear infinite; } @keyframes anwcblink { 0%, 68%, 76%, 82%, 90%, 100% { transform: scaleY(.01); } 72%, 86% { transform: scaleY(1); } }
+.an-wc-coinL { opacity: 0; animation: anwccoinl 2.4s ease-in-out infinite; } @keyframes anwccoinl { 0% { opacity: 0; transform: translate(0, 0); } 8% { opacity: 1; transform: translate(-4px, -18px); } 28% { transform: translate(-14px, -46px); } 48% { transform: translate(-24px, -34px); } 66% { opacity: 1; transform: translate(-30px, 0); } 76%, 100% { opacity: 0; transform: translate(-32px, 8px); } }
+.an-wc-coinR { opacity: 0; animation: anwccoinr 2.4s ease-in-out infinite; } @keyframes anwccoinr { 0% { opacity: 0; transform: translate(0, 0); } 8% { opacity: 1; transform: translate(4px, -18px); } 28% { transform: translate(14px, -46px); } 48% { transform: translate(24px, -34px); } 66% { opacity: 1; transform: translate(30px, 0); } 76%, 100% { opacity: 0; transform: translate(32px, 8px); } }
+.an-wc-spin { animation: anwcspin .3s linear infinite alternate; } @keyframes anwcspin { from { transform: scaleX(1); } to { transform: scaleX(.15); } }
+/* the chess page's own animations (js/fan/chess.js, an-ch-*) */
+.an-ch-sway { animation: anchsway 1.8s ease-in-out infinite alternate; } @keyframes anchsway { from { transform: rotate(-2deg); } to { transform: rotate(2deg); } }
+.an-ch-sceptre { animation: anchsceptre 1.8s ease-in-out infinite; } @keyframes anchsceptre { 0%, 100% { transform: rotate(0); } 20% { transform: rotate(22deg); } 40% { transform: rotate(-6deg); } 60% { transform: rotate(22deg); } 80% { transform: rotate(-4deg); } }
+.an-ch-twirl { animation: anchtwirl 3.2s ease-in-out infinite; } @keyframes anchtwirl { 0% { transform: translateY(0) scaleX(1); } 10% { transform: translateY(-4px) scaleX(-1); } 20% { transform: translateY(0) scaleX(1); } 30% { transform: translateY(-4px) scaleX(-1); } 40%, 100% { transform: translateY(0) scaleX(1); } }
+.an-ch-glint { animation: anchglint 1.5s ease-in-out infinite; } @keyframes anchglint { 0%, 100% { opacity: 0; transform: scale(0) rotate(0); } 50% { opacity: 1; transform: scale(1.2) rotate(45deg); } }
+.an-ch-slide { animation: anchslide 3.2s ease-in-out infinite; } @keyframes anchslide { 0%, 8% { transform: translateX(-24px) rotate(0); } 22% { transform: translateX(0) rotate(-5deg); } 36% { transform: translateX(24px) rotate(3deg); } 44%, 58% { transform: translateX(24px) rotate(0); } 72% { transform: translateX(0) rotate(5deg); } 86% { transform: translateX(-24px) rotate(-3deg); } 94%, 100% { transform: translateX(-24px) rotate(0); } }
+.an-ch-leap { animation: anchleap 1.8s ease-in-out infinite; } @keyframes anchleap { 0%, 100% { transform: translateY(0) rotate(0) scale(1, 1); } 14% { transform: translateY(0) rotate(0) scale(1.05, .92); } 24% { transform: translateY(-8px) rotate(-6deg) scale(.97, 1.04); } 40% { transform: translateY(-24px) rotate(-10deg) scale(1, 1); } 56% { transform: translateY(-8px) rotate(4deg) scale(1, 1); } 64% { transform: translateY(0) rotate(0) scale(1.06, .9); } 74% { transform: translateY(0) rotate(0) scale(.98, 1.03); } 84% { transform: translateY(0) rotate(0) scale(1, 1); } }
+.an-ch-shrink { animation: anchshrink 1.8s ease-in-out infinite; } @keyframes anchshrink { 0%, 14%, 64%, 100% { opacity: 1; transform: scale(1); } 40% { opacity: .5; transform: scale(.6); } }
+.an-ch-diag { animation: anchdiag 4s ease-in-out infinite; } @keyframes anchdiag { 0%, 8% { transform: translate(0, 0) rotate(0) scale(1); } 17% { transform: translate(-11px, -9px) rotate(-5deg) scale(.83); } 26%, 34% { transform: translate(-22px, -18px) rotate(0) scale(.66); } 42% { transform: translate(-11px, -9px) rotate(5deg) scale(.83); } 50%, 58% { transform: translate(0, 0) rotate(0) scale(1); } 67% { transform: translate(11px, -9px) rotate(5deg) scale(.83); } 76%, 84% { transform: translate(22px, -18px) rotate(0) scale(.66); } 92% { transform: translate(11px, -9px) rotate(-5deg) scale(.83); } }
+.an-ch-step { animation: anchstep 4s ease-in-out infinite; } @keyframes anchstep { 0%, 10% { opacity: 1; transform: translateY(0) scale(1); } 18% { transform: translateY(-16px) scale(.9); } 26%, 34% { transform: translateY(-11px) scale(.8); } 42% { transform: translateY(-26px) scale(.72); } 50% { transform: translateY(-20px) scale(.66); } 64% { opacity: 1; transform: translateY(-20px) scale(.66); } 72% { opacity: 0; transform: translateY(-20px) scale(.66); } 80% { opacity: 0; transform: translateY(0) scale(1); } 92%, 100% { opacity: 1; transform: translateY(0) scale(1); } }
+.an-ch-pawnout { animation: anchpawnout 4s linear infinite; } @keyframes anchpawnout { 0%, 36% { opacity: 1; } 40%, 84% { opacity: 0; } 90%, 100% { opacity: 1; } }
+.an-ch-queenin { opacity: 0; animation: anchqueenin 4s ease-in-out infinite; } @keyframes anchqueenin { 0%, 36% { opacity: 0; transform: translateY(0) scale(.9); } 41% { opacity: 1; transform: translateY(0) scale(1.08); } 46% { transform: translateY(0) scale(1); } 53% { transform: translateY(-9px) scale(1); } 60% { transform: translateY(0) scale(1); } 67% { transform: translateY(-9px) scale(1); } 74% { transform: translateY(0) scale(1); } 82% { opacity: 1; transform: translateY(0) scale(1); } 88%, 100% { opacity: 0; transform: translateY(0) scale(1); } }
+.an-ch-crown { animation: anchcrown 4s ease-in-out infinite; } @keyframes anchcrown { 0%, 12% { opacity: 1; transform: translateY(0) scale(1); } 34% { opacity: 1; transform: translateY(25px) scale(.65); } 40% { opacity: 0; transform: translateY(25px) scale(.65); } 86% { opacity: 0; transform: translateY(-20px) scale(1); } 96%, 100% { opacity: 1; transform: translateY(0) scale(1); } }
+.an-ch-flash { opacity: 0; animation: anchflash 4s ease-out infinite; } @keyframes anchflash { 0%, 33% { opacity: 0; transform: scale(.2); } 38% { opacity: 1; transform: scale(1); } 50%, 100% { opacity: 0; transform: scale(1.4); } }
+.an-ch-kjF { animation: anchkj 4s ease-in-out infinite, anchkjf 4s steps(1) infinite; } .an-ch-kjB { opacity: 0; animation: anchkj 4s ease-in-out infinite, anchkjb 4s steps(1) infinite; }
+@keyframes anchkjf { 0% { opacity: 1; } 26% { opacity: 0; } 76%, 100% { opacity: 1; } } @keyframes anchkjb { 0% { opacity: 0; } 26% { opacity: 1; } 76%, 100% { opacity: 0; } }
+@keyframes anchkj { 0%, 10% { transform: translate(0, 0) rotate(0) scale(1, 1); } 14% { transform: translate(0, 0) rotate(0) scale(1.05, .9); } 26% { transform: translate(-18px, -96px) rotate(-14deg) scale(1, 1); } 40% { transform: translate(-36px, -60px) rotate(0) scale(1, 1); } 44% { transform: translate(-36px, -60px) rotate(0) scale(1.06, .88); } 50%, 60% { transform: translate(-36px, -60px) rotate(0) scale(1, 1); } 64% { transform: translate(-36px, -60px) rotate(0) scale(1.05, .9); } 76% { transform: translate(-18px, -96px) rotate(10deg) scale(1, 1); } 90% { transform: translate(0, 0) rotate(0) scale(1, 1); } 94% { transform: translate(0, 0) rotate(0) scale(1.06, .88); } 100% { transform: translate(0, 0) rotate(0) scale(1, 1); } }
+.an-ch-pump { animation: anchpump 2.4s ease-in-out infinite; } @keyframes anchpump { 0%, 48%, 100% { transform: translateY(0); } 8%, 24%, 40% { transform: translateY(-5px); } 16%, 32% { transform: translateY(4px); } }
+.an-ch-kbob { animation: anchkbob 2.4s ease-in-out infinite; } @keyframes anchkbob { 0%, 48%, 100% { transform: translateY(0); } 8%, 24%, 40% { transform: translateY(-1.5px); } 16%, 32% { transform: translateY(1.5px); } }
+.an-ch-pop { opacity: 0; animation: anchpop 2.4s ease-out infinite; } @keyframes anchpop { 0%, 46% { opacity: 0; transform: scale(0); } 58% { opacity: 1; transform: scale(1.6); } 80%, 100% { opacity: 0; transform: scale(.8); } }
+/* the Hot Wheels page's own animations (js/fan/hotwheels.js, an-hw-*) */
+.an-hw-streak { opacity: 0; animation: anhwstreak .85s linear infinite; } @keyframes anhwstreak { 0% { opacity: 0; transform: translateX(0); } 15%, 80% { opacity: 1; } 100% { opacity: 0; transform: translateX(-150px); } }
+.an-hw-wheel { animation: anhwwheel .45s linear infinite; } @keyframes anhwwheel { to { transform: rotate(360deg); } }
+.an-hw-rumble { animation: anhwrumble .16s linear infinite alternate; } @keyframes anhwrumble { from { transform: translate(-.6px, 0); } to { transform: translate(.6px, -1px); } }
+.an-hw-bounce { animation: anhwbounce .7s ease-in-out infinite; }
+@keyframes anhwbounce { 0%, 100% { transform: translateY(0) scale(1); } 20% { transform: translateY(2px) scale(1.03, .95); } 55% { transform: translateY(-12px) rotate(-3deg) scale(.98, 1.03); } 80% { transform: translateY(0) rotate(1deg) scale(1.02, .97); } }
+.an-hw-pulse { animation: anhwpulse 1.2s ease-in-out infinite alternate; } @keyframes anhwpulse { from { transform: scale(1); } to { transform: scale(1.06); } }
+.an-hw-shine { animation: anhwshine 2.6s ease-in-out infinite; } @keyframes anhwshine { 0% { transform: translateX(-20px); } 45%, 100% { transform: translateX(180px); } }
+.an-hw-loop { animation: anhwloop 2.4s linear infinite; } @keyframes anhwloop { to { transform: rotate(-360deg); } }
+.an-hw-jump { animation: anhwjump 2.4s ease-in-out infinite; }
+@keyframes anhwjump { 0% { transform: translate(-22px, 42px) rotate(-14deg); opacity: 0; } 8% { opacity: 1; } 50% { transform: translate(0, 0) rotate(0); } 90% { opacity: 1; } 100% { transform: translate(26px, 44px) rotate(30deg); opacity: 0; } }
+/* the snow page's own animations (js/fan/wsnow.js, an-wn-*) */
+.an-wn-fall { animation: anwnfall 6s linear infinite; } @keyframes anwnfall { from { transform: translateY(0); } to { transform: translateY(158px); } }
+.an-wn-waves { animation: anwnwaves 1.4s linear infinite; } @keyframes anwnwaves { from { transform: translateX(0); } to { transform: translateX(-10px); } }
+.an-wn-pass { animation: anwnpass 3s linear infinite; } @keyframes anwnpass { from { transform: translateX(0); } to { transform: translateX(-120px); } }
+.an-wn-stroll { animation: anwnstroll 4s ease-in-out infinite alternate; } @keyframes anwnstroll { from { transform: translateX(-16px); } to { transform: translateX(16px); } }
+.an-wn-waddle { animation: anwnwaddle .5s ease-in-out infinite alternate; } @keyframes anwnwaddle { 0% { transform: rotate(-7deg) translateY(0); } 50% { transform: rotate(0) translateY(-3px); } 100% { transform: rotate(7deg) translateY(0); } }
+.an-wn-flip { animation: anwnflip .35s ease-in-out infinite alternate; } @keyframes anwnflip { from { transform: rotate(-14deg); } to { transform: rotate(20deg); } }
+.an-wn-throw { animation: anwnthrow 2s ease-in-out infinite; } @keyframes anwnthrow { 0%, 100% { transform: rotate(0); } 10% { transform: rotate(14deg); } 18% { transform: rotate(-12deg); } 28%, 66% { transform: rotate(0); } 74% { transform: rotate(10deg); } 84% { transform: rotate(0); } }
+.an-wn-toss { animation: anwntoss 2s linear infinite; }
+@keyframes anwntoss { 0%, 10% { transform: translateY(0); } 18% { transform: translateY(-4px); animation-timing-function: ease-out; } 45% { transform: translateY(-36px); animation-timing-function: ease-in; } 72%, 100% { transform: translateY(0); } }
+.an-wn-look { animation: anwnlook 2s ease-in-out infinite; } @keyframes anwnlook { 0%, 18%, 76%, 100% { transform: rotate(0) translateY(0); } 40%, 52% { transform: rotate(5deg) translateY(-1px); } }
+.an-wn-bounce { animation: anwnbounce .6s ease-out infinite alternate; } @keyframes anwnbounce { from { transform: translateY(0); } to { transform: translateY(-22px); } }
+.an-wn-spin { animation: anwnspin 1.2s linear infinite; } @keyframes anwnspin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+.an-wn-nod { animation: anwnnod 1.2s ease-in-out infinite; } @keyframes anwnnod { 0%, 100% { transform: rotate(4deg); } 30%, 70% { transform: rotate(-3deg); } }
+.an-wn-flap { animation: anwnflap .5s ease-in-out infinite alternate; } @keyframes anwnflap { from { transform: rotate(-10deg); } to { transform: rotate(12deg); } }
+.an-wn-pounce { animation: anwnpounce 3.6s ease-in-out infinite; }
+@keyframes anwnpounce { 0%, 6% { transform: translate(0, 0) rotate(0) scale(1, 1); } 12% { transform: translate(0, 4px) rotate(0) scale(1.06, .9); } 17% { transform: translate(4px, -6px) rotate(-8deg) scale(.95, 1.08); }
+  27% { transform: translate(36px, -44px) rotate(90deg) scale(1, 1); } 37% { transform: translate(70px, 16px) rotate(180deg) scale(1, 1); } 45% { transform: translate(70px, 13px) rotate(174deg) scale(1, 1); }
+  53% { transform: translate(70px, 16px) rotate(186deg) scale(1, 1); } 61% { transform: translate(70px, 14px) rotate(180deg) scale(1, 1); } 69% { transform: translate(64px, -14px) rotate(200deg) scale(1, 1); }
+  81% { transform: translate(32px, -40px) rotate(290deg) scale(1, 1); } 92% { transform: translate(0, 0) rotate(360deg) scale(1, 1); } 96% { transform: translate(0, 2px) rotate(360deg) scale(1.04, .94); } 100% { transform: translate(0, 0) rotate(360deg) scale(1, 1); } }
+.an-wn-burst { opacity: 0; animation: anwnburst 3.6s ease-out infinite; }
+@keyframes anwnburst { 0%, 35% { opacity: 0; transform: scale(.4); } 38% { opacity: 1; transform: scale(.7); } 48% { opacity: 0; transform: scale(1.4); } 63% { opacity: 0; transform: scale(.4); } 66% { opacity: 1; transform: scale(.7); } 76%, 100% { opacity: 0; transform: scale(1.4); } }
+.an-wn-swish { animation: anwnswish .45s ease-in-out infinite alternate; } @keyframes anwnswish { from { transform: rotate(-10deg); } to { transform: rotate(12deg); } }
+.an-wn-floe { animation: anwnfloe 2.6s ease-in-out infinite alternate; } @keyframes anwnfloe { from { transform: rotate(-3deg) translateY(0); } to { transform: rotate(3deg) translateY(2px); } }
+.an-wn-hum { animation: anwnhum .8s ease-in-out infinite alternate; } @keyframes anwnhum { from { transform: translateY(0) scale(1, 1); } to { transform: translateY(-2px) scale(1.02, .98); } }
+.an-wn-clapl { animation: anwnclapl .4s ease-in-out infinite alternate; } @keyframes anwnclapl { from { transform: rotate(-4deg); } to { transform: rotate(38deg); } }
+.an-wn-clapr { animation: anwnclapr .4s ease-in-out infinite alternate; } @keyframes anwnclapr { from { transform: rotate(4deg); } to { transform: rotate(-38deg); } }
+.an-wn-wingl { animation: anwnwingl 2.4s ease-in-out infinite; }
+@keyframes anwnwingl { 0%, 12%, 90%, 100% { transform: rotate(-62deg) scale(.55); } 18%, 34%, 50% { transform: rotate(24deg) scale(1); } 26%, 42%, 58% { transform: rotate(-26deg) scale(1); } 68% { transform: rotate(0) scale(1); } 80% { transform: rotate(16deg) scale(.9); } }
+.an-wn-wingr { animation: anwnwingr 2.4s ease-in-out infinite; }
+@keyframes anwnwingr { 0%, 12%, 90%, 100% { transform: rotate(62deg) scale(.55); } 18%, 34%, 50% { transform: rotate(-24deg) scale(1); } 26%, 42%, 58% { transform: rotate(26deg) scale(1); } 68% { transform: rotate(0) scale(1); } 80% { transform: rotate(-16deg) scale(.9); } }
+.an-wn-lift { animation: anwnlift 2.4s ease-in-out infinite; }
+@keyframes anwnlift { 0%, 12%, 92%, 100% { transform: translateY(0); } 17% { transform: translateY(2px); } 30% { transform: translateY(-10px); } 46% { transform: translateY(-18px); } 62% { transform: translateY(-20px); } 78% { transform: translateY(-6px); } 88% { transform: translateY(1px); } }
+.an-wn-gallop { animation: anwngallop .3s ease-in-out infinite alternate; } @keyframes anwngallop { from { transform: translateY(0) rotate(-2deg); } to { transform: translateY(-4px) rotate(2deg); } }
+.an-wn-sledbump { animation: anwnsledbump .3s ease-in-out infinite alternate-reverse; } @keyframes anwnsledbump { from { transform: translateY(0) rotate(-1deg); } to { transform: translateY(-2px) rotate(1.5deg); } }
+.an-wn-wag { animation: anwnwag .2s ease-in-out infinite alternate; } @keyframes anwnwag { from { transform: rotate(-12deg); } to { transform: rotate(12deg); } }
+.an-wn-spray { opacity: 0; animation: anwnspray .6s ease-out infinite; } @keyframes anwnspray { 0% { opacity: 0; transform: translate(0, 0) scale(.6); } 15% { opacity: .9; } 100% { opacity: 0; transform: translate(-10px, -6px) scale(1.4); } }
+.an-wn-swimx { animation: anwnswimx 3.4s linear infinite; } @keyframes anwnswimx { 0% { transform: translateX(-42px); } 70%, 100% { transform: translateX(42px); } }
+.an-wn-swimy { animation: anwnswimy 3.4s linear infinite; }
+@keyframes anwnswimy { 0% { transform: translateY(66px); animation-timing-function: ease-out; } 35% { transform: translateY(-24px); animation-timing-function: ease-in; } 70%, 100% { transform: translateY(66px); } }
+.an-wn-roll { animation: anwnroll 3.4s linear infinite; } @keyframes anwnroll { 0% { transform: rotate(-50deg); } 70%, 100% { transform: rotate(50deg); } }
+.an-wn-splash1 { opacity: 0; animation: anwnsplash1 3.4s ease-out infinite; } @keyframes anwnsplash1 { 0% { opacity: 0; transform: scale(.3); } 5% { opacity: 1; transform: scale(.8); } 20%, 100% { opacity: 0; transform: scale(1.3); } }
+.an-wn-splash2 { opacity: 0; animation: anwnsplash2 3.4s ease-out infinite; } @keyframes anwnsplash2 { 0%, 54% { opacity: 0; transform: scale(.3); } 59% { opacity: 1; transform: scale(.8); } 74%, 100% { opacity: 0; transform: scale(1.3); } }
+.an-wn-tip { animation: anwntip 2.6s ease-in-out infinite; }
+@keyframes anwntip { 0%, 16%, 80%, 100% { transform: translateY(0) rotate(0); } 32% { transform: translateY(-14px) rotate(-12deg); } 46% { transform: translateY(-16px) rotate(10deg); } 60% { transform: translateY(-14px) rotate(-8deg); } }
+.an-wn-hello { animation: anwnhello 2.6s ease-in-out infinite; } @keyframes anwnhello { 0%, 12%, 84%, 100% { transform: rotate(0); } 26%, 46%, 66% { transform: rotate(-28deg); } 36%, 56%, 76% { transform: rotate(-6deg); } }
+/* the volcano page's own animations (js/fan/wlava.js, an-wl-*) */
+/* end of the snow and volcano pages' own animations */
+/* the Cars page's own animations (js/fan/cars.js, an-cr-*) */
+.an-cr-wheel { animation: ancrwheel .5s linear infinite; } @keyframes ancrwheel { to { transform: rotate(360deg); } }
+.an-cr-road { animation: ancrroad .5s linear infinite; } @keyframes ancrroad { to { transform: translateX(-28px); } }
+.an-cr-streak { opacity: 0; animation: ancrstreak .9s linear infinite; } @keyframes ancrstreak { 0% { opacity: 0; transform: translateX(0); } 15%, 80% { opacity: 1; } 100% { opacity: 0; transform: translateX(-150px); } }
+.an-cr-flash { opacity: 0; animation: ancrflash 2.4s infinite; } @keyframes ancrflash { 0%, 70%, 82%, 100% { opacity: 0; } 74% { opacity: .55; } 78% { opacity: .2; } }
+.an-cr-race { animation: ancrrace .18s linear infinite alternate; } @keyframes ancrrace { from { transform: translate(-.6px, 0); } to { transform: translate(.6px, -1px); } }
+.an-cr-rattle { animation: ancrrattle .5s ease-in-out infinite; } @keyframes ancrrattle { 0%, 100% { transform: translateY(0) rotate(0); } 25% { transform: translateY(-3px) rotate(-2deg); } 50% { transform: translateY(0) rotate(1deg); } 75% { transform: translateY(-2px) rotate(2deg); } }
+.an-cr-cruise { animation: ancrcruise 2.4s ease-in-out infinite alternate; } @keyframes ancrcruise { from { transform: translateX(-6px); } to { transform: translateX(6px) translateY(-1px); } }
+.an-cr-drift { animation: ancrdrift 2s ease-in-out infinite alternate; } @keyframes ancrdrift { from { transform: translateX(-8px) rotate(4deg); } to { transform: translateX(8px) rotate(-6deg); } }
+.an-cr-hop { animation: ancrhop .9s ease-in-out infinite; }
+@keyframes ancrhop { 0%, 100% { transform: translateY(0) scale(1); } 15% { transform: scale(1.04, .95); } 48% { transform: translateY(-10px) scale(.98, 1.03); } 82% { transform: translateY(0) scale(1.03, .96); } }
+.an-cr-lowrider { animation: ancrlow 1.2s ease-in-out infinite; }
+@keyframes ancrlow { 0%, 100% { transform: rotate(0) translateY(0); } 25% { transform: rotate(-7deg) translateY(-6px); } 50% { transform: rotate(0) translateY(0); } 75% { transform: rotate(6deg) translateY(-5px); } }
+.an-cr-truck { animation: ancrtruck .4s ease-in-out infinite alternate; } @keyframes ancrtruck { from { transform: translateY(0); } to { transform: translateY(-1.4px); } }
+.an-cr-sway { animation: ancrsway 2.4s ease-in-out infinite alternate; } @keyframes ancrsway { from { transform: rotate(-3deg); } to { transform: rotate(3deg); } }
+.an-cr-float { opacity: 0; animation: ancrfloat 2.7s ease-out infinite; } @keyframes ancrfloat { 0% { opacity: 0; transform: translateY(20px); } 25% { opacity: 1; } 100% { opacity: 0; transform: translateY(-14px); } }
+/* the Octonauts page's own animations (js/fan/octonauts.js, an-oc-*) */
+.an-oc-rise { opacity: 0; animation: anocrise 3s ease-in infinite; } @keyframes anocrise { 0% { opacity: 0; transform: translateY(0); } 12%, 75% { opacity: 1; } 100% { opacity: 0; transform: translateY(-125px); } }
+.an-oc-lead { animation: anoclead 1.6s ease-in-out infinite alternate; } @keyframes anoclead { from { transform: rotate(0); } to { transform: rotate(6deg) translateX(3px); } }
+.an-oc-pump { animation: anocpump 1s ease-in-out infinite; }
+@keyframes anocpump { 0%, 100% { transform: translateY(0) scale(1); } 15% { transform: scale(1.04, .95); } 45% { transform: translateY(-12px) scale(.97, 1.04); } 80% { transform: translateY(0) scale(1.03, .96); } }
+.an-oc-waddle { animation: anocwaddle .5s ease-in-out infinite alternate; } @keyframes anocwaddle { from { transform: rotate(-6deg); } to { transform: rotate(6deg); } }
+.an-oc-peer { animation: anocpeer 2s ease-in-out infinite; } @keyframes anocpeer { 0%, 100% { transform: rotate(0) scale(1); } 40%, 60% { transform: rotate(-5deg) scale(1.04); } }
+.an-oc-bob { animation: anocbob 1s ease-in-out infinite alternate; } @keyframes anocbob { to { transform: translateY(-3px); } }
+.an-oc-flash { opacity: 0; animation: anocflash 2s infinite; } @keyframes anocflash { 0%, 60%, 76%, 100% { opacity: 0; } 64% { opacity: .7; } }
+.an-oc-fix { animation: anocfix .8s ease-in-out infinite; } @keyframes anocfix { 0%, 100% { transform: rotate(0); } 30% { transform: rotate(-6deg); } 50% { transform: rotate(4deg) translateY(1px); } }
+.an-oc-float { animation: anocfloat 2.4s ease-in-out infinite alternate; } @keyframes anocfloat { from { transform: translateY(6px) rotate(-4deg); } to { transform: translateY(-8px) rotate(4deg); } }
+.an-oc-bounce { animation: anocbounce .8s ease-in-out infinite; }
+@keyframes anocbounce { 0%, 100% { transform: translateY(0) scale(1); } 15% { transform: scale(1.07, .92); } 50% { transform: translateY(-14px) scale(.95, 1.06); } 85% { transform: translateY(0) scale(1.05, .95); } }
+.an-oc-zoom { animation: anoczoom 3.2s ease-in-out infinite; }
+@keyframes anoczoom { 0% { transform: translateY(170px); } 30%, 60% { transform: translateY(0); } 65% { transform: translateY(4px); } 100% { transform: translateY(-180px); } }
+/* the Peppa Pig page's own animations (js/fan/peppa.js, an-pp-*) */
+.an-pp-jump { animation: anppjump .9s ease-in-out infinite; }
+@keyframes anppjump { 0%, 100% { transform: translateY(0) scale(1.05, .94); } 45% { transform: translateY(-11px) scale(.97, 1.04); } 85% { transform: translateY(0) scale(1, 1); } }
+.an-pp-splash { opacity: 0; animation: anppsplash .9s ease-out infinite; } @keyframes anppsplash { 0%, 80% { opacity: 0; transform: scale(.4); } 88% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(1.5) translateY(-6px); } }
+.an-pp-roar { animation: anpproar .5s ease-in-out infinite alternate; } @keyframes anpproar { from { transform: rotate(-4deg); } to { transform: rotate(4deg) translateY(-2px); } }
+.an-pp-sway { animation: anppsway 1.6s ease-in-out infinite alternate; } @keyframes anppsway { from { transform: rotate(-4deg); } to { transform: rotate(4deg); } }
+.an-pp-laugh { animation: anpplaugh .3s ease-in-out infinite alternate; } @keyframes anpplaugh { from { transform: scale(1, 1); } to { transform: scale(1.04, .97); } }
+.an-pp-hop { animation: anpphop .8s ease-in-out infinite; }
+@keyframes anpphop { 0%, 100% { transform: translateY(0) scale(1); } 15% { transform: scale(1.04, .95); } 48% { transform: translateY(-10px) scale(.97, 1.04); } 82% { transform: translateY(0) scale(1.03, .96); } }
+.an-pp-bunny { animation: anppbunny .6s ease-in-out infinite; } @keyframes anppbunny { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px) rotate(-3deg); } }
+.an-pp-yawn { animation: anppyawn 3s ease-in-out infinite alternate; } @keyframes anppyawn { from { transform: rotate(-3deg) scale(1); } to { transform: rotate(3deg) scale(1.02, .99); } }
+/* the Paw Patrol page's own animations (js/fan/pawpatrol.js, an-pw-*) */
+.an-pw-hop { animation: anpwhop .9s ease-in-out infinite; }
+@keyframes anpwhop { 0%, 100% { transform: translateY(0) scale(1); } 15% { transform: scale(1.04, .95); } 48% { transform: translateY(-10px) scale(.97, 1.04); } 82% { transform: translateY(0) scale(1.03, .96); } }
+.an-pw-attention { animation: anpwatt 1.4s ease-in-out infinite; } @keyframes anpwatt { 0%, 40%, 100% { transform: translateY(0) scale(1); } 15% { transform: translateY(-4px) scale(1, 1.04); } 25% { transform: translateY(0) scale(1); } }
+.an-pw-red { animation: anpwsiren .6s steps(1) infinite; } .an-pw-blue { animation: anpwsiren .6s steps(1) infinite reverse; } @keyframes anpwsiren { 0% { opacity: 1; } 50% { opacity: 0; } }
+.an-pw-hose { animation: anpwhose .5s ease-in-out infinite alternate; } @keyframes anpwhose { from { transform: rotate(-3deg) translateX(-1px); } to { transform: rotate(2deg) translateX(1px); } }
+.an-pw-fly { animation: anpwfly 1.8s ease-in-out infinite alternate; } @keyframes anpwfly { from { transform: translateY(5px) rotate(-3deg); } to { transform: translateY(-7px) rotate(3deg); } }
+.an-pw-cloud { opacity: 0; animation: anpwcloud 3s linear infinite; } @keyframes anpwcloud { 0% { opacity: 0; transform: translateX(0); } 10%, 88% { opacity: 1; } 100% { opacity: 0; transform: translateX(-160px); } }
+.an-pw-dig { animation: anpwdig 1.2s ease-in-out infinite; } @keyframes anpwdig { 0%, 100% { transform: rotate(0); } 35% { transform: rotate(6deg) translateY(2px); } 60% { transform: rotate(-4deg); } }
+.an-pw-clod { opacity: 0; animation: anpwclod 1.2s ease-out infinite; } @keyframes anpwclod { 0%, 50% { opacity: 0; transform: translate(0, 0); } 60% { opacity: 1; } 100% { opacity: 0; transform: translate(-14px, -26px); } }
+.an-pw-wave { animation: anpwwave .7s ease-in-out infinite alternate; } @keyframes anpwwave { from { transform: rotate(-4deg); } to { transform: rotate(4deg) translateY(-2px); } }
+.an-pw-surf { animation: anpwsurf 2.4s ease-in-out infinite; } @keyframes anpwsurf { 0%, 100% { transform: translate(-6px, 2px) rotate(-6deg); } 50% { transform: translate(6px, -6px) rotate(5deg); } }
+.an-pw-board { animation: anpwboard 2s ease-in-out infinite alternate; } @keyframes anpwboard { from { transform: translate(-8px, -6px) rotate(-4deg); } to { transform: translate(8px, 6px) rotate(4deg); } }
+.an-pw-snow { opacity: 0; animation: anpwsnow .9s ease-out infinite; } @keyframes anpwsnow { 0% { opacity: 1; transform: translate(0, 0) scale(.6); } 100% { opacity: 0; transform: translate(14px, -16px) scale(1.4); } }
+.an-pw-listen { animation: anpwlisten 2.4s ease-in-out infinite; } @keyframes anpwlisten { 0%, 100% { transform: scaleX(1) translateY(0); } 20% { transform: scaleX(1) translateY(-5px); } 40%, 60% { transform: scaleX(-1) translateY(0); } 80% { transform: scaleX(1) translateY(-3px); } }
+/* the volcano page's own animations (js/fan/wlava.js, an-wl-*) */
+.an-wl-pass { animation: anwlpass 1.6s linear infinite; } @keyframes anwlpass { to { transform: translateX(-120px); } }
+.an-wl-dust { opacity: 0; animation: anwldust .5s ease-out infinite; } @keyframes anwldust { 0% { opacity: 1; transform: translate(0, 0) scale(.6); } 100% { opacity: 0; transform: translate(-12px, -6px) scale(1.4); } }
+.an-wl-stomp { animation: anwlstomp 2.6s ease-in-out infinite; }
+@keyframes anwlstomp { 0%, 20%, 40%, 100% { transform: translateY(0); } 8%, 28% { transform: translateY(-6px); } 12%, 32% { transform: translateY(0) scale(1.03, .97); } }
+.an-wl-thud { opacity: 0; animation: anwlthud 2.6s ease-out infinite; } @keyframes anwlthud { 0%, 11%, 30%, 100% { opacity: 0; transform: scale(.5); } 13%, 33% { opacity: 1; transform: scale(1); } 20%, 40% { opacity: 0; transform: scale(1.4); } }
+.an-wl-swish { animation: anwlswish 1.3s ease-in-out infinite alternate; } @keyframes anwlswish { from { transform: rotate(-10deg); } to { transform: rotate(12deg); } }
+.an-wl-roar { animation: anwlroar 2.6s ease-in-out infinite; } @keyframes anwlroar { 0%, 44%, 86%, 100% { transform: rotate(0); } 52%, 78% { transform: rotate(-14deg); } 60% { transform: rotate(-11deg); } 68% { transform: rotate(-15deg); } }
+.an-wl-jaw { opacity: 0; animation: anwljaw 2.6s infinite; } @keyframes anwljaw { 0%, 48%, 82%, 100% { opacity: 0; } 52%, 78% { opacity: 1; } }
+.an-wl-ring { animation: anwlring .4s ease-out infinite; } @keyframes anwlring { from { transform: scale(.7); } to { transform: scale(1.2); } }
+.an-wl-gallop { animation: anwlgallop .5s ease-in-out infinite alternate; } @keyframes anwlgallop { from { transform: translateY(0) rotate(-1.5deg); } to { transform: translateY(-4px) rotate(1.5deg); } }
+.an-wl-legs { animation: anwllegs .5s ease-in-out infinite alternate; } .an-wl-legs2 { animation: anwllegs .5s ease-in-out infinite alternate-reverse; }
+@keyframes anwllegs { from { transform: translate(-2px, 0); } to { transform: translate(2px, -3px); } }
+.an-wl-swing { animation: anwlswing 1.6s ease-in-out infinite alternate; } @keyframes anwlswing { from { transform: rotate(-10deg); } to { transform: rotate(10deg); } }
+.an-wl-munch { animation: anwlmunch 3s ease-in-out infinite; }
+@keyframes anwlmunch { 0%, 100% { transform: rotate(0); } 20%, 26% { transform: rotate(16deg); } 34% { transform: rotate(2deg); } 42% { transform: rotate(5deg); } 50% { transform: rotate(1deg); } 58% { transform: rotate(5deg); } 66% { transform: rotate(0); } }
+.an-wl-leaf { opacity: 0; animation: anwlleaf 3s infinite; } @keyframes anwlleaf { 0%, 22%, 70%, 100% { opacity: 0; } 26%, 64% { opacity: 1; } }
+.an-wl-reach { animation: anwlreach 3.4s ease-in-out infinite; } @keyframes anwlreach { 0%, 100% { transform: rotate(0); } 25%, 35% { transform: rotate(10deg); } 55% { transform: rotate(-2deg); } }
+.an-wl-chew { animation: anwlchew 3.4s ease-in-out infinite; } @keyframes anwlchew { 0%, 34%, 80%, 100% { transform: rotate(0); } 42%, 58%, 74% { transform: rotate(6deg); } 50%, 66% { transform: rotate(-2deg); } }
+.an-wl-bite { opacity: 0; animation: anwlbite 3.4s infinite; } @keyframes anwlbite { 0%, 30%, 80%, 100% { opacity: 0; } 34%, 74% { opacity: 1; } }
+.an-wl-leaffall { opacity: 0; animation: anwlleaffall 3.4s ease-in infinite; }
+@keyframes anwlleaffall { 0%, 34% { opacity: 0; transform: translate(0, 0) rotate(0); } 38% { opacity: 1; } 70% { transform: translate(-14px, 50px) rotate(160deg); opacity: 1; } 90%, 100% { opacity: 0; transform: translate(-6px, 90px) rotate(300deg); } }
+.an-wl-soar { animation: anwlsoar 3.6s ease-in-out infinite; }
+@keyframes anwlsoar { 0%, 100% { transform: translate(0, 0) rotate(0); } 25% { transform: translate(-12px, 6px) rotate(-6deg); } 50% { transform: translate(0, -6px) rotate(0); } 75% { transform: translate(12px, 6px) rotate(6deg); } }
+.an-wl-flapl { animation: anwlflapl .45s ease-in-out infinite alternate; transform-box: fill-box; transform-origin: 100% 50%; }
+.an-wl-flapr { animation: anwlflapr .45s ease-in-out infinite alternate; transform-box: fill-box; transform-origin: 0% 50%; }
+@keyframes anwlflapl { from { transform: rotate(16deg); } to { transform: rotate(-18deg); } } @keyframes anwlflapr { from { transform: rotate(-16deg); } to { transform: rotate(18deg); } }
+.an-wl-club { animation: anwlclub 2.8s ease-in-out infinite; } @keyframes anwlclub { 0%, 100% { transform: rotate(0); } 22% { transform: rotate(-16deg); } 32% { transform: rotate(22deg); } 50% { transform: rotate(0); } }
+.an-wl-jolt { animation: anwljolt 2.8s ease-in-out infinite; } @keyframes anwljolt { 0%, 30%, 40%, 100% { transform: translate(0, 0); } 33% { transform: translate(-2px, 1px); } 36% { transform: translate(1px, 0); } }
+.an-wl-target { animation: anwltarget 2.8s ease-in-out infinite; } @keyframes anwltarget { 0%, 31%, 100% { transform: scale(1); } 33%, 76% { transform: scale(0); } 86% { transform: scale(1.12); } 92% { transform: scale(1); } }
+.an-wl-shard { opacity: 0; animation: anwlshard 2.8s ease-out infinite; } @keyframes anwlshard { 0%, 32% { opacity: 0; transform: translateY(0); } 34% { opacity: 1; } 56%, 100% { opacity: 0; transform: translateY(-18px) rotate(90deg); } }
+.an-wl-flash { opacity: 0; animation: anwlflash 2.8s infinite; } @keyframes anwlflash { 0%, 31%, 42%, 100% { opacity: 0; transform: scale(.4); } 34% { opacity: 1; transform: scale(1.4); } }
+.an-wl-zip { animation: anwlzip .3s steps(2) infinite; } @keyframes anwlzip { 0% { opacity: 1; } 50% { opacity: .3; } }
+.an-wl-run { animation: anwlrun .3s ease-in-out infinite alternate; } @keyframes anwlrun { from { transform: translateY(0) rotate(-1deg); } to { transform: translateY(-4px) rotate(2deg); } }
+.an-wl-kick { animation: anwlkick .3s ease-in-out infinite alternate; } .an-wl-kick2 { animation: anwlkick .3s ease-in-out infinite alternate-reverse; }
+@keyframes anwlkick { from { transform: rotate(-22deg); } to { transform: rotate(18deg); } }
+.an-wl-wobble { animation: anwlwobble 3s ease-in-out infinite; } @keyframes anwlwobble { 0%, 34%, 100% { transform: rotate(0); } 6%, 18% { transform: rotate(-7deg); } 12%, 24% { transform: rotate(7deg); } 30% { transform: rotate(-3deg); } }
+.an-wl-hatch { animation: anwlhatch 3s ease-in-out infinite; } @keyframes anwlhatch { 0%, 36%, 86%, 100% { transform: translateY(0); } 44%, 78% { transform: translateY(-16px); } }
+.an-wl-peek { animation: anwlpeek 3s ease-in-out infinite; } @keyframes anwlpeek { 0%, 46%, 76%, 100% { transform: rotate(0); } 54% { transform: rotate(-10deg); } 66% { transform: rotate(10deg); } }
+.an-wl-rumble { animation: anwlrumble 3.2s linear infinite; } @keyframes anwlrumble { 0%, 100% { transform: translate(0, 0); } 10%, 22%, 34% { transform: translate(-1.4px, 0); } 16%, 28%, 40% { transform: translate(1.4px, -.6px); } 46% { transform: translate(0, 0); } }
+.an-wl-gush { animation: anwlgush 3.2s ease-out infinite; } @keyframes anwlgush { 0%, 44% { transform: scale(.2, 0); opacity: 0; } 50% { transform: scale(1.1, 1.2); opacity: 1; } 70% { transform: scale(1, 1); opacity: 1; } 82%, 100% { transform: scale(.4, .2); opacity: 0; } }
+.an-wl-smoke { animation: anwlsmoke 3.2s ease-out infinite; } @keyframes anwlsmoke { 0% { transform: translateY(6px) scale(.8); opacity: .6; } 60% { opacity: 1; } 100% { transform: translateY(-16px) scale(1.2); opacity: 0; } }
+.an-wl-gasp { opacity: 0; animation: anwlgasp 3.2s infinite; } @keyframes anwlgasp { 0%, 44%, 78%, 100% { opacity: 0; } 48%, 74% { opacity: 1; } }
+.an-wl-blob { opacity: 0; animation: anwlblob 3.2s ease-out infinite; } @keyframes anwlblob { 0%, 46% { opacity: 0; transform: translateY(0); } 50% { opacity: 1; } 76% { opacity: 1; transform: translateY(-34px); } 84%, 100% { opacity: 0; transform: translateY(-40px); } }
+/* team own animations A: pt slb vsc cv es fr (js/fan/teamown_a.js, an-ta-*) */
+.an-ta-wave { animation: antawave 1.6s linear infinite; } @keyframes antawave { to { transform: translateX(-10px); } }
+.an-ta-sail { animation: antasail 3.5s linear infinite; } @keyframes antasail { from { transform: translateX(90px); } to { transform: translateX(-110px); } }
+.an-ta-ferry { animation: antaferry 3.5s linear infinite; } @keyframes antaferry { from { transform: translateX(90px); } to { transform: translateX(-110px); } }
+.an-ta-rock { animation: antarock 1.4s ease-in-out infinite alternate; } @keyframes antarock { from { transform: rotate(-4deg); } to { transform: rotate(4deg); } }
+.an-ta-steam { opacity: 0; animation: antasteam 2.4s ease-out infinite; }
+@keyframes antasteam { 0% { transform: translateY(4px); opacity: 0; } 30% { opacity: .9; } 100% { transform: translateY(-14px); opacity: 0; } }
+.an-ta-fall { opacity: 0; animation: antafall 1.4s linear infinite; }
+@keyframes antafall { 0% { transform: translateY(0); opacity: 0; } 15%, 80% { opacity: 1; } 100% { transform: translateY(28px); opacity: 0; } }
+.an-ta-shake { animation: antashake 1.4s ease-in-out infinite; }
+@keyframes antashake { 0%, 60%, 100% { transform: rotate(0); } 12%, 40% { transform: translate(-1px, 2px) rotate(-9deg); } 26% { transform: rotate(3deg); } }
+.an-ta-climb { animation: antaclimb 3.5s linear infinite; } @keyframes antaclimb { to { transform: translate(-120px, 21.12px); } }
+.an-ta-bump { animation: antabump 1.4s ease-in-out infinite; }
+@keyframes antabump { 0%, 50%, 100% { transform: translateY(0); } 20% { transform: translateY(-.9px); } 70% { transform: translateY(-.6px); } }
+.an-ta-carR { animation: antacarr 3.2s linear infinite; } @keyframes antacarr { from { transform: translateX(-20px); } to { transform: translateX(125px); } }
+.an-ta-carL { animation: antacarl 3.4s linear infinite; } @keyframes antacarl { from { transform: translateX(125px); } to { transform: translateX(-20px); } }
+.an-ta-lid { animation: antalid 2.4s ease-in-out infinite; }
+@keyframes antalid { 0%, 25%, 78%, 100% { transform: translateY(0) rotate(0); } 40%, 62% { transform: translateY(-4px) rotate(-10deg); } 70% { transform: translateY(0) rotate(1deg); } }
+.an-ta-puff { opacity: 0; animation: antapuff 2.4s ease-out infinite; }
+@keyframes antapuff { 0%, 36% { transform: translateY(0); opacity: 0; } 46% { opacity: .95; } 72% { transform: translateY(-14px); opacity: 0; } 100% { transform: translateY(-14px); opacity: 0; } }
+.an-ta-flap { animation: antaflap 1.4s ease-in-out infinite; } @keyframes antaflap { 0%, 100% { transform: rotate(16deg); } 50% { transform: rotate(-16deg); } }
+.an-ta-soar { animation: antasoar 1.4s ease-in-out infinite; } @keyframes antasoar { 0%, 100% { transform: translateY(2px); } 55% { transform: translateY(-3px); } }
+.an-ta-flag { animation: antaflag 1.4s ease-in-out infinite; }
+@keyframes antaflag { 0%, 100% { transform: skewY(0) scaleX(1); } 25% { transform: skewY(-10deg) scaleX(.85); } 50% { transform: skewY(5deg) scaleX(1); } 75% { transform: skewY(-6deg) scaleX(.8); } }
+.an-ta-march { animation: antamarch 3.5s linear infinite; } @keyframes antamarch { from { transform: translateX(-20px); } to { transform: translateX(140px); } }
+.an-ta-legA, .an-ta-legB { animation: antaleg 1.4s ease-in-out infinite; } .an-ta-legB { animation-delay: -.233s; }
+@keyframes antaleg { 0%, 33.3%, 66.6%, 100% { transform: rotate(22deg); } 16.6%, 50%, 83.3% { transform: rotate(-22deg); } }
+.an-ta-sift { animation: antasift 1.4s ease-in-out infinite; }
+@keyframes antasift { 0%, 100% { transform: translateX(0); } 12.5%, 37.5%, 62.5%, 87.5% { transform: translateX(-3px); } 25%, 50%, 75% { transform: translateX(3px); } }
+.an-ta-sword { animation: antasword 2s ease-in-out infinite; } @keyframes antasword { 0%, 100% { transform: rotate(0); } 35% { transform: rotate(-12deg); } 60% { transform: rotate(16deg); } }
+.an-ta-cape { animation: antacape 1.6s ease-in-out infinite alternate; } @keyframes antacape { from { transform: rotate(-2deg) scaleX(1); } to { transform: rotate(2deg) scaleX(1.05); } }
+.an-ta-glint { opacity: 0; animation: antaglint 2s ease-in-out infinite; }
+@keyframes antaglint { 0%, 55% { transform: translate(0, 0); opacity: 0; } 62% { opacity: 1; } 85% { transform: translate(-14px, -39px); opacity: 1; } 100% { transform: translate(-14px, -39px); opacity: 0; } }
+.an-ta-glow { animation: antaglow 1.4s ease-in-out infinite alternate; } @keyframes antaglow { from { opacity: .45; } to { opacity: 1; } }
+.an-ta-lava { opacity: 0; animation: antalava 1.6s ease-out infinite; }
+@keyframes antalava { 0% { transform: translate(0, 0); opacity: 0; } 10% { opacity: 1; } 45% { transform: translate(4px, -13px); } 85% { transform: translate(9px, -2px); opacity: 1; } 100% { transform: translate(10px, 2px); opacity: 0; } }
+.an-ta-smoke { opacity: 0; animation: antasmoke 3.2s ease-out infinite; }
+@keyframes antasmoke { 0% { transform: translate(0, 0) scale(.5); opacity: 0; } 15% { opacity: .95; } 100% { transform: translate(14px, -32px) scale(1.7); opacity: 0; } }
+.an-ta-bubble { opacity: 0; animation: antabubble 1.6s ease-out infinite; }
+@keyframes antabubble { 0% { transform: scale(0); opacity: 1; } 60% { transform: scale(1); opacity: 1; } 70% { transform: scale(1.35); opacity: 0; } 100% { transform: scale(0); opacity: 0; } }
+.an-ta-stir { animation: antastir 1.8s linear infinite; }
+@keyframes antastir { 0%, 100% { transform: translate(0, 0) rotate(0); } 25% { transform: translate(6px, 2px) rotate(4deg); } 50% { transform: translate(0, 3.5px) rotate(0); } 75% { transform: translate(-7px, 1.5px) rotate(-5deg); } }
+.an-ta-paddle { animation: antapaddle 1.4s ease-in-out infinite; }
+@keyframes antapaddle { 0%, 50%, 100% { transform: rotate(0); } 25%, 75% { transform: rotate(28deg); } }
+.an-ta-run { animation: antarun 3.5s linear infinite; } @keyframes antarun { from { transform: translate(0, 0); } to { transform: translate(189px, -92px); } }
+.an-ta-swim { animation: antaswim 3.5s linear infinite; }
+@keyframes antaswim { 0% { transform: translate(0, 0); opacity: 1; } 62% { opacity: 1; } 74% { opacity: 0; } 100% { transform: translate(189px, -92px); opacity: 0; } }
+.an-ta-trolley { animation: antatrolley 3.4s ease-in-out infinite; }
+@keyframes antatrolley { 0%, 36% { transform: translateX(0); } 56%, 76% { transform: translateX(-24px); } 92%, 100% { transform: translateX(0); } }
+.an-ta-cable { animation: antacable 3.4s ease-in-out infinite; }
+@keyframes antacable { 0%, 8% { transform: scaleY(1); } 32%, 58% { transform: scaleY(.13); } 70%, 76% { transform: scaleY(.6); } 84%, 92% { transform: scaleY(.13); } 100% { transform: scaleY(1); } }
+.an-ta-block { animation: antablock 3.4s ease-in-out infinite; }
+@keyframes antablock { 0%, 8% { transform: translateY(0); opacity: 1; } 32%, 58% { transform: translateY(-75.7px); } 70% { transform: translateY(-34.8px); opacity: 1; } 74% { opacity: 0; } 76% { transform: translateY(-34.8px); } 84%, 92% { transform: translateY(-75.7px); } 96% { opacity: 0; } 100% { transform: translateY(0); opacity: 1; } }
+.an-ta-star { animation: antastar 3.5s linear infinite; } @keyframes antastar { to { transform: rotate(360deg); } }
+.an-ta-hop { animation: antahop 1.6s ease-in-out infinite; }
+@keyframes antahop { 0%, 40%, 64%, 76%, 100% { transform: translateY(0); } 52% { transform: translateY(-6px); } 70% { transform: translateY(-1.5px); } }
+.an-ta-up { animation: antaup 3.4s ease-in-out infinite; }
+@keyframes antaup { 0%, 100% { transform: translate(0, 26px); } 10% { transform: translate(-1.5px, 19px); } 20% { transform: translate(1.5px, 10px); } 30%, 84% { transform: translate(0, 0); } 92% { transform: translate(0, 12px); } }
+.an-ta-kidB { animation: antakidb 3.4s linear infinite; } @keyframes antakidb { 0%, 29% { opacity: 1; } 30%, 85% { opacity: 0; } 86%, 100% { opacity: 1; } }
+.an-ta-kidF { opacity: 0; animation: antakidf 3.4s linear infinite; } @keyframes antakidf { 0%, 29% { opacity: 0; } 30%, 85% { opacity: 1; } 86%, 100% { opacity: 0; } }
+.an-ta-hi { animation: antahi 3.4s ease-in-out infinite; }
+@keyframes antahi { 0%, 36%, 76%, 100% { transform: rotate(0); } 44%, 60% { transform: rotate(-22deg); } 52%, 68% { transform: rotate(8deg); } }
+.an-ta-beam { animation: antabeam 2.4s linear infinite; }
+@keyframes antabeam { 0%, 100% { transform: scaleX(1); } 25% { transform: scaleX(.05); } 50% { transform: scaleX(-1); } 75% { transform: scaleX(-.05); } }
+.an-ta-lamp { animation: antalamp 1.2s ease-in-out infinite alternate; } @keyframes antalamp { from { opacity: .6; } to { opacity: 1; } }
+.an-ta-lift, .an-ta-lift2 { animation: antalift 2.8s ease-in-out infinite; } .an-ta-lift2 { animation-name: antalift2; }
+@keyframes antalift { 0%, 12%, 100% { transform: translateY(0); } 50%, 62% { transform: translateY(-32px); } }
+@keyframes antalift2 { 0%, 12%, 100% { transform: translate(0, 0); } 50%, 62% { transform: translate(14px, -26px); } }
+.an-ta-snapL, .an-ta-snapR { animation: antasnapl 2.8s ease-in-out infinite; } .an-ta-snapR { animation-name: antasnapr; }
+@keyframes antasnapl { 0%, 28%, 88%, 100% { transform: rotate(0); } 34%, 66% { transform: rotate(-12deg); } }
+@keyframes antasnapr { 0%, 28%, 88%, 100% { transform: rotate(0); } 34%, 66% { transform: rotate(12deg); } }
+.an-ta-crumb { opacity: 0; animation: antacrumb 2.8s ease-out infinite; }
+@keyframes antacrumb { 0%, 30% { transform: translateX(0); opacity: 0; } 33% { opacity: 1; } 56% { transform: translateX(13px); opacity: 0; } 100% { transform: translateX(13px); opacity: 0; } }
+.an-ta-crack { opacity: 0; animation: antacrack 2.8s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes antacrack { 0%, 29% { transform: scale(.3); opacity: 0; } 33% { transform: scale(1.2); opacity: 1; } 44%, 100% { transform: scale(.6); opacity: 0; } }
+.an-ta-ride { animation: antaride 1.4s linear infinite; } @keyframes antaride { to { transform: translateX(-52px); } }
+.an-ta-wheel { animation: antawheel 2.4s linear infinite; } @keyframes antawheel { to { transform: rotate(360deg); } }
+.an-ta-pedal { opacity: 0; animation: antapedal 1.4s step-end infinite; } @keyframes antapedal { 0% { opacity: 1; } 16.667%, 100% { opacity: 0; } }
+/* end of an-ta */
+/* team own animations B: it de nl ch en no (js/fan/teamown_b.js, an-tb-*) */
+.an-tb-fly { animation: antbfly 3.4s linear infinite; }
+@keyframes antbfly { from { transform: translateX(-12px); } to { transform: translateX(132px); } }
+.an-tb-flap { animation: antbflap .5s ease-in-out infinite alternate; transform-box: fill-box; transform-origin: center; }
+@keyframes antbflap { from { transform: scaleY(1); } to { transform: scaleY(-.6); } }
+.an-tb-rays { animation: antbrays 3s linear infinite; }
+@keyframes antbrays { from { transform: rotate(0deg); } to { transform: rotate(45deg); } }
+.an-tb-pull { animation: antbpull 2.8s ease-in-out infinite; }
+@keyframes antbpull { 0%, 15%, 100% { transform: translate(0, 0); } 45%, 70% { transform: translate(7.37px, 6.76px); } }
+.an-tb-strx { animation: antbstrx 2.8s ease-in-out infinite; }
+@keyframes antbstrx { 0%, 15%, 100% { transform: scaleX(1); } 45%, 70% { transform: scaleX(2.11); } }
+.an-tb-steam { animation: antbsteam 2.4s ease-out infinite; }
+@keyframes antbsteam { 0% { transform: translateY(4px); opacity: 0; } 30% { opacity: .9; } 100% { transform: translateY(-10px); opacity: 0; } }
+.an-tb-rock { animation: antbrock 2.4s ease-in-out infinite alternate; }
+@keyframes antbrock { from { transform: rotate(-2deg) translateY(0); } to { transform: rotate(2deg) translateY(1.5px); } }
+.an-tb-oar { animation: antboar 1.6s ease-in-out infinite alternate; }
+@keyframes antboar { from { transform: rotate(-7deg); } to { transform: rotate(9deg); } }
+.an-tb-ripple { animation: antbripple 2.4s ease-in-out infinite alternate; }
+@keyframes antbripple { from { transform: translateX(-4px); } to { transform: translateX(4px); } }
+.an-tb-gallop { animation: antbgallop .8s ease-in-out infinite alternate; }
+@keyframes antbgallop { from { transform: rotate(-8deg); } to { transform: rotate(8deg) translateY(-1px); } }
+.an-tb-boom { animation: antbboom 2.4s ease-out infinite; }
+@keyframes antbboom { 0% { transform: scale(.15); opacity: 0; } 8% { opacity: 1; } 55% { transform: scale(1); opacity: 1; } 75% { transform: scale(1.12); opacity: 0; } 100% { transform: scale(.15); opacity: 0; } }
+.an-tb-shake { animation: antbshake .5s ease-in-out infinite alternate; }
+@keyframes antbshake { from { transform: rotate(-6deg) translateY(-2px); } to { transform: rotate(6deg) translateY(2px); } }
+.an-tb-salt { animation: antbsalt 1.3s ease-in infinite; }
+@keyframes antbsalt { 0% { transform: translateY(0); opacity: 0; } 10%, 85% { opacity: 1; } 100% { transform: translateY(26px); opacity: 0; } }
+.an-tb-dusk { animation: antbdusk 3.5s ease-in-out infinite; }
+@keyframes antbdusk { 0%, 12%, 100% { opacity: 0; } 40%, 78% { opacity: 1; } }
+.an-tb-sails { animation: antbsails 2.4s linear infinite; }
+@keyframes antbsails { from { transform: rotate(0deg); } to { transform: rotate(90deg); } }
+.an-tb-drip { animation: antbdrip 2s ease-in-out infinite; }
+@keyframes antbdrip { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(1.35); } }
+.an-tb-drop { animation: antbdrop 2s ease-in infinite; }
+@keyframes antbdrop { 0%, 45% { transform: translateY(0); opacity: 0; } 50% { transform: translateY(2px); opacity: 1; } 90% { opacity: 1; } 100% { transform: translateY(16px); opacity: 0; } }
+.an-tb-skx { animation: antbskx 3.6s ease-in-out infinite; }
+@keyframes antbskx { 0%, 4%, 94%, 100% { transform: translateX(-26px); } 44%, 54% { transform: translateX(26px); } }
+.an-tb-skf { animation: antbskf 3.6s ease-in-out infinite; }
+@keyframes antbskf { 0%, 44%, 100% { transform: scaleX(1); } 52%, 94% { transform: scaleX(-1); } }
+.an-tb-skb { animation: antbskb .9s ease-in-out infinite alternate; }
+@keyframes antbskb { from { transform: rotate(-3deg); } to { transform: rotate(3deg) translateY(-1px); } }
+.an-tb-kick { animation: antbkick .9s ease-in-out infinite alternate; }
+@keyframes antbkick { from { transform: rotate(0deg); } to { transform: rotate(16deg); } }
+.an-tb-scarf { animation: antbscarf .45s ease-in-out infinite alternate; }
+@keyframes antbscarf { from { transform: rotate(-5deg); } to { transform: rotate(6deg); } }
+.an-tb-car { animation: antbcar 3.4s ease-in-out infinite; }
+@keyframes antbcar { 0%, 8%, 100% { transform: translate(0, 0); } 50%, 58% { transform: translate(32px, -32px); } }
+.an-tb-sway { animation: antbsway 1.1s ease-in-out infinite alternate; }
+@keyframes antbsway { from { transform: rotate(-5deg); } to { transform: rotate(5deg); } }
+.an-tb-smoke { animation: antbsmoke 2.4s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes antbsmoke { 0% { transform: translateY(0) scale(.5); opacity: 0; } 15% { opacity: .9; } 100% { transform: translate(5px, -20px) scale(1.6); opacity: 0; } }
+.an-tb-dip { animation: antbdip 3s ease-in-out infinite; }
+@keyframes antbdip { 0%, 10%, 88%, 100% { transform: translate(0, 0); } 35% { transform: translate(-4px, 13px); } 45% { transform: translate(-1px, 14px); } 55% { transform: translate(-5px, 13px); } 62% { transform: translate(-4px, 13px); } }
+.an-tb-stry { animation: antbstry 3s ease-in-out infinite; }
+@keyframes antbstry { 0%, 10%, 88%, 100% { transform: scaleY(1); opacity: 1; } 30% { transform: scaleY(.2); opacity: 0; } 62% { transform: scaleY(.1); opacity: 0; } 66% { opacity: 1; } }
+.an-tb-bubble { animation: antbbubble 2.2s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes antbbubble { 0% { transform: scale(0); opacity: 1; } 60% { transform: scale(1); opacity: 1; } 75%, 100% { transform: scale(1.4); opacity: 0; } }
+.an-tb-bell { animation: antbbell 2.4s ease-in-out infinite; }
+@keyframes antbbell { 0%, 100% { transform: rotate(12deg); } 50% { transform: rotate(-12deg); } }
+.an-tb-ding { animation: antbding 2.4s ease-out infinite; }
+@keyframes antbding { 0%, 100% { opacity: 1; } 25%, 92% { opacity: 0; } }
+.an-tb-tail { animation: antbtail 1.5s ease-in-out infinite alternate; }
+@keyframes antbtail { from { transform: rotate(-12deg); } to { transform: rotate(10deg); } }
+.an-tb-head { animation: antbhead 2.4s ease-in-out infinite alternate; }
+@keyframes antbhead { from { transform: rotate(-4deg); } to { transform: rotate(4deg); } }
+.an-tb-min { animation: antbspin 3s linear infinite; }
+.an-tb-hour { animation: antbspin 36s linear infinite; }
+.an-tb-wheel { animation: antbspin .9s linear infinite; }
+@keyframes antbspin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.an-tb-bong { animation: antbbong 3s ease-out infinite; }
+@keyframes antbbong { 0% { transform: scale(.8); opacity: 1; } 35%, 100% { transform: scale(1.35); opacity: 0; } }
+.an-tb-boat { animation: antbboat 3.5s linear infinite; }
+@keyframes antbboat { from { transform: translateX(-18px); } to { transform: translateX(138px); } }
+.an-tb-wig { animation: antbwig 1.4s ease-in-out infinite alternate; }
+@keyframes antbwig { from { transform: rotate(-8deg); } to { transform: rotate(6deg); } }
+.an-tb-hop { animation: antbhop 1.5s ease-in-out infinite; }
+@keyframes antbhop { 0%, 40%, 100% { transform: translateY(0); } 20% { transform: translateY(-7px); } }
+.an-tb-scroll { animation: antbscroll 2.2s linear infinite; }
+@keyframes antbscroll { from { transform: translateX(0); } to { transform: translateX(-120px); } }
+.an-tb-bob { animation: antbbob .5s ease-in-out infinite alternate; }
+@keyframes antbbob { from { transform: translateY(0); } to { transform: translateY(-1.2px); } }
+.an-tb-roll { animation: antbroll 1.6s linear infinite; }
+@keyframes antbroll { from { transform: translateX(0); } to { transform: translateX(-10px); } }
+.an-tb-boatbob { animation: antbboatbob .9s ease-in-out infinite alternate; }
+@keyframes antbboatbob { from { transform: rotate(-5deg); } to { transform: rotate(5deg); } }
+.an-tb-beat { animation: antbbeat 1.6s ease-in-out infinite; }
+@keyframes antbbeat { 0%, 45%, 100% { transform: scale(1); } 12% { transform: scale(1.12); } 22% { transform: scale(1); } 32% { transform: scale(1.08); } }
+.an-tb-berry { animation: antbberry 1.6s ease-in-out infinite; }
+@keyframes antbberry { 0%, 50%, 100% { transform: translateY(0) rotate(0deg); } 72% { transform: translateY(-7px) rotate(-12deg); } }
+.an-tb-row { animation: antbrow 1.6s ease-in-out infinite; }
+@keyframes antbrow { 0%, 100% { transform: rotate(-14deg); } 50% { transform: rotate(14deg); } }
+.an-tb-billow { animation: antbbillow 1.6s ease-in-out infinite alternate; }
+@keyframes antbbillow { from { transform: scale(1, 1); } to { transform: scale(1.05, 1.03); } }
+.an-tb-rock2 { animation: antbrock2 2.4s ease-in-out infinite alternate; }
+@keyframes antbrock2 { from { transform: rotate(-2.5deg) translateY(-1px); } to { transform: rotate(2.5deg) translateY(1.5px); } }
+/* end of an-tb */
+/* team own animations C: br ar cn jp kr (js/fan/teamown_c.js, an-tc-*) */
+.an-tc-waves { animation: antcwaves 1.6s linear infinite; }
+@keyframes antcwaves { from { transform: translateX(0); } to { transform: translateX(-10px); } }
+.an-tc-sail { animation: antcsail 3.4s linear infinite; }
+@keyframes antcsail { from { transform: translateX(-14px); } to { transform: translateX(134px); } }
+.an-tc-rock { animation: antcrock .8s ease-in-out infinite alternate; }
+@keyframes antcrock { from { transform: rotate(-5deg); } to { transform: rotate(5deg); } }
+.an-tc-car { animation: antccar 2.6s ease-in-out infinite alternate; }
+@keyframes antccar { 0%, 8% { transform: translate(0, 0); } 92%, 100% { transform: translate(14px, -18.4px); } }
+.an-tc-shake { animation: antcshake .36s ease-in-out infinite alternate; }
+@keyframes antcshake { from { transform: translateX(-1.5px) rotate(-14deg); } to { transform: translateX(1.5px) rotate(14deg); } }
+.an-tc-spr { animation: antcspr .9s linear infinite; }
+@keyframes antcspr { 0% { transform: translate(0, 0) rotate(0); opacity: 0; } 15%, 80% { opacity: 1; } 100% { transform: translate(0, 17px) rotate(160deg); opacity: 0; } }
+.an-tc-conf { animation: antcconf 3.4s linear infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes antcconf { 0% { transform: translate(0, -170px) rotate(0); } 25% { transform: translate(5px, -85px) rotate(180deg); } 50% { transform: translate(0, 0) rotate(360deg); }
+  75% { transform: translate(-5px, 85px) rotate(540deg); } 100% { transform: translate(0, 170px) rotate(720deg); } }
+.an-tc-up { animation: antcup .8s ease-in-out infinite alternate; }
+@keyframes antcup { from { transform: rotate(-6deg); } to { transform: rotate(6deg); } }
+.an-tc-skirt { animation: antcskirt .8s ease-in-out infinite alternate; }
+@keyframes antcskirt { from { transform: rotate(8deg); } to { transform: rotate(-8deg); } }
+.an-tc-arm { animation: antcarm .4s ease-in-out infinite alternate; }
+@keyframes antcarm { from { transform: rotate(-14deg); } to { transform: rotate(12deg); } }
+.an-tc-dash { animation: antcdash .7s linear infinite; }
+@keyframes antcdash { from { transform: translateY(0); } to { transform: translateY(10px); } }
+.an-tc-carin { animation: antccarin 2.6s ease-in infinite; }
+@keyframes antccarin { 0% { transform: translate(50px, 127px) scale(.36); opacity: 0; } 8% { opacity: 1; } 100% { transform: translate(3px, 200px) scale(2.1); opacity: 1; } }
+.an-tc-carout { animation: antccarout 3.2s ease-out infinite; }
+@keyframes antccarout { 0% { transform: translate(114px, 200px) scale(2.1); opacity: 1; } 88% { opacity: 1; } 100% { transform: translate(71px, 127px) scale(.36); opacity: 0; } }
+.an-tc-spoon { animation: antcspoon 3.2s ease-in-out infinite; }
+@keyframes antcspoon { 0%, 100% { transform: translate(0, 0) rotate(0); } 16%, 28% { transform: translate(0, 7px) rotate(0); } 40% { transform: translate(0, -6px) rotate(0); }
+  56% { transform: translate(-24px, -34px) rotate(0); } 64%, 74% { transform: translate(-24px, -34px) rotate(-50deg); } 86% { transform: translate(-24px, -34px) rotate(0); } }
+.an-tc-sauce { animation: antcsauce 3.2s linear infinite; }
+@keyframes antcsauce { 0%, 24%, 72%, 100% { opacity: 0; } 30%, 64% { opacity: 1; } }
+.an-tc-drop { animation: antcdrop 3.2s linear infinite; }
+@keyframes antcdrop { 0%, 63% { transform: translate(0, 0); opacity: 0; } 64% { transform: translate(0, 0); opacity: 1; } 72% { transform: translate(0, 9px); opacity: 1; } 73%, 100% { transform: translate(0, 9px); opacity: 0; } }
+.an-tc-driz { animation: antcdriz 3.2s linear infinite; }
+@keyframes antcdriz { 0%, 70%, 100% { opacity: 0; } 74%, 90% { opacity: 1; } }
+.an-tc-steam { animation: antcsteam 2.4s ease-out infinite; }
+@keyframes antcsteam { 0% { transform: translateY(4px); opacity: 0; } 30% { opacity: .9; } 100% { transform: translateY(-14px); opacity: 0; } }
+.an-tc-wad { animation: antcwad .45s ease-in-out infinite alternate; }
+@keyframes antcwad { from { transform: rotate(-6deg); } to { transform: rotate(6deg); } }
+.an-tc-flapl { animation: antcflapl 1.8s ease-in-out infinite; }
+@keyframes antcflapl { 0%, 45%, 100% { transform: rotate(0); } 15%, 32% { transform: rotate(38deg); } 24% { transform: rotate(14deg); } }
+.an-tc-flapr { animation: antcflapr 1.8s ease-in-out infinite; }
+@keyframes antcflapr { 0%, 45%, 100% { transform: rotate(0); } 15%, 32% { transform: rotate(-38deg); } 24% { transform: rotate(-14deg); } }
+.an-tc-walk { animation: antcwalk 3.5s linear infinite; }
+@keyframes antcwalk { 0% { transform: translate(-22.0px, 135.0px); } 5% { transform: translate(-14.3px, 129.2px); } 10% { transform: translate(-6.6px, 123.4px); } 15% { transform: translate(0.9px, 117.5px); }
+  20% { transform: translate(8.5px, 111.6px); } 25% { transform: translate(16.4px, 106.1px); } 30% { transform: translate(24.9px, 101.5px); } 35% { transform: translate(34.1px, 98.6px); }
+  40% { transform: translate(43.6px, 98.6px); } 45% { transform: translate(53.1px, 98.6px); } 50% { transform: translate(60.9px, 93.1px); } 55% { transform: translate(67.0px, 85.6px); }
+  60% { transform: translate(73.1px, 78.2px); } 65% { transform: translate(81.0px, 73.0px); } 70% { transform: translate(90.4px, 74.5px); } 75% { transform: translate(98.8px, 79.0px); }
+  80% { transform: translate(107.0px, 84.1px); } 85% { transform: translate(116.1px, 87.1px); } 90% { transform: translate(124.9px, 83.9px); } 95% { transform: translate(133.4px, 79.3px); } 100% { transform: translate(142.0px, 75.0px); } }
+.an-tc-bob { animation: antcbob .26s ease-in-out infinite alternate; }
+@keyframes antcbob { from { transform: translateY(0); } to { transform: translateY(-1.2px); } }
+.an-tc-leg { animation: antcleg .26s ease-in-out infinite alternate; }
+@keyframes antcleg { from { transform: rotate(-28deg); } to { transform: rotate(28deg); } }
+.an-tc-lift { animation: antclift 3s ease-in-out infinite; }
+@keyframes antclift { 0%, 30%, 84%, 100% { transform: translate(0, 0); } 52%, 68% { transform: translate(0, -28px); } }
+.an-tc-chop { animation: antcchop 3s ease-in-out infinite; }
+@keyframes antcchop { 0%, 100% { transform: translate(0, 0); } 22%, 30% { transform: translate(-38px, 2px); } 52%, 68% { transform: translate(-38px, -26px); } 84%, 88% { transform: translate(-38px, 2px); } }
+.an-tc-lan { animation: antclan 1.4s ease-in-out infinite alternate; }
+@keyframes antclan { from { transform: rotate(-8deg); } to { transform: rotate(8deg); } }
+.an-tc-dbody { animation: antcdbody .7s ease-in-out infinite alternate; }
+@keyframes antcdbody { from { transform: translateY(1px); } to { transform: translateY(-5px); } }
+.an-tc-dtail { animation: antcdtail .35s ease-in-out infinite alternate; }
+@keyframes antcdtail { from { transform: rotate(-14deg); } to { transform: rotate(12deg); } }
+.an-tc-dhead { animation: antcdhead 1.4s ease-in-out infinite; }
+@keyframes antcdhead { 0%, 100% { transform: translate(0, 0) rotate(-5deg); } 25% { transform: translate(2px, -6px) rotate(2deg); } 50% { transform: translate(0, -2px) rotate(6deg); } 75% { transform: translate(-2px, -7px) rotate(0); } }
+.an-tc-sway { animation: antcsway 1.6s ease-in-out infinite alternate; }
+@keyframes antcsway { from { transform: rotate(-4deg); } to { transform: rotate(5deg); } }
+.an-tc-petal { animation: antcpetal 3.5s linear infinite; }
+@keyframes antcpetal { 0% { transform: translate(0, 0) rotate(0); opacity: 0; } 8% { opacity: 1; } 30% { transform: translate(-14px, 36px) rotate(120deg); } 55% { transform: translate(-26px, 70px) rotate(210deg); }
+  80% { transform: translate(-44px, 104px) rotate(300deg); } 92% { opacity: 1; } 100% { transform: translate(-56px, 140px) rotate(400deg); opacity: 0; } }
+.an-tc-petal2 { animation: antcpetal2 3.5s linear infinite; }
+@keyframes antcpetal2 { 0% { transform: translate(0, 0) rotate(0); opacity: 0; } 8% { opacity: 1; } 30% { transform: translate(-6px, 38px) rotate(-100deg); } 55% { transform: translate(-30px, 66px) rotate(-200deg); }
+  80% { transform: translate(-36px, 106px) rotate(-290deg); } 92% { opacity: 1; } 100% { transform: translate(-60px, 140px) rotate(-380deg); opacity: 0; } }
+.an-tc-maki { animation: antcmaki 3.2s ease-in-out infinite; }
+@keyframes antcmaki { 0%, 32%, 78%, 100% { transform: translate(0, 0); } 54%, 66% { transform: translate(0, -30px); } }
+.an-tc-hashi { animation: antchashi 3.2s ease-in-out infinite; }
+@keyframes antchashi { 0%, 100% { transform: translate(0, 0) rotate(0); } 24%, 32% { transform: translate(62px, 7px) rotate(-40deg); } 54%, 66% { transform: translate(62px, -23px) rotate(-40deg); }
+  78%, 86% { transform: translate(62px, 7px) rotate(-40deg); } }
+.an-tc-cloud { animation: antccloud 3.5s linear infinite; }
+@keyframes antccloud { from { transform: translateX(0); } to { transform: translateX(-140px); } }
+.an-tc-scroll { animation: antcscroll 1.4s linear infinite; }
+@keyframes antcscroll { from { transform: translateX(0); } to { transform: translateX(-120px); } }
+.an-tc-speed { animation: antcspeed .5s linear infinite; }
+@keyframes antcspeed { 0% { transform: translateX(16px); opacity: 0; } 30% { opacity: 1; } 100% { transform: translateX(-24px); opacity: 0; } }
+.an-tc-rumble { animation: antcrumble .3s ease-in-out infinite alternate; }
+@keyframes antcrumble { from { transform: translateY(0); } to { transform: translateY(-1px); } }
+.an-tc-gond { animation: antcgond 2.8s ease-in-out infinite alternate; }
+@keyframes antcgond { 0%, 8% { transform: translate(0, 0); } 92%, 100% { transform: translate(28px, -12.6px); } }
+.an-tc-blink { animation: antcblink 1.4s steps(1) infinite; }
+@keyframes antcblink { 0% { opacity: 1; } 50% { opacity: .15; } }
+.an-tc-kslice { animation: antckslice 3.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes antckslice { 0% { transform: translate(0, 0) scale(1); opacity: 1; } 30% { transform: translate(0, 0) scale(1); } 52% { transform: translate(0, -22px) scale(1); }
+  64% { transform: translate(10px, -80px) scale(1); opacity: 1; } 65% { opacity: 0; } 66% { transform: translate(0, 0) scale(0); } 80% { transform: translate(0, 0) scale(0); opacity: 0; }
+  82% { opacity: 1; } 90% { transform: translate(0, 0) scale(1.15); } 96% { transform: translate(0, 0) scale(1); } 100% { transform: translate(0, 0) scale(1); opacity: 1; } }
+.an-tc-kchop { animation: antckchop 3.4s ease-in-out infinite; }
+@keyframes antckchop { 0%, 100% { transform: translate(40px, -60px); } 22%, 30% { transform: translate(0, 0); } 52% { transform: translate(0, -22px); } 64% { transform: translate(10px, -80px); } }
+.an-tc-kick { animation: antckick 2.4s ease-in-out infinite; }
+@keyframes antckick { 0%, 18%, 78%, 100% { transform: rotate(38deg); } 30%, 58% { transform: rotate(0); } }
+.an-tc-bt { animation: antcbt 2.4s ease-out infinite; }
+@keyframes antcbt { 0% { transform: translate(0, 8px) rotate(-24deg); opacity: 1; } 29% { transform: translate(0, 8px) rotate(-24deg); } 38% { transform: translate(0, 0) rotate(0); } 62% { opacity: 1; }
+  70% { transform: translate(0, 0) rotate(0); opacity: 0; } 84% { transform: translate(0, 8px) rotate(-24deg); opacity: 0; } 92% { opacity: 1; } 100% { transform: translate(0, 8px) rotate(-24deg); opacity: 1; } }
+.an-tc-bb { animation: antcbb 2.4s ease-out infinite; }
+@keyframes antcbb { 0% { transform: translate(-4px, -8px) rotate(18deg); opacity: 1; } 29% { transform: translate(-4px, -8px) rotate(18deg); } 38% { transform: translate(0, 0) rotate(0); } 62% { opacity: 1; }
+  70% { transform: translate(0, 0) rotate(0); opacity: 0; } 84% { transform: translate(-4px, -8px) rotate(18deg); opacity: 0; } 92% { opacity: 1; } 100% { transform: translate(-4px, -8px) rotate(18deg); opacity: 1; } }
+.an-tc-splint { animation: antcsplint 2.4s linear infinite; }
+@keyframes antcsplint { 0%, 30%, 64%, 100% { opacity: 0; } 36%, 56% { opacity: 1; } }
+.an-tc-pow { animation: antcpow 2.4s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes antcpow { 0%, 29% { transform: scale(0); opacity: 0; } 34% { transform: scale(1.25); opacity: 1; } 44% { transform: scale(1); opacity: 1; } 52%, 100% { transform: scale(1.4); opacity: 0; } }
+/* end of an-tc */
 .lv-shot { animation: lvshot 3.2s ease-in infinite; }
 @keyframes lvshot { 0%, 22% { transform: translate(0, 0); opacity: 1; } 48%, 86% { transform: translate(52px, -44px); opacity: 1; } 92% { transform: translate(52px, -44px); opacity: 0; } 96% { transform: translate(0, 0); opacity: 0; } 100% { opacity: 1; } }
 .lv-net { animation: lvnet 3.2s ease-out infinite; transform-box: fill-box; transform-origin: 0 50%; }
@@ -804,14 +1512,14 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
 .aladder i.on { opacity: 1; }
 .aladder .l0 { background: #fff; } .aladder .l1 { background: linear-gradient(135deg, #8d9399, #f4f6f8, #7d848b); }
 .aladder .l2 { background: linear-gradient(135deg, #a8761c, #ffe58a, #9b6a12); } .aladder .l3 { background: conic-gradient(#ff5e5e, #ffd84d, #5eff8a, #4dd2ff, #b06bff, #ff5e5e); }
-.aladder .l4 { background: radial-gradient(#fff59d, #ffb300); box-shadow: 0 0 10px #ffb300; }
-/* a page's living sticker (the owl's wink, the team's goal…) lies still until it's gold (3 copies), the owner: "shouldn't it
-   be after we get a few copies?"; still = each lv- element's own resting state. The full page's big picture still moves */
-.stk.t0 [class*="lv-"], .stk.t1 [class*="lv-"] { animation: none; }
-/* tier 4: a sticker's own animation (one copy past holo): the holo frame with a pulsing gold glow */
-.stk.t4 { box-shadow: 0 0 0 2px #ffd54f, 0 0 14px 4px rgba(255, 193, 7, .75); animation: aspin 3s linear infinite, at4 1.6s ease-in-out infinite; }
-@keyframes at4 { 50% { box-shadow: 0 0 0 2px #fff59d, 0 0 22px 8px rgba(255, 193, 7, .9); } }
-.apips .p4 { background: radial-gradient(#fff59d, #ffb300); box-shadow: 0 0 4px #ffb300; } .apips .e4 { border-color: #ffb300; }
+/* the three looks (the owner, 2026-10-03): still until gold (a page's living sticker too: each lv- element's own resting
+   state), gold = a gentle bob (an-gold; a scene filling the card breathes, an-breathe), holo = the sticker's own animation
+   (its lv-/an- classes run only on a holo card). The full page's big picture still moves */
+.stk:not(.t3) [class*="lv-"], .stk:not(.t3) [class*="an-"]:not(.an-gold):not(.an-breathe) { animation: none; }
+.an-gold { animation: angold 2.6s ease-in-out infinite; }
+@keyframes angold { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+.an-breathe { animation: anbreathe 3s ease-in-out infinite; transform-origin: 60px 79px; }
+@keyframes anbreathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.035); } }
 .aladder b { font: 700 22px var(--display); color: #333; }
 .kpacks { display: inline-flex; align-items: center; gap: 4px; } .kpacks[hidden] { display: none; }
 .kpacks svg { height: 30px; width: auto; }
