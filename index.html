@@ -537,15 +537,27 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
 .aslot.got { cursor: zoom-in; }
 .aslot .aghost { position: absolute; inset: 4%; width: 92%; height: 92%; filter: brightness(0); opacity: .09; }
 .aslot .anum { position: relative; font: 900 calc(var(--cw) * .3) Arial, sans-serif; color: #b9a983; }
-/* a big picture over two slots (picture pages, slots 2 + 3): each half reaches over half the gap, square on the seam side, so they meet */
-.aslot.hl.got .stk, .aslot.hr.got .stk { width: calc(var(--cw) * 1.07); }
-.aslot.hl.got .stk { padding-right: 0; border-top-right-radius: 0; border-bottom-right-radius: 0; }
-.aslot.hr.got .stk { margin-left: calc(var(--cw) * -.07); padding-left: 0; border-top-left-radius: 0; border-bottom-left-radius: 0; }
-.aslot.hl.got .stk .sin { border-top-right-radius: 0; border-bottom-right-radius: 0; }
-.aslot.hr.got .stk .sin { border-top-left-radius: 0; border-bottom-left-radius: 0; }
-.aslot.hr.got .stk .sno { left: auto; right: 4%; } .aslot.hr.got .stk .spip { left: auto; right: 5%; }
-/* the living sticker (one per picture page): the flag waves, the player bobs and winks, sparkles twinkle; transform/opacity
-   only (cheap on the old iPad), and on for everyone: the owner's laptop prefers reduced motion, the child's iPad doesn't */
+/* a team page holds 12 stickers: 3 columns x 4 rows when the screen is taller than wide, 4 x 3 otherwise, the cards a bit smaller */
+.apage.p12 { --cw: clamp(64px, min(calc((100vw - 270px) / 3.9), calc((100dvh - 340px) / 5.5)), 176px); }
+@media (min-aspect-ratio: 1/1) { .apage.p12 { --cw: clamp(64px, min(calc((100vw - 270px) / 5.1), calc((100dvh - 340px) / 4.15)), 176px); }
+  .apage.p12 .agrid { grid-template-columns: repeat(4, var(--cw)); } }
+/* a world page before the child reaches that world on the path: its slots wait behind a lock */
+.aslot.lock { border-style: solid; background: #ece3cf; }
+.aslot.lock .alock { position: relative; font-size: calc(var(--cw) * .32); line-height: 1; text-align: center; opacity: .75; }
+.anav button.lock { opacity: .55; }
+/* a shiny copy (1 card in 50): the picture in another palette, a rainbow rim and a sparkle in the corner */
+.stk.shiny { background: linear-gradient(135deg, #ff8a80, #ffd180, #ffff8d, #b9f6ca, #80d8ff, #ea80fc); }
+.stk .sshiny { position: absolute; z-index: 3; top: 2%; right: 3%; width: calc(var(--cw) * .2); height: calc(var(--cw) * .2); }
+/* a full page joins into one big picture (aBigPicture): drawn over the grid, the slots' seams on top; tapping it shows the stickers again */
+.agrid { position: relative; }
+.abig { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: calc(var(--cw) * .09); box-shadow: 0 2px 8px rgba(0,0,0,.3); animation: abigin .6s ease-out; cursor: pointer; }
+@keyframes abigin { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
+.agrid.big .aslot { visibility: hidden; }
+.apuz { font-size: 26px; line-height: 1; padding: 2px 8px; border-radius: 10px; border: 2px solid #ffc107; background: #fff8e1; cursor: pointer; }
+.apuz[aria-pressed="true"] { background: #ffc107; }
+/* the living stickers: transform/opacity only (cheap on the old iPad), and on for everyone: the owner's laptop prefers
+   reduced motion, the child's iPad doesn't. Kinds: the flag waves, bob / float up and down, wink, twinkle (sparkles),
+   spin, drive (to and fro), pulse, swing (from the top), and the team's goal: the shot (ball), the net, the cheer */
 .lv-wave { animation: lvwave 1.6s ease-in-out infinite; }
 @keyframes lvwave { 0%, 100% { transform: translateY(-1.4px); } 50% { transform: translateY(1.4px); } }
 .lv-wink { opacity: 0; animation: lvwink 3.6s infinite; }
@@ -554,6 +566,30 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
 @keyframes lvtw { 0%, 100% { transform: scale(.4); opacity: .3; } 50% { transform: scale(1); opacity: 1; } }
 .lv-bob { animation: lvbob 2.4s ease-in-out infinite; }
 @keyframes lvbob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+.lv-float { animation: lvfloat 3s ease-in-out infinite; }
+@keyframes lvfloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+.lv-spin { animation: lvspin 4s linear infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes lvspin { to { transform: rotate(360deg); } }
+.lv-drive { animation: lvdrive 2.2s ease-in-out infinite; }
+@keyframes lvdrive { 0%, 100% { transform: translateX(-4px); } 50% { transform: translateX(4px); } }
+.lv-pulse { animation: lvpulse 1.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes lvpulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+.lv-swing { animation: lvswing 2s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 0; }
+@keyframes lvswing { 0%, 100% { transform: rotate(-6deg); } 50% { transform: rotate(6deg); } }
+/* a sticker's own animation (tier 4): swing on a rope from a pivot set inline (transform-origin), the backdrop drifting
+   against it, speed lines at the bottom of the arc */
+.lv-pend { animation: lvpend 1.7s ease-in-out infinite alternate; }
+@keyframes lvpend { from { transform: rotate(-9deg); } to { transform: rotate(11deg); } }
+.lv-drift { animation: lvdrift 1.7s ease-in-out infinite alternate; }
+@keyframes lvdrift { from { transform: translateX(3px); } to { transform: translateX(-3px); } }
+.lv-streak { opacity: 0; animation: lvstreak 1.7s ease-in-out infinite alternate; }
+@keyframes lvstreak { 0%, 30% { opacity: 0; } 50% { opacity: .9; } 70%, 100% { opacity: 0; } }
+.lv-shot { animation: lvshot 3.2s ease-in infinite; }
+@keyframes lvshot { 0%, 22% { transform: translate(0, 0); opacity: 1; } 48%, 86% { transform: translate(52px, -44px); opacity: 1; } 92% { transform: translate(52px, -44px); opacity: 0; } 96% { transform: translate(0, 0); opacity: 0; } 100% { opacity: 1; } }
+.lv-net { animation: lvnet 3.2s ease-out infinite; transform-box: fill-box; transform-origin: 0 50%; }
+@keyframes lvnet { 0%, 46% { transform: scaleX(1); } 52% { transform: scaleX(1.18); } 60% { transform: scaleX(.95); } 68%, 100% { transform: scaleX(1); } }
+.lv-yay { opacity: 0; animation: lvyay 3.2s infinite; }
+@keyframes lvyay { 0%, 48% { opacity: 0; } 54%, 86% { opacity: 1; } 92%, 100% { opacity: 0; } }
 .apage.out-l { animation: aoutl .2s ease-in forwards; } .apage.out-r { animation: aoutr .2s ease-in forwards; }
 .apage.in-l { animation: ainl .23s ease-out; } .apage.in-r { animation: ainr .23s ease-out; }
 @keyframes aoutl { to { transform: perspective(1400px) rotateY(-70deg); opacity: .2; } }
@@ -589,10 +625,10 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
 .apackbig.torn .ptop { transform: translate(45%, -70%) rotate(28deg); opacity: 0; }
 .apackbig.torn .pbody { transform: scale(1.18); opacity: 0; }
 @keyframes ashake { 0%, 100% { transform: rotate(0); } 20% { transform: rotate(-4deg); } 40% { transform: rotate(4deg); } 60% { transform: rotate(-2deg); } 80% { transform: rotate(2deg); } }
-/* a pack of 5: portrait = 3 + 2 in two rows, landscape = one row */
-.areveal { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: calc(var(--cw) * .3) 3vw; max-width: 94vw;
-  --cw: min(27vw, 200px, calc((100dvh - 190px) / 2.9)); }
-@media (min-aspect-ratio: 1/1) { .areveal { gap: 2vw; --cw: min(16vw, 200px, calc((100dvh - 150px) / 1.4)); } }
+/* a pack of 7: 4 + 3 in two rows (max-width fits exactly 4 cards a row) */
+.areveal { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; --gx: 3vw; gap: calc(var(--cw) * .3) var(--gx);
+  --cw: min(21vw, 200px, calc((100dvh - 190px) / 2.9)); max-width: calc(var(--cw) * 4 + var(--gx) * 3 + 2px); }
+@media (min-aspect-ratio: 1/1) { .areveal { --gx: 2vw; --cw: min(17vw, 200px, calc((100dvh - 190px) / 2.9)); } }
 .areveal:empty { display: none; }
 .aflip { position: relative; width: var(--cw); height: calc(var(--cw) * (.07 + .93 * 158 / 120)); animation: arise .35s calc(var(--i) * .45s) both; }
 .aflip .aback, .aflip .afront { position: absolute; inset: 0; -webkit-backface-visibility: hidden; backface-visibility: hidden; }
@@ -616,10 +652,10 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
 .stk.tup .sin::after { animation: ashine .8s ease-out 1, ashine 2.8s 1s ease-in-out infinite; }
 @keyframes atup { 0% { transform: scale(1); box-shadow: 0 0 0 0 #fff; } 35% { transform: scale(1.1); box-shadow: 0 0 0 8px rgba(255,255,255,.9), 0 0 28px 10px #ffe082; } 100% { transform: scale(1); } }
 .atray { position: fixed; z-index: 40; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; gap: 14px; padding: 12px 16px; border-radius: 20px;
-  background: rgba(255, 250, 240, .95); box-shadow: 0 6px 22px rgba(0,0,0,.3); --cw: min(clamp(70px, 11vw, 104px), calc((100vw - 120px) / 5)); }
+  background: rgba(255, 250, 240, .95); box-shadow: 0 6px 22px rgba(0,0,0,.3); --cw: min(clamp(56px, 11vw, 104px), calc((100vw - 32px - 6 * 14px) / 7)); }
 .atray[hidden] { display: none; }
 @media (min-aspect-ratio: 1/1) {     /* landscape: the tray waits at the left, beside the book, not over its bottom row */
-  .atray { left: 12px; top: 50%; bottom: auto; transform: translateY(-50%); flex-direction: column; gap: 10px; --cw: min(clamp(56px, 8.5vw, 100px), calc((100dvh - 90px) / 6.9)); }
+  .atray { left: 12px; top: 50%; bottom: auto; transform: translateY(-50%); flex-direction: column; gap: 10px; --cw: min(clamp(48px, 8.5vw, 100px), calc((100dvh - 112px) / 9.2)); }
 }
 .atray .aitem { appearance: none; border: 0; background: none; padding: 0; cursor: pointer; animation: abob 1.4s calc(var(--i) * .2s) ease-in-out infinite; }
 @keyframes abob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
@@ -630,6 +666,11 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
 .aladder i.on { opacity: 1; }
 .aladder .l0 { background: #fff; } .aladder .l1 { background: linear-gradient(135deg, #8d9399, #f4f6f8, #7d848b); }
 .aladder .l2 { background: linear-gradient(135deg, #a8761c, #ffe58a, #9b6a12); } .aladder .l3 { background: conic-gradient(#ff5e5e, #ffd84d, #5eff8a, #4dd2ff, #b06bff, #ff5e5e); }
+.aladder .l4 { background: radial-gradient(#fff59d, #ffb300); box-shadow: 0 0 10px #ffb300; }
+/* tier 4: a sticker's own animation (one copy past holo): the holo frame with a pulsing gold glow */
+.stk.t4 { box-shadow: 0 0 0 2px #ffd54f, 0 0 14px 4px rgba(255, 193, 7, .75); animation: aspin 3s linear infinite, at4 1.6s ease-in-out infinite; }
+@keyframes at4 { 50% { box-shadow: 0 0 0 2px #fff59d, 0 0 22px 8px rgba(255, 193, 7, .9); } }
+.apips .p4 { background: radial-gradient(#fff59d, #ffb300); box-shadow: 0 0 4px #ffb300; } .apips .e4 { border-color: #ffb300; }
 .aladder b { font: 700 22px var(--display); color: #333; }
 .kpacks { display: inline-flex; align-items: center; gap: 4px; } .kpacks[hidden] { display: none; }
 .kpacks svg { height: 30px; width: auto; }

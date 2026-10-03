@@ -103,6 +103,8 @@ function mergePlayer(a, b) {
       c0: Math.max(x.c0 || 0, y.c0 || 0), p3: Math.max(x.p3 || 0, y.p3 || 0),      // the larger c0: never creates packs
       c1: Math.max(x.c1 || 0, y.c1 || 0) };     // the copy that switched later had paid a pack for each of its solves until then
     if (x.bp != null || y.bp != null) out.album.bp = Math.max(x.bp || 0, y.bp || 0);   // neither yet: albumOf derives it from the bosses
+    if (x.lp || y.lp) out.album.lp = Math.max(x.lp || 0, y.lp || 0);     // packs for the stickers album v5 removed
+    if (x.sh || y.sh) out.album.sh = maxMap(x.sh, y.sh);                 // shiny stickers
   }
   out.school = {};
   for (const pc of new Set([...Object.keys(a.school || {}), ...Object.keys(b.school || {})])) {
@@ -3221,7 +3223,7 @@ function openBots() {
 }
 
 
-/* ================= sticker book: anime-style athletes drawn in SVG, a pack of 5 for every clean path solve ================= */
+/* ================= sticker book: anime-style athletes drawn in SVG, a pack of 7 for every 5 clean path solves ================= */
 
 /* ---- drawing: one chibi athlete (pose, kit, head) on a team backdrop; a sticker is a line of settings ----
    Figure coordinates: viewBox 0 -16 100 136 (head around 50,25, feet at y 107); the card is 120 x 158. */
@@ -3571,19 +3573,37 @@ function aMiniInner(key) {
     : `<svg width="60" height="40" viewBox="0 0 120 158" preserveAspectRatio="${A_MINI_ALIGN[key] || "xMidYMid"} slice">${A_BACK[key]}</svg>`;
 }
 function aMiniFlag(key, w = 36, h = 24) { return `<svg class="aflag" viewBox="0 0 60 40" width="${w}" height="${h}">${aMiniInner(key)}</svg>`; }
-// the whole sticker picture (backdrop + figure), or just the figure as a grey silhouette for an empty slot
-function stickerSvg(st, ghost = false) {
-  if (st.scene || st.sp || st.fan) return aSceneSvg(st, ghost);
-  const fig = `<g transform="translate(2 18.6) scale(1.16)" ${ghost ? "" : `filter="url(#aWhiteEdge)"`}>${aFigure(st)}</g>`;
-  if (ghost) return `<svg class="aghost" viewBox="0 0 120 158" aria-hidden="true">${fig}</svg>`;
-  return `<svg viewBox="0 0 120 158" aria-hidden="true">${A_BACK[st.bd]}${A_RAYS}${st.mini ? `<svg x="6" y="134" width="27" height="18" viewBox="0 0 60 40">${aMiniInner(st.mini)}</svg><rect x="6" y="134" width="27" height="18" fill="none" stroke="#fff" stroke-width="1.5"/>` : ""}${A_CREST[st.bd] && st.pose !== "kit" ? `<circle cx="19" cy="139" r="15" fill="#fff" opacity=".92"/>${aCrest(st.bd, 19, 139.5, .26)}` : ""}${fig}</svg>`;
+/* a sticker's picture in parts: [backdrop, main, over]; main alone is the grey silhouette of an empty slot (ghost), and
+   the page's big picture puts the mains of a full page on one backdrop (aBigPicture) */
+function aParts(st, o = {}) {
+  if (st.scene || st.sp || st.fan || st.cty) return aSceneParts(st);
+  const f = o.shiny && !st.boss ? { ...st, ...A_GOLD_KIT } : st;
+  const fig = `<g transform="translate(2 18.6) scale(1.16)"${o.ghost ? "" : ` filter="url(#aWhiteEdge)"`}>${aFigure(f)}</g>`;
+  const corner = (st.mini ? aFlagAt(st.mini) : "") + (A_CREST[st.bd] && st.pose !== "kit" ? `<circle cx="19" cy="139" r="15" fill="#fff" opacity=".92"/>${aCrest(st.bd, 19, 139.5, .26)}` : "");
+  return [A_BACK[st.bd] + A_RAYS + corner, fig, ""];
 }
+// a shiny figure plays in a golden kit (and its backdrop turns another colour, aShiny)
+const A_GOLD_KIT = { shirt: "#ffd54f", stripes: undefined, trim: "#8d6e00", shorts: "#ffca28", socks: "#ffd54f", numStroke: "none" };
+/* the picture: o.holo (5 copies) = the same picture alive: the character floats (scenes stay still), sparkles twinkle
+   (the owner, 2026-10-03: "animating it is enough"; proper animations per sticker maybe later); o.shiny = 1 card in 50:
+   the backdrop in another palette (a theme page's character too; a player gets a golden kit instead) */
+function stickerSvg(st, ghost = false, o = {}) {
+  const [back, main, top = ""] = o.anim && !ghost ? stkAnim(st)() : aParts(st, ghost ? { ghost: 1 } : o);
+  if (o.anim && !ghost) return `<svg viewBox="0 0 120 158" aria-hidden="true">${o.shiny ? `<g filter="url(#aShiny)">${back}${main}</g>` : back + main}${top}</svg>`;
+  if (ghost) return `<svg class="aghost" viewBox="0 0 120 158" aria-hidden="true">${main}</svg>`;
+  const sh = o.shiny ? ` filter="url(#aShiny)"` : "", still = st.scene && st.scene !== "comic";
+  const m = st.fan && sh ? `<g${sh}>${main}</g>` : main;
+  return `<svg viewBox="0 0 120 158" aria-hidden="true"><g${sh}>${back}</g>${o.holo && !still ? `<g class="lv-float">${m}</g>` : m}${top}${o.holo ? aHoloSparks() : ""}</svg>`;
+}
+const aHoloSparks = () => [[16, 26, 6, 0], [102, 40, 5, .6], [22, 112, 4, 1.2], [98, 118, 6, .9], [60, 12, 4, .3]].map(([x, y, r, d]) => aSpark(x, y, r, "#fff", "lv-tw", `animation-delay:-${d}s`)).join("");
 // the white cut-out edge around the figure: one filter for the whole page
 function aDefs() {
   if (document.getElementById("aDefs")) return;
   const d = document.createElement("div"); d.id = "aDefs"; d.style.cssText = "position:absolute;width:0;height:0;overflow:hidden";
+  // aShiny: a shiny copy's other palette
   d.innerHTML = `<svg width="0" height="0"><filter id="aWhiteEdge" x="-10%" y="-10%" width="120%" height="120%"><feMorphology in="SourceAlpha" operator="dilate" radius="1.3" result="d"/>
-    <feFlood flood-color="#fff"/><feComposite in2="d" operator="in" result="edge"/><feMerge><feMergeNode in="edge"/><feMergeNode in="SourceGraphic"/></feMerge></filter></svg>`;
+    <feFlood flood-color="#fff"/><feComposite in2="d" operator="in" result="edge"/><feMerge><feMergeNode in="edge"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="aShiny" color-interpolation-filters="sRGB"><feColorMatrix type="hueRotate" values="160"/><feColorMatrix type="saturate" values="1.25"/></filter></svg>`;
   document.body.appendChild(d);
 }
 /* scene pieces for the picture pages: a figure placed on the card (default = where stickerSvg puts it; extra drawing in
@@ -3605,10 +3625,8 @@ const aFlagAt = (key, x = 6, y = 134) => `<svg x="${x}" y="${y}" width="27" heig
 // a goal net (posts drawn by the caller)
 const aNet = (x0, y0, x1, y1, step = 6, op = .7) => `<g opacity="${op}" stroke="#fff" stroke-width=".7">${[...Array(Math.floor((x1 - x0) / step) + 1)].map((_, i) => `<path d="M${x0 + i * step},${y0} V${y1}"/>`).join("")}${[...Array(Math.floor((y1 - y0) / step) + 1)].map((_, i) => `<path d="M${x0},${y0 + i * step} H${x1}"/>`).join("")}</g>`;
 
-/* ---- the picture page (<team>y): 1 the team's landmark, 2+3 one big picture over two slots (the striker shoots | the
-   ball flies past the diving keeper; each half is drawn 133.5 wide so the two meet over the gap in the book, and is cut to
-   the card elsewhere), 4 a comic action shot, 5 the team photo, 6 a retro card, 7 a night match, 8 the goal party,
-   9 a living sticker (CSS: the flag waves, the player bobs and winks, sparkles twinkle). A scene = [backdrop, main, over
+/* ---- the team page's pictures: the landmark, a comic bicycle kick, the team photo and the living goal (the ball flies
+   into the net, the net bulges, sparkles burst: CSS lv-shot / lv-net / lv-yay). A scene = [backdrop, main, over
    (optional)]: an empty slot shows the main part as a ghost ---- */
 const aU = p => p + (++aUid);
 const aSky = (a, b) => { const g = aU("asky"); return `<defs>${aVGrad(g, a, b)}</defs><rect width="120" height="158" fill="url(#${g})"/>`; };
@@ -3787,18 +3805,6 @@ Object.assign(A_POSES, {
   strike: { ...A_POSES.kick, ball: undefined }, hooray: { ...A_POSES.cheer, ball: undefined } });
 const A_YSCENES = {
   land: t => A_LAND[t](),
-  // the big picture, 267 wide: the left half shows 0-133.5, the right half 133.5-267
-  two: (t, half) => {
-    const cols = aYCols(t), look = aLook(t, 0);
-    const back = `<rect width="267" height="62" fill="#263238"/>${aCrowd(0, 270, [8, 18, 28, 38, 48], [...cols, "#fff"], 11 + t.length, 2.6)}${aBoards(56, 267, [...cols, "#ffeb3b"])}` +
-      aPitch(65, 267, 22) + `<path d="M0,126 H267" stroke="#fff" stroke-width="2.2" opacity=".85"/>` + aNet(166, 58, 254, 124);
-    const main = [`<path d="M162,126 V56 H258 V126" fill="none" stroke="${A_OL}" stroke-width="5.4"/><path d="M162,126 V56 H258 V126" fill="none" stroke="#fff" stroke-width="3.4"/>` +
-      `<path d="M100,124 Q140,70 176,74" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" opacity=".55" stroke-dasharray="1 7"/><path d="M134,92 Q156,76 172,74" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" opacity=".8"/>` +
-      aYFig({ ...aKitOf(t), pose: "strike", num: 9, hs: "spiky", ...look }, 10, 20, 1.12) +
-      aEdge(aFootball(180, 74, 8)) + aYFig({ ...A_KEEP2, pose: "keeper", num: 1, hs: "neat", ...aLook(t, 4) }, 188, 50, .78, "rotate(68 50 60)") +
-      aSpark(166, 64, 5) + aSpark(196, 44, 4)];
-    return [`<g transform="translate(${half ? -133.5 : 0} 0)">${back}</g>`, `<g transform="translate(${half ? -133.5 : 0} 0)">${main}</g>`];
-  },
   comic: t => {       // a bicycle kick: halftone, a burst, speed lines
     const ht = aU("aht"), k = aKitOf(t), rgb = h => [1, 3, 5].map(i => parseInt(h.length < 5 ? h[1 + (i >> 1)].repeat(2) : h.slice(i, i + 2), 16));
     const far = c => rgb(c).reduce((s, v, i) => s + Math.abs(v - rgb(k.stripes || k.shirt)[i]) + Math.abs(v - rgb(k.shirt)[i]), 0);
@@ -3819,63 +3825,49 @@ const A_YSCENES = {
       aYFig({ ...k, pose: "photo", num: 4, hs: "buzz", ...aLook(t, 2) }, 0, 40, .53) + aYFig({ ...k, pose: "photo", num: 8, hs: "pony", lash: 1, ...aLook(t, 3) }, 64, 40, .53) +
       aYFig({ ...k, pose: "lift", num: 10, hs: "spiky", ...aLook(t, 4) }, 27, 58, .62) + aEdge(aFootball(100, 132, 7.5))];
   },
-  retro: t => {       // an old card: sepia, a laced collar and a laced ball, a year when there's one to tell
-    const sp = aU("asep"), vg = aU("avg"), k = aKitOf(t), yr = A_YT[t][2];
-    const extra = `<path d="M42,41 L50,47.5 L58,41 L57,46 L50,51 L43,46Z" fill="#fff" ${A_OUT}/><path d="M48.6,47.8 l2.8,1.6 M51.4,47.8 l-2.8,1.6" stroke="${A_OL}" stroke-width=".7"/>` +
-      aC(77, 104, 8.3, "#8d5524", A_OUT) + `<path d="M70,101 Q77,98 84,101 M70,107 Q77,110 84,107 M77,96 V112" fill="none" stroke="#5d3613" stroke-width=".9"/><path d="M75.5,99.5 h3 M75.5,101.5 h3 M75.5,103.5 h3" stroke="#f3e6c8" stroke-width=".7"/>`;
-    const filt = `<defs><filter id="${sp}" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values=".39 .77 .19 0 0  .35 .69 .17 0 0  .27 .53 .13 0 0  0 0 0 1 0"/></filter>` +
-      `<radialGradient id="${vg}" cx=".5" cy=".5" r=".72"><stop offset=".55" stop-color="#3b2208" stop-opacity="0"/><stop offset="1" stop-color="#3b2208" stop-opacity=".6"/></radialGradient></defs>`;
-    const label = yr ? `<text x="60" y="144" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-weight="700" font-size="11" fill="#5a4020" letter-spacing="1">${yr}</text>`
-      : [48, 60, 72].map(x => aStar(x, 140, 3.4, "#8a6d3b")).join("");
-    return [filt + `<g filter="url(#${sp})"><rect width="120" height="158" fill="#cfd8dc"/><path d="M0,30 L20,18 H100 L120,30 V58 H0Z" fill="#6d4c41" ${A_OUT}/>` +
-      [...Array(5)].map((_, i) => `<path d="M0,${36 + i * 5} H120" stroke="#4e342e" stroke-width="1"/>`).join("") + aCrowd(4, 118, [34, 44], ["#5d4037", "#3e2723", "#795548"], 9, 2.2) +
-      `<rect y="58" width="120" height="100" fill="#689f38"/>${[...Array(9)].map((_, i) => `<ellipse cx="${(i * 37) % 113 + 6}" cy="${70 + (i * 23) % 60}" rx="7" ry="2" fill="#8d6e63" opacity=".55"/>`).join("")}</g>`,
-      `<g filter="url(#${sp})">${aYFig({ ...k, stripes: k.stripes, boots: "#4e342e", pose: "run", hs: "neat", ...aLook(t, 1) }, 2, 14, 1.12, "", extra)}</g>`,
-      `<g filter="url(#${sp})"><rect width="120" height="158" fill="url(#${vg})"/><path d="M18,20 l14,40 M90,30 l-6,30 M30,120 l30,6" stroke="#fff" stroke-width=".5" opacity=".35"/>` +
-      `<rect x="3.5" y="3.5" width="113" height="151" rx="4" fill="none" stroke="#f3e6c8" stroke-width="7"/>` +
-      `<path d="M20,133 H100 L96,140 L100,147 H20 L24,140Z" fill="#f3e6c8" stroke="#8a6d3b" stroke-width="1"/>${label}</g>` + `<path d="M0,0 L9,0 L0,9Z M120,158 L111,158 L120,149Z" fill="#fff" opacity=".7"/>`];
+  badge: t => {       // the team's badge, a foil sticker as on the first slot of a football album: the flag in a gold-rimmed shield (a club: its crest)
+    const g = aU("afoil"), c = aU("ashd"), sh = "M60,24 L97,35 V78 Q97,114 60,134 Q23,114 23,78 V35Z";
+    const back = `<defs><linearGradient id="${g}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#b0bec5"/><stop offset=".3" stop-color="#f5f5f5"/>` +
+      `<stop offset=".5" stop-color="#cfd8dc"/><stop offset=".72" stop-color="#ffffff"/><stop offset="1" stop-color="#90a4ae"/></linearGradient></defs><rect width="120" height="158" fill="url(#${g})"/>` +
+      [...Array(7)].map((_, i) => `<path d="M${-40 + i * 26},158 L${20 + i * 26},0" stroke="#fff" stroke-width="7" opacity=".45"/>`).join("") + aSpark(18, 20, 6) + aSpark(104, 142, 6) + aSpark(102, 22, 4);
+    const main = A_CREST[t] ? aEdge(aCrest(t, 60, 82, 1.05))
+      : aEdge(`<clipPath id="${c}"><path d="${sh}"/></clipPath><g clip-path="url(#${c})"><svg x="23" y="24" width="74" height="110" viewBox="0 0 120 158" preserveAspectRatio="${A_MINI_ALIGN[t] || "xMidYMid"} slice">${A_BACK[t]}</svg>` +
+        `<path d="M23,24 L60,60 L97,24Z" fill="#fff" opacity=".18"/></g><path d="${sh}" fill="none" stroke="${A_OL}" stroke-width="7"/><path d="${sh}" fill="none" stroke="#ffc107" stroke-width="4.4"/>` +
+        aStar(60, 16, 9, "#ffc107") + `<path d="M60,7 L62,13 L68,13" fill="none" stroke="#fff" stroke-width="1" opacity=".6"/>`);
+    return [back, main];
   },
-  night: t => {       // floodlights in the dark, a glowing player and a comet ball
-    const gl = aU("agl"), tr = aU("atr"), bm = aU("abm"), c = A_YT[t][1];
-    return [`<defs><filter id="${gl}" x="-20%" y="-20%" width="140%" height="140%"><feMorphology in="SourceAlpha" operator="dilate" radius="1.6" result="d"/>` +
-      `<feFlood flood-color="${c}"/><feComposite in2="d" operator="in"/><feGaussianBlur stdDeviation="2.6" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>` +
-      `<linearGradient id="${tr}" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffff8d" stop-opacity="0"/><stop offset="1" stop-color="#ffff8d" stop-opacity=".95"/></linearGradient>` +
-      `<linearGradient id="${bm}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e1f5fe" stop-opacity=".45"/><stop offset="1" stop-color="#e1f5fe" stop-opacity="0"/></linearGradient></defs>` +
-      `<rect width="120" height="158" fill="#070b24"/>${[[14, 30], [30, 12], [98, 52], [108, 76], [20, 70], [48, 40], [76, 62]].map(([x, y]) => aC(x, y, .9, "#fff")).join("")}` +
-      `<polygon points="0,0 14,0 70,150 20,158" fill="url(#${bm})"/><polygon points="120,0 108,0 54,150 104,158" fill="url(#${bm})" opacity=".7"/>` +
-      `<rect y="118" width="120" height="40" fill="#0b3d1f"/><path d="M0,124 H120" stroke="${c}" stroke-width="1.2" opacity=".6"/><ellipse cx="60" cy="146" rx="30" ry="9" fill="none" stroke="${c}" stroke-width="1.2" opacity=".5"/>` +
-      `<polygon points="122,-14 128,-4 88,18 81,10" fill="url(#${tr})"/>` + aYFlag(t),
-      `<g filter="url(#${gl})">${aFig({ ...aKitOf(t), pose: "header", num: 10, hs: "spiky", ...aLook(t, 5), boots: c })}</g>` +
-      aC(84.4, 12.8, 13, "#ffff8d", `opacity=".25"`) + aSpark(102, 26, 4, "#ffff8d") + aSpark(68, 6, 3, "#ffff8d")];
+  stadium: t => {     // the team's stadium on match night: the bowl in the team's colours, the pitch, four floodlights
+    const cols = aYCols(t), c1 = cols[0], c2 = cols.find(x => x !== c1 && !/^#f{3,6}$/i.test(x)) || "#fff", R = aRand(9 + t.length);
+    const light = (x, y) => `<path d="M${x},${y + 4} V${y + 70}" stroke="${A_OL}" stroke-width="3.2"/><path d="M${x},${y + 4} V${y + 70}" stroke="#b0bec5" stroke-width="1.8"/>` +
+      aR(x - 7, y - 3, 14, 7, "#eceff1") + [-4.5, 0, 4.5].map(d => aC(x + d, y + .5, 1.6, "#fffde7")).join("");
+    const back = aSky("#1a237e", "#5c6bc0") + [...Array(18)].map(() => aC(R() * 120, R() * 50, .5 + R() * .7, "#fff")).join("") +
+      `<polygon points="10,40 0,40 30,110 50,110" fill="#fffde7" opacity=".12"/><polygon points="110,40 120,40 90,110 70,110" fill="#fffde7" opacity=".12"/>` + aYFlag(t);
+    const seats = [...Array(24)].map((_, i) => { const a0 = Math.PI * (i / 12), a1 = Math.PI * ((i + 1) / 12), p = (a, rx, ry) => `${(60 + rx * Math.cos(a)).toFixed(1)},${(98 + ry * Math.sin(a)).toFixed(1)}`;
+      return `<polygon points="${p(a0, 54, 33)} ${p(a1, 54, 33)} ${p(a1, 40, 22)} ${p(a0, 40, 22)}" fill="${i % 2 ? c1 : c2}"/>`; }).join("");
+    const main = `<ellipse cx="60" cy="98" rx="58" ry="37" fill="#cfd8dc" ${A_OUT}/>` + seats + `<ellipse cx="60" cy="98" rx="54" ry="33" fill="none" stroke="${A_OL}" stroke-width=".8"/>` +
+      `<ellipse cx="60" cy="98" rx="40" ry="22" fill="#2e7d32" ${A_OUT}/><ellipse cx="60" cy="98" rx="34" ry="17" fill="#43a047"/>` +
+      `<path d="M60,81 V115" stroke="#fff" stroke-width="1"/><ellipse cx="60" cy="98" rx="7" ry="4" fill="none" stroke="#fff" stroke-width="1"/>` +
+      `<path d="M27,92 h6 v12 h-6 M93,92 h-6 v12 h6" fill="none" stroke="#fff" stroke-width="1"/>` + light(14, 38) + light(106, 38) +
+      [26, 46, 74, 94].map((x, i) => `<path d="M${x},${i % 3 ? 64 : 68} v-9" stroke="${A_OL}" stroke-width=".8"/><rect x="${x}" y="${(i % 3 ? 55 : 59)}" width="7" height="4.5" fill="${i % 2 ? c1 : c2}" ${A_OUT}/>`).join("");
+    return [back, main];
   },
-  party: t => {       // the goal party: the ball in the net, confetti in the team's colours
-    const cols = aYCols(t), conf = [...cols, "#ff5252", "#69f0ae", "#e040fb", "#ffeb3b"];
-    return [`<rect width="120" height="158" fill="#1a237e"/>${aCrowd(0, 124, [8, 18, 28], cols, 4 + t.length, 2.4)}` +
-      `<g opacity=".6">${[...Array(16)].map((_, i) => `<path d="M${-60 + i * 12},34 L${i * 12},126 M${i * 12},34 L${-60 + i * 12},126" stroke="#fff" stroke-width=".7"/>`).join("")}</g>` +
-      `<path d="M0,34 H120" stroke="#fff" stroke-width="3"/><rect y="124" width="120" height="34" fill="#43a047"/><path d="M0,126 H120" stroke="#fff" stroke-width="2"/>` +
-      aEdge(aFootball(100, 116, 8)) + aConfetti(55, conf, 21 + t.length) +
-      [["M4,10 q8,6 4,14 t4,14", conf[0]], ["M110,4 q-8,6 -4,14 t-4,14", conf[1]], ["M30,4 q6,8 0,14", conf[2]], ["M92,40 q-6,8 0,16", conf[3]]].map(([d, c]) => `<path d="${d}" fill="none" stroke="${c}" stroke-width="2" stroke-linecap="round"/>`).join("") + aYFlag(t),
-      aYFig({ ...aKitOf(t), pose: "hooray", num: 10, hs: "curly", ...aLook(t, 6) }, 2, 18.6, 1.16) + aConfetti(10, conf, 5 + t.length)];
-  },
-  live: t => {        // the living sticker: the flag waves, the player bobs and winks, sparkles twinkle (CSS lv-…)
-    const look = aLook(t, 1), s = .95, ox = 4, oy = 30, x0 = 76, y0 = 8, ex = ox + 56.7 * s, ey = oy + 28.5 * s, flag = aMiniInner(t);
-    const strips = [...Array(11)].map((_, i) => `<g class="lv-wave" style="animation-delay:-${(i * .14).toFixed(2)}s"><svg x="${x0 + i * 3}" y="${y0}" width="3.1" height="22" viewBox="${(i * 60 / 11).toFixed(2)} 0 ${(60 / 11 + .1).toFixed(2)} 40" preserveAspectRatio="none">${flag}</svg></g>`).join("");
-    return [aSky("#81d4fa", "#e1f5fe") + aCloud(6, 8, .7) + `<rect y="96" width="120" height="10" fill="#263238"/>${aCrowd(0, 124, [99], aYCols(t), 3 + t.length, 2)}` + aPitch(106, 120, 24) +
-      `<path d="M0,128 H120" stroke="#fff" stroke-width="1.6" opacity=".8"/>`,
-      `<path d="M${x0 - .6},96 L${x0 + .8},${y0 - 2}" stroke="${A_OL}" stroke-width="3"/><path d="M${x0 - .6},96 L${x0 + .8},${y0 - 2}" stroke="#d7ccc8" stroke-width="1.6"/>${aC(x0 + .8, y0 - 3, 2, "#ffc107", A_OUT)}` +
-      `<g class="lv-bob">${aYFig({ ...aKitOf(t), pose: "cheer", num: 9, hs: "spiky", ...look }, ox, oy, s)}` +
-      `<g class="lv-wink"><ellipse cx="${ex.toFixed(1)}" cy="${(ey + .4).toFixed(1)}" rx="${(4.5 * s).toFixed(2)}" ry="${(5.5 * s).toFixed(2)}" fill="${look.skin}"/><path d="M${(ex - 4).toFixed(1)},${(ey + 1.2).toFixed(1)} Q${ex.toFixed(1)},${(ey - 3).toFixed(1)} ${(ex + 4).toFixed(1)},${(ey + 1.2).toFixed(1)}" fill="none" stroke="#1a1a1a" stroke-width="1.9" stroke-linecap="round"/></g></g>` +
-      strips + `<rect x="${x0}" y="${y0}" width="33" height="22" fill="none" stroke="${A_OL}" stroke-width=".6" opacity=".4"/>` +
-      aSpark(14, 22, 5, "#fff", "lv-tw") + aSpark(104, 48, 4, "#fff", "lv-tw", "animation-delay:-.6s") + aSpark(24, 90, 4, "#fff", "lv-tw", "animation-delay:-1.2s")];
+  goal: t => {        // the living goal: the striker shoots, the ball flies into the top corner, the net bulges, sparkles burst
+    const cols = aYCols(t), k = aKitOf(t);
+    return [`<rect width="120" height="62" fill="#263238"/>${aCrowd(0, 124, [8, 18, 28, 38, 48], [...cols, "#fff"], 7 + t.length, 2.4)}${aBoards(56, 120, [...cols, "#ffeb3b"])}` +
+      aPitch(65, 120, 24) + `<path d="M0,128 H120" stroke="#fff" stroke-width="2" opacity=".8"/>` + aYFlag(t),
+      `<g class="lv-net">${aNet(84, 60, 120, 104, 5, .75)}</g><path d="M84,106 V58 H124" fill="none" stroke="${A_OL}" stroke-width="5.4"/><path d="M84,106 V58 H124" fill="none" stroke="#fff" stroke-width="3.4"/>` +
+      aYFig({ ...k, pose: "strike", num: 9, hs: "spiky", ...aLook(t, 0) }, -6, 44, .82) +
+      `<g class="lv-shot">${aEdge(aFootball(55, 124, 6.5))}</g>` +
+      `<g class="lv-yay">${aSpark(100, 62, 7, "#ffeb3b")}${aSpark(112, 92, 5, "#fff")}${aSpark(92, 86, 4, "#ffeb3b")}${aConfetti(14, [...cols, "#ffeb3b", "#e040fb"], 3 + t.length)}</g>`];
   },
 };
-// the nine stickers of a picture page, in grid order (2 and 3 = the two halves, side by side in the top row)
-const A_YPAGE = [{ scene: "land" }, { scene: "two", half: "l" }, { scene: "two", half: "r" }, { scene: "comic" }, { scene: "photo" }, { scene: "retro" },
-  { scene: "night" }, { scene: "party" }, { scene: "live" }];
-function aSceneSvg(st, ghost) {
-  const [back, main, top = ""] = st.fan ? FAN[st.fan][st.fi][2]() : st.sp ? A_SPECIALS[st.sp]() : A_YSCENES[st.scene](st.team, st.half === "r"), w = st.half ? 133.5 : 120;
-  const fl = st.scene === "land" ? aYFlag(st.team) : "";
-  return `<svg${ghost ? ` class="aghost"` : ""} viewBox="0 0 ${w} 158" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${ghost ? main : back + main + top + fl}</svg>`;
+// a picture sticker's parts (see aParts): a theme or world page's drawing (FAN.<key>[i]), a team's food or national thing
+// (FAN.food / FAN.thing[team], js/fan/countries*.js), the special page, or a team scene; each FAN row = [name, what, draw]
+function aSceneParts(st) {
+  const row = st.fan ? FAN[st.fan] && FAN[st.fan][st.fi] : st.cty ? FAN[st.cty] && FAN[st.cty][st.team] : null;
+  if ((st.fan || st.cty) && !row) return [`<rect width="120" height="158" fill="#eee"/>`, "", ""];
+  const [back, main, top = ""] = row ? row[2]() : st.sp ? A_SPECIALS[st.sp]() : A_YSCENES[st.scene](st.team);
+  return [back, main, top + (st.scene === "land" ? aYFlag(st.team) : "")];
 }
 
 /* ---- the special page (sp, first in the book; the owner's choice from lab/special_ideas.html, 2026-10-03): chess pieces
@@ -4000,11 +3992,9 @@ const A_SPECIALS = {
 };
 // the special page, in the owner's order (S11, S1, S3, S6, S19, S9, S15, S14, S4 of the lab); ids sp1…sp9 by slot
 const A_SP_ORDER = ["rook", "buddy", "referee", "royals", "rocket", "octopus", "robot", "goldball", "goldboot"];
-/* ---- the catalogue, by team: each of the 12 teams has a football page (the kit + 8 players, one the team's mascot)
-   and a "friends" page (5 basketball players and 4 animal friends in the team's kit); Portugal's section holds Portugal,
-   Benfica and Vitória SC. Then the bosses' page. Ids are page id + slot: progress is stored by id, numbers can move.
-   Album v2 (2026-10-03) moved the old basketball (bba, bbb) and animal (ana, anb) pages into the teams: `old` = the
-   sticker's v1 id, albumMigrate carries its copies over ---- */
+/* ---- the catalogue: the special page, the seven world pages, a page of 12 per team (A_TEAM12; Portugal's section holds
+   Portugal, Benfica and Vitória SC), the subject pages, the theme pages, the bosses' page. Ids are page id + slot:
+   progress is stored by id, numbers can move; when stickers move or go, albumMigrate carries the copies ---- */
 const A_SKIN = ["#f8dcc4", "#f2c29b", "#e0ac7e", "#b67a4b", "#8a5530", "#f5d6b4"];
 const A_HAIR = { black: "#1b1b1b", dark: "#3b2314", brown: "#6b3e1f", blond: "#e3b84f", light: "#f3dc8c", red: "#b5501f" };
 const A_EYES = { brown: "#6b3e1f", dark: "#3b2a1a", blue: "#3a7bd5", green: "#4a9a5a" };
@@ -4044,7 +4034,7 @@ const A_TEAMS = {
   nl: { kit: { shirt: "#F36C21", trim: "#fff", numStroke: "#21468B", shorts: "#fff", socks: "#F36C21" }, gk: { shirt: "#00acc1", trim: "#111", shorts: "#00acc1", socks: "#00acc1" }, mascot: "lionnl",
     looks: "0 blond blue|4 black dark|1 brown brown|0 light blue|3 black dark|0 blond green|1 dark brown" },
 };
-// a team page: the kit, then eight players (two of them women: ponytail, long lashes), the last the team's mascot
+// the players of album v4's football page (the kit, eight players, the mascot): the team page draws its keeper, striker and mascot from them
 const A_SLOTS = [
   { pose: "kit", num: 10 },
   { pose: "kick", num: 9, hs: "spiky" }, { pose: "keeper", num: 1, hs: "neat", gk: 1 }, { pose: "header", num: 4, hs: "buzz" },
@@ -4055,24 +4045,35 @@ function aLook(team, i) {
   const [sk, h, e] = A_TEAMS[team].looks.split("|")[i].split(" ");
   return { skin: A_SKIN[+sk], hair: A_HAIR[h], eyes: A_EYES[e] };
 }
-// the sections of the book (a flag each; Portugal's holds the two Portuguese clubs), every team = 3 pages (football, friends, pictures)
+// the sections of the book (a flag each; Portugal's holds the two Portuguese clubs), a page of 12 per team
 // (Cape Verde beside Portugal, then Europe, South America, Asia)
 const A_SECTIONS = [["pt", "slb", "vsc"], ["cv"], ["es"], ["fr"], ["it"], ["de"], ["nl"], ["ch"], ["en"], ["no"], ["br"], ["ar"], ["cn"], ["jp"], ["kr"]];
-/* the theme pages after the teams (the owner, 2026-10-03: heroes, Octonauts, Peppa, Paw Patrol, Hot Wheels; faithful
-   versions, family use): page id, the drawings' key in FAN, icon, section (the two hero pages share one frame). The
-   drawings are js/fan/<key>.js (built after this file, drafted in lab/fan_ideas.html): FAN.<key> = 9 rows
-   [name, what, draw], draw() = [backdrop, character] like the picture pages; read only when a sticker is drawn */
+/* the theme pages after the teams (the owner, 2026-10-03: heroes, Octonauts, Peppa, Paw Patrol, Hot Wheels; later that
+   day Pokémon, Mario, Minecraft, Cars, Sonic; faithful versions, family use): page id, the drawings' key in FAN, icon,
+   section (the two hero pages share one frame). The drawings are js/fan/<key>.js (built after this file; lab/new_pages.html
+   shows them, lab/check_fan.mjs checks them): FAN.<key> = 9 rows [name, what, draw], draw() = [backdrop, character]
+   like the picture stickers; read only when a sticker is drawn */
 const FAN = {};
 const A_FAN = [["mv", "marvel", "🕷️", "hero"], ["dc", "dc", "🦇", "hero"], ["oct", "octonauts", "🐙", "oct"], ["pig", "peppa", "🐷", "pig"],
-  ["paw", "pawpatrol", "🐾", "paw"], ["hw", "hotwheels", "🏎️", "hw"]];
+  ["paw", "pawpatrol", "🐾", "paw"], ["hw", "hotwheels", "🏎️", "hw"], ["pk", "pokemon", "⚡", "pk"], ["mario", "mario", "🍄", "mario"],
+  ["mc", "minecraft", "⛏️", "mc"], ["cars", "cars", "🏁", "cars"], ["sonic", "sonic", "💨", "sonic"]];
+// subject pages (the owner, 2026-10-03): chess pieces, jungle animals, World Cup mascots, trophies and famous balls, vehicles
+const A_THEMES = [["chess", "chess", "♞"], ["jungle", "jungle", "🦁"], ["wcm", "wcmascots", "🏟️"], ["cups", "trophies", "🏆"], ["veh", "vehicles", "🚒"]];
+/* the world pages, one per world of the learning path (kids.js WORLDS, same order): a page opens when the child reaches
+   its world (aWorldsOpen), then its stickers come from every pack like the others (the owner, 2026-10-03: a page only
+   from its own world's packs could never be finished once he moved on) */
+const A_WORLDP = [["wsea", "🌊"], ["wforest", "🌳"], ["wsnow", "❄️"], ["wdesert", "🏜️"], ["wlava", "🌋"], ["wcastle", "🏰"], ["wspace", "🚀"]];
 const A_PAGES = [
   { id: "sp", icon: "🌟", sec: "sp" },
-  ...A_SECTIONS.flatMap(ts => ts.flatMap(t => [{ id: t, team: t, sec: ts[0] }, { id: t + "x", team: t, sec: ts[0], friends: 1 }, { id: t + "y", team: t, sec: ts[0], pics: 1 }])),
+  ...A_WORLDP.map(([id, icon], world) => ({ id, fan: id, icon, sec: "world", world })),
+  ...A_SECTIONS.flatMap(ts => ts.map(t => ({ id: t, team: t, sec: ts[0], big: 1 }))),
+  ...A_THEMES.map(([id, fan, icon]) => ({ id, fan, icon, sec: "theme" })),
   ...A_FAN.map(([id, fan, icon, sec]) => ({ id, fan, icon, sec })),
   { id: "boss", icon: "👑", sec: "boss" },
 ];
-/* a team's friends page: 5 basketball players "b pose lookSlot number" (look slots 3 and 5 are the women) and 4 animal
-   friends "a animal pose number", laid out like a chequerboard; ":old" = the sticker's id before album v2 */
+/* album v4's friends pages: 5 basketball players "b pose lookSlot number" (look slots 3 and 5 are the women) and 4 animal
+   friends "a animal pose number"; ":old" = the sticker's id before album v2. A team page keeps the first basketball player
+   who isn't a woman (the owner, 2026-10-03: one basketball player); the rest only tell albumMigrate where old ids went */
 const A_FRIENDS = {
   pt: "b dribble 0 7:bba1|a chick dribble 3:anb7|b shoot 4 4:bbb3|a lion kick 9|b shoot 3 11|a polar keeper 1|b dribble 5 23|a jaguar header 17|b dribble 2 15",
   slb: "b shoot 5 14:bba6|a rooster shoot 6:anb8|b dribble 3 21:bbb7|a tiger run 18|b dribble 0 7|a bear keeper 1|b shoot 2 10|a rabbit cheer 4|b shoot 6 30",
@@ -4095,54 +4096,80 @@ const A_FRIENDS = {
 const A_BB_HAIR = ["spiky", "neat", "buzz", "pony", "spiky", "pony", "curly"];      // by look slot, as on the football page
 // the bosses of the learning path: a crown, the bot's ring colour on a black kit; only beating that boss gives it
 const A_BOSSES = [["gate1", "cat", "kick", 2], ["gate2", "wolf", "header", 3], ["gate4", "chick", "cheer", 0], ["gate3", "tiger", "keeper", 4], ["gate5", "trex", "lift", 5], ["gate6", "dragon", "kick", 6]];
+/* a team page (album v5, the owner 2026-10-03: "goalkeeper, bicycle kick, field player … are enough"): 12 stickers in grid
+   order, [kind, where the sticker was in v4: slot n of the football page, x = the friends page, yn = slot n of the
+   picture page]; the stickers of v4 not kept went (albumMigrate pays a pack per 5 of their copies) */
+const A_TEAM12 = [["badge"], ["keeper", "3"], ["player", "2"], ["comic", "y4"], ["bb", "x"], ["mascot", "9"], ["photo", "y5"], ["stadium"],
+  ["land", "y1"], ["food"], ["thing"], ["goal"]];
+const aBbRow = t => A_FRIENDS[t].split("|").findIndex(r => { const f = r.split(" "); return f[0] === "b" && f[2] !== "3" && f[2] !== "5"; });
+function aTeamSticker(t, kind) {
+  const T = A_TEAMS[t];
+  if (kind === "keeper" || kind === "player" || kind === "mascot") {
+    const i = { keeper: 2, player: 1, mascot: 8 }[kind], sl = A_SLOTS[i], kit = sl.gk ? { ...T.gk, gloves: "#fff" } : T.kit;
+    return { bd: t, ...kit, ...sl, ...(sl.mascot ? { head: T.mascot } : aLook(t, i - 1)), gk: undefined, mascot: undefined };
+  }
+  if (kind === "bb") {
+    const f = A_FRIENDS[t].split("|")[aBbRow(t)].split(":")[0].split(" "), k = T.kit;
+    return { bd: "court", mini: t, pose: f[1], num: +f[3], hs: A_BB_HAIR[+f[2]], ...aLook(t, +f[2]), shirt: k.shirt, stripes: k.stripes, trim: k.trim,
+      numStroke: k.numStroke, shorts: k.shirt, socks: "#fff" };
+  }
+  if (kind === "food" || kind === "thing") return { cty: kind, team: t };
+  return { scene: kind, team: t };
+}
 const STK = (() => {
-  const out = [], add = (pg, o) => out.push({ ...o, id: pg.id + (out.filter(s => s.page === pg).length + 1), page: pg, n: out.length + 1 });
+  const out = [], n = {}, add = (pg, o) => { n[pg.id] = (n[pg.id] || 0) + 1; out.push({ ...o, id: pg.id + n[pg.id], page: pg, n: out.length + 1 }); };
   for (const pg of A_PAGES) {
-    const T = A_TEAMS[pg.team];
-    if (pg.friends) A_FRIENDS[pg.team].split("|").forEach(row => {
-      const [spec, old] = row.split(":"), f = spec.split(" "), k = T.kit;
-      const kit = { shirt: k.shirt, stripes: k.stripes, trim: k.trim, numStroke: k.numStroke, old };
-      if (f[0] === "b") add(pg, { bd: "court", mini: pg.team, pose: f[1], num: +f[3], hs: A_BB_HAIR[+f[2]], lash: f[2] === "3" || f[2] === "5" ? 1 : 0,
-        ...aLook(pg.team, +f[2]), ...kit, shorts: k.shirt, socks: "#fff" });
-      else add(pg, { bd: A_POSES[f[2]].bball ? "court" : "pitch", mini: pg.team, head: f[1], pose: f[2], num: +f[3], ...kit,
-        shorts: A_POSES[f[2]].bball ? k.shirt : k.shorts, socks: A_POSES[f[2]].bball ? "#fff" : k.socks });
-    });
-    else if (pg.pics) A_YPAGE.forEach(o => add(pg, { ...o, team: pg.team }));
+    if (pg.team) A_TEAM12.forEach(([kind]) => add(pg, aTeamSticker(pg.team, kind)));
     else if (pg.id === "sp") A_SP_ORDER.forEach(k => add(pg, { sp: k }));
     else if (pg.fan) for (let fi = 0; fi < 9; fi++) add(pg, { fan: pg.fan, fi });
-    else if (pg.team) A_SLOTS.forEach((sl, i) => {
-      const kit = sl.gk ? { ...T.gk, gloves: "#fff" } : T.kit;
-      add(pg, { bd: pg.team, ...kit, ...sl, ...(sl.mascot ? { head: T.mascot } : i ? aLook(pg.team, i - 1) : {}), gk: undefined, mascot: undefined });
-    });
     else A_BOSSES.forEach(([gate, head, pose, lvl]) =>
       add(pg, { bd: "boss", head, pose, boss: gate, crown: 1, num: 1, shirt: "#212121", trim: lvl ? BOT_RING[lvl - 1] : "#fff", shorts: "#212121", socks: "#212121" }));
   }
   return out;
 })();
-// album v1 id → v2 id of the stickers that moved (the old basketball and animal pages)
-const A_VER = 4, A_MOVED = Object.fromEntries(STK.filter(st => st.old).map(st => [st.old, st.id]));
+// album v1 id → v2 id of the stickers that moved (the old basketball and animal pages into the teams' friends pages)
+const A_MOVED = Object.fromEntries(Object.entries(A_FRIENDS).flatMap(([t, rows]) => rows.split("|").map((r, i) => [r.split(":")[1], t + "x" + (i + 1)]).filter(([o]) => o)));
+// album v4 id → v5 id of the team stickers that stayed ({ "pt3": "pt2", … })
+const A_V5 = Object.fromEntries(Object.keys(A_TEAMS).flatMap(t => A_TEAM12.map(([, was], i) => was && [t + (was === "x" ? "x" + (aBbRow(t) + 1) : was), t + (i + 1)]).filter(Boolean)));
+const A_VER = 5;
 /* bring an album up to A_VER (in place, once: guarded by a.v; running it again changes nothing). v2: a moved sticker keeps
    its copies. v3 (2026-10-03, packs of 5 for every solve): c0 = the solves the old rule (a pack of 3 per 5) already paid
    for, p3 = the packs earned until then (incl. gifts), which stay packs of 3: the switch gives no packs for past solves.
-   v4 (2026-10-03, a pack per PACK_EVERY solves again): c1 = the solves already paid a pack each, so nothing earned is lost */
+   v4 (2026-10-03, a pack per PACK_EVERY solves again): c1 = the solves already paid a pack each, so nothing earned is lost.
+   v5 (2026-10-03, a page of 12 per team): the kept team stickers move to their new ids, and the copies of the ones that
+   went pay lp = a pack per LOST_PER_PACK (the owner: "one pack for each 5 stickers he lost", copies count) */
 function albumMigrate(a) {
   if (!a || (a.v || 1) >= A_VER) return a;
-  const s = a.s || (a.s = {});
-  if ((a.v || 1) < 2) for (const [o, n] of Object.entries(A_MOVED)) if (o in s) { s[n] = Math.max(s[n] || 0, s[o] || 0); delete s[o]; }
-  if ((a.v || 1) < 3) { a.c0 = a.c || 0; a.p3 = Math.floor(a.c0 / OLD_EVERY) + (a.b || 0); }
-  a.c1 = a.c || 0;
+  const s = a.s || (a.s = {}), v = a.v || 1;
+  if (v < 2) for (const [o, n] of Object.entries(A_MOVED)) if (o in s) { s[n] = Math.max(s[n] || 0, s[o] || 0); delete s[o]; }
+  if (v < 3) { a.c0 = a.c || 0; a.p3 = Math.floor(a.c0 / OLD_EVERY) + (a.b || 0); }
+  if (v < 4) a.c1 = a.c || 0;
+  if (v < 5) {
+    const ns = {}, team = /^([a-z]+?)[xy]?\d+$/;
+    let lost = 0;
+    for (const [id, c] of Object.entries(a.s)) {
+      const m = team.exec(id);
+      if (m && A_TEAMS[m[1]] && id.length <= m[1].length + 3) { const to = A_V5[id]; if (to) ns[to] = Math.max(ns[to] || 0, c); else lost += c || 0; }
+      else ns[id] = c;
+    }
+    a.s = ns; a.lp = (a.lp || 0) + Math.floor(lost / LOST_PER_PACK);
+  }
   a.v = A_VER;
   return a;
 }
 
 /* ---- progress: pl.album = { c: clean path solves, b: extra packs (the old stickers, a parent's gift), o: packs opened,
-   s: { sticker id: copies }, v: catalogue version, c0 / p3 / c1: see albumMigrate, bp: packs from beaten bosses }. Packs are drawn from a seed (the pack's number),
+   s: { sticker id: copies }, sh: { sticker id: 1 } the shiny ones, v: catalogue version, c0 / p3 / c1 / lp: see
+   albumMigrate, bp: packs from beaten bosses }. Packs are drawn from a seed (the pack's number),
    so two devices that open the same pack get the same stickers and mergePlayer can take the larger of each count ---- */
 // the owner (2026-10-03): "5 stickers per solve" = a pack of 5 for every clean solve after the switch (before: 3 per 5 solves);
 // later that day, a pack every solve was too much (the queen + rook mate replayed for packs): "no packs on replays and one pack
 // on average per 5 stars" = a pack of 5 for every PACK_EVERY clean solves of unfinished stages (puzzles and endgames alike)
+// the owner (2026-10-03, later): 7 stickers per pack (PACK_SIZE; packs already waiting open as packs of 7 too)
 // the owner (2026-10-03): "each boss should be like two packs guaranteed": BOSS_PACKS for every boss game won on the path
-const PACK_EVERY = 5, PACK_SIZE = 5, OLD_EVERY = 5, OLD_SIZE = 3, OLD_PACKS_MAX = 10, BOSS_PACKS = 2;
+// the owner (2026-10-03): a holo sticker (HOLO copies) leaves the packs, so every sticker ends up holo; then the packs stop.
+// 1 card in SHINY_ODDS comes shiny (another palette, kept for good)
+const PACK_EVERY = 5, PACK_SIZE = 7, OLD_EVERY = 5, OLD_SIZE = 3, OLD_PACKS_MAX = 10, BOSS_PACKS = 2, LOST_PER_PACK = 5, HOLO = 5, SHINY_ODDS = 50;
 function albumOf(pl) {
   // first time: one pack per sticker of the old "a sticker every 10 stars" row, at most OLD_PACKS_MAX
   if (!pl.album) pl.album = { c: 0, b: Math.min(OLD_PACKS_MAX, Math.floor((pl.stars || 0) / 10)), o: 0, s: {}, v: A_VER, c0: 0, p3: 0, c1: 0 };
@@ -4153,11 +4180,26 @@ function albumOf(pl) {
 }
 // a boss's sticker: owned once that gate is beaten (also for gates beaten before the sticker book existed)
 function stkOwned(pl, st) { const n = albumOf(pl).s[st.id] || 0; return st.boss ? (n || stageStars(pl, st.boss) >= 1 ? 1 : 0) : n; }
-function stkTier(st, copies) { return st.boss ? 3 : copies >= 5 ? 3 : copies >= 3 ? 2 : copies >= 2 ? 1 : 0; }
+/* tiers: 1 copy plain, 2 silver, 3 gold, HOLO holo (the picture moves: float + sparkles); a sticker with its own animation
+   (a FAN row's 4th entry, e.g. Spider-Man swinging on his web) needs one copy more for it, tier 4 (the owner, 2026-10-03:
+   "Spider-Man has one more copy than all other stickers"), and only then leaves the packs (stkMax) */
+function stkAnim(st) { const row = st && st.fan && FAN[st.fan] && FAN[st.fan][st.fi]; return row && typeof row[3] === "function" ? row[3] : null; }
+const stkMax = st => HOLO + (stkAnim(st) ? 1 : 0);
+function stkTier(st, copies) { return st.boss ? 3 : copies > HOLO && stkAnim(st) ? 4 : copies >= HOLO ? 3 : copies >= 3 ? 2 : copies >= 2 ? 1 : 0; }
 // packs of 3 per OLD_EVERY solves up to c0, a pack per solve from c0 to c1, then one per PACK_EVERY
 function packsEarned(a) { const c0 = a.c0 || 0, c1 = Math.max(c0, a.c1 || 0); return Math.floor(c0 / OLD_EVERY) + (c1 - c0) + Math.floor(aSince(a) / PACK_EVERY); }
 function aSince(a) { return Math.max(0, a.c - Math.max(a.c0 || 0, a.c1 || 0)); }      // solves under the current rule
-function packsWaiting(pl) { const a = albumOf(pl); return Math.max(0, packsEarned(a) + a.b + a.bp - a.o); }
+// packs to open: none while the packs have nothing left to give (every open sticker holo)
+function packsWaiting(pl) { const a = albumOf(pl), n = Math.max(0, packsEarned(a) + a.b + a.bp + (a.lp || 0) - a.o); return n && aPool(pl).length ? n : 0; }
+// the worlds reached on the learning path (the one being played and those before it): their pages are open
+function aWorldsOpen(pl) {
+  if (albumPreview || typeof stageCur !== "function") return A_WORLDP.length;
+  const i = stageCur(pl);
+  return i < 0 ? A_WORLDP.length : Math.min(A_WORLDP.length, worldOf(i) + 1);
+}
+const stkLocked = (pl, st) => st.page.world >= aWorldsOpen(pl);
+// what packs draw from: every sticker not yet holo, on an open page (bosses only come from bosses)
+function aPool(pl) { const a = albumOf(pl), open = aWorldsOpen(pl); return STK.filter(st => !st.boss && (a.s[st.id] || 0) < stkMax(st) && !(st.page.world >= open)); }
 // a clean solve of an unfinished stage on the learning path (stageStar, an endgame win; replays don't count): every
 // PACK_EVERY of them is a pack.
 // No pop-up, no sound (the owner: packs must never pull the child away from playing): the counters go up, and a small
@@ -4182,16 +4224,17 @@ function aRand(seed) {      // mulberry32
   let t = seed >>> 0;
   return () => { t = (t + 0x6D2B79F5) >>> 0; let r = Math.imul(t ^ (t >>> 15), 1 | t); r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) ^ r; return ((r ^ (r >>> 14)) >>> 0) / 4294967296; };
 }
-// open the next pack: PACK_SIZE different stickers (OLD_SIZE for a pack earned before the switch, albumMigrate), one of them new while any is missing (bosses only come from bosses)
+// open the next pack: PACK_SIZE different stickers from the pool (OLD_SIZE for a pack earned before the switch, albumMigrate;
+// fewer when the pool is smaller), one of them new while any is missing; each card is shiny with odds 1 in SHINY_ODDS
 function packOpen(pl) {
   if (packsWaiting(pl) <= 0) return null;
-  const a = albumOf(pl), R = aRand(a.o * 7919 + 104729), size = a.o < (a.p3 || 0) ? OLD_SIZE : PACK_SIZE;
+  const a = albumOf(pl), R = aRand(a.o * 7919 + 104729), pool = aPool(pl), size = Math.min(pool.length, a.o < (a.p3 || 0) ? OLD_SIZE : PACK_SIZE);
   a.o++;
-  const pool = STK.filter(st => !st.boss), missing = pool.filter(st => !a.s[st.id]), pick = [];
+  const missing = pool.filter(st => !a.s[st.id]), pick = [];
   if (missing.length) pick.push(missing[Math.floor(R() * missing.length)]);
   while (pick.length < size) { const st = pool[Math.floor(R() * pool.length)]; if (!pick.includes(st)) pick.push(st); }
   for (let i = pick.length - 1; i > 0; i--) { const j = Math.floor(R() * (i + 1)); [pick[i], pick[j]] = [pick[j], pick[i]]; }
-  const got = pick.map(st => { const was = a.s[st.id] || 0; a.s[st.id] = was + 1; return { st, was }; });
+  const got = pick.map(st => { const was = a.s[st.id] || 0, sh = R() < 1 / SHINY_ODDS; a.s[st.id] = was + 1; if (sh) (a.sh || (a.sh = {}))[st.id] = 1; return { st, was, sh }; });
   save(); aBadge();
   return got;
 }
@@ -4204,10 +4247,13 @@ function albumBoss(pl, gateId) {
 }
 
 /* ---- pictures: a sticker card (tier frame, number), the pack, the back of a sticker ---- */
-function stickerCard(st, copies, cls = "") {
+function stickerCard(st, copies, cls = "", shiny = aIsShiny(st)) {
   const t = stkTier(st, copies);
-  return `<div class="stk t${t}${cls ? " " + cls : ""}" data-st="${st.id}"><div class="sin">${stickerSvg(st)}<span class="sno">${st.n}</span>${t ? `<span class="spip">${"◆".repeat(t)}</span>` : ""}</div></div>`;
+  return `<div class="stk t${t === 4 ? "3 t4" : t}${shiny ? " shiny" : ""}${cls ? " " + cls : ""}" data-st="${st.id}"><div class="sin">${stickerSvg(st, false, { holo: copies >= HOLO && !st.boss, anim: t === 4, shiny })}` +
+    `<span class="sno">${st.n}</span>${t ? `<span class="spip">${"◆".repeat(t)}</span>` : ""}${shiny ? A_SHINY_MARK : ""}</div></div>`;
 }
+function aIsShiny(st) { if (albumPreview || !S.players) return false; const a = albumOf(pzPlayers()); return !!(a.sh && a.sh[st.id]); }
+const A_SHINY_MARK = `<svg class="sshiny" viewBox="-10 -10 20 20" aria-hidden="true">${aStar(0, 0, 9.5, "#fff")}${aStar(0, 0, 7.5, "#ff4081")}${aStar(0, 0, 4.5, "#ffeb3b")}</svg>`;
 const A_PACK_TOP = `<polygon points="4,14 4,6 10,2 16,6 22,2 28,6 34,2 40,6 46,2 52,6 58,2 64,6 70,2 76,6 76,14" fill="#0d47a1" stroke="#ffc107" stroke-width="1.5"/>`;
 function aPackSvg(part = "all") {
   const body = `<rect x="4" y="13" width="72" height="90" rx="3" fill="#1565c0" stroke="#ffc107" stroke-width="2"/>
@@ -4219,21 +4265,26 @@ function aPackSvg(part = "all") {
 }
 const A_CARD_BACK = `<svg viewBox="0 0 120 158" aria-hidden="true"><rect width="120" height="158" fill="#1565c0"/>${[...Array(24)].map((_, i) => aStar(10 + (i % 4) * 33 + (Math.floor(i / 4) % 2) * 16, 12 + Math.floor(i / 4) * 27, 3.5, "#42a5f5")).join("")}
   <circle cx="60" cy="79" r="30" fill="#ffc107"/><circle cx="60" cy="79" r="26" fill="#0d47a1"/><g transform="translate(60 79) scale(2) translate(-60 -79)">${aFootball(60, 79, 9)}</g></svg>`;
-// a page's picture: the team's flag (crest for a club); its friends page = the flag with a basketball and a paw on it,
-// its picture page = the flag with a little framed picture (sky, sun, hills) and a gold sparkle
-const A_PAW = `<ellipse cx="10" cy="13" rx="5" ry="4.2" fill="#4e342e"/>${[[4.2, 7.6], [8, 4.6], [12, 4.6], [15.8, 7.6]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="2.1" fill="#4e342e"/>`).join("")}`;
-const A_PIC_ICON = `<svg class="abdg l" viewBox="0 0 20 20"><rect x="1.5" y="3" width="17" height="14" rx="1.5" fill="#fff" stroke="#4e342e" stroke-width="1.4"/><rect x="3.5" y="5" width="13" height="10" fill="#81d4fa"/>` +
-  `<circle cx="13" cy="8" r="1.8" fill="#ffca28"/><path d="M3.5,15 L8,9.5 L11,13 L13,11 L16.5,15Z" fill="#43a047"/></svg>`;
-const A_SPARK_ICON = `<svg class="abdg r" viewBox="0 0 20 20">${aC(10, 10, 9.6, "#fff")}${aSpark(10, 10, 8, "#ffb300")}${aSpark(15.5, 4.5, 2.6, "#ffb300")}</svg>`;
-// (small = the page buttons, where a friends page sits beside its team's flag: the paw and the ball alone)
-function aPageIcon(pg, w = 40, h = 27, small = false) {
-  if (!pg.team) return `<span class="aemo">${pg.icon}</span>`;
-  if (!pg.friends && !pg.pics) return aMiniFlag(pg.team, w, h);
-  const paw = pg.pics ? A_PIC_ICON : `<svg class="abdg l" viewBox="0 0 20 20">${aC(10, 10, 9.6, "#fff")}<g transform="translate(1.2 1.6) scale(.88)">${A_PAW}</g></svg>`;
-  const ball = pg.pics ? A_SPARK_ICON : `<svg class="abdg r" viewBox="0 0 20 20">${aBasketball(10, 10, 8.6)}</svg>`;
-  if (small) return `<span class="aico f" style="height:${h}px">${paw}${ball}</span>`;
-  return `<span class="aico" style="width:${w}px;height:${h}px">${aMiniFlag(pg.team, w, h)}${paw}${ball}</span>`;
+// a page's picture: the team's flag (crest for a club), else the page's emoji
+function aPageIcon(pg, w = 40, h = 27) { return pg.team ? aMiniFlag(pg.team, w, h) : `<span class="aemo">${pg.icon}</span>`; }
+
+/* ---- a full page's big picture (the owner, 2026-10-03: "a finished page joins into one big picture"): the mains of its
+   stickers in their slots on one backdrop (a team's landmark scene, else the first sticker's), drawn over the grid with
+   the seams where the slots meet; tapping it (or 🧩) shows the stickers again. cols / rows = the grid as laid out ---- */
+const A_CELL_H = 120 * (.07 + .93 * 158 / 120), A_GAP_X = 16.8, A_GAP_Y = 12;      // .aslot's height, .agrid's gaps (CSS) for a 120-wide slot
+function aBigPicture(pg, cols) {
+  const sts = STK.filter(st => st.page === pg), rows = Math.ceil(sts.length / cols);
+  const W = cols * 120 + (cols - 1) * A_GAP_X, H = rows * A_CELL_H + (rows - 1) * A_GAP_Y;
+  const bs = pg.team ? { scene: "land", team: pg.team } : sts[0], back = aParts(bs)[0];
+  const at = i => [(i % cols) * (120 + A_GAP_X), Math.floor(i / cols) * (A_CELL_H + A_GAP_Y)];
+  const seams = [...Array(cols - 1)].map((_, c) => { const x = (c + 1) * (120 + A_GAP_X) - A_GAP_X / 2; return `<path d="M${x.toFixed(1)},0 V${H.toFixed(1)}"/>`; }).join("") +
+    [...Array(rows - 1)].map((_, r) => { const y = (r + 1) * (A_CELL_H + A_GAP_Y) - A_GAP_Y / 2; return `<path d="M0,${y.toFixed(1)} H${W.toFixed(1)}"/>`; }).join("");
+  return `<svg class="abig" viewBox="0 0 ${W.toFixed(1)} ${H.toFixed(1)}" preserveAspectRatio="none" aria-label="The whole page as one picture">` +
+    `<svg width="${W.toFixed(1)}" height="${H.toFixed(1)}" viewBox="0 0 120 158" preserveAspectRatio="xMidYMid slice">${back}</svg>` +
+    sts.map((st, i) => { const [x, y] = at(i); return `<svg x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="120" height="${A_CELL_H.toFixed(1)}" viewBox="0 0 120 158" overflow="visible">${aParts(st)[1]}</svg>`; }).join("") +
+    `<g stroke="#fff" stroke-width="1.6" stroke-dasharray="7 5" opacity=".55">${seams}</g></svg>`;
 }
+let albumBigOff = {};      // pages the child turned back to their stickers (this visit only)
 
 /* ---- the book (kids' 📖 tab): one page at a time, ◀ ▶ or a swipe to turn, the pages' pictures below to jump;
    packs waiting at the top. Opening one: tap the pack (it tears by itself after a moment), three stickers turn over,
@@ -4279,6 +4330,7 @@ function renderAlbum() {
     if (!down) return;
     const dx = ev.clientX - down.x, dy = ev.clientY - down.y; down = null;
     if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) return aTurn(albumPage + (dx < 0 ? 1 : -1));
+    if (ev.target.closest(".abig") && Math.abs(dx) < 12 && Math.abs(dy) < 12) { albumBigOff[A_PAGES[albumPage].id] = true; return aRenderPage(); }
     const slot = ev.target.closest(".aslot.got");
     if (slot && Math.abs(dx) < 12 && Math.abs(dy) < 12) aZoom(STK.find(st => st.id === slot.dataset.st));
   };
@@ -4296,15 +4348,19 @@ function aRenderTop() {
 }
 function aRenderPage() {
   const pl = pzPlayers(), pg = A_PAGES[albumPage], sts = STK.filter(st => st.page === pg), have = sts.filter(st => aCopies(pl, st)).length;
-  $("aPage").className = "apage" + (have === sts.length ? " full" : "");
-  $("aPage").innerHTML = `<div class="ahead">${pg.sec !== pg.team && pg.team ? `<span class="asec">${aMiniFlag(pg.sec, 36, 24)}</span>` : ""}${aPageIcon(pg, 48, 32)}<span class="abar"><i style="width:${100 * have / sts.length}%"></i></span><b>${have}</b><small>/${sts.length}</small></div>
-    <div class="agrid">${sts.map(st => { const c = aCopies(pl, st);
-      return `<div class="aslot${c ? " got" : ""}${st.half ? " h" + st.half : ""}" data-st="${st.id}">${c ? stickerCard(st, c) : `${stickerSvg(st, true)}<span class="anum">${st.n}</span>`}</div>`; }).join("")}</div>`;
+  const full = have === sts.length, lock = sts.length && stkLocked(pl, sts[0]), big = full && !albumBigOff[pg.id];
+  $("aPage").className = "apage" + (full ? " full" : "") + (pg.big ? " p12" : "");
+  $("aPage").innerHTML = `<div class="ahead">${pg.sec !== pg.team && pg.team ? `<span class="asec">${aMiniFlag(pg.sec, 36, 24)}</span>` : ""}${aPageIcon(pg, 48, 32)}<span class="abar"><i style="width:${100 * have / sts.length}%"></i></span><b>${have}</b><small>/${sts.length}</small>` +
+      `${full ? `<button type="button" class="apuz" id="aPuz" aria-pressed="${big}" aria-label="The whole page as one picture">🧩</button>` : ""}</div>
+    <div class="agrid${big ? " big" : ""}" id="aGrid">${sts.map(st => { const c = aCopies(pl, st);
+      return `<div class="aslot${c ? " got" : ""}${lock ? " lock" : ""}" data-st="${st.id}">${c ? stickerCard(st, c) : lock ? `<span class="alock">🔒<br>${pg.icon}</span>` : `${stickerSvg(st, true)}<span class="anum">${st.n}</span>`}</div>`; }).join("")}</div>`;
+  if (big) $("aGrid").insertAdjacentHTML("beforeend", aBigPicture(pg, getComputedStyle($("aGrid")).gridTemplateColumns.split(" ").length));
+  if ($("aPuz")) $("aPuz").onclick = ev => { ev.stopPropagation(); albumBigOff[pg.id] = !albumBigOff[pg.id]; aRenderPage(); };
   $("aPrev").disabled = albumPage === 0; $("aNext").disabled = albumPage === A_PAGES.length - 1;
-  // the pages' pictures, grouped by section (a team's two pages, Portugal's six) in one frame each
+  // the pages' pictures, grouped by section (Portugal's three teams, the worlds, the subjects, the two hero pages) in one frame each
   const btn = (p, i) => {
     const s = STK.filter(st => st.page === p), h = s.filter(st => aCopies(pl, st)).length;
-    return `<button type="button" data-pg="${i}" aria-pressed="${i === albumPage}" class="${h === s.length ? "full" : ""}" aria-label="Page ${i + 1}">${aPageIcon(p, 27, 18, true)}<i><b style="width:${100 * h / s.length}%"></b></i></button>`;
+    return `<button type="button" data-pg="${i}" aria-pressed="${i === albumPage}" class="${h === s.length ? "full" : ""}${s.length && stkLocked(pl, s[0]) ? " lock" : ""}" aria-label="Page ${i + 1}">${aPageIcon(p, 27, 18)}<i><b style="width:${100 * h / s.length}%"></b></i></button>`;
   };
   $("aNav").innerHTML = [...new Set(A_PAGES.map(p => p.sec))].map(sec => `<div class="agrp${pg.sec === sec ? " on" : ""}" data-sec="${sec}">${
     A_PAGES.map((p, i) => p.sec === sec ? btn(p, i) : "").join("")}</div>`).join("");
@@ -4348,9 +4404,9 @@ function aOpenPack() {
       $("aTear").hidden = true;
       // a new sticker: a sparkle badge; a copy: pips towards the next tier, and when it reaches one, the frame turns into it
       $("aReveal").innerHTML = got.map((g, i) => {
-        const c = g.was + 1, up = g.was && stkTier(g.st, c) > stkTier(g.st, g.was);
+        const c = g.was + 1, up = g.was && stkTier(g.st, c) > stkTier(g.st, g.was);      // (aPips: one more pip for a sticker with its own animation)
         return `<div class="aflip${g.was ? " dup" : " new"}" style="--i:${i}" data-st="${g.st.id}"><div class="aback">${A_CARD_BACK}</div><div class="afront">${stickerCard(g.st, up ? g.was : c)}` +
-          `${g.was ? aPips(c) : `<span class="amark anew">${A_NEW}</span>`}</div></div>`;
+          `${g.was ? aPips(c, g.st) : `<span class="amark anew">${A_NEW}</span>`}</div></div>`;
       }).join("");
       got.forEach((g, i) => setTimeout(() => sfx(g.was ? "flip" : "sticker"), 350 + i * 450));
       got.forEach((g, i) => {
@@ -4370,9 +4426,9 @@ function aOpenPack() {
 const A_NEW_PTS = [...Array(24)].map((_, i) => { const a = i * Math.PI / 12, r = i % 2 ? 31 : 48; return (r * Math.sin(a)).toFixed(1) + "," + (-r * Math.cos(a)).toFixed(1); }).join(" ");
 const A_NEW = `<svg viewBox="-50 -50 100 100" aria-hidden="true"><polygon points="${A_NEW_PTS}" fill="#ffca28" stroke="#e65100" stroke-width="3" stroke-linejoin="round"/>
   <path d="M0,-27 Q4,-4 27,0 Q4,4 0,27 Q-4,4 -27,0 Q-4,-4 0,-27Z" fill="#fff"/><path d="M19,-29 Q20.5,-22 27,-21 Q20.5,-20 19,-13 Q17.5,-20 11,-21 Q17.5,-22 19,-29Z" fill="#fff"/></svg>`;
-function aPips(c) {
-  const next = [2, 3, 5].find(x => x > c), n = next || 5;
-  return `<span class="apips" aria-label="${c} copies">${[...Array(n)].map((_, k) => k < c ? `<i class="p${stkTier({}, k + 1)}${k === c - 1 ? " nw" : ""}"></i>` : `<i class="e${stkTier({}, n)}"></i>`).join("")}</span>`;
+function aPips(c, st = {}) {
+  const next = [2, 3, HOLO, stkMax(st)].find(x => x > c), n = next || stkMax(st);
+  return `<span class="apips" aria-label="${c} copies">${[...Array(n)].map((_, k) => k < c ? `<i class="p${stkTier(st, k + 1)}${k === c - 1 ? " nw" : ""}"></i>` : `<i class="e${stkTier(st, n)}"></i>`).join("")}</span>`;
 }
 // a sticker from the tray flies into its slot (turning to its page first)
 function aStick(g, el) {
@@ -4401,7 +4457,7 @@ function aStick(g, el) {
 // a sticker in the book, big, with its ladder: plain, silver, gold, holo (the ones reached lit)
 function aZoom(st) {
   const ov = $("aOverlay"), c = aCopies(pzPlayers(), st), t = stkTier(st, c);
-  ov.innerHTML = `<div class="azoom">${stickerCard(st, c)}<div class="aladder">${[0, 1, 2, 3].map(k => `<i class="l${k}${k <= t ? " on" : ""}"></i>`).join("")}<b>×${c}</b></div></div>`;
+  ov.innerHTML = `<div class="azoom">${stickerCard(st, c)}<div class="aladder">${[0, 1, 2, 3, ...(stkAnim(st) ? [4] : [])].map(k => `<i class="l${k}${k <= t ? " on" : ""}"></i>`).join("")}<b>×${c}</b></div></div>`;
   ov.hidden = false; sfx("flip");
   ov.onclick = () => { ov.hidden = true; ov.onclick = null; ov.innerHTML = ""; };
 }
@@ -4411,7 +4467,8 @@ function albumParents(pl) {
   const a = albumOf(pl), have = STK.filter(st => stkOwned(pl, st)).length, local = location.protocol === "file:";
   return `<figure class="chart wide"><figcaption>Sticker book</figcaption>
     <p class="tiny">A pack of ${PACK_SIZE} stickers for every ${PACK_EVERY > 1 ? PACK_EVERY + " clean solves" : "clean solve"} on the learning path (puzzles, endgames and the review stop; replays of a finished stage don't count), and for each boss beaten ${BOSS_PACKS} packs and its own sticker.
-      Every pack holds at least one sticker missing from the book until it's full. Copies turn a sticker silver (2), gold (3), then holo (5).</p>
+      Every pack holds at least one sticker missing from the book until it's full. Copies turn a sticker silver (2), gold (3), then holo (${HOLO}: it comes alive and leaves the packs; a sticker with its own animation needs ${HOLO + 1} for it);
+      1 card in ${SHINY_ODDS} is shiny. A world's page opens when the path reaches that world. ${aPool(pl).length ? "" : "<b>Every open sticker is holo: no more packs for now.</b>"}</p>
     <div class="tiles"><div class="tile"><span class="lbl">Stickers</span><b>${have}/${STK.length}</b></div>
       <div class="tile"><span class="lbl">Packs opened</span><b>${a.o}</b></div><div class="tile"><span class="lbl">Packs waiting</span><b>${packsWaiting(pl)}</b></div>
       <div class="tile"><span class="lbl">Next pack in</span><b>${PACK_EVERY - aSince(a) % PACK_EVERY} solve${PACK_EVERY - aSince(a) % PACK_EVERY > 1 ? "s" : ""}</b></div></div>
@@ -4813,8 +4870,18 @@ function albumParentsWire(pl) {
     return [bg, aEdge(shadow(60, 148, 50, 2.6) + ant + `<g transform="translate(20 34) scale(.7)">${man}</g>`)];
   }
 
+  /* Spider-Man's own animation (tier 4, one copy past holo): he swings on his web, a bit smaller, about the point where
+     the web sticks (128.7, -2.5: the end of his web line once scaled), the city drifting against him, speed lines at the
+     bottom of the arc (lv-pend / lv-drift / lv-streak in template.html; the pivot was checked at -9° and 11°) */
+  function spidermanSwing() {
+    const [bg, main] = spiderman();
+    const streaks = [[8, 70, 34], [4, 84, 26], [12, 98, 30], [86, 60, 28], [92, 76, 22]].map(([x, y, w]) => `<path d="M${x},${y} h${w}" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/>`).join("");
+    return [`<g transform="translate(-4 0)"><g class="lv-drift"><g transform="scale(1.07) translate(-1 0)">${bg}</g></g></g><g class="lv-streak">${streaks}</g>`,
+      `<g class="lv-pend" style="transform-origin:128.7px -2.5px"><g transform="translate(60 100) scale(.85) translate(-60 -100)">${main}</g></g>`];
+  }
+
   FAN.marvel = [
-    ["Spider-Man", "red and blue suit, web lines, big white lenses; swinging over the skyscrapers, the web-shooter hand shooting a web", spiderman],
+    ["Spider-Man", "red and blue suit, web lines, big white lenses; swinging over the skyscrapers, the web-shooter hand shooting a web", spiderman, spidermanSwing],
     ["Miles Morales", "black suit with red web lines and red spider, a cyan rim light; crouched on a rooftop before a huge glowing moon", miles],
     ["Iron Man", "red and gold armour, glowing arc reactor and eye slits; flying, repulsor blast", ironman],
     ["Hulk", "huge and green, messy black hair, torn purple shorts; flexing both fists, the ground cracking", hulk],
@@ -6639,6 +6706,5482 @@ function albumParentsWire(pl) {
     ["Loop-the-loop", "a big red racer upside-down round the top of the orange loop, sparks flying", loop],
     ["The big jump", "a big blue racer flying over the canyon between two ramps, fire from the exhaust", jump],
   ];
+})();
+
+/* Sticker book theme page "Pokémon": 9 kid favourites, chibi style with dark outlines. holo() = the evolution
+   (Pikachu -> Raichu, Bulbasaur -> Venusaur, ...) on a spectacular backdrop. Living sticker: Pikachu's cheeks crackle. */
+(() => {
+  "use strict";
+  const OL = A_OL;
+  const uid = p => `pk${p}${++aUid}`;
+  const st = (w = 1.4) => `stroke="${OL}" stroke-width="${w}" stroke-linejoin="round" stroke-linecap="round"`;
+  const P = (d, f, w = 1.4, x = "") => `<path d="${d}" fill="${f}" ${st(w)} ${x}/>`;
+  const Pn = (d, f, x = "") => `<path d="${d}" fill="${f}" ${x}/>`;
+  const E = (cx, cy, rx, ry, f, w = 1.4, x = "") => `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${f}" ${st(w)} ${x}/>`;
+  const En = (cx, cy, rx, ry, f, x = "") => `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${f}" ${x}/>`;
+  const line = (d, w = 1.2, c = OL) => `<path d="${d}" fill="none" stroke="${c}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>`;
+  const mir = s => `<g transform="matrix(-1 0 0 1 120 0)">${s}</g>`;
+  const at = (s, x, y, k = 1, a = 0) => `<g transform="translate(${x} ${y}) rotate(${a}) scale(${k})">${s}</g>`;
+  // a filled shape with a part of it painted another colour (ear tips, tail bases): clip, paint, outline on top
+  function tipped(d, fill, inner, w = 1.4) {
+    const id = uid("cl");
+    return `<defs><clipPath id="${id}"><path d="${d}"/></clipPath></defs>` + Pn(d, fill) + `<g clip-path="url(#${id})">${inner}</g>` + `<path d="${d}" fill="none" ${st(w)}/>`;
+  }
+  // anime eye: dark oval, a coloured lower iris, two white highlights
+  const eye = (x, y, rx, ry, iris = "", k = 1) => En(x, y, rx, ry, "#1b1b1b") +
+    (iris ? En(x, +(y + ry * .38).toFixed(2), +(rx * .72).toFixed(2), +(ry * .45).toFixed(2), iris) : "") +
+    aC(x - rx * .28, y - ry * .38, +(rx * .42 * k).toFixed(2), "#fff") + aC(x + rx * .3, y + ry * .2, +(rx * .18).toFixed(2), "#fff");
+  // an eye with a white sclera (Bulbasaur, Charizard...)
+  const eyeW = (x, y, rx, ry, iris, dx = 0) => E(x, y, rx, ry, "#fff", 1.1) + En(x + dx, y + ry * .15, rx * .7, ry * .8, iris) + En(x + dx, y + ry * .2, rx * .32, ry * .45, "#1b1b1b") + aC(x + dx - rx * .25, y - ry * .2, +(rx * .25).toFixed(2), "#fff");
+  const shadow = (x, y, rx) => En(x, y, rx, +(rx * .18).toFixed(1), "#000", 'opacity=".18"');
+  const blush = (x, y, r = 3.5, c = "#ff7a9c") => En(x, y, r, r * .6, c, 'opacity=".55"');
+  const pball = (x, y, r) => P(`M${x - r},${y} A${r},${r} 0 0 1 ${x + r},${y}Z`, "#e53935", 1.2) + P(`M${x - r},${y} A${r},${r} 0 0 0 ${x + r},${y}Z`, "#fafafa", 1.2) +
+    line(`M${x - r},${y} H${x + r}`, r * .2) + aC(x, y, +(r * .32).toFixed(2), "#fff", st(1.2)) + aC(x, y, +(r * .16).toFixed(2), "#fff", st(.7)) +
+    `<path d="M${x - r * .7},${y - r * .35} A${r * .75},${r * .75} 0 0 1 ${x - r * .2},${y - r * .78}" fill="none" stroke="#fff" stroke-width="${(r * .14).toFixed(2)}" stroke-linecap="round" opacity=".75"/>`;
+  const sky = (a, b) => aSky(a, b);
+  const radial = (a, b, cy) => aRadial(uid("rd"), a, b, cy);
+  const tufts = (pts, c = "#3c8f2a") => pts.map(([x, y]) => `<path d="M${x - 2},${y} l1,-3.4 l1,3.4 l1,-4 l1,4" fill="none" stroke="${c}" stroke-width=".8"/>`).join("");
+  const sparks = (pts, c = "#fff") => pts.map(([x, y, r]) => aSpark(x, y, r, c)).join("");
+  const bolt = (x, y, k, c = "#ffe600") => at(P("M2,-14 L-6,1 L0,1 L-3,14 L7,-3 L1,-3 L5,-14Z", c, 1), x, y, k);
+  const flame = (x, y, k = 1, a = 0) => at(P("M0,8 C-7,8 -9,1 -6,-5 C-5,-1 -3,0 -2,-2 C-3,-7 0,-12 3,-15 C3,-9 8,-6 8,1 C8,5 5,8 0,8Z", "#ff7a1a", 1.1) +
+    Pn("M0,6 C-4,6 -5,2 -3,-2 C-2,0 -1,0 0,-2 C0,-5 1,-7 3,-9 C3,-5 5,-2 5,2 C5,4 3,6 0,6Z", "#ffe14d"), x, y, k, a);
+  const note = (x, y, k = 1, c = "#fff") => at(`<g fill="${c}" stroke="${OL}" stroke-width=".9"><ellipse cx="0" cy="0" rx="3.2" ry="2.4" transform="rotate(-20)"/><path d="M2.8,-.8 V-13 Q7,-11 8,-7 Q6,-9 4.4,-9.4 V-.8Z"/></g>`, x, y, k);
+  const heart = (x, y, k = 1, c = "#ff6fa8") => at(P("M0,4 C-6,0 -7,-4 -4,-6 C-2,-7 -1,-6 0,-4 C1,-6 2,-7 4,-6 C7,-4 6,0 0,4Z", c, .9), x, y, k);
+  const meadow = (sk1, sk2, g1, g2, y = 112) => sky(sk1, sk2) + aCloud(8, 18, .9) + aCloud(78, 30, .7) +
+    Pn(`M0,${y} Q30,${y - 12} 62,${y - 4} T120,${y - 6} V158 H0Z`, g1) + Pn(`M0,${y + 14} Q40,${y + 4} 80,${y + 12} T120,${y + 10} V158 H0Z`, g2);
+
+  /* ---------------- 1 Pikachu / Raichu ---------------- */
+  function pikachu() {
+    const Y = "#ffd726", t = [];
+    // tail: a lightning bolt behind, brown at the base
+    t.push(tipped("M70,122 L90,108 L84,102 L102,86 L95,80 L113,56 L86,78 L92,84 L76,98 L82,104 L66,114Z", Y, aR(60, 106, 22, 22, "#a8642a", 'stroke="none"')));
+    // ears with black tips
+    const ear = tipped("M42,60 Q28,42 21,20 Q37,30 52,54Z", Y, aC(20, 18, 13, "#1b1b1b"));
+    t.push(ear, mir(ear));
+    // body, feet, head
+    t.push(P("M44,94 C37,106 37,124 45,133 H75 C83,124 83,106 76,94Z", Y));
+    t.push(E(48, 134, 9, 4.2, Y), E(72, 134, 9, 4.2, Y));
+    t.push(P("M60,49 C81,49 89,62 89,76 C89,91 77,98 60,98 C43,98 31,91 31,76 C31,62 39,49 60,49Z", Y));
+    t.push(eye(48, 72, 4.4, 5.2), eye(72, 72, 4.4, 5.2));
+    t.push(En(60, 79, 1.2, .8, "#1b1b1b"));
+    t.push(P("M54,83 Q57,86 60,83 Q63,86 66,83 Q64,92 60,92 Q56,92 54,83Z", "#c2283b", 1.1), Pn("M56.5,88.5 Q60,86 63.5,88.5 Q62,91.4 60,91.4 Q58,91.4 56.5,88.5Z", "#ff8fa0"));
+    t.push(aC(40, 84, 6, "#f0402e", st(1.1)), aC(80, 84, 6, "#f0402e", st(1.1)));
+    // arms: little paws held up in front
+    t.push(E(49, 106, 4.4, 6, Y, 1.2, 'transform="rotate(-30 49 106)"'), E(71, 106, 4.4, 6, Y, 1.2, 'transform="rotate(30 71 106)"'));
+    t.push(line("M52,120 Q60,123 68,120", .9, "#c9a400"));
+    const spk = [[29, 80, 4.2, 0], [31, 91, 3, .5], [91, 79, 4.2, .9], [89, 91, 3, 1.3], [26, 70, 2.4, .3], [94, 69, 2.4, 1.1]];
+    const live = `<g>${spk.map(([x, y, r, d]) => aSpark(x, y, r, "#fff36b", "lv-tw", `animation-delay:${d}s`)).join("")}</g>`;
+    return [meadow("#8fd3ff", "#e3f6ff", "#7cc95a", "#5cb244") + tufts([[12, 140], [104, 138], [30, 150], [94, 152]]) + pball(100, 128, 7) + shadow(60, 138, 30),
+      aEdge(t.join("")) + live];
+  }
+
+  /* ---------------- 2 Bulbasaur / Venusaur ---------------- */
+  const TEAL = "#7fd3b8", TEALD = "#4fae95";
+  function bulbaFace(cx, cy, k, body, spot, eyes = "#d6283a") {
+    const t = [];
+    const ear = P(`M${cx - 26 * k},${cy - 14 * k} L${cx - 31 * k},${cy - 27 * k} L${cx - 17 * k},${cy - 21 * k}Z`, body, 1.2);
+    t.push(ear, P(`M${cx + 26 * k},${cy - 14 * k} L${cx + 31 * k},${cy - 27 * k} L${cx + 17 * k},${cy - 21 * k}Z`, body, 1.2));
+    t.push(tipped(`M${cx},${cy - 24 * k} C${cx + 25 * k},${cy - 24 * k} ${cx + 37 * k},${cy - 14 * k} ${cx + 37 * k},${cy} C${cx + 37 * k},${cy + 15 * k} ${cx + 22 * k},${cy + 22 * k} ${cx},${cy + 22 * k} C${cx - 22 * k},${cy + 22 * k} ${cx - 37 * k},${cy + 15 * k} ${cx - 37 * k},${cy} C${cx - 37 * k},${cy - 14 * k} ${cx - 25 * k},${cy - 24 * k} ${cx},${cy - 24 * k}Z`,
+      body, Pn(`M${cx - 5 * k},${cy - 25 * k} L${cx + 6 * k},${cy - 25 * k} L${cx + 3 * k},${cy - 15 * k} L${cx - 3 * k},${cy - 17 * k}Z`, spot) +
+        Pn(`M${cx - 38 * k},${cy + 2 * k} L${cx - 31 * k},${cy - 2 * k} L${cx - 29 * k},${cy + 5 * k}Z`, spot) + Pn(`M${cx + 38 * k},${cy + 2 * k} L${cx + 31 * k},${cy - 2 * k} L${cx + 29 * k},${cy + 5 * k}Z`, spot) +
+        Pn(`M${cx + 16 * k},${cy - 22 * k} L${cx + 22 * k},${cy - 20 * k} L${cx + 18 * k},${cy - 15 * k}Z`, spot)));
+    t.push(eyeW(cx - 16 * k, cy - 1 * k, 6.4 * k, 7 * k, eyes, 1.2 * k), eyeW(cx + 16 * k, cy - 1 * k, 6.4 * k, 7 * k, eyes, -1.2 * k));
+    t.push(line(`M${cx - 23 * k},${cy - 9 * k} Q${cx - 16 * k},${cy - 11 * k} ${cx - 10 * k},${cy - 8 * k}`, 1.3 * k), line(`M${cx + 23 * k},${cy - 9 * k} Q${cx + 16 * k},${cy - 11 * k} ${cx + 10 * k},${cy - 8 * k}`, 1.3 * k));
+    t.push(aC(cx - 3 * k, cy + 6 * k, .9 * k, OL), aC(cx + 3 * k, cy + 6 * k, .9 * k, OL));
+    t.push(P(`M${cx - 13 * k},${cy + 10 * k} Q${cx},${cy + 13 * k} ${cx + 13 * k},${cy + 10 * k} Q${cx + 8 * k},${cy + 19 * k} ${cx},${cy + 19 * k} Q${cx - 8 * k},${cy + 19 * k} ${cx - 13 * k},${cy + 10 * k}Z`, "#c2283b", 1.1),
+      Pn(`M${cx - 6 * k},${cy + 16 * k} Q${cx},${cy + 13 * k} ${cx + 6 * k},${cy + 16 * k} Q${cx + 3 * k},${cy + 18.6 * k} ${cx},${cy + 18.6 * k} Q${cx - 3 * k},${cy + 18.6 * k} ${cx - 6 * k},${cy + 16 * k}Z`, "#ff8fa0"));
+    return t.join("");
+  }
+  const claws = (x, y, k = 1) => [-3.4, 0, 3.4].map(dx => P(`M${x + dx * k - 1.4 * k},${y} L${x + dx * k},${y + 3 * k} L${x + dx * k + 1.4 * k},${y}Z`, "#fff", .8)).join("");
+  function bulbasaur() {
+    const t = [];
+    // the bulb on its back
+    t.push(P("M60,22 C64,28 82,34 86,52 C89,66 74,74 60,74 C46,74 31,66 34,52 C38,34 56,28 60,22Z", "#5fbf5a"));
+    t.push(Pn("M60,26 C66,34 78,40 80,52 C76,46 68,40 60,38Z", "#8be07a"), line("M60,24 Q55,48 60,72", 1.1, "#2f7d2c"), line("M50,32 Q41,50 47,71", 1.1, "#2f7d2c"), line("M70,32 Q79,50 73,71", 1.1, "#2f7d2c"));
+    // body and legs
+    t.push(E(60, 104, 36, 20, TEAL));
+    t.push(Pn("M30,96 L38,92 L36,100Z", TEALD), Pn("M88,94 L94,99 L86,101Z", TEALD));
+    t.push(E(36, 122, 10, 11, TEAL), E(84, 122, 10, 11, TEAL), claws(36, 130.5), claws(84, 130.5));
+    t.push(bulbaFace(60, 92, .82, TEAL, TEALD));
+    return [meadow("#9ad8ff", "#eaf8ff", "#8ed35f", "#6cbf48", 110) + tufts([[10, 138], [108, 136], [24, 152], [96, 150]]) +
+      [[18, 126, "#ff8fb1"], [102, 124, "#fff176"], [12, 148, "#fff"], [108, 150, "#ff8fb1"]].map(([x, y, c]) => aC(x, y, 2.2, c) + aC(x, y, .9, "#ffd23f")).join("") + shadow(60, 136, 38),
+      aEdge(t.join(""))];
+  }
+
+  /* ---------------- 3 Charmander / Charizard ---------------- */
+  const OR = "#f8963a", CR = "#fde5a0";
+  function charmander() {
+    const t = [];
+    // tail curling up on the right, the flame on its tip
+    t.push(P("M70,120 C88,124 98,116 98,104 C98,96 94,90 96,84 L101,85 C100,92 105,98 104,106 C103,122 88,131 70,128Z", OR));
+    t.push(flame(99, 76, 1.25));
+    // body
+    t.push(P("M46,86 C38,96 38,120 46,130 H74 C82,120 82,96 74,86Z", OR));
+    t.push(Pn("M50,96 C46,106 47,120 52,127 H68 C73,120 74,106 70,96Z", CR));
+    // feet with claws
+    t.push(E(47, 132, 8, 4.4, OR), E(73, 132, 8, 4.4, OR), claws(44, 134, .7), claws(76, 134, .7));
+    // head
+    t.push(P("M60,34 C80,34 88,48 88,62 C88,78 76,88 60,88 C44,88 32,78 32,62 C32,48 40,34 60,34Z", OR));
+    t.push(eye(48, 60, 5, 7, "#2b6fd6"), eye(72, 60, 5, 7, "#2b6fd6"));
+    t.push(aC(57, 69, .8, OL), aC(63, 69, .8, OL));
+    t.push(P("M46,73 Q60,79 74,73 Q70,84 60,84 Q50,84 46,73Z", "#c2283b", 1.1), Pn("M53,81 Q60,77 67,81 Q64,83.6 60,83.6 Q56,83.6 53,81Z", "#ff8fa0"));
+    t.push(P("M48,74 L50,77 L52,75Z", "#fff", .6), P("M72,74 L70,77 L68,75Z", "#fff", .6));
+    t.push(blush(40, 70), blush(80, 70));
+    // arms
+    const arm = P("M45,98 C38,100 34,106 36,110 C38,113 42,111 48,104Z", OR, 1.2);
+    t.push(arm, mir(arm));
+    const bg = sky("#ffb36b", "#ffe4b8") + aSun(30, 40, 12) +
+      Pn("M0,98 L18,74 L30,84 L46,62 L62,82 L76,70 L96,90 L108,78 L120,88 V158 H0Z", "#c97b4a") + Pn("M0,108 L22,92 L44,104 L70,94 L94,106 L120,98 V158 H0Z", "#a95f36") +
+      Pn("M0,124 Q60,116 120,124 V158 H0Z", "#d9a26a") + [[16, 134], [104, 140], [34, 150]].map(([x, y]) => E(x, y, 5, 3, "#b98455", 1)).join("") + shadow(62, 136, 30);
+    return [bg, aEdge(t.join(""))];
+  }
+
+  /* ---------------- 4 Squirtle / Blastoise ---------------- */
+  const BL = "#8ccfec", SH = "#b8642a", BY = "#f5d98a";
+  function squirtle() {
+    const t = [];
+    // curly tail on the left
+    t.push(P("M44,118 C30,122 18,118 18,108 C18,100 26,96 32,100 C36,103 34,110 28,108 C30,112 38,112 42,110Z", BL, 1.3));
+    // shell rim around the body, then the belly plates
+    t.push(P("M40,84 C30,96 30,122 42,132 H78 C90,122 90,96 80,84Z", SH));
+    t.push(P("M46,88 C40,100 40,120 48,128 H72 C80,120 80,100 74,88Z", BY, 1.2), line("M47,100 H73 M46,112 H74 M60,88 V128", 1, "#c9a14a"));
+    t.push(Pn("M41,90 C38,96 37,104 37,110", "none", `stroke="#fff" stroke-width="1.6" opacity=".5" stroke-linecap="round"`));
+    // feet and arms
+    t.push(E(47, 133, 8, 4.4, BL), E(73, 133, 8, 4.4, BL));
+    const arm = P("M42,94 C34,96 30,104 32,108 C34,112 40,108 44,102Z", BL, 1.2);
+    t.push(arm, mir(arm));
+    // head
+    t.push(P("M60,32 C80,32 89,46 89,60 C89,76 77,86 60,86 C43,86 31,76 31,60 C31,46 40,32 60,32Z", BL));
+    t.push(eye(48, 58, 5, 7, "#a34b2c"), eye(72, 58, 5, 7, "#a34b2c"));
+    t.push(aC(57, 67, .7, OL), aC(63, 67, .7, OL));
+    t.push(P("M48,71 Q60,77 72,71 Q68,81 60,81 Q52,81 48,71Z", "#c2283b", 1.1), Pn("M54,78.6 Q60,75 66,78.6 Q63,80.6 60,80.6 Q57,80.6 54,78.6Z", "#ff8fa0"));
+    t.push(blush(40, 68), blush(80, 68));
+    const bg = sky("#7fd0ff", "#dff4ff") + aCloud(14, 16, .8) + aCloud(80, 26, .7) +
+      aWaves(92, "#2f9be0", "#bfe9ff", 3) + Pn("M0,122 Q60,110 120,122 V158 H0Z", "#f6dca0") + aC(104, 138, 3, "#ff8a65", st(.8)) + aC(14, 146, 2.4, "#fff", st(.8)) + shadow(60, 136, 30);
+    return [bg, aEdge(t.join(""))];
+  }
+
+  /* ---------------- 5 Eevee / Sylveon ---------------- */
+  function eevee() {
+    const t = [], Bn = "#bd8148", D = "#6d4524", Cm = "#fbecc4";
+    // fluffy tail up on the right with a cream tip
+    t.push(tipped("M72,122 C92,124 104,110 102,94 C100,82 108,74 106,66 C96,70 88,80 86,92 C84,104 78,112 70,114Z", Bn, aC(108, 66, 14, Cm)));
+    // body sitting
+    t.push(P("M44,96 C36,108 38,126 46,134 H74 C82,126 84,108 76,96Z", Bn));
+    t.push(E(48, 135, 8, 4, Bn), E(72, 135, 8, 4, Bn));
+    // long ears with dark insides
+    const ear = P("M42,52 C32,40 26,22 26,8 C38,16 48,30 54,44Z", Bn) + Pn("M42,47 C35,38 31,26 31,16 C39,23 45,32 49,42Z", D);
+    t.push(ear, mir(ear));
+    // fluffy cream collar
+    t.push(P("M36,86 L42,92 L40,98 L48,98 L50,104 L56,100 L60,106 L64,100 L70,104 L72,98 L80,98 L78,92 L84,86 L60,90Z", Cm, 1.2));
+    // head
+    t.push(P("M60,40 C78,40 88,52 88,66 C88,80 76,90 60,90 C44,90 32,80 32,66 C32,52 42,40 60,40Z", Bn));
+    t.push(Pn("M50,42 L54,50 L57,42 L60,50 L63,42 L66,50 L70,42Z", Bn), line("M50,42 L54,50 L57,42 L60,50 L63,42 L66,50 L70,42", 1.2));
+    t.push(eye(48, 66, 5, 6.6, "#6b3a1a"), eye(72, 66, 5, 6.6, "#6b3a1a"));
+    t.push(En(60, 74, 1.4, 1, OL));
+    t.push(line("M56,78 Q58,80.5 60,78 Q62,80.5 64,78", 1.1));
+    t.push(blush(41, 75), blush(79, 75));
+    const bg = meadow("#a7dcff", "#f0faff", "#94d36b", "#73c24f", 114) + tufts([[12, 140], [104, 138], [28, 152], [94, 152]]) +
+      [[14, 128, "#ff8fb1"], [106, 126, "#fff176"], [20, 150, "#b39ddb"], [102, 150, "#ff8fb1"], [8, 116, "#fff"]].map(([x, y, c]) => aC(x, y, 2.3, c) + aC(x, y, .9, "#ffd23f")).join("") + shadow(62, 138, 32);
+    return [bg, aEdge(t.join(""))];
+  }
+
+  /* ---------------- 6 Jigglypuff / Wigglytuff ---------------- */
+  const PK = "#fcb6cf";
+  function jiggly(cx, cy, r, big) {
+    const t = [];
+    const ear = P(`M${cx - r * .62},${cy - r * .66} L${cx - r * .66},${cy - r * 1.08} L${cx - r * .24},${cy - r * .9}Z`, PK, 1.3) + Pn(`M${cx - r * .6},${cy - r * .8} L${cx - r * .64},${cy - r * 1.02} L${cx - r * .42},${cy - r * .92}Z`, "#2b2b2b");
+    t.push(ear, mir(ear));
+    // feet then the round body
+    t.push(E(cx - r * .42, cy + r * .94, r * .3, r * .14, PK), E(cx + r * .42, cy + r * .94, r * .3, r * .14, PK));
+    t.push(aC(cx, cy, r, PK, st(1.5)));
+    t.push(`<path d="M${cx - r * .7},${cy - r * .45} A${r * .82},${r * .82} 0 0 1 ${cx - r * .2},${cy - r * .8}" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".55"/>`);
+    // the curl on the forehead
+    t.push(P(`M${cx + r * .1},${cy - r} C${cx - r * .12},${cy - r * .7} ${cx - r * .32},${cy - r * .66} ${cx - r * .3},${cy - r * .48} C${cx - r * .28},${cy - r * .34} ${cx - r * .06},${cy - r * .36} ${cx - r * .08},${cy - r * .52} C${cx - r * .1},${cy - r * .6} ${cx - r * .2},${cy - r * .58} ${cx - r * .18},${cy - r * .5}`, "none", 1.3));
+    // big blue eyes
+    const eb = (x) => E(x, cy - r * .02, r * .2, r * .24, "#fff", 1.2) + En(x, cy + r * .02, r * .17, r * .2, "#2fa0c8") + En(x, cy + r * .04, r * .09, r * .12, "#123") +
+      aC(x - r * .06, cy - r * .1, +(r * .07).toFixed(2), "#fff") + aC(x + r * .06, cy + r * .1, +(r * .03).toFixed(2), "#fff");
+    t.push(eb(cx - r * .34), eb(cx + r * .34));
+    t.push(blush(cx - r * .62, cy + r * .3, r * .1), blush(cx + r * .62, cy + r * .3, r * .1));
+    t.push(P(`M${cx - r * .1},${cy + r * .36} Q${cx},${cy + r * .5} ${cx + r * .1},${cy + r * .36}Z`, "#c2283b", 1));
+    // arms
+    t.push(E(cx - r * .98, cy + r * .2, r * .16, r * .1, PK, 1.2, `transform="rotate(-30 ${cx - r * .98} ${cy + r * .2})"`), E(cx + r * .98, cy + r * .2, r * .16, r * .1, PK, 1.2, `transform="rotate(30 ${cx + r * .98} ${cy + r * .2})"`));
+    return t.join("");
+  }
+  function jigglypuff() {
+    // the microphone (its marker) in the right hand
+    const mic = at(P("M-2,0 L-3,24 H3 L2,0Z", "#2f2f2f", 1.1) + aC(0, -3, 5, "#4a4a4a", st(1.2)) + `<path d="M-3,-5 A4,4 0 0 1 1,-7" fill="none" stroke="#fff" stroke-width="1.1" opacity=".7"/>`, 96, 84, 1, 20);
+    const bg = radial("#b39ddb", "#311b92", ".3") + `<polygon points="44,0 76,0 104,158 16,158" fill="#fff9c4" opacity=".28"/>` +
+      Pn("M0,132 H120 V158 H0Z", "#6a1b9a") + line("M0,132 H120", 1.4) +
+      note(16, 40, 1.1) + note(102, 34, 1, "#ffd54f") + note(14, 100, .9, "#80deea") + note(106, 108, 1.1, "#f8bbd0") + sparks([[30, 20, 3], [90, 60, 2.6], [26, 70, 2.2]], "#fff59d");
+    return [bg, aEdge(jiggly(60, 88, 34) + mic)];
+  }
+
+  /* ---------------- 7 Psyduck / Golduck ---------------- */
+  function psyduck() {
+    const t = [], Y = "#fcd94e", Bk = "#f6e7b8";
+    // body
+    t.push(P("M42,90 C32,102 34,126 46,134 H74 C86,126 88,102 78,90Z", Y));
+    t.push(P("M38,132 L32,138 L42,138 L46,134 L52,138 L52,132Z", Bk, 1.1), P("M82,132 L88,138 L78,138 L74,134 L68,138 L68,132Z", Bk, 1.1));
+    // arms reaching up to hold its head
+    const arm = P("M44,96 C32,92 24,80 26,68 L33,66 C34,76 40,84 48,88Z", Y, 1.3) + P("M26,68 C22,64 24,58 28,58 C30,56 34,58 34,62 C36,62 37,66 33,67Z", Bk, 1.1);
+    t.push(arm, mir(arm));
+    // the three hairs
+    t.push(line("M60,30 Q58,20 54,16", 1.6), line("M60,30 Q60,18 61,13", 1.6), line("M60,30 Q63,20 68,17", 1.6));
+    // head
+    t.push(P("M60,28 C80,28 90,42 90,58 C90,76 78,88 60,88 C42,88 30,76 30,58 C30,42 40,28 60,28Z", Y));
+    // blank, puzzled eyes
+    t.push(E(47, 54, 7, 7.6, "#fff", 1.2), E(73, 54, 7, 7.6, "#fff", 1.2), aC(48, 55, 1.5, "#1b1b1b"), aC(72, 55, 1.5, "#1b1b1b"));
+    // the wide flat bill
+    t.push(P("M44,68 C44,62 52,60 60,60 C68,60 76,62 76,68 C76,76 68,79 60,79 C52,79 44,76 44,68Z", Bk), line("M47,70 Q60,73 73,70", 1), aC(56, 64, .8, OL), aC(64, 64, .8, OL));
+    // a "?" style puzzlement: three little sweat drops
+    t.push(P("M88,38 C86,42 86,44 88,45 C90,44 90,42 88,38Z", "#8fd3ff", .8), P("M94,46 C92,49 92,51 94,52 C96,51 96,49 94,46Z", "#8fd3ff", .8));
+    const bg = sky("#a5dcff", "#e8f7ff") + aCloud(76, 14, .8) + Pn("M0,96 Q60,84 120,96 V158 H0Z", "#7cc95a") +
+      E(60, 132, 58, 18, "#4fb3e8", 1.2) + Pn("M10,128 Q30,124 44,128 M70,138 Q86,134 104,138", "none", 'stroke="#c6ecff" stroke-width="1.4" stroke-linecap="round"') +
+      E(16, 138, 8, 3.4, "#5fbf5a", 1) + E(102, 128, 7, 3, "#5fbf5a", 1) + aC(104, 127, 1.8, "#ff8fb1") +
+      tufts([[8, 108], [112, 106], [96, 112]], "#2e7d32");
+    return [bg, aEdge(t.join(""))];
+  }
+
+  /* ---------------- 8 Togepi / Togekiss ---------------- */
+  const triPat = (cx, cy) => [[-12, 8, "#e53950"], [8, 4, "#3f7fe0"], [-2, 20, "#3f7fe0"], [14, 18, "#e53950"], [-20, 22, "#e53950"]]
+    .map(([dx, dy, c]) => P(`M${cx + dx - 4},${cy + dy + 3} L${cx + dx},${cy + dy - 4} L${cx + dx + 4},${cy + dy + 3}Z`, c, .9)).join("");
+  function togepi() {
+    const t = [], Cr = "#fdf1c0";
+    // the head's crown of five spikes
+    t.push(P("M38,64 L34,46 L44,54 L46,36 L54,50 L60,30 L66,50 L74,36 L76,54 L86,46 L82,64Z", Cr));
+    t.push(P("M60,40 C78,40 86,52 86,66 C86,80 74,88 60,88 C46,88 34,80 34,66 C34,52 42,40 60,40Z", Cr));
+    t.push(eye(50, 64, 3.6, 4.6), eye(70, 64, 3.6, 4.6));
+    t.push(P("M54,72 Q60,80 66,72Z", "#c2283b", 1), blush(42, 72), blush(78, 72));
+    // tiny arms up
+    t.push(E(30, 90, 4.4, 6, Cr, 1.2, 'transform="rotate(-40 30 90)"'), E(90, 90, 4.4, 6, Cr, 1.2, 'transform="rotate(40 90 90)"'));
+    // the eggshell body with its triangle pattern, zig-zag top
+    t.push(tipped("M32,90 L38,84 L44,90 L50,84 L56,90 L62,84 L68,90 L74,84 L80,90 L88,86 C92,104 86,128 60,132 C34,128 28,104 32,90Z", "#fffdf6", triPat(60, 98)));
+    t.push(E(48, 134, 7, 3.6, Cr), E(72, 134, 7, 3.6, Cr));
+    const bg = sky("#9ed8ff", "#fff3e0") +
+      ["#ef5350", "#ffa726", "#ffee58", "#66bb6a", "#42a5f5", "#ab47bc"].map((c, i) => `<path d="M-10,${120 + i * 0} A${70 - i * 5},${70 - i * 5} 0 0 1 ${130},120" fill="none" stroke="${c}" stroke-width="5" opacity=".55" transform="translate(0 ${i * 5})"/>`).join("") +
+      aCloud(2, 104, 1.1) + aCloud(88, 100, 1) + Pn("M0,128 Q60,118 120,128 V158 H0Z", "#9ad66b") + tufts([[14, 142], [104, 140], [30, 152], [90, 152]]) + shadow(60, 137, 26);
+    return [bg, aEdge(t.join(""))];
+  }
+
+  /* ---------------- 9 Magikarp / Gyarados ---------------- */
+  function magikarp() {
+    const t = [], R = "#f2552c", Cm = "#fbe8b0", Fn = "#f7d774";
+    // tail fin on the right, crown-like dorsal fin on top
+    t.push(P("M92,86 L114,64 L110,86 L116,110 Z", Fn), line("M96,86 L110,72 M98,88 L112,102", 1, "#d4a43a"));
+    t.push(P("M44,50 L48,34 L54,46 L60,30 L64,44 L72,32 L74,48 L82,40 L82,56Z", Fn), line("M52,48 L54,40 M62,46 L62,38 M72,48 L72,40", 1, "#d4a43a"));
+    // body (tipped: cream belly)
+    t.push(tipped("M18,84 C18,60 40,48 62,48 C84,48 96,70 96,86 C96,104 82,120 60,120 C38,120 18,108 18,84Z", R,
+      En(56, 120, 40, 16, Cm) + [...Array(8)].map((_, i) => `<path d="M${52 + (i % 4) * 10},${70 + Math.floor(i / 4) * 14} q5,6 10,0" fill="none" stroke="#b83a1a" stroke-width="1"/>`).join("")));
+    // side fin
+    t.push(P("M56,96 L72,110 L66,98 L76,100Z", Fn, 1.1));
+    // the huge round eye, the pouty mouth and the whiskers
+    t.push(aC(36, 74, 9, "#fff", st(1.3)), aC(37, 75, 2.4, "#1b1b1b"));
+    t.push(P("M18,88 C14,84 14,96 18,94 C20,93 21,90 18,88Z", "#ffd0b8", 1.2));
+    t.push(line("M24,82 C14,76 8,80 6,86", 3.4), line("M24,82 C14,76 8,80 6,86", 1.6, Fn), line("M26,96 C18,104 10,104 6,100", 3.4), line("M26,96 C18,104 10,104 6,100", 1.6, Fn));
+    t.push(`<path d="M42,58 C50,54 58,52 66,53" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".55"/>`);
+    // flopping out of the river: splash drops
+    const drops = [[20, 46, 3], [100, 46, 2.6], [12, 120, 2.4], [108, 126, 3]].map(([x, y, r]) => P(`M${x},${y - r * 1.6} C${x - r},${y} ${x - r},${y + r} ${x},${y + r} C${x + r},${y + r} ${x + r},${y} ${x},${y - r * 1.6}Z`, "#bfe9ff", .8)).join("");
+    const bg = sky("#8fd3ff", "#e6f7ff") + aCloud(8, 14, .8) + aCloud(84, 24, .7) +
+      Pn("M0,106 Q30,98 60,104 T120,100 V158 H0Z", "#2f9be0") + Pn("M0,124 Q30,116 60,122 T120,118 V158 H0Z", "#1f7fc4") +
+      Pn("M30,132 Q40,124 50,132 Q60,124 70,132 Q80,124 90,132", "none", 'stroke="#d6f2ff" stroke-width="2" stroke-linecap="round"');
+    return [bg, aEdge(at(t.join(""), 60, 82, 1, -12) .replace(`translate(60 82) rotate(-12) scale(1)`, `rotate(-12 60 82)`)) + drops];
+  }
+
+  FAN.pokemon = [
+    ["Pikachu", "The electric mouse with red cheeks and a lightning-bolt tail; its cheeks crackle", pikachu],
+    ["Bulbasaur", "The teal seed Pokémon with a green bulb on its back", bulbasaur],
+    ["Charmander", "The little fire lizard, a flame on its tail, in a sunset canyon", charmander],
+    ["Squirtle", "The little blue turtle on the beach", squirtle],
+    ["Eevee", "Brown fox with a fluffy cream collar and tail", eevee],
+    ["Jigglypuff", "The round pink singer with its microphone on a stage", jigglypuff],
+    ["Psyduck", "The puzzled yellow duck holding its head by a pond", psyduck],
+    ["Togepi", "The baby in an eggshell under a rainbow", togepi],
+    ["Magikarp", "The splashing orange fish", magikarp],
+  ];
+})();
+
+/* Sticker book page "Mario": 9 stickers of the Mushroom Kingdom (Mario, Luigi, Peach, Yoshi, Toad, Bowser, Donkey Kong,
+   Rosalina, Boo), chibi style with dark outlines on Mushroom Kingdom backdrops (hills, pipes, ? blocks, castles).
+   Living sticker: Boo floats up and down. */
+(() => {
+  "use strict";
+  const OL = A_OL;
+  const uid = p => `mr${p}${++aUid}`;
+  const st = (w = 1.4) => `stroke="${OL}" stroke-width="${w}" stroke-linejoin="round" stroke-linecap="round"`;
+  const P = (d, f, w = 1.4, x = "") => `<path d="${d}" fill="${f}" ${st(w)} ${x}/>`;
+  const Pn = (d, f, x = "") => `<path d="${d}" fill="${f}" ${x}/>`;
+  const E = (cx, cy, rx, ry, f, w = 1.4, x = "") => `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${f}" ${st(w)} ${x}/>`;
+  const En = (cx, cy, rx, ry, f, x = "") => `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${f}" ${x}/>`;
+  const line = (d, w = 1.2, c = OL) => `<path d="${d}" fill="none" stroke="${c}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>`;
+  const mir = s => `<g transform="matrix(-1 0 0 1 120 0)">${s}</g>`;
+  const at = (s, x, y, k = 1, a = 0) => `<g transform="translate(${x} ${y}) rotate(${a}) scale(${k})">${s}</g>`;
+  const r1 = v => +(+v).toFixed(2);
+  function tipped(d, fill, inner, w = 1.4) {
+    const id = uid("cl");
+    return `<defs><clipPath id="${id}"><path d="${d}"/></clipPath></defs>` + Pn(d, fill) + `<g clip-path="url(#${id})">${inner}</g>` + `<path d="${d}" fill="none" ${st(w)}/>`;
+  }
+  // a Mario-style eye: tall white oval, coloured iris, black pupil, highlight
+  const eyeO = (x, y, rx, ry, iris) => E(x, y, rx, ry, "#fff", 1.1) + En(x, r1(y + ry * .15), r1(rx * .74), r1(ry * .72), iris) +
+    En(x, r1(y + ry * .2), r1(rx * .42), r1(ry * .45), "#111") + aC(x - rx * .3, y - ry * .28, r1(rx * .32), "#fff");
+  const shadow = (x, y, rx) => En(x, y, rx, r1(rx * .18), "#000", 'opacity=".18"');
+  const blush = (x, y, r = 3.4, c = "#ff7a9c") => En(x, y, r, r1(r * .6), c, 'opacity=".55"');
+  const star5 = (x, y, r, f, w = 1.1) => `<polygon points="${[...Array(10)].map((_, i) => { const rr = i % 2 ? r * .48 : r, a = -Math.PI / 2 + i * Math.PI / 5; return `${r1(x + rr * Math.cos(a))},${r1(y + rr * Math.sin(a))}`; }).join(" ")}" fill="${f}" ${st(w)}/>`;
+
+  /* ---------------- backdrop pieces ---------------- */
+  const hill = (x, y, w, h, c) => P(`M${x},${y} C${x},${y - h} ${x + w},${y - h} ${x + w},${y}Z`, c, 1.2) +
+    En(x + w * .35, y - h * .5, 1.4, 2.4, "#1f6b2a", 'opacity=".55"') + En(x + w * .62, y - h * .42, 1.4, 2.4, "#1f6b2a", 'opacity=".55"');
+  const bricks = (y = 146, c = "#c8641c") => aR(-1, y, 122, 158 - y + 1, c, "") +
+    line(`M0,${y + 6} H120`, .8) + [...Array(8)].map((_, i) => line(`M${i * 16 + 8},${y} V${y + 6} M${i * 16},${y + 6} V158`, .8)).join("");
+  const qmark = `<path d="M-3,-2.6 Q-3,-6 .2,-6 Q3.6,-6 3.6,-3 Q3.6,-.8 .6,.2 V2" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/>` + aC(.6, 5, 1.3, "#fff");
+  const qblock = (x, y, k = 1) => at(aR(-8, -8, 16, 16, "#f8b800", 'rx="2"') + [[-5.5, -5.5], [5.5, -5.5], [-5.5, 5.5], [5.5, 5.5]].map(([a, b]) => aC(a, b, .9, "#7a4a00")).join("") +
+    at(qmark, .7, .7, 1) .replace(/#fff/g, "#7a4a00") + qmark, x, y, k);
+  const pipe = (x, y, w, h) => aR(x + 2, y + 8, w - 4, h - 8, "#2fa53a") + Pn(`M${x + 5},${y + 9} h3 V${y + h} h-3Z`, "#8be08b") +
+    aR(x, y, w, 9, "#38c444", 'rx="1.5"') + Pn(`M${x + 3},${y + 1.5} h3 v6 h-3Z`, "#9ff09f");
+  const coin = (x, y, r = 5) => E(x, y, r1(r * .72), r, "#ffcc00", 1.1) + En(x, y, r1(r * .2), r1(r * .55), "#fff1a6");
+  const mushroom = (x, y, k = 1, cap = "#e53935") => at(P("M-5,0 V6 Q0,9 5,6 V0Z", "#fff3dc", 1) + P("M-10,1 C-10,-12 10,-12 10,1Z", cap, 1.1) +
+    aC(0, -6, 2.6, "#fff") + aC(-6.5, -2, 1.8, "#fff") + aC(6.5, -2, 1.8, "#fff") + En(-1.8, 3, .7, 1.3, "#111") + En(1.8, 3, .7, 1.3, "#111"), x, y, k);
+  function overworld(o = {}) {
+    const s = [aSky(o.sky1 || "#4fb4ff", o.sky2 || "#c8eeff"), aCloud(6, 16, .8), aCloud(84, 30, .6)];
+    s.push(hill(-14, 146, 46, 60, "#4cc35a"), hill(78, 146, 56, 46, "#3aa84a"), hill(20, 146, 30, 26, "#6bd673"));
+    s.push(bricks());
+    return s.join("");
+  }
+
+  /* ---------------- 1-2 Mario and Luigi ---------------- */
+  const OV = "#2b5bd7", SKIN = "#ffcb9a", BR = "#3b2314";
+  const armDown = (side, col) => { const t = aL([[44, 100], [35, 110], [31, 120]], col, 6) + aC(30, 122, 6, "#fff", st(1.2)); return side > 0 ? t : mir(t); };
+  const armUp = (side, col) => { const t = aL([[44, 100], [34, 88], [32, 77]], col, 6) + aC(32, 72, 6.5, "#fff", st(1.2)) + line("M28.5,71 h7 M28.5,74 h7", .7); return side > 0 ? t : mir(t); };
+  function plumber(o) {
+    const t = [shadow(60, 148, 30)];
+    t.push(E(46, 142, 10.5, 5.5, "#7a3f1c"), E(74, 142, 10.5, 5.5, "#7a3f1c"));
+    t.push(P("M42,98 Q60,90 78,98 L79,118 H41Z", o.shirt));
+    t.push(o.up > 0 ? armUp(1, o.shirt) + armDown(-1, o.shirt) : armUp(-1, o.shirt) + armDown(1, o.shirt));
+    t.push(P("M41,112 Q60,116 79,112 L78,138 H64 L60,126 L56,138 H42Z", OV));
+    t.push(P("M48,100 H72 L73,114 H47Z", OV), aL([[48.5, 101], [45, 94]], OV, 2.4), aL([[71.5, 101], [75, 94]], OV, 2.4));
+    t.push(aC(51, 104.5, 2.2, "#ffd54a", st(.8)), aC(69, 104.5, 2.2, "#ffd54a", st(.8)));
+    // head
+    t.push(E(38.5, 72, 4.2, 5.6, SKIN), E(81.5, 72, 4.2, 5.6, SKIN));
+    t.push(E(60, 70, 21, 20, SKIN, 1.6));
+    t.push(Pn("M40,62 Q38,72 42,78 L44,64Z", BR), Pn("M80,62 Q82,72 78,78 L76,64Z", BR));
+    t.push(E(61, 61.5, 23, 5, o.cap, 1.4));
+    t.push(P("M37,61.5 C35,35 85,35 83,61.5 Q60,55 37,61.5Z", o.cap, 1.6));
+    t.push(aC(60, 48, 7, "#fff", st(1)), line(o.letter, 2, o.cap));
+    t.push(eyeO(53, 72, 3.7, 5.4, "#2b6fe0"), eyeO(67, 72, 3.7, 5.4, "#2b6fe0"));
+    t.push(P("M54,88 Q60,96 66,88Z", "#c62828", .9));
+    t.push(P(o.stache, BR, 1));
+    t.push(E(61, 80.5, 6.5, 5, SKIN, 1.2), aC(58.8, 78.6, 1.5, "#fff", 'opacity=".7"'));
+    return t.join("");
+  }
+  function mario() {
+    const bg = overworld() + qblock(88, 22) + qblock(104, 22) + coin(96, 6) + coin(14, 50) + pipe(96, 112, 22, 34);
+    return [bg, aEdge(plumber({ cap: "#e52521", shirt: "#e52521", up: 1, letter: "M56.5,51.5 V44.5 L60,48.5 L63.5,44.5 V51.5",
+      stache: "M45,86 Q49,80 55,83.5 Q60,81.5 65,83.5 Q71,80 75,86 Q72,90 67.5,88 Q64,91 61,88.5 Q57,91 53.5,88 Q48,90 45,86Z" }))];
+  }
+  function luigi() {
+    const bg = overworld({ sky1: "#5cc0ff", sky2: "#d6f4ff" }) + pipe(2, 104, 22, 42) + qblock(100, 22) + coin(84, 14) + coin(96, 46);
+    return [bg, aEdge(plumber({ cap: "#2fa83a", shirt: "#2fa83a", up: -1, letter: "M58,44.5 V51.5 H63",
+      stache: "M46,84 Q48,88 53,87.5 Q57,86 60,84.5 Q63,86 67,87.5 Q72,88 74,84 Q76,88 72,90 Q66,91 60,88 Q54,91 48,90 Q44,88 46,84Z" }))];
+  }
+
+  /* ---------------- 3 Princess Peach ---------------- */
+  const tower = (x, y, w, h, roof) => aR(x, y, w, h, "#fbf3e6") + P(`M${x - 2},${y} L${x + w / 2},${y - w * 1.1} L${x + w + 2},${y}Z`, roof, 1.2) +
+    P(`M${x + w / 2 - 2.5},${y + h * .3} a2.5,2.5 0 0 1 5,0 v5 h-5Z`, "#3b2a5a", 1);
+  function peach() {
+    const bg = aSky("#ffbfdc", "#fff1f8") + aCloud(42, 10, .7) + tower(4, 70, 18, 76, "#e8434f") + tower(98, 64, 18, 82, "#e8434f") +
+      hill(-10, 146, 40, 24, "#6bd673") + hill(84, 146, 46, 22, "#4cc35a") + aSpark(30, 30, 3.5, "#fff") + aSpark(92, 22, 3, "#fff") + bricks(148, "#e7a0c0");
+    const H = "#ffd447", PK = "#ff8cc6", sk = "#ffe2cc", t = [shadow(60, 149, 34)];
+    t.push(P("M36,64 C32,36 88,36 84,64 L90,98 Q84,104 76,96 L74,80 H46 L44,96 Q36,104 30,98Z", H));
+    t.push(P("M49,98 Q44,120 28,146 Q60,154 92,146 Q76,120 71,98Z", PK, 1.5));
+    t.push(P("M33,138 Q46,146 60,140 Q74,146 87,138 L91,146 Q60,154 29,146Z", "#f06aa8", 1.2));
+    t.push(line("M44,118 Q52,124 60,118 Q68,124 76,118", 1, "#e0559a"));
+    t.push(P("M50,84 Q60,88 70,84 L72,100 H48Z", PK));
+    t.push(aC(47, 88, 6.5, "#ffb3da", st(1.2)), aC(73, 88, 6.5, "#ffb3da", st(1.2)));
+    t.push(aL([[45, 93], [48, 104], [56, 107]], "#fff", 4.5), aL([[75, 93], [72, 104], [64, 107]], "#fff", 4.5), aC(60, 107, 4.2, "#fff", st(1)));
+    t.push(aC(60, 92, 3.2, "#3d8bff", st(1)), aC(59, 91, .9, "#fff"));
+    t.push(E(60, 66, 19, 19, sk, 1.6));
+    t.push(aC(42, 77, 2.4, "#3d8bff", st(.9)), aC(78, 77, 2.4, "#3d8bff", st(.9)));
+    t.push(P("M41,64 C40,44 80,44 79,64 Q74,54 66,57 Q60,50 54,57 Q46,54 41,64Z", H));
+    t.push(P("M48,48 L46,34 L53,40 L60,29 L67,40 L74,34 L72,48Z", "#ffd21f", 1.2), aC(60, 42, 2.4, "#e53935", st(.7)),
+      aC(51.5, 44, 1.6, "#3d8bff", st(.6)), aC(68.5, 44, 1.6, "#3d8bff", st(.6)), aC(60, 30, 1.3, "#fff"));
+    t.push(aEye(53, 68, "#2f7de1", .8), aEye(67, 68, "#2f7de1", .8));
+    t.push(blush(48, 75), blush(72, 75), P("M57,78.5 Q60,81.5 63,78.5Z", "#e5537a", .8));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  /* ---------------- 4 Yoshi ---------------- */
+  const egg = (x, y, k = 1) => at(E(0, 0, 8, 10, "#fff", 1.2) + aC(-3, -3, 2.4, "#3cba4a") + aC(3.5, 2, 2.2, "#3cba4a") + aC(-2, 5, 1.6, "#3cba4a") + aC(3, -6.5, 1.4, "#3cba4a"), x, y, k);
+  function yoshi() {
+    const bg = aSky("#7fd3ff", "#e8fbff") + aCloud(4, 14, .7) + P("M-4,120 Q30,92 64,116 T124,108 V160 H-4Z", "#9be07a", 1.1) +
+      P("M-4,136 Q40,120 80,134 T124,128 V160 H-4Z", "#5fc65a", 1.1) + egg(104, 140) + egg(14, 144, .8) +
+      [[22, 128], [92, 124], [60, 140]].map(([x, y]) => aC(x, y, 1.6, "#ff6f8e") + aC(x, y, .7, "#ffe14d")).join("");
+    const G = "#4cc23f", t = [shadow(62, 148, 30)];
+    t.push(P("M42,120 Q24,126 16,112 Q28,116 42,110Z", G));
+    t.push(E(50, 132, 7, 9, G), E(73, 132, 7, 9, G));
+    t.push(E(48, 142, 11.5, 6, "#f57c00"), E(75, 142, 11.5, 6, "#f57c00"), line("M38,143 h20 M65,143 h20", .8, "#a34f00"));
+    t.push(P("M42,96 C38,120 44,136 61,136 C78,136 83,120 77,96Z", G));
+    t.push(P("M54,100 C50,118 54,132 64,132 C74,132 77,116 73,100Z", "#fff", 1.1));
+    t.push(P("M38,96 Q35,110 44,116 Q51,106 51,96Z", "#e53935"), line("M40,98 Q38,108 44,113", 1.2, "#fff"));
+    t.push(aL([[73, 104], [82, 112]], G, 4), aC(84, 113, 4, "#fff", st(1)));
+    t.push(aC(36, 58, 4.2, "#e53935", st(1.1)), aC(33, 68, 4.2, "#e53935", st(1.1)), aC(35, 78, 3.8, "#e53935", st(1.1)));
+    t.push(E(54, 68, 20, 21, G, 1.6));
+    t.push(E(62, 86, 14, 8, "#fff", 1.2));
+    t.push(E(81, 72, 21, 15, G, 1.6));
+    t.push(line("M64,86 Q72,91 80,87", 1.2), En(89, 64, 1.6, 2.4, "#1b5e20"), En(96, 67, 1.5, 2.3, "#1b5e20"));
+    t.push(E(55, 44, 7, 11, "#fff", 1.4), E(68, 42, 7, 11, "#fff", 1.4));
+    t.push(En(57.5, 46, 3, 5, "#111"), En(70.5, 44, 3, 5, "#111"), aC(56.5, 43.5, 1.2, "#fff"), aC(69.5, 41.5, 1.2, "#fff"));
+    t.push(blush(68, 80, 3));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  /* ---------------- 5 Toad ---------------- */
+  function toad() {
+    const bg = aSky("#86d8ff", "#e9fbff") + aCloud(80, 12, .7) + hill(-12, 146, 40, 36, "#4cc35a") + hill(88, 146, 40, 30, "#6bd673") +
+      mushroom(12, 128, 1.1, "#e53935") + mushroom(106, 134, .9, "#3d8bff") + mushroom(98, 104, .7, "#2fa83a") + bricks(148, "#d98a3c");
+    const sk = "#ffd9b8", t = [shadow(60, 148, 26)];
+    t.push(E(51, 144, 9, 5, "#8d4e1c"), E(69, 144, 9, 5, "#8d4e1c"));
+    t.push(P("M44,122 Q41,141 52,141 H68 Q79,141 76,122Z", "#fff"));
+    t.push(P("M45,103 Q60,98 75,103 L77,126 H43Z", "#fff"));
+    t.push(P("M45,103 Q50,101 54,102 L56,126 H43Z", "#2f5fd0"), P("M75,103 Q70,101 66,102 L64,126 H77Z", "#2f5fd0"));
+    t.push(line("M54,102 L56,126", 1.6, "#ffd54a"), line("M66,102 L64,126", 1.6, "#ffd54a"));
+    t.push(aL([[46, 108], [38, 118]], sk, 4.5), aC(37, 120, 4.6, sk, st(1)));
+    t.push(aL([[74, 108], [84, 98]], sk, 4.5), aC(86, 96, 4.8, sk, st(1)));
+    t.push(E(60, 90, 17, 14, sk, 1.5));
+    const cap = "M17,80 C11,28 109,28 103,80 Q60,92 17,80Z";
+    t.push(tipped(cap, "#fff", aC(60, 44, 11, "#e53935") + aC(24, 64, 10, "#e53935") + aC(96, 64, 10, "#e53935") + aC(42, 76, 5, "#e53935") + aC(78, 76, 5, "#e53935"), 1.7));
+    t.push(En(54, 90, 2.8, 5, "#111"), En(66, 90, 2.8, 5, "#111"), aC(53.3, 88, 1, "#fff"), aC(65.3, 88, 1, "#fff"));
+    t.push(P("M55,96 Q60,103 65,96Z", "#c62828", .9), blush(47, 96), blush(73, 96));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  /* ---------------- 6 Bowser ---------------- */
+  function bowser() {
+    const bg = aSky("#2a0b12", "#b5301a") +
+      aR(2, 40, 20, 106, "#4a3b3b") + aR(98, 34, 20, 112, "#4a3b3b") + aR(0, 34, 6, 8, "#4a3b3b") + aR(10, 34, 6, 8, "#4a3b3b") + aR(98, 28, 6, 8, "#4a3b3b") + aR(110, 28, 6, 8, "#4a3b3b") +
+      Pn("M0,138 Q20,130 40,138 T80,136 T120,138 V158 H0Z", "#ff6a00") + Pn("M0,146 Q24,140 48,146 T96,144 T120,146 V158 H0Z", "#ffcc33") +
+      [[14, 20], [60, 14], [104, 16]].map(([x, y]) => aC(x, y, 1.2, "#ffb36b")).join("");
+    const SK = "#efc94c", t = [shadow(60, 150, 36)];
+    // shell with white rim and spikes
+    t.push(E(60, 104, 42, 36, "#fff", 1.6), E(60, 104, 37, 31, "#2f9e44", 1.4));
+    [[20, 88, -60], [100, 88, 60], [22, 118, -110], [98, 118, 110], [60, 70, 0]].forEach(([x, y, a]) => t.push(at(P("M-5,4 L0,-9 L5,4Z", "#fff6dc", 1.2), x, y, 1, a)));
+    t.push(E(44, 144, 12, 6, SK), E(76, 144, 12, 6, SK), aC(36, 145, 1.6, "#fff", st(.6)), aC(84, 145, 1.6, "#fff", st(.6)));
+    t.push(P("M37,94 Q34,140 60,142 Q86,140 83,94Z", "#fff1c1", 1.5));
+    t.push(line("M42,108 Q60,113 78,108 M41,120 Q60,125 79,120 M44,132 Q60,136 76,132", 1.1, "#c9a65a"));
+    const arm = aL([[40, 98], [26, 110], [22, 124]], SK, 9) + E(24, 112, 7, 4.5, "#222", 1.2) +
+      [[18, 109], [24, 107], [30, 109]].map(([x, y]) => P(`M${x - 1.5},${y} L${x},${y - 4} L${x + 1.5},${y}Z`, "#fff", .7)).join("") +
+      aC(22, 127, 6, SK, st(1.2)) + P("M17,130 l-2,4 l3.5,-1.5Z M22,133 l0,4.5 l2,-4Z", "#fff", .7);
+    t.push(arm, mir(arm));
+    t.push(P("M40,46 Q28,30 32,20 Q42,32 50,42Z", "#fff6dc", 1.3), P("M80,46 Q92,30 88,20 Q78,32 70,42Z", "#fff6dc", 1.3));
+    t.push(P("M42,48 L36,32 L48,40 L52,24 L60,38 L68,24 L72,40 L84,32 L78,48Z", "#e8381f", 1.3));
+    t.push(E(60, 64, 26, 22, SK, 1.6));
+    t.push(E(60, 76, 20, 11, "#ffe6a3", 1.3));
+    t.push(eyeO(51, 61, 4.2, 5.6, "#d32f2f"), eyeO(69, 61, 4.2, 5.6, "#d32f2f"));
+    t.push(P("M40,52 L56,57 L56,53 L43,48Z", "#e8381f", 1), P("M80,52 L64,57 L64,53 L77,48Z", "#e8381f", 1));
+    t.push(En(55, 71, 1.6, 1.1, OL), En(65, 71, 1.6, 1.1, OL));
+    t.push(P("M44,79 Q60,92 76,79 Q60,86 44,79Z", "#7a1a1a", 1.1), P("M50,82 L52,87 L54,83Z M70,82 L68,87 L66,83Z", "#fff", .7));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  /* ---------------- 7 Donkey Kong ---------------- */
+  const barrel = (x, y, k = 1) => at(P("M-9,-11 Q-12,0 -9,11 H9 Q12,0 9,-11Z", "#a8662a", 1.2) + line("M-10.5,-6 H10.5 M-10.5,6 H10.5", 1.6, "#4a4a4a") + line("M-3,-11 Q-4,0 -3,11 M3,-11 Q4,0 3,11", .6, "#6b3a10"), x, y, k);
+  const banana = (x, y, k = 1, a = 0) => at(P("M-8,-2 Q0,8 9,-4 Q2,2 -6,-4Z", "#ffe14d", 1) + aC(-7, -3, .9, "#5a3a10"), x, y, k, a);
+  function dk() {
+    const bg = aSky("#7ed6a0", "#e8ffd8") + Pn("M0,0 H120 V30 Q100,42 86,26 Q70,44 52,28 Q36,46 22,28 Q10,40 0,30Z", "#2e8b3c") +
+      Pn("M0,0 H120 V16 Q104,26 92,14 Q74,28 58,14 Q40,30 24,14 Q10,24 0,16Z", "#1f6b2a") +
+      aR(8, 30, 6, 116, "#7a4a24") + aR(104, 26, 7, 120, "#7a4a24") + P("M0,144 Q60,136 120,144 V158 H0Z", "#8c5a2b", 1.1) +
+      barrel(14, 132) + barrel(104, 134, .9) + banana(100, 110, 1.1, -20) + banana(18, 104, 1, 15);
+    const F = "#7b4320", S = "#e8b07a", t = [shadow(60, 149, 32)];
+    t.push(E(46, 138, 10, 8, F), E(74, 138, 10, 8, F), E(44, 145, 9, 4, S, 1.2), E(76, 145, 9, 4, S, 1.2));
+    t.push(E(60, 112, 25, 23, F, 1.6));
+    t.push(P("M46,100 Q60,96 74,100 Q77,118 60,122 Q43,118 46,100Z", S, 1.2));
+    t.push(aL([[38, 102], [26, 118], [28, 130]], F, 10), E(29, 134, 8.5, 7, S, 1.3));
+    t.push(aL([[82, 102], [97, 96], [97, 82]], F, 10), aC(97, 76, 8, S, st(1.3)), line("M92,74 h9 M92,78 h9", .7));
+    t.push(P("M53.5,99 H66.5 L64,106 L68.5,125 L60,132 L51.5,125 L56,106Z", "#e0261f", 1.2), P("M54,99 H66 L63.5,106 H56.5Z", "#b71c1c", 1),
+      aC(60, 116, 3, "#ffd54a", st(.7)));
+    t.push(E(35.5, 64, 5, 6, S, 1.3), E(84.5, 64, 5, 6, S, 1.3));
+    t.push(E(60, 64, 24, 22, F, 1.6), P("M48,46 Q52,30 60,40 Q64,28 72,44Z", F, 1.4));
+    t.push(P("M43,63 C40,49 57,47 60,55 C63,47 80,49 77,63 Q70,67 60,66 Q50,67 43,63Z", S, 1.2));
+    t.push(E(60, 76, 17.5, 11, S, 1.3));
+    t.push(line("M46,52 Q53,48 59,53 M61,53 Q67,48 74,52", 1.6));
+    t.push(eyeO(53, 59, 3.5, 4.6, "#5a2d0c"), eyeO(67, 59, 3.5, 4.6, "#5a2d0c"));
+    t.push(En(56, 69.5, 1.6, 1.1, OL), En(64, 69.5, 1.6, 1.1, OL));
+    t.push(P("M47,75 Q60,91 73,75 Q60,79 47,75Z", "#7a1a1a", 1.1), Pn("M49,76 Q60,80 71,76 L70,78.5 Q60,82.5 50,78.5Z", "#fff"));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  /* ---------------- 8 Rosalina (with a Luma) ---------------- */
+  function rosalina() {
+    const R = aRand(808), g = uid("rs");
+    const bg = `<defs><radialGradient id="${g}" cx=".5" cy=".3" r=".9"><stop offset="0" stop-color="#3b3f9e"/><stop offset="1" stop-color="#0b0c2e"/></radialGradient></defs><rect width="120" height="158" fill="url(#${g})"/>` +
+      [...Array(26)].map(() => aC(R() * 120, R() * 150, r1(.4 + R() * .9), "#fff", `opacity="${r1(.5 + R() * .5)}"`)).join("") +
+      aSpark(18, 24, 4, "#fff") + aSpark(104, 128, 3.5, "#ffe9a6") + aC(102, 22, 9, "#ffb74d", st(1)) + `<ellipse cx="102" cy="22" rx="15" ry="3.4" fill="none" stroke="#ffe0b2" stroke-width="1.4" transform="rotate(-18 102 22)"/>` +
+      E(60, 152, 52, 10, "#6c7bd6", 1.2);
+    const H = "#fff1b8", D = "#7fd8f0", sk = "#ffe6d6", t = [shadow(60, 149, 32)];
+    t.push(P("M38,62 C34,36 86,36 82,62 L86,100 Q78,106 72,96 L70,78 H50 L48,96 Q42,106 34,100Z", H));
+    t.push(P("M48,96 Q40,124 28,148 H92 Q80,124 72,96Z", D, 1.5), line("M50,112 Q48,130 44,146 M70,112 Q72,130 76,146", .9, "#4fb6d6"));
+    t.push(P("M49,84 Q60,89 71,84 L73,99 H47Z", D));
+    t.push(aL([[48, 88], [40, 104], [50, 110]], D, 5), aC(52, 110, 3.6, sk, st(1)));
+    t.push(aL([[72, 88], [82, 98]], D, 5), aC(84, 98, 3.6, sk, st(1)));
+    t.push(line("M84,98 L92,74", 1.8, "#d9d9d9"), star5(93, 70, 6, "#ffd84a"));
+    t.push(star5(60, 92, 3.6, "#ffd84a", .8));
+    t.push(E(60, 66, 18.5, 19, sk, 1.6));
+    t.push(aC(42.5, 76, 2.2, "#ffd84a", st(.8)));
+    t.push(aEye(53, 68, "#2f8fd8", .8));
+    t.push(P("M42,62 C40,44 80,42 80,60 Q82,72 78,82 Q74,72 64,72 Q62,62 58,54 Q50,56 42,62Z", H));
+    t.push(line("M66,58 Q72,66 74,76", .8, "#e6cf7a"));
+    t.push(P("M50,48 L49,38 L55,42 L60,34 L65,42 L71,38 L70,48Z", "#e8f4ff", 1.1), aC(60, 42.5, 1.8, "#3d8bff", st(.6)), aC(53, 44.5, 1.2, "#e53935"), aC(67, 44.5, 1.2, "#e53935"));
+    t.push(blush(50, 76, 3), P("M56,79 Q59,81.5 62,79Z", "#e5537a", .8));
+    // the Luma
+    const luma = star5(0, 0, 11, "#ffd84a", 1.3) + En(-2.6, -.5, 1.1, 2, "#111") + En(2.6, -.5, 1.1, 2, "#111") + aC(-2.9, -1.3, .45, "#fff") + aC(2.3, -1.3, .45, "#fff") + blush(-5, 2.5, 1.8) + blush(5, 2.5, 1.8);
+    t.push(at(luma, 30, 34, 1, -10));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  /* ---------------- 9 Boo (living: floats) ---------------- */
+  function boo() {
+    const R = aRand(909);
+    const bg = aSky("#2c1b4f", "#7b5ea7") + aC(96, 22, 11, "#fff6c9") + aC(92, 19, 9, "#463170") +
+      [...Array(14)].map(() => aC(R() * 120, R() * 60, r1(.4 + R() * .6), "#fff", 'opacity=".8"')).join("") +
+      aR(0, 92, 30, 66, "#3a2a5a") + P("M-2,92 L15,74 L32,92Z", "#2a1d44", 1.1) + aR(8, 104, 8, 10, "#ffd54a") + aR(8, 124, 8, 10, "#ffd54a") +
+      aR(94, 100, 26, 58, "#3a2a5a") + P("M92,100 L108,82 L122,100Z", "#2a1d44", 1.1) + aR(102, 112, 8, 10, "#ffd54a") +
+      Pn("M0,146 Q60,138 120,146 V158 H0Z", "#1d1433");
+    const t = [];
+    t.push(P("M60,46 C88,46 98,68 96,90 C94,112 82,124 63,124 C52,124 44,128 32,136 C37,124 33,118 29,110 C22,92 30,46 60,46Z", "#fff", 1.7));
+    t.push(P("M30,92 Q20,94 22,102 Q28,100 32,100Z", "#fff", 1.3), P("M95,96 Q105,100 102,108 Q96,104 93,104Z", "#fff", 1.3));
+    t.push(En(48, 76, 3.2, 5.6, "#111"), En(72, 76, 3.2, 5.6, "#111"), aC(47.2, 73.6, 1.1, "#fff"), aC(71.2, 73.6, 1.1, "#fff"));
+    t.push(line("M43,66 L52,69 M77,66 L68,69", 1.4));
+    t.push(P("M40,88 Q60,122 82,88 Q60,96 40,88Z", "#6b0f2b", 1.3));
+    t.push(P("M52,103 Q58,124 72,104 Q62,108 52,103Z", "#ff6f8e", 1), P("M46,90.5 L49,97 L51.5,91.5Z M76,90.5 L73,97 L70.5,91.5Z", "#fff", .8));
+    t.push(blush(40, 82, 3.6), blush(80, 82, 3.6));
+    return [bg, aEdge(`<g class="lv-float">${t.join("")}</g>`)];
+  }
+
+  FAN.mario = [
+    ["Mario", "the red plumber jumping with a fist up, ? blocks and a green pipe", mario],
+    ["Luigi", "Mario's brother in green, waving beside a pipe", luigi],
+    ["Princess Peach", "pink gown and golden crown in front of her castle", peach],
+    ["Yoshi", "the green dinosaur with his red saddle and spotted eggs", yoshi],
+    ["Toad", "the mushroom friend with a red-spotted cap", toad],
+    ["Bowser", "the spiky king of the Koopas in front of his lava castle", bowser],
+    ["Donkey Kong", "the big ape with his red tie, barrels and bananas", dk],
+    ["Rosalina", "the star princess with her wand and a little Luma in space", rosalina],
+    ["Boo", "the shy ghost floating by a haunted house (he floats)", boo],
+  ];
+})();
+
+/* Sticker book theme page "Minecraft": 9 favourites drawn blocky on a pixel grid (every part outlined as one piece,
+   chibi big heads), backdrops built from textured blocks (grass, the Nether, the End, a lush cave, a mine with ores).
+   Living sticker: the Creeper swells as if about to go off. */
+(() => {
+  "use strict";
+  const OL = A_OL;
+  const uid = p => `mc${p}${++aUid}`;
+  const r2 = v => +v.toFixed(2);
+  const Rn = (x, y, w, h, f, ex = "") => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${f}" ${ex}/>`;
+  // deterministic noise for textures
+  const hsh = (i, j, s = 1) => {
+    let h = Math.imul(i + 31 * s, 374761393) ^ Math.imul(j + 17 * s, 668265263);
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  };
+  const pick = (cols, i, j, s) => cols[Math.floor(hsh(i, j, s) * cols.length)];
+  // a pixel part: cells from fn(i, j) (a colour or null); a dark rect under every cell gives one outline round the part
+  function pixF(x0, y0, cw, ch, u, fn, ol = 1.2) {
+    let a = "", b = "";
+    for (let j = 0; j < ch; j++) for (let i = 0; i < cw; i++) {
+      const c = fn(i, j);
+      if (!c) continue;
+      const x = r2(x0 + i * u), y = r2(y0 + j * u);
+      a += Rn(r2(x - ol), r2(y - ol), r2(u + 2 * ol), r2(u + 2 * ol), OL);
+      b += Rn(x, y, r2(u + .2), r2(u + .2), c);
+    }
+    return a + b;
+  }
+  const pix = (rows, x0, y0, u, pal, ol) => pixF(x0, y0, rows[0].length, rows.length, u, (i, j) => pal[rows[j][i]] || null, ol);
+  const solid = (x0, y0, cw, ch, u, cols, s = 1) => pixF(x0, y0, cw, ch, u, (i, j) => pick(cols, i, j, s));
+  // textured blocks for the scenery (no heavy outline)
+  const PAL = {
+    grass: ["#5fa83a", "#6cbf45", "#4f9630", "#7acb52"], dirt: ["#8b5a3c", "#7a4e33", "#9a6847", "#6d452c"],
+    stone: ["#8a8a8a", "#7d7d7d", "#969696", "#6f6f6f"], end: ["#e8e6a9", "#dcd99a", "#f1efbd", "#cfcc8d"],
+    nether: ["#7a2a2a", "#8e3434", "#6a2222", "#9c3d3d"], planks: ["#b58a52", "#a67c47", "#c19a63"],
+    cobble: ["#8a8a8a", "#6c6c6c", "#a0a0a0", "#5c5c5c"], leaves: ["#3e8e2a", "#4ea83a", "#2f7420", "#5cb848"],
+    log: ["#6b4f2f", "#5a4127", "#7a5a37"], obsidian: ["#1d1530", "#2b1f47", "#140f22", "#3a2a5e"],
+    moss: ["#5d7a2f", "#6b8b37", "#4f6a26", "#7a9a3e"], glow: ["#ffd75e", "#f7c03a", "#fff0a0", "#e0a52a"],
+    lava: ["#ff7a1a", "#ffa733", "#ff5a0f", "#ffc94d"],
+  };
+  function tex(x, y, w, h, s, cols, seed = 1) {
+    let o = "";
+    for (let j = 0; j * s < h - .01; j++) for (let i = 0; i * s < w - .01; i++)
+      o += Rn(r2(x + i * s), r2(y + j * s), r2(Math.min(s, w - i * s) + .15), r2(Math.min(s, h - j * s) + .15),
+        pick(cols, i + Math.round(x / s), j + Math.round(y / s), seed));
+    return o;
+  }
+  const edge = (x, y, w, h) => Rn(x, y, w, h, "none", 'stroke="#000" stroke-opacity=".3" stroke-width=".6"');
+  function blk(x, y, s, kind, seed = 1, h = s) {
+    let o;
+    if (kind === "grass") o = tex(x, y, s, h, s / 4, PAL.dirt, seed) + tex(x, y, s, s / 4, s / 4, PAL.grass, seed + 1) +
+      Rn(x + s / 4, y + s / 4, s / 4, s / 4, PAL.grass[2]) + Rn(x + s * .75, y + s / 4, s / 4, s / 8, PAL.grass[0]);
+    else if (kind.startsWith("ore:")) {
+      const c = kind.slice(4);
+      o = tex(x, y, s, h, s / 4, PAL.stone, seed) + [[1, 1], [2, 2], [0, 3], [3, 0]].filter((_, k) => hsh(k, seed, 5) < .8)
+        .map(([i, j]) => Rn(x + i * s / 4 + 1, y + j * s / 4 + 1, s / 4 - 1, s / 4 - 1, c, 'stroke="#000" stroke-opacity=".35" stroke-width=".5"')).join("");
+    } else o = tex(x, y, s, h, s / 4, PAL[kind], seed);
+    return o + edge(x, y, s, h);
+  }
+  // a row of ground blocks from y to the bottom of the card
+  const ground = (y, top = "grass", below = "dirt", s = 20) => [...Array(Math.ceil(120 / s))].map((_, i) =>
+    blk(i * s, y, s, top, i + 3) + (y + s < 158 ? blk(i * s, y + s, s, below, i + 9, Math.min(s, 158 - y - s)) : "")).join("");
+  const cloud = (x, y, w) => Rn(x, y, w, 6, "#fff", 'opacity=".95"') + Rn(x + 4, y - 4, w - 10, 4, "#fff", 'opacity=".95"');
+  const sunSq = (x, y, s) => Rn(x - s / 2, y - s / 2, s, s, "#fff3a0") + Rn(x - s / 3, y - s / 3, s * 2 / 3, s * 2 / 3, "#fffbe0");
+  const tree = (x, y) => tex(x - 4, y - 40, 8, 40, 4, PAL.log, 7) + edge(x - 4, y - 40, 8, 40) +
+    tex(x - 16, y - 60, 32, 24, 4, PAL.leaves, 8) + edge(x - 16, y - 60, 32, 24) + tex(x - 8, y - 68, 16, 8, 4, PAL.leaves, 9) + edge(x - 8, y - 68, 16, 8);
+  const flowerPx = (x, y, c) => Rn(x, y - 6, 1.6, 6, "#3e8e2a") + Rn(x - 1.6, y - 9, 4.8, 3.2, c) + Rn(x, y - 7.4, 1.6, 1.6, "#ffe14d");
+  const daySky = () => aSky("#79b4ff", "#d4e9ff") + sunSq(98, 18, 14) + cloud(8, 26, 30) + cloud(70, 40, 24);
+  const dark = (y, a = .38) => Rn(0, y, 120, 158 - y, "#0a1030", `opacity="${a}"`);
+
+  /* a blocky person, front view: big 8x8 head, body, arms down (or held out in front, for the Zombie), legs */
+  function person(o) {
+    const t = [], U = 4, HU = 4.8, dx = o.dx || 0, bx = 44 + dx, by = 57, aw = o.armW || 4;
+    const wear = (main, alt, s) => (i, j) => hsh(i, j, s) < .2 ? alt : main;
+    const legFn = (i, j) => j >= 6 ? o.shoes : wear(o.pants, o.pantsD, 3)(i, j);
+    t.push(pixF(bx, 85, 4, 8, U, legFn), pixF(bx + 16, 85, 4, 8, U, legFn));
+    const armFn = s => (i, j) => j < o.sleeve ? wear(o.shirt, o.shirtD, s)(i, j) : (hsh(i, j, s) < .2 ? o.skinD : o.skin);
+    if (o.forward) {
+      const fw = (i, j) => i < 3 ? wear(o.shirt, o.shirtD, 4)(i, j) : (hsh(i, j, 6) < .2 ? o.skinD : o.skin);
+      t.push(pixF(bx + 18, by + 1, 9, 4, U, fw));
+      t.push(pixF(bx, by, 8, 7, U, wear(o.shirt, o.shirtD, 2)));
+      t.push(pixF(bx + 22, by + 10, 9, 4, U, fw));
+    } else {
+      t.push(pixF(bx - aw * U, by, aw, 7, U, armFn(4)), pixF(bx + 32, by, aw, 7, U, armFn(5)));
+      t.push(pixF(bx, by, 8, 7, U, wear(o.shirt, o.shirtD, 2)));
+    }
+    if (o.extra) t.push(o.extra(bx, by));
+    t.push(pix(o.face, r2(60 - 4 * HU + dx), 18.6, HU, o.pal));
+    return t.join("");
+  }
+
+  /* ---------------- 1 Steve ---------------- */
+  function steve() {
+    const ch = person({
+      face: ["HHHHHHHH", "HHHHHHHH", "HSSSSSSH", "SSSSSSSS", "SWBSSBWS", "SSSNNSSS", "SsMMMMsS", "SSSssSSS"],
+      pal: { H: "#3b2a1a", S: "#c69c6d", s: "#b5895c", W: "#fff", B: "#4a3dbe", N: "#8d5a3b", M: "#6b3e26" },
+      shirt: "#2ab0b0", shirtD: "#219a9a", sleeve: 3, skin: "#c69c6d", skinD: "#b5895c", pants: "#3b3fa0", pantsD: "#33368c", shoes: "#5a5a5a",
+    });
+    return [daySky() + tree(14, 118) + flowerPx(100, 118, "#e53935") + ground(118), aEdge(ch)];
+  }
+
+  /* ---------------- 2 Alex (in the Nether) ---------------- */
+  function alex() {
+    const O = "#e2832b", Od = "#c86a1e";
+    const ch = person({
+      face: ["OOOOOOOO", "OOoOOOOO", "OSSSSSOO", "SSSSSSSO", "SWGSSGWS", "SSSSSSSS", "SSSPPSSS", "SSSSSSSS"],
+      pal: { O, o: Od, S: "#f2c49b", W: "#fff", G: "#3f9a4a", P: "#d98a7a" }, armW: 3,
+      shirt: "#6fbf5a", shirtD: "#5ea94b", sleeve: 2, skin: "#f2c49b", skinD: "#e3b287", pants: "#6b4a2b", pantsD: "#5c3f24", shoes: "#4a3020",
+      extra: () => pixF(69.6, 50, 2, 5, 4.8, (i, j) => (i + j) % 3 ? O : Od),
+    });
+    const back = aSky("#3a0b0b", "#c4471c") + tex(94, 0, 12, 118, 4, PAL.lava, 4) + edge(94, 0, 12, 118) +
+      blk(0, 22, 18, "glow", 2) + blk(18, 22, 18, "nether", 3) + blk(0, 40, 18, "nether", 4) + ground(118, "nether", "nether") +
+      Rn(0, 112, 120, 6, "#ff9a3c", 'opacity=".35"');
+    return [back, aEdge(ch)];
+  }
+
+  /* ---------------- 3 Creeper (living: it swells) ---------------- */
+  function creeper() {
+    const G = ["#5fc040", "#4aa832", "#7ed957", "#3b8f2a", "#a8e88a"], u = 5.5, t = [];
+    const face = ["........", "........", ".KK..KK.", ".KK..KK.", "...KK...", "..KKKK..", "..KKKK..", "..K..K.."];
+    const legFn = s => (i, j) => pick(G, i, j, s);
+    t.push(pixF(43.5, 96, 3, 4, u, legFn(3)), pixF(60, 96, 3, 4, u, legFn(4)));
+    t.push(pixF(43.5, 63, 6, 6, u, (i, j) => pick(G, i, j, 2)));
+    t.push(pixF(38, 19, 8, 8, u, (i, j) => face[j][i] === "K" ? (j >= 5 && (i === 3 || i === 4) ? "#1e1e1e" : "#111") : pick(G, i, j, 1)));
+    const back = aSky("#8cc4ff", "#e2f1ff") + cloud(76, 20, 30) + cloud(6, 36, 22) + tree(104, 118) +
+      flowerPx(12, 118, "#ffe14d") + flowerPx(24, 118, "#e53935") + ground(118);
+    return [back, aEdge(`<g class="lv-pulse">${t.join("")}</g>`)];
+  }
+
+  /* ---------------- 4 Pig ---------------- */
+  function pig() {
+    const Pk = ["#f2a7a2", "#eb9b96", "#f6b4af"], u = 5, t = [];
+    const face = ["PPPPPPPP", "PPPPPPPP", "PPPPPPPP", "PWKPPKWP", "PPSSSSPP", "PPNSSNPP", "PPSSSSPP", "PPPPPPPP"];
+    const leg = s => (i, j) => j === 3 ? "#c97f7a" : pick(Pk, i, j, s);
+    t.push(pixF(14, 96, 2, 4, u, leg(5)), pixF(34, 96, 2, 4, u, leg(6)));
+    t.push(pixF(10, 62, 11, 7, u, (i, j) => pick(Pk, i, j, 2)));
+    t.push(pixF(62, 96, 2, 4, u, leg(7)), pixF(86, 96, 2, 4, u, leg(8)));
+    t.push(pix(face, 56, 52, u, { P: Pk[0], W: "#fff", K: "#111", S: "#f7c5c0", N: "#8e4a4a" }));
+    t.push(pixF(66, 72, 4, 3, u, (i, j) => (j === 1 && (i === 0 || i === 3)) ? "#8e4a4a" : "#f7c5c0"));
+    t.push(pixF(4, 64, 1, 2, 3, () => "#eb9b96"));
+    const fence = [6, 50, 94].map(x => tex(x, 84, 8, 34, 4, PAL.planks, x) + edge(x, 84, 8, 34)).join("") +
+      tex(0, 90, 120, 5, 5, PAL.planks, 2) + edge(0, 90, 120, 5) + tex(0, 102, 120, 5, 5, PAL.planks, 3) + edge(0, 102, 120, 5);
+    return [daySky() + fence + ground(118), aEdge(t.join(""))];
+  }
+
+  /* ---------------- 5 Enderman (in the End) ---------------- */
+  function enderman() {
+    const K = ["#2c2c33", "#34343c", "#26262c"], u = 4, t = [];
+    const face = ["kkkkkkkk", "kkkkkkkk", "kkkkkkkk", "kkkkkkkk", "kkkkkkkk", "pPpkkpPp", "kkkkkkkk", "kkkkkkkk"];
+    const dk = s => (i, j) => pick(K, i, j, s);
+    t.push(pixF(50, 74, 2, 13, u, dk(3)), pixF(62, 74, 2, 13, u, dk(4)));
+    t.push(pixF(42, 42, 2, 12, u, dk(5)), pixF(70, 42, 2, 12, u, dk(6)));
+    t.push(pixF(48, 42, 6, 8, u, dk(2)));
+    t.push(blk(44, 72, 32, "grass", 4) + Rn(44, 72, 32, 32, "none", `stroke="${OL}" stroke-width="1.6"`));
+    t.push(pixF(40, 86, 2, 2, u, () => "#34343c"), pixF(72, 86, 2, 2, u, () => "#34343c"));
+    t.push(pix(face, 44, 10, u, { k: "#1c1c21", p: "#cc33ff", P: "#f2b3ff" }));
+    t.push(Rn(44, 30, 12, 4, "#e27bff", 'opacity=".35"'), Rn(64, 30, 12, 4, "#e27bff", 'opacity=".35"'));
+    const stars = [[8, 10], [30, 22], [96, 8], [110, 30], [78, 18], [20, 50], [100, 64]].map(([x, y]) => Rn(x, y, 1.6, 1.6, "#e9d6ff")).join("");
+    const back = aSky("#0c0717", "#3a2358") + stars + tex(4, 46, 14, 82, 3.5, PAL.obsidian, 2) + edge(4, 46, 14, 82) + Rn(6, 40, 10, 6, "#f0e0ff", 'opacity=".6"') +
+      tex(98, 62, 16, 66, 4, PAL.obsidian, 3) + edge(98, 62, 16, 66) + ground(128, "end", "end");
+    return [back, aEdge(t.join(""))];
+  }
+
+  /* ---------------- 6 Zombie (at night) ---------------- */
+  function zombie() {
+    const ch = person({
+      dx: -10, forward: 1,
+      face: ["DDDDDDDD", "DDDDDDDD", "DZZZZZZD", "ZZZZZZZZ", "ZKKZZKKZ", "ZZZNNZZZ", "ZZMMMMZZ", "ZzZZZZzZ"],
+      pal: { D: "#2e5c22", Z: "#5a9e44", z: "#4c8a39", K: "#1d2b1a", N: "#3d7a2e", M: "#2c4a22" },
+      shirt: "#2ab0b0", shirtD: "#219a9a", sleeve: 3, skin: "#5a9e44", skinD: "#4c8a39", pants: "#3b3fa0", pantsD: "#33368c", shoes: "#3a5a8a",
+    });
+    const stars = [[8, 12], [40, 8], [64, 28], [12, 44], [104, 50], [50, 46]].map(([x, y]) => Rn(x, y, 1.6, 1.6, "#fff")).join("");
+    const back = aSky("#0d1433", "#2b3a6b") + stars + Rn(86, 10, 18, 18, "#f4f1d0") + Rn(90, 14, 4, 4, "#d8d4b0") + Rn(97, 20, 3, 3, "#d8d4b0") +
+      tree(106, 118) + ground(118) + dark(0, .3);
+    return [back, aEdge(ch)];
+  }
+
+  /* ---------------- 7 Axolotl ---------------- */
+  function axolotl() {
+    const A = ["#f7a1c4", "#f39abd", "#fbb0cf"], u = 5.5, t = [];
+    const gill = (x, y, cw, ch) => pixF(x, y, cw, ch, u, (i, j) => (j === 0 && ch > 1) || (i === 0 && cw > 1) ? "#f07aa8" : "#d6457d");
+    t.push(gill(74, 50, 1, 3), gill(85, 47, 1, 3), gill(58, 62, 3, 1));
+    t.push(pixF(6, 82, 5, 3, u, (i, j) => j === 0 ? (i < 4 ? "#fbc9dd" : null) : pick(A, i, j, 3)));
+    t.push(pixF(30, 76, 8, 4, u, (i, j) => j === 3 ? "#fcc4dc" : pick(A, i, j, 2)));
+    t.push(pixF(38, 98, 1, 2, u, () => "#e98bb2"), pixF(60, 98, 1, 2, u, () => "#e98bb2"));
+    t.push(pixF(66, 64, 8, 7, u, (i, j) => j === 6 ? "#fcc4dc" : pick(A, i, j, 1)));
+    t.push(Rn(98.6, 75.4, 6.6, 6.6, OL) + Rn(99.2, 76, 2.2, 2.2, "#fff"));
+    t.push(Rn(88, 92, 18, 2, "#7a2244"));
+    t.push(pixF(80, 102.5, 1, 1, u, () => "#e98bb2"));
+    const bub = [[20, 30, 4], [28, 18, 3], [106, 40, 4], [100, 26, 3], [14, 56, 3]].map(([x, y, s]) => Rn(x, y, s, s, "none", 'stroke="#d8f4ff" stroke-width="1"')).join("");
+    const grassW = [8, 24, 52, 94, 110].map((x, k) => tex(x, 100 - k % 2 * 8, 3, 18 + k % 2 * 8, 3, ["#3f9a4a", "#5cb848", "#2f7d38"], k)).join("");
+    const berries = [16, 46, 80].map((x, k) => Rn(x, 0, 2, 12 + k * 5, "#3e8e2a") + Rn(x - 2, 12 + k * 5, 6, 6, "#ffb347", 'stroke="#c46a00" stroke-width=".6"')).join("");
+    const back = aSky("#2a8ccf", "#0b3a5e") + Rn(0, 0, 120, 6, "#6b8b37") + berries + bub + grassW + ground(118, "moss", "dirt");
+    return [back, aEdge(t.join(""))];
+  }
+
+  /* ---------------- 8 Iron Golem ---------------- */
+  function golem() {
+    const I = ["#dcd6cc", "#cfc8bc", "#e6e1d8"], V = "#4f8a2b", u = 4.4, t = [];
+    const iron = (s, vine = 0) => (i, j) => hsh(i, j, s + 40) < vine ? V : pick(I, i, j, s);
+    t.push(pixF(46.8, 88, 3, 6, u, iron(3, .15)), pixF(60, 88, 3, 6, u, iron(4)));
+    t.push(pixF(46.8, 75, 6, 3, u, iron(5, .2)));
+    t.push(pixF(38, 48.8, 10, 6, u, iron(2, .14)));
+    t.push(pixF(24.8, 50, 3, 14, u, iron(6, .1)), pixF(82, 50, 3, 14, u, iron(7, .1)));
+    t.push(pix(["llllll", "llllll", "kkkkkk", "lrnnrl", "llnnll", "llnnll", "llnnll"], 46.8, 18, u, { l: "#dcd6cc", k: "#6e675e", r: "#c0281f", n: "#b3aa9c" }));
+    t.push(pixF(55.6, 48.8, 2, 2, u, () => "#b3aa9c"));
+    t.push(Rn(87.4, 98, 2, 16, "#3e8e2a") + pixF(84.2, 92, 2, 2, 4, () => "#e53935") + Rn(87.2, 95.2, 2.4, 2.4, "#3b2a1a"));
+    const house = tex(70, 70, 50, 48, 5, PAL.planks, 2) + edge(70, 70, 50, 48) + tex(70, 106, 50, 12, 4, PAL.cobble, 3) +
+      tex(66, 62, 54, 8, 4, PAL.log, 4) + edge(66, 62, 54, 8) + Rn(104, 80, 12, 12, "#9fd3ff", 'stroke="#5a4127" stroke-width="2"');
+    return [daySky() + house + ground(118), aEdge(t.join(""))];
+  }
+
+  /* ---------------- 9 Diamond pickaxe + sword ---------------- */
+  function tools() {
+    const L = "#b4fff4", D = "#3fe8cb", d = "#1fa596", K = "#0f5e57", Br = "#7a5530", br = "#56391d";
+    const pk = {};
+    const A = [[11, 4], [10, 3], [9, 2], [8, 1], [7, 1], [6, 1], [5, 2]], Ai = [[10, 4], [9, 3], [8, 2], [7, 2], [6, 2]];
+    const refl = ([c, r]) => [15 - r, 15 - c];
+    A.forEach(p => { pk[p] = L; pk[refl(p)] = L; });
+    Ai.forEach(p => { pk[p] = D; pk[refl(p)] = D; });
+    pk[[5, 2]] = d; pk[[13, 10]] = d; pk[[11, 4]] = D;
+    for (let c = 1; c <= 10; c++) pk[[c, 15 - c]] = c % 2 ? Br : br;
+    const sw = {};
+    for (let c = 6; c <= 13; c++) { sw[[c, 15 - c]] = D; sw[[c, 14 - c]] = L; sw[[c + 1, 15 - c]] = d; }
+    sw[[14, 1]] = L;
+    [[3, 8], [4, 9], [5, 10], [6, 11], [7, 12]].forEach(p => { sw[p] = K; });
+    [[4, 11], [3, 12], [2, 13]].forEach(p => { sw[p] = Br; });
+    sw[[1, 14]] = K;
+    const g = 4, grid = (m, x0, y0) => pixF(x0, y0, 16, 16, g, (i, j) => m[[i, j]] || null);
+    const ch = grid(sw, -6, 70) + `<g transform="matrix(-1 0 0 1 120 0)">${grid(pk, -4, 16)}</g>`;
+    const wall = tex(0, 0, 120, 130, 8, PAL.stone, 2) +
+      [[8, 8, "#4aedd9"], [92, 16, "#4aedd9"], [12, 96, "#ffd54f"], [96, 92, "#e53935"], [52, 2, "#d8c7b4"]].map(([x, y, c], k) => blk(x, y, 18, "ore:" + c, k + 1)).join("");
+    const torch = Rn(104, 52, 3, 14, "#7a5530") + Rn(103, 48, 5, 5, "#ffd54f") + Rn(104, 49, 3, 3, "#fff6c0") + aC(105.5, 50, 9, "#fff2a0", 'opacity=".25"');
+    const back = wall + torch + aC(60, 72, 46, "#fffbe0", 'opacity=".28"') + aC(60, 72, 30, "#fff", 'opacity=".25"') +
+      [[24, 30], [98, 66], [30, 112], [84, 22]].map(([x, y]) => aSpark(x, y, 4, "#fff")).join("") + ground(130, "stone", "stone");
+    return [back, aEdge(ch)];
+  }
+
+  FAN.minecraft = [
+    ["Steve", "The miner and builder with the blue shirt", steve],
+    ["Alex", "The adventurer with orange hair, here in the Nether", alex],
+    ["Creeper", "The green one that sneaks up and goes boom: sssss!", creeper],
+    ["Pig", "The pink farm pig with the big snout", pig],
+    ["Enderman", "The tall one from the End with glowing purple eyes, carrying a block", enderman],
+    ["Zombie", "The green zombie who walks with his arms out at night", zombie],
+    ["Axolotl", "The pink water friend with frilly gills", axolotl],
+    ["Iron Golem", "The big iron guardian of the village, holding a poppy", golem],
+    ["Diamond tools", "A diamond pickaxe and a diamond sword", tools],
+  ];
+})();
+
+/* Sticker book theme page "Cars" (Pixar): 9 cars of Radiator Springs, chibi style with dark outlines, every car seen
+   from the side facing right with the big windshield eyes. Living sticker: Lightning McQueen drives to and fro. */
+(() => {
+  "use strict";
+  const OL = A_OL;
+  const uid = p => `cr${p}${++aUid}`;
+  const st = (w = 1.4) => `stroke="${OL}" stroke-width="${w}" stroke-linejoin="round" stroke-linecap="round"`;
+  const P = (d, f, w = 1.4, x = "") => `<path d="${d}" fill="${f}" ${st(w)} ${x}/>`;
+  const Pn = (d, f, x = "") => `<path d="${d}" fill="${f}" ${x}/>`;
+  const E = (cx, cy, rx, ry, f, w = 1.4, x = "") => `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${f}" ${st(w)} ${x}/>`;
+  const En = (cx, cy, rx, ry, f, x = "") => `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${f}" ${x}/>`;
+  const Rn = (x, y, w, h, f, ex = "") => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${f}" ${ex}/>`;
+  const line = (d, w = 1.2, c = OL) => `<path d="${d}" fill="none" stroke="${c}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>`;
+  const at = (s, x, y, k = 1, a = 0) => `<g transform="translate(${x} ${y}) rotate(${a}) scale(${k})">${s}</g>`;
+  const r2 = v => +v.toFixed(2);
+  const shadow = (x, y, rx) => En(x, y, rx, r2(rx * .1), "#000", 'opacity=".2"');
+  // a tyre with a coloured rim, a hub cap and a shine
+  const wheel = (x, y, r, rim = "#c9ced6", tyre = "#26262b") => aC(x, y, r, tyre, st(1.4)) + aC(x, y, r2(r * .56), rim, st(1)) +
+    aC(x, y, r2(r * .2), "#eef1f4", st(.7)) +
+    `<path d="M${r2(x - r * .72)},${r2(y - r * .4)} A${r2(r * .8)},${r2(r * .8)} 0 0 1 ${r2(x - r * .2)},${r2(y - r * .78)}" fill="none" stroke="#6a6a72" stroke-width="${r2(r * .12)}" stroke-linecap="round"/>`;
+  // the windshield is the face: two big eyes clipped by the glass (its frame is the eyelid), optional lids over them
+  function wind(d, eyes, iris, lid = "", lidC = "#000") {
+    const id = uid("ws");
+    let inner = Pn(d, "#fff") + eyes.map(([x, y, rx, ry, dx = 0]) => {
+      const ix = x + dx;
+      return E(x, y, rx, ry, "#fff", 1) + En(ix, r2(y + ry * .12), r2(rx * .64), r2(ry * .66), iris) +
+        En(ix, r2(y + ry * .16), r2(rx * .32), r2(ry * .36), "#141414") + aC(ix - rx * .24, y - ry * .2, r2(rx * .24), "#fff") +
+        aC(ix + rx * .22, y + ry * .34, r2(rx * .1), "#fff");
+    }).join("");
+    if (lid) inner += P(lid, lidC, 1.2);
+    return `<defs><clipPath id="${id}"><path d="${d}"/></clipPath></defs><g clip-path="url(#${id})">${inner}</g><path d="${d}" fill="none" ${st(1.5)}/>`;
+  }
+  // race numbers drawn as strokes (no text): 9, 5, 1
+  const DIG = {
+    9: "M6,3.4 C6,.4 0,.4 0,3.4 C0,6.4 6,6.4 6,3.4 V6.4 Q6,11 1,11",
+    5: "M6,0 H1 L.6,5 Q2,4 3.4,4 Q6.2,4 6.2,7.5 Q6.2,11 3,11 Q1,11 0,9.6",
+    1: "M1,2.4 L3.6,0 V11 M1,11 H6",
+  };
+  const num = (s, x, y, k = 1, c = "#ffd21f") => at([...s].map((ch, i) =>
+    `<g transform="translate(${i * 8.4} 0)">${line(DIG[ch], 3.6, OL)}${line(DIG[ch], 1.9, c)}</g>`).join(""), x, y, k);
+  const bolt = (d, c = "#ffcf1f", c2 = "#ff8f00") => P(d, c, 1.1) + Pn(d, c2, 'opacity=".35" transform="translate(0 1.4)"');
+  // scenery
+  const road = (y = 124, c = "#6b6b72") => Pn(`M0,${y} H120 V158 H0Z`, c) + Rn(0, y, 120, 2, "#8a8a92") +
+    [6, 34, 62, 90].map(x => Rn(x, y + 16, 16, 2.6, "#ffd54f", 'rx="1"')).join("");
+  const mesa = (d, c = "#c8622e", c2 = "#a94a20") => Pn(d, c2) + Pn(d, c, 'transform="translate(-2.4 0)"');
+  const cactus = (x, y, k = 1) => at(P("M-2,0 V-18 Q0,-21 2,-18 V0Z M2,-8 H5 V-13 Q6.5,-15 8,-13 V-6 H2Z M-2,-6 H-6 V-11 Q-7.5,-13 -9,-11 V-4 H-2Z", "#3f9a4a", .9), x, y, k);
+  const desert = (sk1 = "#6ec3f0", sk2 = "#ffe7bf") => aSky(sk1, sk2) + aCloud(70, 14, .7) +
+    mesa("M-2,104 V64 L6,62 L8,50 H20 L22,62 L30,64 V104Z") + mesa("M80,104 V72 L88,70 C88,60 92,52 98,52 C104,52 106,60 106,70 L114,72 V104Z") +
+    Pn("M28,104 C34,92 46,90 54,96 C62,90 74,92 82,104Z", "#d9814a") + Pn("M0,100 H120 V126 H0Z", "#ecbd84") +
+    cactus(36, 112, .8) + cactus(110, 110, .7);
+  const cone = (x, y, h = 36, c = "#ff8a1e") => P(`M${x - 11},${y} L${x - 3},${y - h} Q${x},${y - h - 3} ${x + 3},${y - h} L${x + 11},${y}Z`, c, 1.1) +
+    Pn(`M${x - 6.4},${y - h * .55} H${x + 6.4} L${x + 7.4},${y - h * .42} H${x - 7.4}Z`, "#fff6e8") +
+    P(`M${x - 4},${y} V${y - 8} Q${x},${y - 12} ${x + 4},${y - 8} V${y}Z`, "#5a3a22", .9);
+  const tyreStack = (x, y, n, r = 7) => [...Array(n)].map((_, i) => E(x, y - i * 5, r, 3.2, "#2b2b30", 1) + En(x, y - i * 5, r * .5, 1.4, "#55555c")).join("");
+  const checker = (y, h = 8, s = 4) => [...Array(30)].map((_, i) => [...Array(Math.ceil(h / s))].map((_, j) => (i + j) % 2 ? "" : Rn(i * s, y + j * s, s, s, "#1b1b1b")).join("")).join("") +
+    Rn(0, y, 120, h, "none", `stroke="${OL}" stroke-width="1"`);
+  const flower = (x, y, r, c) => [0, 72, 144, 216, 288].map(a => aC(x + r * Math.cos(a * Math.PI / 180), y + r * Math.sin(a * Math.PI / 180), r2(r * .62), c, st(.6))).join("") + aC(x, y, r2(r * .5), "#ffd54f", st(.6));
+
+  /* ---------------- 1 Lightning McQueen ---------------- */
+  function mcqueen() {
+    const R = "#e3242b", t = [];
+    t.push(shadow(60, 130, 54));
+    t.push(line("M14,92 V82", 2.4), P("M4,79 H25 L27,83 H6Z", R, 1.2));
+    t.push(P("M8,108 C7,98 11,92 20,90 L44,86 C50,74 58,68 70,67 C81,67 88,72 95,84 L107,88 C113,90 115,97 114,104 L113,112 C113,115 111,117 108,117 H103 C103,108 97,103 90,103 C83,103 77,108 77,117 H43 C43,108 37,103 30,103 C23,103 17,108 17,117 H12 C9,117 8,114 8,111Z", R));
+    t.push(line("M60,69 Q72,66 84,70", 1.4, "#ff8a8a"));
+    t.push(P("M46,86 L52,75 C55,71 58,70 61,70 L57,86Z", "#2b4c6f", 1.1));
+    t.push(wind("M57,86 L61,72 C67,68 79,68 85,71 L96,85 C84,87 70,87 57,86Z", [[69, 79, 7.5, 9, 1.8], [85, 80, 7, 8.6, 1.8]], "#2f7fd6"));
+    t.push(bolt("M10,106 L44,101 L40,106 L78,102 L36,114 L40,109 L10,112Z"));
+    t.push(num("95", 47, 88.5, .95));
+    t.push(E(107, 93, 3.4, 2.4, "#ffe57a", 1));
+    t.push(P("M95,99 Q104,109 113,100 Q104,104 95,99Z", "#6b0e12", 1.1), Pn("M97,100.4 Q104,103.2 111,101 L110.4,102.4 Q104,104.4 97.6,101.6Z", "#fff"));
+    t.push(wheel(30, 117, 11, "#d32f2f"), wheel(90, 117, 11, "#d32f2f"));
+    const back = desert() + road() + [[4, 72], [10, 80], [2, 88]].map(([x, y]) => line(`M${x},${y} H${x + 12}`, 1.6, "#fff")).join("");
+    return [back, aEdge(`<g class="lv-drive">${t.join("")}</g>`)];
+  }
+
+  /* ---------------- 2 Mater ---------------- */
+  function mater() {
+    const B = "#9b5a32", T = "#4f8a83", t = [];
+    t.push(shadow(60, 130, 54));
+    // the tow boom and hook
+    t.push(line("M26,96 L30,66 L12,74", 4.4, OL), line("M26,96 L30,66 L12,74", 2.4, "#7d7f86"), line("M12,74 V94", 1.1), line("M12,94 Q12,99 15,99 Q18,99 18,96", 1.6));
+    t.push(P("M6,92 H52 V112 H6Z", B), Pn("M10,96 H22 V104 H10Z", T, 'opacity=".8"'), line("M6,98 H52", .8, "#6d3f22"));
+    t.push(P("M48,112 V70 C48,62 54,58 62,58 H76 C84,58 88,64 89,72 L90,86 H48Z", B));
+    t.push(P("M86,84 C98,82 108,84 112,90 L113,104 C113,108 110,111 106,111 H86Z", B));
+    t.push(Pn("M58,96 C62,92 70,92 72,98 C68,102 60,102 58,96Z", T, 'opacity=".85"'), En(98, 90, 5, 2.4, "#6d3f22", 'opacity=".5"'));
+    t.push(P("M52,64 L56,60 V84 H52Z", "#3a2b22", 1));
+    t.push(wind("M60,63 H82 C85,63 87,65 87,68 V84 H60Z", [[67, 74, 7, 9.5, 1.6], [81, 74, 6.6, 9.5, 1.6]], "#6e9a46"));
+    t.push(line("M68,58 V54", 1.6), aC(68, 51, 3.6, "#ffa726", st(1.1)));
+    t.push(P("M18,112 C18,100 42,100 42,112Z", T, 1.2), P("M78,112 C78,100 102,100 102,112Z", T, 1.2));
+    t.push(aC(104, 87, 3.2, "#fff4c2", st(1)));
+    t.push(line("M96,103 Q104,109 113,102", 1.4), P("M101,104.6 h4.4 v6.4 h-4.4z", "#fff8e1", .9), P("M105.6,104.8 h4.2 v6 h-4.2z", "#fff8e1", .9));
+    t.push(wheel(30, 117, 10.5, "#8a8f96"), wheel(90, 117, 10.5, "#8a8f96"));
+    const back = aSky("#ffb27a", "#ffe9c4") + aSun(26, 40, 13) + mesa("M70,104 V70 L78,68 L80,56 H96 L98,68 L106,70 V104Z") +
+      Pn("M0,100 H120 V158 H0Z", "#d8a067") + line("M0,104 H120", 1.2, "#7a5a3a") + [8, 30, 52, 74, 96, 118].map(x => line(`M${x},104 V92`, 2, "#7a5a3a")).join("") +
+      Pn("M0,124 H120 V158 H0Z", "#b98552");
+    return [back, aEdge(t.join(""))];
+  }
+
+  /* ---------------- 3 Sally ---------------- */
+  function sally() {
+    const C = "#5fb0e6", t = [];
+    t.push(shadow(60, 130, 54));
+    t.push(P("M10,90 L26,87 L27,90 L11,93Z", C, 1.1));
+    t.push(P("M8,108 C8,99 13,94 22,92 C32,79 48,69 66,68 C78,68 86,74 93,83 L105,88 C112,91 114,98 113,105 L112,112 C112,115 110,117 107,117 H103 C103,108 97,103 90,103 C83,103 77,108 77,117 H43 C43,108 37,103 30,103 C23,103 17,108 17,117 H12 C9,117 8,114 8,111Z", C));
+    t.push(line("M46,76 Q60,68 78,70", 1.4, "#c4e6ff"));
+    t.push(P("M38,88 C42,80 48,75 56,72 L55,88Z", "#24476e", 1.1));
+    t.push(wind("M56,88 L58,72 C66,69 78,69 84,72 L94,86 C82,89 68,89 56,88Z", [[67, 80, 7.4, 9, 1.8], [83, 81, 7, 8.6, 1.8]], "#2fa58a"));
+    t.push(line("M14,97 q3,-4 7,-1 q3,3 6,-1 q2,-3 5,-1", 1.1, "#1d3f6b"), aC(33, 95.6, 1.2, "#1d3f6b"));
+    t.push(aC(105, 91, 3.4, "#fffbe0", st(1)), line("M42,100 H76", .9, "#2f7cb8"));
+    t.push(line("M96,101 Q104,106 112,101", 1.4), line("M96,101 l-1,-1.2", 1));
+    t.push(wheel(30, 117, 10.8), wheel(90, 117, 10.8));
+    const back = aSky("#ffb2a0", "#ffe9cf") + aSun(96, 30, 10) + mesa("M86,96 V66 L94,64 L96,52 H108 L110,64 L118,66 V96Z") +
+      Pn("M0,92 H120 V158 H0Z", "#ecbd84") + cone(16, 102, 40) + cone(44, 98, 32, "#ff9b3d") + cone(70, 100, 36) + road(124);
+    return [back, aEdge(t.join(""))];
+  }
+
+  /* ---------------- 4 Doc Hudson ---------------- */
+  function doc() {
+    const N = "#1e3a68", t = [];
+    t.push(shadow(60, 130, 55));
+    t.push(wheel(30, 117, 11));
+    t.push(P("M6,108 C6,97 12,90 22,88 C30,76 42,66 60,65 C76,65 86,72 92,82 L106,86 C113,88 115,96 114,104 L113,112 C113,115 111,117 108,117 H103 C103,108 97,103 90,103 C83,103 77,108 77,117 H46 L44,114 H12 C8,114 6,112 6,109Z", N));
+    t.push(line("M44,68 Q58,62 76,66", 1.4, "#5b7fb8"));
+    t.push(P("M36,86 C40,76 46,71 54,69 L53,86Z", "#13253f", 1.1));
+    t.push(wind("M53,86 L56,70 C64,66 76,66 82,69 L93,84 C80,87 66,87 53,86Z", [[66, 78, 7.6, 9.2, 1.6], [82, 79, 7.2, 8.8, 1.6]], "#3f7fd0",
+      "M46,58 H100 V72 L86,74.6 L76,71 L64,74.4 L46,71Z", N));
+    t.push(num("51", 20, 92, 1, "#f5f5f5"));
+    t.push(line("M10,104 H44", 1.1, "#c9ced6"));
+    t.push(P("M96,108 H113 C115,108 116,110 115,112 C114,114 112,115 110,115 H96Z", "#d9dde3", 1.1));
+    t.push(aC(106, 92, 3.4, "#fff4c2", st(1)), line("M97,101 Q104,99 112,101", 1.5));
+    t.push(wheel(90, 117, 11));
+    const back = aSky("#ff9f6b", "#ffe2b8") + aCloud(8, 18, .8) + mesa("M30,102 C34,74 46,58 60,56 C74,58 84,74 88,102Z", "#b9532a", "#93401e") +
+      Pn("M0,100 H120 V158 H0Z", "#d38b54") + Pn("M0,118 C30,112 90,112 120,118 V136 C90,130 30,130 0,136Z", "#b8703f") +
+      [[10, 140], [40, 146], [96, 142]].map(([x, y]) => En(x, y, 4, 1.4, "#a8653a")).join("");
+    return [back, aEdge(t.join(""))];
+  }
+
+  /* ---------------- 5 Luigi & Guido ---------------- */
+  function luigiGuido() {
+    const Y = "#ffd84a", Bl = "#3d7fd1", t = [];
+    t.push(shadow(30, 130, 26), shadow(88, 130, 30));
+    // Guido: a little blue forklift holding a tyre up high, facing Luigi
+    t.push(line("M44,104 V64", 3.8, OL), line("M44,104 V64", 2, "#9aa0a8"), line("M50,104 V64", 3.8, OL), line("M50,104 V64", 2, "#9aa0a8"));
+    t.push(aC(40, 56, 11, "#26262b", st(1.4)), aC(40, 56, 5.6, "#9aa0a8", st(1)), aC(40, 56, 2, "#eef1f4"));
+    t.push(line("M44,66 H52", 2.4), line("M50,66 H38", 2.4));
+    t.push(P("M8,116 C5,98 12,84 26,82 C38,80 46,88 47,100 L47,116Z", Bl));
+    t.push(wind("M24,100 C24,90 28,84 35,84 C41,85 45,91 46,100Z", [[31, 92, 5.4, 7.2, 1.2], [41, 92, 5, 7, 1.2]], "#7a4a22"));
+    t.push(P("M10,100 C11,92 15,87 21,86 L21,100Z", "#24476e", 1));
+    t.push(E(40, 106, 2.2, 2.6, "#5a1010", 1));
+    t.push(wheel(15, 119, 6), wheel(40, 119, 6));
+    // Luigi: the yellow Fiat 500 (drawn facing right, mirrored to face Guido)
+    const L = [];
+    L.push(P("M3,110 C2,99 6,93 13,91 C15,79 22,72 32,72 C42,72 49,79 51,90 C58,92 61,99 60,110 C60,115 58,117 56,117 C56,111 52,107 47,107 C42,107 38,111 38,117 H25 C25,111 21,107 16,107 C11,107 7,111 7,117 H6 C4,117 3,115 3,113Z", Y));
+    L.push(P("M18,72 H40 V75 H18Z", "#8d6e63", 1), line("M22,72 V68 M36,72 V68", 1.3), P("M24,64 H34 V68 H24Z", "#c2a27a", .9));
+    L.push(P("M12,90 C13,82 17,78 23,77 L23,90Z", "#24476e", 1));
+    L.push(wind("M25,90 C25,80 29,76 36,76 C43,76 47,81 50,90Z", [[33, 83, 5.4, 7, 1.2], [44, 84, 5, 6.8, 1.2]], "#7a4a22"));
+    L.push(aC(55, 94, 2.8, "#fffbe0", st(1)));
+    L.push(P("M48,101 C52,97.6 57,97.6 61,100.6 C57,103.4 52,103.4 48,101Z", "#dfe3e8", 1), line("M50,106 Q55,109.4 59,105", 1.3));
+    L.push(wheel(16, 117, 8), wheel(47, 117, 8));
+    t.push(`<g transform="matrix(-1 0 0 1 118 0)">${L.join("")}</g>`);
+    const back = aSky("#7cc6f2", "#e9f6ff") + aCloud(84, 12, .6) +
+      P("M60,104 V48 H118 V104Z", "#f3e3c3", 1.2) + P("M58,48 H120 V42 H58Z", "#c88c4a", 1.1) +
+      [0, 1, 2, 3, 4, 5].map(i => P(`M${60 + i * 10},54 h10 v8 q-5,4 -10,0z`, ["#2e9e4f", "#fff", "#d8322f"][i % 3], .8)).join("") +
+      tyreStack(70, 100, 6, 7) + tyreStack(104, 100, 4, 7) + mesa("M0,102 V70 L8,68 L10,58 H22 L24,68 L32,70 V102Z") +
+      Pn("M0,100 H120 V158 H0Z", "#ecbd84") + road(124);
+    return [back, aEdge(t.join(""))];
+  }
+
+  /* ---------------- 6 Ramone ---------------- */
+  function ramone() {
+    const V = "#6b2fa0", t = [];
+    t.push(shadow(60, 130, 56));
+    t.push(P("M4,106 C4,98 7,95 12,94 L16,86 L26,92 L44,90 C50,78 58,72 70,72 C80,72 86,77 92,86 L108,90 C114,92 116,98 115,106 L114,112 C114,115 112,116 109,116 H103 C103,109 97,105 90,105 C83,105 77,109 77,116 H43 C43,109 37,105 30,105 C23,105 17,109 17,116 H8 C5,116 4,113 4,110Z", V));
+    t.push(line("M50,76 Q64,70 82,76", 1.4, "#a77ad6"));
+    t.push(P("M38,90 C42,82 46,77 54,75 L54,90Z", "#1d1530", 1.1));
+    t.push(wind("M54,90 L57,75 C64,72 76,72 82,74 L93,88 C80,91 66,91 54,90Z", [[66, 82, 7.4, 8.6, 1.6], [82, 83, 7, 8.2, 1.6]], "#8bb04a",
+      "M46,64 H100 V77 L56,76Z", V));
+    t.push(bolt("M115,99 C100,97 92,95 78,98 C86,100 82,102 72,104 C82,105 78,108 66,110 C86,110 100,109 114,107Z", "#ffb300", "#e53935"));
+    t.push(line("M8,100 H46", 1, "#d6b4ff"), line("M10,103 H40", 1, "#d6b4ff"));
+    t.push(line("M96,101 Q103,105 111,100", 1.5), line("M101,99 h3", 1), aC(109, 93, 2.6, "#fffbe0", st(1)));
+    t.push(wheel(30, 117, 10, "#e8eaed"), wheel(90, 117, 10, "#e8eaed"));
+    const back = aSky("#3b1d6e", "#ff8fb1") + aStar(14, 14, 2, "#fff") + aStar(104, 22, 1.6, "#fff") + aStar(60, 10, 1.4, "#fff") +
+      P("M8,108 V54 C8,40 30,34 44,34 C58,34 80,40 80,54 V108Z", "#9a5ac8", 1.2) + P("M20,108 V74 H40 V108Z", "#3a2252", 1) +
+      P("M50,70 H70 V86 H50Z", "#ffe28a", 1) + line("M16,50 Q44,40 72,50", 2.4, "#4dffd2") + line("M16,50 Q44,40 72,50", 1, "#fff") +
+      Pn("M0,104 H120 V158 H0Z", "#4a3a5c") + road(124, "#3e3e48");
+    return [back, aEdge(t.join(""))];
+  }
+
+  /* ---------------- 7 Cruz Ramirez ---------------- */
+  function cruz() {
+    const Y = "#ffd21c", Bl = "#1f5fbf", t = [];
+    t.push(shadow(60, 130, 54));
+    t.push(line("M14,92 V83", 2.4), P("M5,80 H25 L27,84 H7Z", Bl, 1.2));
+    t.push(P("M8,108 C7,99 11,93 20,91 L42,87 C49,75 58,68 70,67 C81,67 88,72 96,83 L108,88 C114,91 115,98 114,105 L113,112 C113,115 111,117 108,117 H103 C103,108 97,103 90,103 C83,103 77,108 77,117 H43 C43,108 37,103 30,103 C23,103 17,108 17,117 H12 C9,117 8,114 8,111Z", Y));
+    t.push(Pn("M9,104 H113 L113.6,108 H8.4Z", Bl), line("M58,69 Q72,66 84,70", 1.4, "#fff3a8"));
+    t.push(P("M45,87 L51,75 C54,71 57,70 60,70 L56,87Z", "#24476e", 1.1));
+    t.push(wind("M56,87 L60,72 C67,68 79,68 85,71 L97,85 C84,88 70,88 56,87Z", [[68, 80, 7.6, 9, 1.8], [84, 81, 7.2, 8.6, 1.8]], "#2a8fd6"));
+    t.push(num("51", 48, 89, .95, "#1f5fbf"));
+    t.push(E(107, 94, 3.4, 2.4, "#fff8d0", 1));
+    t.push(P("M95,99 Q104,108 113,100 Q104,103.4 95,99Z", "#6b0e12", 1.1));
+    t.push(wheel(30, 117, 11, "#1f5fbf"), wheel(90, 117, 11, "#1f5fbf"));
+    const stands = [...Array(6)].map((_, i) => [...Array(12)].map((_, j) => aC(5 + j * 10 + (i % 2) * 5, 46 + i * 7, 2.4, ["#e53935", "#ffeb3b", "#42a5f5", "#fff", "#66bb6a"][(i * 3 + j) % 5])).join("")).join("");
+    const back = aSky("#4aa8ef", "#d8efff") + P("M-2,40 H122 V90 H-2Z", "#9aa3ad", 1) + stands + P("M-2,36 H122 V42 H-2Z", "#e53935", 1) +
+      checker(90, 8) + Pn("M0,98 H120 V158 H0Z", "#55555c") + Rn(0, 98, 120, 2, "#fff") + [8, 40, 72, 104].map(x => Rn(x, 140, 14, 2.6, "#fff")).join("");
+    return [back, aEdge(t.join(""))];
+  }
+
+  /* ---------------- 8 Mack ---------------- */
+  function mack() {
+    const R = "#d6232a", t = [];
+    t.push(shadow(60, 130, 57));
+    t.push(P("M2,60 H76 V110 H2Z", R), Pn("M4,96 H74 V100 H4Z", "#ffcf1f"));
+    t.push(bolt("M8,84 L38,76 L34,82 L70,72 L32,92 L36,86 L8,92Z"));
+    t.push(aR(76, 34, 4, 28, "#cfd5db"), P("M74,34 H82 V38 H74Z", "#9aa0a8", 1));
+    t.push(P("M76,118 V60 C76,54 80,52 86,52 H100 C104,52 106,55 107,60 L108,80 H112 C115,80 117,82 117,85 V112 C117,116 115,118 112,118Z", R));
+    t.push(wind("M86,57 H102 C104,57 105,59 105,61 L106,80 H86Z", [[91, 68, 5.6, 8.4, 1.2], [101, 68, 5.4, 8.4, 1.2]], "#7b4b2a"));
+    t.push(P("M78,58 H84 V78 H78Z", "#24476e", 1));
+    t.push(P("M108,84 H117 V110 H108Z", "#dfe3e8", 1.1), line("M110,88 V106 M113,88 V106", 1, "#9aa0a8"));
+    t.push(line("M86,96 Q96,106 107,98", 1.6), P("M90,98 Q96,103 104,99 Z", "#5a1010", .9));
+    t.push(P("M104,113 H118 V117 H104Z", "#cfd5db", 1));
+    t.push(wheel(14, 117, 8), wheel(32, 117, 8), wheel(62, 117, 9.4), wheel(96, 117, 10));
+    const back = aSky("#14204a", "#3b4f8f") + aC(98, 20, 9, "#fff6c8") + aC(102, 17, 8, "#1a2655") +
+      [[10, 12], [30, 24], [56, 10], [76, 30], [18, 40], [48, 36], [112, 44]].map(([x, y]) => aStar(x, y, 1.6, "#fff7c0")).join("") +
+      Pn("M0,98 C20,88 40,90 60,96 C80,88 100,88 120,96 V158 H0Z", "#2a2f4a") + road(122, "#3a3a44");
+    return [back, aEdge(t.join(""))];
+  }
+
+  /* ---------------- 9 Fillmore ---------------- */
+  function fillmore() {
+    const G = "#8cc98f", t = [];
+    const body = "M6,112 V72 C6,64 12,60 20,60 H96 C108,60 114,66 114,78 V112 C114,116 112,118 108,118 H104 C104,109 98,104 91,104 C84,104 78,109 78,118 H42 C42,109 36,104 29,104 C22,104 16,109 16,118 H10 C7,118 6,116 6,113Z";
+    const cl = uid("fb");
+    t.push(shadow(60, 130, 56));
+    t.push(P("M18,58 H78 V54 H18Z", "#8d6e63", 1), line("M24,58 V60 M72,58 V60", 1.2));
+    t.push(`<defs><clipPath id="${cl}"><path d="${body}"/></clipPath></defs>` + Pn(body, G) + `<g clip-path="url(#${cl})">${Rn(0, 50, 120, 36, "#f4f1e4")}</g>` + `<path d="${body}" fill="none" ${st(1.4)}/>`);
+    t.push([14, 32, 50].map(x => P(`M${x},66 h14 v14 h-14z`, "#3a5f7e", 1)).join(""));
+    t.push(wind("M72,86 V66 C72,64 74,63 76,63 H104 C110,63 112,68 112,74 V86Z", [[83, 76, 7.2, 9.4, 1.2], [100, 76, 7, 9.4, 1.2]], "#7a5a32",
+      "M66,58 H118 V75 C110,76 94,77 70,75Z", "#f4f1e4"));
+    t.push(flower(26, 96, 4, "#ff7eb6"), flower(56, 94, 3.4, "#ffb74d"), aC(40, 108, 1.4, "#ffd54f"));
+    t.push(aC(70, 100, 5.4, "#fff", st(1)) + line("M70,94.6 V105.4 M70,100 L66.2,103.8 M70,100 L73.8,103.8", 1.1));
+    t.push(aC(111, 96, 3, "#fffbe0", st(1)), line("M98,96 Q105,101 112,97", 1.4));
+    t.push(wheel(29, 118, 10), wheel(91, 118, 10));
+    const back = aSky("#9fd8ff", "#f3fbff") + [["#ff8a80", 30], ["#ffd180", 38], ["#ccff90", 46], ["#80d8ff", 54]].map(([c, r]) =>
+      `<path d="M${60 - r},100 A${r},${r} 0 0 1 ${60 + r},100" fill="none" stroke="${c}" stroke-width="6" opacity=".7"/>`).join("") +
+      Pn("M0,98 C30,90 60,94 120,96 V158 H0Z", "#7cc95a") + flower(10, 108, 3, "#ff7eb6") + flower(112, 106, 3, "#fff176") + road(126, "#a08a6a");
+    return [back, aEdge(t.join(""))];
+  }
+
+  FAN.cars = [
+    ["Lightning McQueen", "Number 95, the red race car with the lightning bolt: Ka-chow!", mcqueen],
+    ["Mater", "The rusty, buck-toothed tow truck, McQueen's best friend", mater],
+    ["Sally", "The blue Porsche who runs the Cozy Cone Motel", sally],
+    ["Doc Hudson", "The Fabulous Hudson Hornet, a champion racer and the town doctor", doc],
+    ["Luigi & Guido", "The little Fiat and his forklift friend from the tyre shop: pit stop!", luigiGuido],
+    ["Ramone", "The purple lowrider with flames who paints the cars", ramone],
+    ["Cruz Ramirez", "The yellow number 51 racer who became a champion", cruz],
+    ["Mack", "The big red truck who carries McQueen to every race", mack],
+    ["Fillmore", "The relaxed flower-power bus", fillmore],
+  ];
+})();
+
+/* Sticker book page "Sonic": 9 stickers (Sonic, Tails, Knuckles, Amy Rose, Shadow, Dr. Eggman, Cream with Cheese,
+   Silver, Super Sonic), chibi style with dark outlines on Green Hill backdrops (checkered hills, palm trees, loops, rings).
+   Living sticker: Super Sonic floats among the Chaos Emeralds. */
+(() => {
+  "use strict";
+  const OL = A_OL;
+  const uid = p => `sn${p}${++aUid}`;
+  const st = (w = 1.4) => `stroke="${OL}" stroke-width="${w}" stroke-linejoin="round" stroke-linecap="round"`;
+  const P = (d, f, w = 1.4, x = "") => `<path d="${d}" fill="${f}" ${st(w)} ${x}/>`;
+  const Pn = (d, f, x = "") => `<path d="${d}" fill="${f}" ${x}/>`;
+  const E = (cx, cy, rx, ry, f, w = 1.4, x = "") => `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${f}" ${st(w)} ${x}/>`;
+  const En = (cx, cy, rx, ry, f, x = "") => `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${f}" ${x}/>`;
+  const line = (d, w = 1.2, c = OL) => `<path d="${d}" fill="none" stroke="${c}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>`;
+  const mir = s => `<g transform="matrix(-1 0 0 1 120 0)">${s}</g>`;
+  const at = (s, x, y, k = 1, a = 0) => `<g transform="translate(${x} ${y}) rotate(${a}) scale(${k})">${s}</g>`;
+  const r1 = v => +(+v).toFixed(2);
+  const lerp = (a, b, t) => [r1(a[0] + (b[0] - a[0]) * t), r1(a[1] + (b[1] - a[1]) * t)];
+  function tipped(d, fill, inner, w = 1.4) {
+    const id = uid("cl");
+    return `<defs><clipPath id="${id}"><path d="${d}"/></clipPath></defs>` + Pn(d, fill) + `<g clip-path="url(#${id})">${inner}</g>` + `<path d="${d}" fill="none" ${st(w)}/>`;
+  }
+  const shadow = (x, y, rx) => En(x, y, rx, r1(rx * .18), "#000", 'opacity=".18"');
+  const blush = (x, y, r = 3, c = "#ff7a9c") => En(x, y, r, r1(r * .6), c, 'opacity=".5"');
+  const SK = "#f6c79a";
+
+  /* ---------------- backdrop pieces ---------------- */
+  const ring = (x, y, r = 4) => `<ellipse cx="${x}" cy="${y}" rx="${r1(r * .8)}" ry="${r}" fill="none" stroke="#8a5a00" stroke-width="${r1(r * .55 + 1.4)}"/>` +
+    `<ellipse cx="${x}" cy="${y}" rx="${r1(r * .8)}" ry="${r}" fill="none" stroke="#ffd21f" stroke-width="${r1(r * .55)}"/>` + aC(x - r * .45, y - r * .55, r1(r * .2), "#fff");
+  const palm = (x, y, h, k = 1) => at(P(`M-2,0 Q-4,${-h / 2} 1,${-h} L5,${-h} Q1,${-h / 2} 3,0Z`, "#a0602a", 1) +
+    [...Array(Math.floor(h / 7))].map((_, i) => line(`M-2.6,${-i * 7 - 4} h5.6`, .7)).join("") +
+    [[-16, 6, -150], [16, 4, -30], [-12, -6, -120], [12, -7, -60], [0, -9, -90]].map(([dx, dy, a]) => at(P("M0,0 Q10,-6 20,2 Q10,0 0,3Z", "#2fae3a", 1), 3, -h, 1, a)).join("") +
+    aC(1, 2 - h, 2, "#7a4a24", st(.7)) + aC(5, 3 - h, 2, "#7a4a24", st(.7)), x, y, k);
+  function greenHill(o = {}) {
+    const ch = uid("ck"), s = [o.noSky ? "" : aSky(o.sky1 || "#2f86ea", o.sky2 || "#bfe6ff")];
+    s.push(`<defs><pattern id="${ch}" width="10" height="10" patternUnits="userSpaceOnUse"><rect width="10" height="10" fill="#c46a22"/><rect width="5" height="5" fill="#8a4512"/><rect x="5" y="5" width="5" height="5" fill="#8a4512"/></pattern></defs>`);
+    if (!o.noClouds) s.push(aCloud(10, 14, .8), aCloud(84, 28, .6));
+    s.push(Pn("M0,112 Q16,96 32,108 Q48,90 66,106 Q84,92 102,104 Q112,98 120,102 V128 H0Z", o.far || "#4fae58"));
+    s.push(aR(-1, 112, 122, 14, o.water || "#3fa7e0", 'stroke="none"'), line("M6,117 h10 M30,121 h14 M64,116 h12 M92,121 h16", .9, "#d8f3ff"));
+    if (o.loop) s.push(`<circle cx="${o.loop}" cy="98" r="17" fill="none" stroke="${OL}" stroke-width="9"/><circle cx="${o.loop}" cy="98" r="17" fill="none" stroke="url(#${ch})" stroke-width="7"/>`,
+      `<path d="M${o.loop - 18},88 A18,18 0 0 1 ${o.loop + 18},88" fill="none" stroke="#3ec43e" stroke-width="3"/>`);
+    (o.palms || []).forEach(([x, y, h, k]) => s.push(palm(x, y, h, k)));
+    s.push(P("M-2,128 Q30,121 60,128 T122,126 V160 H-2Z", `url(#${ch})`, 1.3));
+    s.push(P("M-2,128 Q30,121 60,128 T122,126 V133 Q90,128 60,134 Q30,127 -2,134Z", "#3ec43e", 1.2));
+    (o.rings || []).forEach(([x, y, r]) => s.push(ring(x, y, r)));
+    return s.join("");
+  }
+  const emerald = (x, y, k, c) => at(P("M-5,-4 L5,-4 L8,0 L0,7 L-8,0Z", c, 1) + Pn("M-5,-4 L-2,0 L2,0 L5,-4Z", "#fff", 'opacity=".45"') + line("M-8,0 H8 M-2,0 L0,7 L2,0", .5), x, y, k);
+
+  /* ---------------- hedgehog parts (facing a little to the right) ---------------- */
+  const shoe = (x, y, main, strap, buckle = "#ffd21f") => En(x, y, 12.5, 6.5, main) + Pn(`M${x - 3},${y - 6.3} h6 l.4,12.6 h-6.8Z`, strap) +
+    aR(x - 1.5, y - 2, 3, 4, buckle, `stroke-width=".6"`) + `<ellipse cx="${x}" cy="${y}" rx="12.5" ry="6.5" fill="none" ${st(1.4)}/>` + line(`M${x - 3},${y - 6.3} l0,12.6 M${x + 3},${y - 6.3} l.4,12.6`, .8);
+  const glove = (x, y, r = 5.5, c = "#fff") => aC(x, y, r, c, st(1.2)) + line(`M${x - r * .5},${y - r * .2} h${r1(r)}`, .6);
+  // quills from a list of points; triplets [base, tip, base] make the spikes (Shadow's stripes follow them)
+  const pts2d = pts => "M" + pts.map(p => p.join(",")).join(" L") + "Z";
+  const Q_BACK = [[46, 46], [10, 34], [36, 56], [6, 72], [38, 78], [14, 100], [52, 86]];
+  const Q_UP = [[40, 80], [8, 66], [36, 60], [10, 34], [44, 48], [36, 12], [56, 40], [66, 8], [68, 44], [60, 64]];
+  const stripes = (pts, c) => { let s = ""; for (let i = 0; i + 2 < pts.length; i += 2) { const a = pts[i], t = pts[i + 1], b = pts[i + 2], m = lerp(a, b, .5);
+    s += Pn(pts2d([lerp(a, t, .3), lerp(a, t, .86), lerp(m, t, .86), lerp(m, t, .3)]), c); } return s; };
+  const EYES = "M46,64 C45,50 59,48 61,57 C63,48 77,50 76,64 C75,75 64,75 61,69 C58,75 47,75 46,64Z";
+  const MUZ = "M42,76 Q46,68 54,71 Q61,74 68,71 Q78,67 82,76 Q81,90 62,90 Q44,90 42,76Z";
+  function eyes(iris, o = {}) {
+    const t = [P(EYES, "#fff", 1.2)];
+    [[55, 63], [69, 63]].forEach(([x, y]) => t.push(En(x + .5, y, 3.6, 5.4, iris), En(x + 1.3, y + .6, 1.8, 3.2, "#111"), aC(x - .4, y - 2.6, 1.3, "#fff")));
+    if (o.brow) t.push(line("M46,54 L58,59.5 M64,59 L76,52", 1.8));
+    if (o.lash) t.push(line("M46.5,58 l-3,-3 M47,61 l-3.5,-1 M75.5,57 l3,-3 M75.5,60 l3.5,-1", 1));
+    return t.join("");
+  }
+  function hogBody(o) {
+    const t = [shadow(60, 148, 28)];
+    t.push(aL([[53, 116], [47, 134]], o.leg || o.fur, 4.2), aL([[67, 116], [73, 134]], o.leg || o.fur, 4.2));
+    t.push(shoe(44, 140, o.shoe || "#e2231a", o.strap || "#fff", o.buckle), shoe(76, 140, o.shoe || "#e2231a", o.strap || "#fff", o.buckle));
+    if (o.dress) t.push(P("M50,95 Q40,118 34,130 Q60,136 86,130 Q80,118 70,95Z", o.dress, 1.4), o.hem ? line("M36,127 Q60,133 84,127", 1.6, o.hem) : "");
+    else { t.push(E(60, 107, 13, 14, o.fur)); if (o.belly) t.push(E(61.5, 110, 8.5, 10, o.belly, 1.1)); }
+    if (o.chest) t.push(o.chest);
+    const gr = o.gloveR || 5.5, gc = o.glove || "#fff";
+    t.push(aL([[49, 99], [39, 108], [34, 117]], o.arm || SK, 3.2), glove(33, 120, gr, gc));
+    if (o.thumb) t.push(aL([[71, 99], [81, 93]], o.arm || SK, 3.2), glove(85, 91, gr, gc), E(83.5, 85, 1.9, 3.2, gc, 1));
+    else if (!o.noRight) t.push(aL([[71, 99], [81, 108], [86, 117]], o.arm || SK, 3.2), glove(87, 120, gr, gc));
+    if (o.cuffs) t.push(E(36.5, 114, 3.6, 2, o.cuffs, .8), o.thumb ? E(80.5, 94, 2, 3.4, o.cuffs, .8) : E(83.5, 114, 3.6, 2, o.cuffs, .8));
+    return t.join("");
+  }
+  function hogHead(o) {
+    const t = [], q = o.quills || Q_BACK;
+    t.push(typeof q === "string" ? P(q, o.fur, 1.5) : P(pts2d(q), o.fur, 1.5));
+    if (o.stripe) t.push(stripes(q, o.stripe));
+    if (!o.noEars) t.push(P("M44,50 L37,30 L55,42Z", o.fur), Pn("M44.5,46 L40.5,35 L51,43Z", o.ear || SK), P("M65,42 L80,29 L79,50Z", o.fur), Pn("M68,42 L77.5,34 L77,47Z", o.ear || SK));
+    t.push(aC(60, 64, 24, o.fur, st(1.6)));
+    if (o.front) t.push(P(o.front, o.fur, 1.4));
+    t.push(P(MUZ, o.muz || SK, 1.3));
+    t.push(eyes(o.iris, o));
+    t.push(E(71, 74, 3.6, 2.6, "#111", .8), aC(70, 73, .9, "#fff"));
+    t.push(o.mouth || line("M58,82 Q67,87 75,80", 1.3));
+    return t.join("");
+  }
+
+  /* ---------------- 1 Sonic ---------------- */
+  function sonic() {
+    const bg = greenHill({ loop: 24, palms: [[104, 124, 46, 1]], rings: [[88, 40, 4], [100, 30, 4], [112, 40, 4]] });
+    const o = { fur: "#1f5fd6", belly: SK, iris: "#2fae4a", thumb: 1 };
+    return [bg, aEdge(hogBody(o) + hogHead(o))];
+  }
+
+  /* ---------------- 2 Tails ---------------- */
+  function tails() {
+    const bg = greenHill({ sky1: "#4aa3f5", palms: [[14, 126, 50, 1]], rings: [[100, 12, 3.5], [112, 20, 3.5]] }) +
+      at(P("M-14,0 H14 L10,4 H-10Z", "#3d6fe0", 1) + P("M-4,-4 H6 L4,0 H-6Z", "#e53935", 1) + line("M-12,2 v-6 M12,2 v-6", .8), 104, 58, .9, -8);
+    const F = "#f7a21b", t = [];
+    t.push(tipped("M48,118 C26,128 4,118 6,96 C16,110 34,112 50,108Z", F, aC(6, 100, 12, "#fff")));
+    t.push(tipped("M50,110 C30,100 22,82 28,66 C34,84 44,96 56,102Z", F, aC(28, 64, 10, "#fff")));
+    t.push(hogBody({ fur: F, belly: "#fff", arm: F, thumb: 1 }));
+    t.push(P("M42,52 L30,26 L56,42Z", F), Pn("M42,47 L34,32 L51,42Z", "#fff"), P("M64,42 L88,24 L80,52Z", F), Pn("M67,42 L84,30 L78,47Z", "#fff"));
+    t.push(P("M40,68 L25,72 L37,78 L28,86 L44,84Z", F), P("M80,68 L95,72 L83,78 L92,86 L76,84Z", F));
+    t.push(aC(60, 65, 22.5, F, st(1.6)));
+    t.push(P("M46,48 L49,58 L54,47 L58,59 L62,46 L66,56 L70,46 Q58,38 46,48Z", F, 1.2));
+    t.push(P(MUZ, "#fff", 1.3), eyes("#3a8bdc"));
+    t.push(E(71, 74, 3.2, 2.4, "#111", .8), aC(70, 73, .8, "#fff"));
+    t.push(P("M58,80 Q66,88 74,79 Q66,83 58,80Z", "#c62828", 1));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  /* ---------------- 3 Knuckles ---------------- */
+  function knuckles() {
+    const bg = aSky("#5fb4f5", "#d9f1ff") + aCloud(6, 18, .8) + aCloud(84, 10, .6) +
+      P("M70,60 Q96,52 122,58 L118,74 Q100,92 84,74Z", "#4cbf4a", 1.1) + Pn("M84,74 Q100,92 118,74 L106,98 Q98,104 92,96Z", "#8a5a2b") +
+      greenHill({ noSky: 1, noClouds: 1, far: "#3aa84a", water: "#3fa7e0" }) +
+      emerald(102, 112, 2.2, "#2fd36a") + aSpark(92, 100, 3, "#fff") + aSpark(114, 104, 2.4, "#fff");
+    const F = "#e0301e", t = [];
+    const dreads = "M42,58 Q22,72 18,100 Q30,92 38,86 Q30,104 34,118 Q44,104 48,90 Q46,76 50,64Z";
+    t.push(P(dreads, F, 1.5), mir(P(dreads, F, 1.5)));
+    const chest = P("M51,99 Q60,108 69,99 Q66,110 60,111 Q54,110 51,99Z", "#fff", 1);
+    const o = { fur: F, iris: "#8e3fbf", noEars: 1, quills: "M60,40 Z", brow: 1, shoe: "#2e9e48", strap: "#ffd21f", buckle: "#c0c0c0",
+      chest, gloveR: 7.5, arm: F, mouth: P("M57,81 Q67,88 76,79 Q66,84 57,81Z", "#fff", 1) };
+    t.push(hogBody(o));
+    [[33, 120], [87, 120]].forEach(([x, y]) => t.push(P(`M${x - 4},${y - 6} l1.5,-4.5 l2.5,4 M${x + 1},${y - 6.8} l2,-4.4 l2,4.4`, "#fff", .9)));
+    t.push(hogHead(o));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  /* ---------------- 4 Amy Rose ---------------- */
+  const heart = (x, y, k = 1, c = "#ff6fa8") => at(P("M0,4 C-6,0 -7,-4 -4,-6 C-2,-7 -1,-6 0,-4 C1,-6 2,-7 4,-6 C7,-4 6,0 0,4Z", c, .9), x, y, k);
+  function amy() {
+    const bg = greenHill({ sky1: "#ff9fcf", sky2: "#ffe6f2", far: "#6cc46a", palms: [[108, 124, 40, .9]] }) + heart(16, 24, 1.3) + heart(100, 20, 1) + heart(92, 46, .8, "#ff3d7f");
+    const F = "#ff7fb2", t = [];
+    t.push(P("M40,58 L22,86 L44,78 L36,104 L56,86 Z", F, 1.5));
+    t.push(hogBody({ fur: F, dress: "#e8282d", hem: "#fff", leg: F, shoe: "#e8282d", strap: "#fff", noRight: 1, cuffs: "#ffd21f" }));
+    // the Piko Piko hammer held up
+    t.push(aL([[71, 99], [82, 98]], SK, 3.2), line("M84,104 L96,62", 3.4, OL), line("M84,104 L96,62", 2, "#ffd21f"));
+    t.push(at(aR(-11, -8, 22, 16, "#e8282d", 'rx="2.5"') + aR(-11, -8, 4, 16, "#ffd21f") + aR(7, -8, 4, 16, "#ffd21f"), 97, 56, 1, 16));
+    t.push(glove(84, 98, 5.5));
+    t.push(P("M44,50 L37,30 L55,42Z", F), Pn("M44.5,46 L40.5,35 L51,43Z", SK), P("M65,42 L80,29 L79,50Z", F), Pn("M68,42 L77.5,34 L77,47Z", SK));
+    t.push(aC(60, 64, 24, F, st(1.6)));
+    t.push(`<path d="M38,58 Q58,32 82,52" fill="none" stroke="${OL}" stroke-width="5" stroke-linecap="round"/><path d="M38,58 Q58,32 82,52" fill="none" stroke="#e8282d" stroke-width="3" stroke-linecap="round"/>`);
+    t.push(P("M46,50 L47,60 L53,51 L58,61 L62,50 L69,58 L70,48 Q58,42 46,50Z", F, 1.2));
+    t.push(P(MUZ, SK, 1.3), eyes("#3fbf5a", { lash: 1 }));
+    t.push(E(71, 74, 3, 2.2, "#111", .8), blush(48, 79, 3), P("M60,81 Q67,87 74,80Z", "#e5537a", .9));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  /* ---------------- 5 Shadow ---------------- */
+  function shadowHog() {
+    const R = aRand(505);
+    const bg = greenHill({ sky1: "#0f1640", sky2: "#5b4a8a", far: "#2e5a3a", water: "#284a8a", noClouds: 1, palms: [[106, 124, 44, .9]] }) +
+      aC(22, 24, 10, "#fff6c9") + [...Array(16)].map(() => aC(R() * 120, R() * 70, r1(.4 + R() * .6), "#fff", 'opacity=".8"')).join("");
+    const o = { fur: "#26262b", stripe: "#e53935", quills: Q_UP, iris: "#d32f2f", brow: 1, arm: "#26262b", shoe: "#fff", strap: "#e53935", buckle: "#ffd21f",
+      chest: P("M52,98 L56,104 L60,98 L64,104 L68,98 L66,108 Q60,112 54,108Z", "#fff", 1), cuffs: "#ffd21f", thumb: 0,
+      mouth: line("M60,82 Q67,84 74,80", 1.3) };
+    const t = [hogBody(o)];
+    t.push(line("M52,118 L48,128 M68,118 L72,128", 1.4, "#e53935"));
+    t.push(hogHead(o));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  /* ---------------- 6 Dr. Eggman (in the Egg Mobile) ---------------- */
+  function eggman() {
+    const bg = aSky("#262a52", "#6f5aa0") + aR(-1, 120, 122, 40, "#4a4f63") + line("M0,128 H120 M0,140 H120 M0,152 H120", .8, "#2c3040") +
+      aR(4, 30, 12, 90, "#5b6178") + aR(104, 20, 12, 100, "#5b6178") + line("M4,46 h12 M4,70 h12 M104,40 h12 M104,64 h12", 1, "#2c3040") +
+      aC(10, 92, 3, "#ffcc33") + aC(110, 84, 3, "#ff4d4d") + [[30, 16], [62, 10], [92, 18]].map(([x, y]) => aC(x, y, 1, "#fff", 'opacity=".7"')).join("");
+    const t = [];
+    t.push(P("M52,138 Q60,158 68,138Z", "#ff8a1f", 1), Pn("M56,139 Q60,151 64,139Z", "#ffe14d"));
+    t.push(P("M30,112 C26,86 40,76 60,76 C80,76 94,86 90,112Z", "#e2312b", 1.6));
+    t.push(line("M60,80 V112", 1), aC(57, 90, 1.3, "#ffd21f"), aC(57, 100, 1.3, "#ffd21f"));
+    t.push(aL([[34, 94], [28, 106], [32, 112]], "#e2312b", 6), aL([[86, 94], [92, 106], [88, 112]], "#e2312b", 6));
+    t.push(P("M18,112 Q60,121 102,112 L95,135 Q60,146 25,135Z", "#d5dae2", 1.6));
+    t.push(P("M20,119 Q60,129 100,119 L99,124 Q60,134 21,124Z", "#2b2b33", 1), aC(36, 130, 2.4, "#ffd21f", st(.8)), aC(84, 130, 2.4, "#ffd21f", st(.8)), aC(60, 134, 2.4, "#ff4d4d", st(.8)));
+    t.push(glove(32, 113, 6), glove(88, 113, 6));
+    t.push(E(60, 58, 20, 22, "#f7c8a6", 1.6));
+    t.push(aC(52, 41, 5.5, "#9aa1ad", st(1.1)), aC(68, 41, 5.5, "#9aa1ad", st(1.1)), aC(52, 41, 3.4, "#ffb74d"), aC(68, 41, 3.4, "#ffb74d"), line("M57.5,41 h5", 1.4));
+    t.push(E(52, 58, 6, 4.8, "#2f8fe0", 1.3), E(68, 58, 6, 4.8, "#2f8fe0", 1.3), line("M58,57 h4", 1.3), aC(50, 56.5, 1.4, "#fff", 'opacity=".8"'), aC(66, 56.5, 1.4, "#fff", 'opacity=".8"'));
+    t.push(P("M51,76 Q60,85 69,76Z", "#fff", 1), line("M54,77.5 v3 M60,78 v4 M66,77.5 v3", .6));
+    const st1 = "M59,70 Q46,66 36,72 Q26,78 16,68 Q18,84 36,82 Q50,80 59,76Z";
+    t.push(P(st1, "#9a4f1c", 1.3), mir(P(st1, "#9a4f1c", 1.3)));
+    t.push(aC(60, 68, 6, "#ff9e9e", st(1.2)), aC(58, 66, 1.5, "#fff", 'opacity=".7"'));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  /* ---------------- 7 Cream (with Cheese the Chao) ---------------- */
+  function cream() {
+    const bg = greenHill({ sky1: "#7cc6ff", sky2: "#fff3dc", far: "#7fcf6a", palms: [[12, 126, 42, .9]] }) +
+      [[30, 140], [50, 146], [86, 142], [104, 150], [70, 152]].map(([x, y], i) => aC(x, y, 2.6, ["#ff6f8e", "#fff", "#ffd21f"][i % 3], st(.6)) + aC(x, y, 1, "#ff9f1a")).join("");
+    const C = "#f7e6bd", t = [];
+    const ear = "M50,50 C40,30 26,38 25,66 C24,90 30,100 36,98 C38,80 41,62 54,52Z";
+    t.push(tipped(ear, C, aC(30, 100, 13, "#d9822b")), mir(tipped(ear, C, aC(30, 100, 13, "#d9822b"))));
+    t.push(hogBody({ fur: C, dress: "#f2862a", hem: "#ffd9a8", leg: C, arm: C, shoe: "#f5b331", strap: "#fff", buckle: "#ffd21f", thumb: 0 }));
+    t.push(P("M50,96 Q60,101 70,96 L68,100 Q60,104 52,100Z", "#fff", 1), P("M60,99 L52,94 L52,104Z M60,99 L68,94 L68,104Z", "#2f6fd6", 1), aC(60, 99, 2, "#2f6fd6", st(.8)));
+    t.push(aC(60, 66, 21, C, st(1.6)));
+    t.push(P("M54,47 Q60,36 66,47 Q60,44 54,47Z", C, 1.1));
+    t.push(En(52.5, 64, 7.5, 8.5, "#f2a04a"), En(67.5, 64, 7.5, 8.5, "#f2a04a"));
+    t.push(E(53, 64, 4.4, 6, "#fff", 1), E(67, 64, 4.4, 6, "#fff", 1));
+    [[53.6, 65], [67.6, 65]].forEach(([x, y]) => t.push(En(x, y, 3.1, 4.4, "#8a4a1c"), En(x + .3, y + .5, 1.6, 2.6, "#111"), aC(x - 1, y - 2, 1.1, "#fff")));
+    t.push(E(60, 77, 9, 6, "#fffaf0", 1), E(60, 74.5, 2.2, 1.6, "#5a3020", .7), P("M56,79 Q60,83 64,79Z", "#e5537a", .8), blush(45, 74, 2.8), blush(75, 74, 2.8));
+    // Cheese the Chao
+    const ch = P("M0,-12 C10,-8 10,8 0,8 C-10,8 -10,-8 0,-12Z", "#a8dcff", 1.2) + aC(0, -12, 1.8, "#ffd54a", st(.7)) + aC(0, -19, 3.2, "#ffd54a", st(1)) +
+      P("M-7,-2 Q-14,-6 -12,2Z M7,-2 Q14,-6 12,2Z", "#cbeaff", .9) + E(0, 13, 5.5, 5, "#a8dcff", 1.1) +
+      P("M0,8.5 L-4,6 L-4,11Z M0,8.5 L4,6 L4,11Z", "#e53935", .7) + En(-3, 0, 1.4, 2, "#111") + En(3, 0, 1.4, 2, "#111") + blush(-5.5, 3.5, 1.6) + blush(5.5, 3.5, 1.6);
+    t.push(at(ch, 96, 46, 1, 8));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  /* ---------------- 8 Silver ---------------- */
+  function silver() {
+    const bg = aSky("#5a4fa0", "#d7c9f5") + aCloud(84, 16, .6) + greenHill({ noSky: 1, noClouds: 1, far: "#6f9a8a", water: "#7aa6e0" }) +
+      aSpark(18, 30, 4, "#7ff4ff") + aSpark(100, 50, 3.2, "#7ff4ff") + aSpark(24, 92, 2.6, "#7ff4ff");
+    const F = "#d6dbe3";
+    const front = "M44,50 L32,24 L50,42 L50,12 L58,40 L68,14 L68,42 L86,28 L76,52Z";
+    const o = { fur: F, iris: "#f2c12e", quills: [[44, 52], [16, 46], [38, 64], [12, 80], [40, 82]], front, arm: F, muz: "#eef1f5", belly: "#fff",
+      chest: P("M50,98 Q46,90 52,92 Q54,86 58,92 Q60,84 63,92 Q67,86 68,93 Q74,90 70,98 Q60,104 50,98Z", "#fff", 1.1),
+      shoe: "#fff", strap: "#2fd5e8", buckle: "#ffd21f", glove: "#fff" };
+    const t = [hogBody(o), aC(33, 120, 2, "#2fd5e8"), aC(87, 120, 2, "#2fd5e8"), hogHead(o)];
+    return [bg, aEdge(t.join(""))];
+  }
+
+  /* ---------------- 9 Super Sonic (living: floats) ---------------- */
+  function superSonic() {
+    const bg = aRadial(uid("rd"), "#fff7c2", "#f29a1a", ".45") +
+      [["#2fd36a", 0], ["#3d8bff", 1], ["#e53935", 2], ["#ffd21f", 3], ["#b06ad9", 4], ["#7ff4ff", 5], ["#d9d9d9", 6]].map(([c, i]) => {
+        const a = -Math.PI / 2 + i * 2 * Math.PI / 7; return emerald(r1(60 + 50 * Math.cos(a)), r1(80 + 64 * Math.sin(a)), 1.1, c); }).join("");
+    const g = uid("au");
+    const aura = `<defs><radialGradient id="${g}"><stop offset=".55" stop-color="#fff59d" stop-opacity=".9"/><stop offset="1" stop-color="#ffe14d" stop-opacity="0"/></radialGradient></defs>` +
+      `<ellipse cx="60" cy="86" rx="44" ry="62" fill="url(#${g})"/>`;
+    const o = { fur: "#ffd23f", belly: SK, iris: "#d32f2f", quills: Q_UP, brow: 1, thumb: 1, mouth: P("M58,81 Q67,88 75,79 Q66,84 58,81Z", "#fff", 1) };
+    const sp = aSpark(30, 40, 4, "#fff") + aSpark(92, 120, 3.5, "#fff") + aSpark(96, 36, 3, "#fff");
+    return [bg + aura, aEdge(`<g class="lv-float">${hogBody(o)}${hogHead(o)}${sp}</g>`)];
+  }
+
+  FAN.sonic = [
+    ["Sonic", "the blue hedgehog giving a thumbs up in Green Hill, with a loop and rings", sonic],
+    ["Tails", "the two-tailed fox, with his plane in the sky", tails],
+    ["Knuckles", "the red echidna with spiky fists, guarding the Master Emerald", knuckles],
+    ["Amy Rose", "the pink hedgehog in her red dress with her Piko Piko hammer", amy],
+    ["Shadow", "the black hedgehog with red stripes under the moon", shadowHog],
+    ["Dr. Eggman", "the moustached doctor in his Egg Mobile", eggman],
+    ["Cream", "the little rabbit with her Chao friend Cheese", cream],
+    ["Silver", "the silver hedgehog with his glowing powers", silver],
+    ["Super Sonic", "golden Sonic among the seven Chaos Emeralds (he floats)", superSonic],
+  ];
+})();
+
+/* Sticker book world page "Sea" (the learning path's first world): 9 cute chibi sea animals with big anime eyes; the
+   holo picture (5 copies) shows the same animal in a grander scene. The jellyfish is the page's living sticker (it floats). */
+(() => {
+  "use strict";
+  const OL = A_OL, OUT = `stroke="${OL}" stroke-width="1.1" stroke-linejoin="round"`;
+  const uid = p => `ws${p}${++aUid}`;
+  const f1 = v => +(+v).toFixed(1);
+  const at = (x, y, s, inner, rot = 0, flip = false) => `<g transform="translate(${x} ${y})${rot ? ` rotate(${rot})` : ""} scale(${flip ? -s : s} ${s})">${inner}</g>`;
+  const blush = (x, y, r = 2.6) => `<ellipse cx="${x}" cy="${y}" rx="${r}" ry="${f1(r * .6)}" fill="#ff7a9a" opacity=".55"/>`;
+  const smile = (x, y, w = 2.6) => `<path d="M${f1(x - w)},${y} Q${x},${f1(y + w * 1.1)} ${f1(x + w)},${y}" fill="none" stroke="${OL}" stroke-width="1" stroke-linecap="round"/>`;
+  const grin = (x, y, w = 3) => `<path d="M${f1(x - w)},${y} Q${x},${f1(y + w * 1.4)} ${f1(x + w)},${y}Z" fill="#d6304a" stroke="${OL}" stroke-width=".9" stroke-linejoin="round"/>` +
+    `<ellipse cx="${x}" cy="${f1(y + w * .8)}" rx="${f1(w * .5)}" ry="${f1(w * .25)}" fill="#ff8fa3"/>`;
+  // two anime eyes, each with a thin dark rim so they read on any colour
+  const eyes = (x1, x2, y, iris, s = 1) => [x1, x2].map(x => `<ellipse cx="${x}" cy="${y}" rx="${f1(4.5 * s)}" ry="${f1(5.4 * s)}" fill="${OL}"/>` + aEye(x, y, iris, s)).join("");
+  const eye1 = (x, y, iris, s = 1) => `<ellipse cx="${x}" cy="${y}" rx="${f1(4.5 * s)}" ry="${f1(5.4 * s)}" fill="${OL}"/>` + aEye(x, y, iris, s);
+  const thick = (d, col, w) => `<path d="${d}" fill="none" stroke="${OL}" stroke-width="${f1(w + 2.2)}" stroke-linecap="round" stroke-linejoin="round"/>` +
+    `<path d="${d}" fill="none" stroke="${col}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>`;
+  const glow = (x, y, r, c, op = .9) => { const g = uid("gl"); return `<defs><radialGradient id="${g}"><stop offset="0" stop-color="${c}" stop-opacity="${op}"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></radialGradient></defs><circle cx="${x}" cy="${y}" r="${r}" fill="url(#${g})"/>`; };
+
+  /* ---------- backdrops ---------- */
+  const bub = (x, y, r, cls = "") => `<g${cls ? ` class="${cls}"` : ""}><circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(r)}" fill="#fff" fill-opacity=".18" stroke="#fff" stroke-opacity=".8" stroke-width=".7"/>` + aC(x - r * .35, y - r * .35, f1(Math.max(.4, r * .3)), "#fff", `opacity=".9"`) + `</g>`;
+  function bubbles(seed, n, x0 = 2, x1 = 118, y0 = 6, y1 = 120, rmax = 3.4) {
+    const R = aRand(seed); let s = "";
+    for (let i = 0; i < n; i++) s += bub(x0 + R() * (x1 - x0), y0 + R() * (y1 - y0), 1 + R() * (rmax - 1));
+    return s;
+  }
+  const weed = (x, y, h, c, sway = 5) => {
+    let d = `M${x},${y}`;
+    for (let i = 1; i <= 4; i++) d += ` Q${x + (i % 2 ? sway : -sway)},${f1(y - h * (i - .5) / 4)} ${x},${f1(y - h * i / 4)}`;
+    return `<path d="${d}" fill="none" stroke="${c}" stroke-width="3.6" stroke-linecap="round"/>` +
+      [0, 1, 2, 3].map(i => { const ex = x + (i % 2 ? 3.4 : -3.4), ey = f1(y - h * (i + .6) / 4); return `<ellipse cx="${ex}" cy="${ey}" rx="3.4" ry="1.5" fill="${c}" transform="rotate(${i % 2 ? -30 : 30} ${ex} ${ey})"/>`; }).join("");
+  };
+  function coral(x, y, s, c) {
+    const br = [[[0, 0], [0, -10], [-5, -16], [-6, -22]], [[0, -10], [5, -15], [6, -23]], [[0, -5], [-7, -9], [-10, -13]], [[0, -5], [7, -6], [10, -10]]];
+    return `<g transform="translate(${x} ${y}) scale(${s})">` + br.map(b => `<polyline points="${aPts(b)}" fill="none" stroke="${c}" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>`).join("") + `</g>`;
+  }
+  const star5 = (x, y, s, c = "#ff8a50") => `<g transform="translate(${x} ${y}) scale(${s} ${f1(s * .75)})"><polygon points="${aPts([...Array(10)].map((_, i) => { const r = i % 2 ? 2.4 : 6, a = -Math.PI / 2 + i * Math.PI / 5; return [r * Math.cos(a), r * Math.sin(a)]; }))}" fill="${c}" stroke="${c}" stroke-width="1.4" stroke-linejoin="round"/></g>`;
+  const shell = (x, y, s, c = "#ffccbc") => `<g transform="translate(${x} ${y}) scale(${s})"><path d="M-5,0 Q-6,-7 0,-8 Q6,-7 5,0Z" fill="${c}"/><path d="M0,0 V-7.5 M-2.5,0 L-2,-7 M2.5,0 L2,-7" stroke="#e08f7c" stroke-width=".6"/></g>`;
+  // underwater: light water at the top, light shafts, sandy floor, seaweed, coral, bubbles
+  function under(o = {}) {
+    const g = uid("wat"), fy = o.floor || 136, R = aRand(o.seed || 5);
+    let s = `<defs>${aVGrad(g, o.top || "#74d8f6", o.bot || "#1667b8")}</defs><rect width="120" height="158" fill="url(#${g})"/>`;
+    s += `<g opacity="${o.night ? .05 : .14}" fill="#fff">` + [[4, -6], [38, 26], [74, 70], [100, 108]].map(([a, b]) => `<polygon points="${a},0 ${a + 12},0 ${b + 18},158 ${b},158"/>`).join("") + `</g>`;
+    s += `<path d="M0,${fy} Q30,${fy - 6} 60,${fy} T120,${fy - 2} V158 H0Z" fill="${o.sand || "#f1d58a"}"/>`;
+    for (let i = 0; i < 14; i++) s += aC(4 + R() * 112, fy + 5 + R() * (154 - fy), .7, o.night ? "#8a7a55" : "#d9b860");
+    if (o.weed !== false) s += weed(9, fy + 4, 42, o.night ? "#1f6e55" : "#2fa36b") + weed(112, fy + 2, 34, o.night ? "#26805f" : "#3bb37a", 4);
+    if (o.coral !== false) s += coral(98, fy + 3, .8, o.night ? "#a04a72" : "#ff6f91") + star5(24, fy + 9, .9, o.night ? "#b8653f" : "#ff8a50") + shell(82, fy + 12, .8);
+    return s + bubbles(o.seed || 5, o.nb === undefined ? 9 : o.nb, 2, 118, 6, fy - 14);
+  }
+  // above the water: sky (day, sunset or night), sun or moon, the sea from y down
+  function surface(o = {}) {
+    const g = uid("sky"), wy = o.wy || 106;
+    let s = `<defs>${aVGrad(g, o.top || "#5ec4f2", o.bot || "#dff4ff")}</defs><rect width="120" height="158" fill="url(#${g})"/>`;
+    if (o.night) { const R = aRand(o.seed || 9); for (let i = 0; i < 16; i++) s += aSpark(f1(4 + R() * 112), f1(4 + R() * (wy - 30)), f1(1.2 + R() * 1.8), "#fff6c2"); }
+    if (o.moon) s += glow(o.moon[0], o.moon[1], 24, "#fff6c2", .5) + aC(o.moon[0], o.moon[1], 10, "#fff6c4") + aC(o.moon[0] - 3, o.moon[1] - 2, 1.8, "#efe2a2") + aC(o.moon[0] + 3, o.moon[1] + 3, 1.3, "#efe2a2");
+    if (o.sun) s += aSun(o.sun[0], o.sun[1], o.sun[2] || 10);
+    if (o.clouds !== false && !o.night) s += aCloud(6, 16, .8) + aCloud(70, 30, .65);
+    return s + aWaves(wy, o.sea || "#2f8fd8", o.line || "#bfe6ff", o.nw || 4);
+  }
+  const beach = (y, c = "#f6dc94") => `<path d="M0,${y} Q40,${y - 8} 80,${y - 2} Q100,${y + 1} 120,${y - 4} V158 H0Z" fill="${c}"/>`;
+
+  /* ---------- the animals (drawn around 0,0, facing right) ---------- */
+  function clownfish(o = {}) {
+    const c = uid("cf"), OR = o.col || "#ff7b1c";
+    return `<path d="M-17,0 Q-26,-12 -31,-11 Q-27,0 -31,11 Q-26,12 -17,0Z" fill="${OR}" ${OUT}/><path d="M-29.3,-9 Q-26,0 -29.3,9" fill="none" stroke="${OL}" stroke-width="1.8"/>` +
+      `<path d="M-13,-11 Q-8,-24 3,-21 Q8,-18 7,-13Z" fill="${OR}" ${OUT}/><path d="M-9,-14 L-6,-20 M-3,-14 L0,-20" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>` +
+      `<path d="M-7,12 Q-3,22 6,18 L6,12Z" fill="${OR}" ${OUT}/>` +
+      `<defs><clipPath id="${c}"><ellipse cx="0" cy="0" rx="20" ry="15"/></clipPath></defs><ellipse cx="0" cy="0" rx="20" ry="15" fill="${OR}"/>` +
+      `<g clip-path="url(#${c})"><path d="M-7,-16 Q-2,0 -7,16 L1,16 Q6,0 1,-16Z" fill="#fff" stroke="${OL}" stroke-width="1.3"/>` +
+      `<path d="M-21,-16 Q-15,0 -21,16 L-15,16 Q-10,0 -15,-16Z" fill="#fff" stroke="${OL}" stroke-width="1.3"/>` +
+      `<ellipse cx="6" cy="-9" rx="10" ry="3.4" fill="#fff" opacity=".28"/></g><ellipse cx="0" cy="0" rx="20" ry="15" fill="none" ${OUT}/>` +
+      `<path d="M-2,5 Q-10,9 -8,14 Q-2,13 1,7Z" fill="#ffa040" ${OUT}/>` +
+      eyes(7.5, 15.5, -2.5, "#3a2a1a", .85) + blush(5.5, 5) + blush(18, 4.6, 2) + smile(12, 6.5, 2.4);
+  }
+  function anemone(x, y, s, c1, c2, n = 13) {
+    let t = "";
+    for (let i = 0; i < n; i++) {
+      const a = -Math.PI + (i + .5) * Math.PI / n, L = 20 + (i % 3) * 4, ex = Math.cos(a) * L * 1.3, ey = Math.sin(a) * L;
+      t += thick(`M${f1(ex * .2)},0 Q${f1(ex * .6 + (i % 2 ? 4 : -4))},${f1(ey * .6)} ${f1(ex)},${f1(ey)}`, i % 2 ? c1 : c2, 3.6) + aC(ex, ey, 2.2, "#fff6fb", `stroke="${OL}" stroke-width=".7"`);
+    }
+    return `<g transform="translate(${x} ${y}) scale(${s})">${t}<path d="M-14,0 Q0,-6 14,0 L12,10 H-12Z" fill="${c2}" ${OUT}/></g>`;
+  }
+  function dolphin(o = {}) {
+    const B = o.col || "#5ba8dc";
+    return `<path d="M-26,2 L-37,-7 Q-33,2 -39,10Z" fill="${B}" ${OUT}/>` +
+      `<path d="M-4,-12 Q1,-23 8,-13Z" fill="${B}" ${OUT}/>` +
+      `<path d="M-28,2 Q-14,-14 8,-13 Q20,-12 24,-5 L33,-3 Q35,1 29,2.5 Q18,7 6,8 Q-12,10 -28,2Z" fill="${B}" ${OUT}/>` +
+      `<path d="M-20,4 Q2,4 30,1.6 Q18,6.6 6,7.8 Q-10,9 -20,4Z" fill="#e3f4ff"/>` +
+      `<path d="M3,6 Q0,14 -6,16 Q-4,10 -2,6Z" fill="${B}" ${OUT}/>` +
+      `<ellipse cx="2" cy="-9" rx="9" ry="2.4" fill="#fff" opacity=".3"/>` +
+      eye1(15, -4.5, "#16466e", .85) + blush(18.5, 1.5, 2.2) + `<path d="M23,.5 Q27,2 31,.4" fill="none" stroke="${OL}" stroke-width="1" stroke-linecap="round"/>`;
+  }
+  function whale(o = {}) {
+    const B = o.col || "#3f7fd6", L = "#cfe8ff";
+    return `<path d="M-30,6 Q-42,2 -43,-12 L-38,-13 Q-37,-3 -27,-4Z" fill="${B}" ${OUT}/>` +
+      `<path d="M-41,-11 Q-50,-13 -55,-22 Q-46,-23 -41,-16 Q-40,-25 -32,-28 Q-33,-18 -41,-11Z" fill="${B}" ${OUT}/>` +
+      `<path d="M-34,-2 Q-32,-26 0,-26 Q31,-26 35,-4 Q37,14 14,18 Q-14,21 -30,10 Q-35,5 -34,-2Z" fill="${B}" ${OUT}/>` +
+      `<path d="M-24,10 Q2,20 34,4 Q32,14 14,17.4 Q-10,20.4 -24,10Z" fill="${L}"/>` +
+      `<path d="M-10,15 Q4,18 18,14 M-4,18 Q6,19.4 14,17" fill="none" stroke="#8fb9e6" stroke-width=".9"/>` +
+      `<ellipse cx="-6" cy="-19" rx="13" ry="3.4" fill="#fff" opacity=".25"/>` +
+      `<path d="M2,10 Q-6,18 -14,18 Q-8,12 -4,9Z" fill="${B}" ${OUT}/>` +
+      eyes(13, 25, -4, "#163a7a", 1) + blush(10, 4, 2.6) + blush(29, 3.6, 2.2) + smile(19.5, 6, 3);
+  }
+  const spout = (x, y, s = 1, c = "#bfeaff") => `<g transform="translate(${x} ${y}) scale(${s})"><path d="M-2,0 Q-4,-10 -12,-13 Q-4,-18 0,-9 Q4,-18 12,-13 Q4,-10 2,0Z" fill="${c}" ${OUT}/>` +
+    aC(-14, -9, 1.6, c, A_OUT) + aC(14, -9, 1.6, c, A_OUT) + aC(-8, -20, 1.3, c, A_OUT) + aC(8, -20, 1.3, c, A_OUT) + `</g>`;
+  function turtle(o = {}) {
+    const S = o.shell || "#4caf50", SK = o.skin || "#9ccc65";
+    return `<path d="M-16,5 Q-27,9 -33,14 Q-29,5 -20,2Z" fill="${SK}" ${OUT}/>` +
+      `<path d="M10,4 Q22,8 30,20 Q19,21 7,9Z" fill="${SK}" ${OUT}/>` +
+      `<ellipse cx="32" cy="-5" rx="11" ry="10" fill="${SK}" ${OUT}/>` + aC(26, -12, 1.2, "#7cb342") + aC(37, -13, 1, "#7cb342") +
+      `<path d="M-24,2 Q-22,-22 0,-22 Q22,-22 24,2Z" fill="${S}" ${OUT}/>` +
+      `<path d="M-7,-9 L0,-14 L7,-9 L5,-2 L-5,-2Z M-7,-9 L-15,-12 M7,-9 L15,-12 M-5,-2 L-12,2 M5,-2 L12,2 M0,-14 L0,-21 M-15,-12 L-21,-3 M15,-12 L21,-3" fill="${o.shell2 || "#66bb6a"}" stroke="#2e7d32" stroke-width="1.1" stroke-linejoin="round"/>` +
+      `<path d="M-16,-15 Q-10,-20 -2,-20" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity=".55"/>` +
+      `<path d="M-26,2 Q0,8 26,2 Q26,6 22,7 Q0,12 -22,7 Q-26,6 -26,2Z" fill="#dbe88a" ${OUT}/>` +
+      eyes(28.5, 36.5, -6, "#4a2a12", .78) + blush(26, -.5, 1.8) + blush(39.5, -.8, 1.6) + smile(33, 0, 2.2);
+  }
+  function crab(o = {}) {
+    const R = o.col || "#ef4b3f";
+    const claw = side => `<g transform="translate(${side * 29} -21) rotate(${side * 18})"><path d="M0,7 Q-9,5 -8.5,-4 Q-7.5,-10.5 -1,-10 L0,-2.5Z" fill="${R}" ${OUT}/><path d="M0,7 Q9,5 8.5,-4 Q7.5,-10.5 1,-10 L0,-2.5Z" fill="${R}" ${OUT}/></g>`;
+    return [-1, 1].map(sd => [0, 1, 2].map(i => aL([[sd * 15, 4 + i * 3], [sd * (24 + i * 2), 10 + i * 4], [sd * (27 + i * 2), 18 + i * 3]], R, 2.2)).join("")).join("") +
+      aL([[-15, -4], [-26, -10], [-28, -15]], R, 4) + aL([[15, -4], [26, -10], [28, -15]], R, 4) + claw(-1) + claw(1) +
+      aL([[-6, -10], [-8, -21]], R, 2.2) + aL([[6, -10], [8, -21]], R, 2.2) +
+      `<ellipse cx="0" cy="0" rx="20" ry="13" fill="${R}" ${OUT}/><ellipse cx="-4" cy="-6" rx="9" ry="3" fill="#fff" opacity=".28"/>` +
+      eyes(-8.5, 8.5, -24, "#3a1a10", .95) + blush(-11, 3) + blush(11, 3) + grin(0, 3, 3.6) + aC(-5, -5, 1, "#ff8a80") + aC(6, -6, .9, "#ff8a80");
+  }
+  function seahorse(o = {}) {
+    const Y = o.col || "#ffc62e", F = o.fin || "#ff9a3c";
+    return thick("M-3,10 Q7,24 -1,32 Q-9,37 -12,30 Q-13,23 -6,24", Y, 6.2) +
+      `<path d="M-11,-8 Q-22,-6 -21,5 Q-15,3 -11,1Z" fill="${F}" ${OUT}/><path d="M-12,-5 L-19,-3 M-12,-2 L-19,2" stroke="#fff" stroke-width=".8" opacity=".7"/>` +
+      `<path d="M-8,-16 Q-17,-2 -8,11 Q1,17 5,6 Q9,-5 4,-15Z" fill="${Y}" ${OUT}/>` +
+      `<path d="M4,-8 Q-1,-7 -3,-9 M5,-2 Q0,-1 -2,-3 M5,4 Q1,5 -1,3" fill="none" stroke="#e09a12" stroke-width="1" stroke-linecap="round"/>` +
+      `<path d="M5,-26 L18,-25 Q21,-22 18,-18.6 L5,-18Z" fill="${Y}" ${OUT}/>` +
+      `<path d="M-7,-29 L-5,-37 L-1.5,-31 L2,-37.5 L3.5,-30Z" fill="${F}" ${OUT}/>` +
+      `<circle cx="0" cy="-23" r="10.5" fill="${Y}" ${OUT}/><ellipse cx="-4" cy="-28" rx="4.5" ry="2" fill="#fff" opacity=".35"/>` +
+      eye1(1.5, -24, "#7a3a12", 1.05) + blush(7.5, -17.5, 2) + `<path d="M14,-19.5 Q16,-18 18,-19.6" fill="none" stroke="${OL}" stroke-width=".9" stroke-linecap="round"/>`;
+  }
+  function shark(o = {}) {
+    const B = o.col || "#7aa7cc";
+    return `<path d="M-28,0 Q-35,-10 -43,-19 Q-38,-4 -43,13 Q-35,6 -28,3Z" fill="${B}" ${OUT}/>` +
+      `<path d="M-7,-16 Q-3,-33 11,-17Z" fill="${B}" ${OUT}/>` +
+      `<path d="M-30,0 Q-20,-18 6,-18 Q29,-17 35,-3 Q36,9 20,13 Q-8,16 -30,0Z" fill="${B}" ${OUT}/>` +
+      `<path d="M-22,4 Q-4,9 12,7 Q28,6 35.4,-1 Q36,9 20,12.4 Q-6,15 -22,4Z" fill="#f2f8fc"/>` +
+      `<path d="M-3,-5 Q-5,0 -3,5 M-7,-5 Q-9,0 -7,5 M-11,-4 Q-13,0 -11,4" fill="none" stroke="#4f7fa8" stroke-width="1" stroke-linecap="round"/>` +
+      `<path d="M2,8 Q-1,19 -11,21 Q-5,12 -4,7Z" fill="${B}" ${OUT}/>` +
+      `<ellipse cx="0" cy="-12" rx="11" ry="2.6" fill="#fff" opacity=".28"/>` +
+      eyes(13, 24, -6.5, "#1b3e64", .9) + blush(10, 0, 2.3) + blush(29, -1, 2) +
+      `<path d="M13,3.5 Q22,12 31,2.5 Q22,6 13,3.5Z" fill="#d6304a" stroke="${OL}" stroke-width=".9" stroke-linejoin="round"/>` +
+      `<path d="M16,4.6 l1.2,1.8 l1.2,-1.4 M25,4.5 l1.2,1.6 l1.2,-1.8" fill="#fff" stroke="none"/><path d="M16,4.4 L17.2,6.6 L18.4,5 Z M25,4.6 L26.2,6.4 L27.4,4.2Z" fill="#fff"/>`;
+  }
+  function jelly(o = {}) {
+    const P = o.col || "#f48fca", P2 = o.col2 || "#ce5fb0", t = o.tent || "#f7b6dd";
+    let s = "";
+    [-13, -6.5, 6.5, 13].forEach((x, i) => { s += thick(`M${x},0 Q${x + (i % 2 ? 4 : -4)},8 ${x},15 Q${x + (i % 2 ? -4 : 4)},22 ${x},30 Q${x + (i % 2 ? 3 : -3)},36 ${x - 1},41`, t, 1.6); });
+    s += thick("M-3,0 Q-8,8 -2,15 Q4,22 -3,30", P2, 3.8) + thick("M3,0 Q8,9 3,17 Q-2,25 4,33", P2, 3.8);
+    s += `<path d="M-19,1 Q-20,-25 0,-25 Q20,-25 19,1 Q15,4.4 10.5,1 Q5.6,4.4 0,1 Q-5.6,4.4 -10.5,1 Q-15,4.4 -19,1Z" fill="${P}" ${OUT}/>` +
+      `<path d="M-13,-15 Q-10,-21 -3,-22" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" opacity=".7"/>` +
+      aC(9, -18, 1.3, "#fff", `opacity=".6"`) + aC(13, -12, .9, "#fff", `opacity=".6"`);
+    return s + eyes(-6.5, 6.5, -9, o.iris || "#5a1f6e", .95) + blush(-12, -2.6) + blush(12, -2.6) + smile(0, -3.5, 2.4);
+  }
+  function octopus(o = {}) {
+    const P = o.col || "#9b6ad8", P2 = o.light || "#c7a6f2";
+    const arms = [
+      "M-14,0 Q-30,6 -30,18 Q-30,26 -24,25", "M-8,2 Q-16,16 -14,26 Q-12,32 -7,29", "M-2,3 Q-3,18 2,28 Q5,33 9,29",
+      "M4,3 Q10,16 16,24 Q21,29 24,24", "M10,1 Q24,4 30,-6 Q34,-14 30,-18", "M14,-2 Q26,-2 30,8 Q33,15 28,17"];
+    const suck = [[-29, 14], [-27, 20], [-14, 20], [-12, 25], [0, 20], [3, 25], [14, 20], [18, 24], [27, 0], [30, -6]];
+    return arms.map((d, i) => thick(d, i === 4 ? P : P, 5.6)).join("") + suck.map(([x, y]) => aC(x, y, 1, P2, `stroke="#7a4bb8" stroke-width=".5"`)).join("") +
+      `<path d="M-19,4 Q-24,-29 0,-30 Q24,-29 19,4 Q0,10 -19,4Z" fill="${P}" ${OUT}/>` +
+      `<ellipse cx="-8" cy="-22" rx="6" ry="3" fill="#fff" opacity=".3"/>` + aC(10, -21, 2.2, P2) + aC(14, -15, 1.4, P2) + aC(-14, -12, 1.5, P2) +
+      eyes(-7, 7, -9, "#3b1a6a", 1.1) + blush(-13, -1.6) + blush(13, -1.6) + grin(0, -2, 3);
+  }
+
+  /* ---------- the stickers ---------- */
+  const clownA = () => [under({ seed: 3, coral: false }) + anemone(60, 138, 1.15, "#ff7eb6", "#d94f9a"),
+    aEdge(at(58, 76, 1.55, clownfish()))];
+  const dolA = () => [surface({ sun: [98, 22, 11] }) + `<path d="M24,112 Q30,100 36,110 Q42,98 48,112" fill="#e8f7ff" ${OUT}/>` + bubbles(11, 4, 20, 60, 98, 112, 2),
+    aEdge(at(62, 70, 1.45, dolphin(), -28))];
+  const whaleA = () => [surface({ sun: [100, 18, 10], wy: 100, sea: "#2a7ccc" }),
+    aEdge(at(62, 96, 1.2, spout(4, -26) + whale()))];
+  const turtleA = () => [under({ seed: 8 }) + coral(28, 138, .9, "#ffb74d"),
+    aEdge(at(54, 78, 1.45, turtle(), -6))];
+  const castle = (x, y, s) => `<g transform="translate(${x} ${y}) scale(${s})" fill="#e8c06a" stroke="#b58a3a" stroke-width=".8"><rect x="-16" y="-14" width="32" height="14"/><rect x="-20" y="-24" width="10" height="24"/><rect x="10" y="-24" width="10" height="24"/><rect x="-6" y="-30" width="12" height="16"/>` +
+    `<path d="M-20,-24 v-3 h3 v3 h1 v-3 h3 v3 h1 v-3 h2 v3 M10,-24 v-3 h3 v3 h1 v-3 h3 v3 h1 v-3 h2 v3 M-6,-30 v-3 h3 v3 h1.5 v-3 h3 v3 h1.5 v-3 h2 v3"/><path d="M-3,0 V-7 A3,3 0 0 1 3,-7 V0Z" fill="#a77b30"/>` +
+    `<path d="M0,-33 V-42" stroke="#6d4c41" stroke-width="1"/><path d="M0,-42 L8,-39.5 L0,-37Z" fill="#e53935" stroke="none"/></g>`;
+  const crabA = () => [surface({ sun: [20, 20, 10], wy: 78, nw: 2 }) + beach(104) + castle(96, 128, .9) + shell(22, 140, 1.2) + star5(104, 146, .9),
+    aEdge(at(56, 112, 1.3, crab()))];
+  const horseA = () => [under({ seed: 12, coral: false }) + weed(30, 140, 110, "#2fa36b", 6) + weed(96, 140, 80, "#43b581", 4) + coral(70, 140, .9, "#ff8a80"),
+    aEdge(at(62, 74, 1.5, seahorse()))];
+  const fishy = (x, y, s, c, flip) => at(x, y, s, `<path d="M-7,0 L-12,-4 L-11,0 L-12,4Z" fill="${c}" ${OUT}/><path d="M-8,0 Q-2,-6 6,0 Q-2,6 -8,0Z" fill="${c}" ${OUT}/>` + aC(2.4, -1, 1.3, "#fff") + aC(2.7, -1, .7, "#111"), 0, flip);
+  const sharkA = () => [under({ seed: 15 }) + fishy(20, 30, 1.1, "#ffd54f") + fishy(98, 120, 1, "#ff8a65", true) + fishy(28, 112, .9, "#80deea"),
+    aEdge(at(62, 76, 1.38, shark()))];
+  const jellyA = () => [under({ seed: 18, top: "#8be0fa", bot: "#2a5fc4" }) + at(18, 40, .4, jelly({ col: "#b39ddb", col2: "#9575cd", tent: "#d1c4e9" })) + at(100, 104, .35, jelly({ col: "#80deea", col2: "#4dd0e1", tent: "#b2ebf2" })),
+    aEdge(`<g class="lv-float">${at(60, 70, 1.45, jelly())}</g>`)];
+  const octoA = () => [under({ seed: 21 }) + star5(96, 128, 1.3, "#ffb300") + shell(18, 140, 1.4),
+    aEdge(at(56, 82, 1.45, octopus()))];
+
+  FAN.wsea = [
+    ["Clownfish", "Orange with white stripes, peeking out of its anemone", clownA],
+    ["Dolphin", "Leaping out of the waves in the sunshine", dolA],
+    ["Whale", "A big blue whale blowing a fountain", whaleA],
+    ["Sea turtle", "Gliding over the sea floor", turtleA],
+    ["Crab", "Waving its claws on the beach by a sandcastle", crabA],
+    ["Seahorse", "Curly tail, among the seaweed", horseA],
+    ["Friendly shark", "A smiling shark with its fish friends", sharkA],
+    ["Jellyfish", "A pink jellyfish floating (it moves)", jellyA],
+    ["Octopus", "Eight wiggly arms on the sea floor", octoA],
+  ];
+})();
+
+/* Sticker book page "Woodland Forest" (9 of 9: fox, owl, fawn, squirrel, hedgehog, bear cub, rabbit, woodpecker, frog) */
+(() => {
+  "use strict";
+  const uid = p => `wf${p}${++aUid}`;
+  const r1 = v => +(+v).toFixed(1);
+  const at = (x, y, s, inner, rot = 0) => `<g transform="translate(${x} ${y}) rotate(${rot}) scale(${s})">${inner}</g>`;
+  const blush = (x, y, r = 2.6) => `<ellipse cx="${x}" cy="${y}" rx="${r}" ry="${r1(r * .6)}" fill="#ff7a9a" opacity=".5"/>`;
+  const smile = (x, y, w = 4) => `<path d="M${r1(x - w)},${y} Q${x},${r1(y + w * .9)} ${r1(x + w)},${y}" fill="none" stroke="${A_OL}" stroke-width="1.1" stroke-linecap="round"/>`;
+  // a small round tree with a puffy crown, trunk bottom at (x,yBase)
+  function tree(x, yBase, s, col) {
+    let g = `<path d="M${-3*s},0 L${-3*s},${18*s} L${3*s},${18*s} L${3*s},0Z" fill="#6b4a2e" ${A_OUT}/>`;
+    g += [[0,-20,16],[-13,-8,13],[13,-8,13],[0,2,14]].map(([dx,dy,r]) => `<circle cx="${dx*s}" cy="${(dy)*s}" r="${r*s}" fill="${col}" ${A_OUT}/>`).join("");
+    return `<g transform="translate(${x} ${yBase})">${g}</g>`;
+  }
+  // a speckled toadstool mushroom cap+spots, used standalone or as the frog's seat
+  function spotRing(cx, cy, rx, ry, n, r, col) {
+    let s = "";
+    for (let i = 0; i < n; i++) { const a = i * 2 * Math.PI / n; s += `<circle cx="${r1(cx + Math.cos(a)*rx)}" cy="${r1(cy + Math.sin(a)*ry*.6)}" r="${r}" fill="${col}"/>`; }
+    return s;
+  }
+
+  /* ---------- backdrops ---------- */
+  function forestDay() {
+    const g = uid("fd");
+    let s = `<defs>${aVGrad(g, "#bfe8c8", "#eef8df")}</defs><rect width="120" height="158" fill="url(#${g})"/>`;
+    s += aSun(98, 22, 11);
+    s += tree(12, 96, .9, "#4a9a5c") + tree(104, 88, 1.05, "#3f8a50") + tree(96, 128, .6, "#52a864");
+    s += aP("M0,128 Q30,112 60,124 Q90,134 120,118 V158 H0Z", "#7bbf6a");
+    s += aP("M0,146 Q35,134 70,144 Q95,150 120,140 V158 H0Z", "#5fa852");
+    return s;
+  }
+  function forestNight() {
+    const g = uid("fn");
+    let s = `<defs>${aVGrad(g, "#101a3a", "#2c3d6e")}</defs><rect width="120" height="158" fill="url(#${g})"/>`;
+    s += aC(94, 26, 13, "#f4eecb") + aC(89, 22, 10.5, "#101a3a", 'opacity=".85"');
+    s += [[16,20,1.2],[40,10,.9],[70,16,1],[106,40,.7],[20,50,.8]].map(([x,y,r]) => `<circle cx="${x}" cy="${y}" r="${r}" fill="#fff" opacity=".85"/>`).join("");
+    s += `<g opacity=".9">${tree(14, 104, 1, "#16321f")}${tree(100, 96, 1.15, "#102a19")}</g>`;
+    s += aP("M0,134 Q35,120 70,132 Q95,140 120,126 V158 H0Z", "#142a1c");
+    return s;
+  }
+  function mossyFloor() {
+    const g = uid("mf");
+    let s = `<defs>${aVGrad(g, "#2e6b3f", "#9fd68a")}</defs><rect width="120" height="158" fill="url(#${g})"/>`;
+    s += [[14,18],[100,14]].map(([x,y]) => tree(x, y+70, .55, "#3f8a50")).join("");
+    s += [[18,100],[98,110],[30,130]].map(([x,y]) => `<path d="M${x-7},${y+6} Q${x},${y-8} ${x+7},${y+6}Z" fill="#2e7a46" ${A_OUT}/>`).join("");
+    s += aP("M0,128 Q30,114 60,124 Q90,132 120,120 V158 H0Z", "#6b4a2e");
+    s += aP("M0,144 Q35,134 70,142 Q95,148 120,138 V158 H0Z", "#5a3b22");
+    return s;
+  }
+
+  /* ---------- the animals (drawn around 0,0) ---------- */
+  function foxChar() {
+    const fur1 = "#e8732f", fur2 = "#c85a1f", white = "#fff6e8", black = "#2a1a10";
+    let s = `<path d="M8,30 Q34,34 36,16 Q38,2 24,2 Q30,14 20,24Z" fill="${fur1}" ${A_OUT}/><path d="M26,10 Q34,10 34,18 Q28,16 24,10Z" fill="${white}"/>`;
+    s += aP("M-18,10 Q-24,30 -8,40 Q0,45 8,40 Q24,30 18,10 Q0,20 -18,10Z", fur1);
+    s += aP("M-9,22 Q0,28 9,22 L7,37 Q0,41 -7,37Z", white);
+    s += aP("M-16,-22 L-22,-34 L-9,-28Z", fur1) + aP("M16,-22 L22,-34 L9,-28Z", fur1);
+    s += aP("M-15,-22 L-19,-30 L-11,-26Z", black) + aP("M15,-22 L19,-30 L11,-26Z", black);
+    s += aC(0, -12, 17, fur1, A_OUT);
+    s += aP("M-9,-6 Q0,2 9,-6 Q9,6 0,10 Q-9,6 -9,-6Z", white);
+    s += aEye(-7, -12, "#2a1a10", .9) + aEye(7, -12, "#2a1a10", .9);
+    s += aC(0,2,1.8,black,A_OUT);
+    s += smile(0, 6, 5);
+    s += blush(-13,-6) + blush(13,-6);
+    return s;
+  }
+  function owlChar() {
+    const fur1 = "#8a5a3c", fur2 = "#6b4428", face = "#e8d2a0", beak = "#f0a93a";
+    let s = aP("M-19,8 Q-24,32 -8,42 Q0,46 8,42 Q24,32 19,8 Q0,18 -19,8Z", fur1);
+    s += [[-11,16],[2,12],[-5,26],[9,22],[-14,30],[11,32]].map(([x,y]) => aC(x,y,2,fur2)).join("");
+    s += aC(-13,38,4.2,fur2,A_OUT) + aC(13,38,4.2,fur2,A_OUT);
+    s += aP("M-16,-24 L-22,-34 L-10,-30Z", fur1) + aP("M16,-24 L22,-34 L10,-30Z", fur1);
+    s += aC(0, -8, 19, fur1, A_OUT);
+    s += aC(-9,-8,11,face,A_OUT) + aC(9,-8,11,face,A_OUT);
+    s += aEye(-9, -8, "#4a2f10", 1.3) + aEye(9, -8, "#4a2f10", 1.3);
+    s += `<ellipse class="lv-wink" cx="-9" cy="-8" rx="9.5" ry="9.5" fill="${face}"/><ellipse class="lv-wink" cx="9" cy="-8" rx="9.5" ry="9.5" fill="${face}"/>`;
+    s += aP("M-3,0 Q0,5 3,0 Q2,3 0,4 Q-2,3 -3,0Z", beak);
+    s += blush(-18,0) + blush(18,0);
+    return s;
+  }
+  function fawnChar() {
+    const skin = "#d9a066", white = "#f6ead2", horn = "#8a5a2e";
+    let s = aP("M-16,10 Q-22,30 -7,40 Q0,44 7,40 Q22,30 16,10 Q0,19 -16,10Z", skin);
+    s += [[-8,16],[4,20],[-2,28],[9,26],[-11,32]].map(([x,y]) => aC(x,y,1.8,white)).join("");
+    s += aC(-9,40,4.2,white,A_OUT) + aC(9,40,4.2,white,A_OUT);
+    s += aP("M-15,-18 Q-26,-22 -23,-10 Q-20,-2 -12,-6Z", skin) + aP("M15,-18 Q26,-22 23,-10 Q20,-2 12,-6Z", skin);
+    s += aP("M-13,-15 Q-19,-18 -17,-11Q-15,-6 -10,-9Z", "#e8c9a0") + aP("M13,-15 Q19,-18 17,-11Q15,-6 10,-9Z", "#e8c9a0");
+    s += `<path d="M-4,-30 Q-6,-36 -10,-37 M4,-30 Q6,-36 10,-37" fill="none" stroke="${horn}" stroke-width="2.4" stroke-linecap="round"/>`;
+    s += aC(0, -14, 16, skin, A_OUT);
+    s += aP("M-9,-16 Q0,-6 9,-16Z", white);
+    s += aEye(-8, -16, "#2a1a10", 1, 1) + aEye(8, -16, "#2a1a10", 1, 1);
+    s += aP("M-3,-4 Q0,-1 3,-4 L2,-2.4 Q0,-1 -2,-2.4Z", "#6b3a1e");
+    s += blush(-15,-9) + blush(15,-9);
+    return s;
+  }
+  function squirrelChar() {
+    const fur1 = "#a85c2e", fur2 = "#8a4a24", white = "#f3e0c0", acorn = "#c88a3e";
+    let s = `<path d="M14,20 Q36,10 30,-14 Q26,-30 8,-24 Q24,-16 20,0 Q16,16 2,22Z" fill="${fur1}" ${A_OUT}/>`;
+    s += aP("M-16,8 Q-22,28 -8,38 Q0,43 8,38 Q22,28 16,8 Q0,17 -16,8Z", fur1);
+    s += aP("M-8,18 Q0,24 8,18 L6,32 Q0,36 -6,32Z", white);
+    s += aC(-13,-6,7,fur1,A_OUT) + aC(13,-6,7,fur1,A_OUT);
+    s += aC(0, -8, 16, fur1, A_OUT);
+    s += aP("M-9,-6 Q0,3 9,-6 Q9,8 0,12 Q-9,8 -9,-6Z", white);
+    s += aC(0,20,5,acorn,A_OUT) + aP("M-5,17 Q0,12 5,17Z", "#7a5020");
+    s += aEye(-6, -8, "#2a1a10", .85) + aEye(6, -8, "#2a1a10", .85);
+    s += aC(0,0,1.8,"#6b3a1e",A_OUT);
+    s += blush(-12,-3) + blush(12,-3);
+    return s;
+  }
+  function hedgehogChar() {
+    const spike = "#9c8058", spike2 = "#7a6142", face = "#ead9b5";
+    let d = "";
+    for (let i = -8; i <= 8; i++) { const x = i * 2.6, h = 14 - Math.abs(i) * .5; d += `M${x-2},-4 L${x},${-4-h} L${x+2},-4 `; }
+    let s = `<path d="${d}Z" fill="${spike}" ${A_OUT}/>`;
+    s += [-5,-1,3,7].map(i => `<path d="M${i*2.6},-6 L${i*2.6+1},${-16+Math.abs(i)}" stroke="${spike2}" stroke-width="1" opacity=".5"/>`).join("");
+    s += aP("M-20,0 Q-24,20 -8,30 Q0,34 8,30 Q24,20 20,0 Q0,10 -20,0Z", spike);
+    s += aP("M-14,6 Q0,16 14,6 Q16,20 0,26 Q-16,20 -14,6Z", face);
+    s += aEye(-6, 8, "#2a1a10", .8) + aEye(6, 8, "#2a1a10", .8);
+    s += aC(0,16,2,"#2a1a10",A_OUT);
+    s += aC(-13,30,4,spike2,A_OUT) + aC(13,30,4,spike2,A_OUT);
+    s += blush(-11,12) + blush(11,12);
+    return s;
+  }
+  function bearCubChar() {
+    const fur1 = "#8a5a35", fur2 = "#6b4426", face = "#e8c9a0";
+    let s = aP("M-19,8 Q-25,30 -9,40 Q0,45 9,40 Q25,30 19,8 Q0,18 -19,8Z", fur1);
+    s += aC(-11,40,4.6,fur2,A_OUT) + aC(11,40,4.6,fur2,A_OUT);
+    s += aC(-15,-22,7,fur1,A_OUT) + aC(15,-22,7,fur1,A_OUT);
+    s += aC(-15,-22,3.6,fur2) + aC(15,-22,3.6,fur2);
+    s += aC(0, -10, 18, fur1, A_OUT);
+    s += aC(0,-2,10,face,A_OUT);
+    s += aEye(-7, -11, "#2a1a10", .9) + aEye(7, -11, "#2a1a10", .9);
+    s += aC(0,0,3,fur2,A_OUT);
+    s += smile(0, 5, 5);
+    s += blush(-14,-4) + blush(14,-4);
+    return s;
+  }
+  function rabbitChar() {
+    const fur1 = "#e8e2d5", fur2 = "#cfc6b4", pink = "#f5b8c6";
+    let s = aP("M-14,-18 Q-20,-46 -8,-50 Q-2,-44 -4,-18Z", fur1) + aP("M14,-18 Q20,-46 8,-50 Q2,-44 4,-18Z", fur1);
+    s += aP("M-11,-22 Q-15,-42 -8,-45 Q-4,-40 -5,-20Z", pink) + aP("M11,-22 Q15,-42 8,-45 Q4,-40 5,-20Z", pink);
+    s += aP("M-17,6 Q-23,28 -8,38 Q0,43 8,38 Q23,28 17,6 Q0,16 -17,6Z", fur1);
+    s += aC(-10,38,4.4,fur2,A_OUT) + aC(10,38,4.4,fur2,A_OUT);
+    s += aC(0, -10, 17, fur1, A_OUT);
+    s += aP("M-9,-6 Q0,3 9,-6 Q9,8 0,12 Q-9,8 -9,-6Z", "#fff6e8");
+    s += aEye(-7, -11, "#2a1a10", .9) + aEye(7, -11, "#2a1a10", .9);
+    s += aC(0,0,1.8,pink,A_OUT);
+    s += `<path d="M0,2 Q-4,6 -8,5 M0,2 Q4,6 8,5" fill="none" stroke="${A_OL}" stroke-width="1" stroke-linecap="round"/>`;
+    s += blush(-13,-5) + blush(13,-5);
+    return s;
+  }
+  function woodpeckerChar() {
+    const trunk = "#6b4a2e", red = "#d6392b", black = "#242424", white = "#fff";
+    let s = `<path d="M-14,-50 Q-20,0 -14,50 Q0,56 14,50 Q20,0 14,-50Z" fill="${trunk}" ${A_OUT}/>`;
+    s += [[-6,-20],[8,-4],[-8,14],[6,32]].map(([x,y]) => `<ellipse cx="${x}" cy="${y}" rx="7" ry="3" fill="#5a3b22" opacity=".6"/>`).join("");
+    s += aP("M-10,0 Q-16,22 -4,32 Q2,36 8,32 Q16,22 10,0 Q0,10 -10,0Z", black);
+    s += aP("M-5,8 Q0,14 5,8 L4,22 Q0,26 -4,22Z", white);
+    s += aC(-7,32,3.6,black,A_OUT) + aC(7,32,3.6,black,A_OUT);
+    s += aC(0, -14, 13, black, A_OUT);
+    s += aP("M-10,-20 Q0,-32 10,-20 Q10,-26 0,-30 Q-10,-26 -10,-20Z", red);
+    s += aP("M-6,-8 Q0,-3 6,-8 L5,0 Q0,3 -5,0Z", white);
+    s += aEye(-6, -16, "#fff", .8) + `<circle cx="-6" cy="-16" r="2" fill="#2a1a10"/>` + aEye(6, -16, "#fff", .8) + `<circle cx="6" cy="-16" r="2" fill="#2a1a10"/>`;
+    s += aP("M0,-8 L9,-6 L0,-3Z", "#f0a93a");
+    s += blush(-11,-10) + blush(11,-10);
+    return s;
+  }
+  function frogChar() {
+    const cap = "#d6392b", stem = "#f3ead9", green = "#6cb24a", green2 = "#4e9436";
+    let s = `<path d="M-20,2 Q-22,18 0,20 Q22,18 20,2 Q22,-10 0,-12 Q-22,-10 -20,2Z" fill="${cap}" ${A_OUT}/>`;
+    s += spotRing(0, -4, 15, 9, 7, 2.6, "#fff");
+    s += aR(-9, 2, 18, 30, stem, A_OUT);
+    s += aP("M-18,4 Q-22,24 -8,34 Q0,38 8,34 Q22,24 18,4 Q0,13 -18,4Z", green);
+    s += aP("M-9,16 Q0,21 9,16 L7,30 Q0,34 -7,30Z", green2);
+    s += [[-15,34],[15,34]].map(([x,y]) => `<ellipse cx="${x}" cy="${y}" rx="4.6" ry="3" fill="${green}" ${A_OUT}/>`).join("");
+    s += aC(-10, -8, 8, green, A_OUT) + aC(10, -8, 8, green, A_OUT);
+    s += aEye(-10, -8, "#2a1a10", 1) + aEye(10, -8, "#2a1a10", 1);
+    s += `<path d="M-6,4 Q0,9 6,4" fill="none" stroke="${A_OL}" stroke-width="1.1" stroke-linecap="round"/>`;
+    s += blush(-14,2) + blush(14,2);
+    return s;
+  }
+
+  function fox() { return [forestDay(), aEdge(at(60, 100, 1.15, foxChar()))]; }
+  function owl() { return [forestNight(), aEdge(at(60, 96, 1.15, owlChar()))]; }
+  function fawn() { return [forestDay(), aEdge(at(60, 100, 1.1, fawnChar()))]; }
+  function squirrel() { return [forestDay(), aEdge(at(60, 100, 1.15, squirrelChar()))]; }
+  function hedgehog() { return [mossyFloor(), aEdge(at(60, 112, 1.3, hedgehogChar()))]; }
+  function bearCub() { return [forestDay(), aEdge(at(60, 100, 1.15, bearCubChar()))]; }
+  function rabbit() { return [forestDay(), aEdge(at(60, 102, 1.1, rabbitChar()))]; }
+  function woodpecker() { return [forestDay(), aEdge(at(60, 96, 1.05, woodpeckerChar()))]; }
+  function frog() { return [mossyFloor(), aEdge(at(60, 100, 1.1, frogChar()))]; }
+
+  FAN.wforest = [
+    ["Fox", "A bushy orange tail curled by its paws, big ears listening for friends", fox],
+    ["Owl", "Perched in the moonlight, blinking its big round eyes", owl],
+    ["Fawn", "A spotted baby deer with the gentlest eyes in the forest", fawn],
+    ["Squirrel", "Puffy-tailed and holding a shiny acorn", squirrel],
+    ["Hedgehog", "A round little ball of soft spikes, peeking out with a happy face", hedgehog],
+    ["Bear cub", "A chubby honey-brown bear cub, round ears and a big smile", bearCub],
+    ["Rabbit", "Long floppy ears with pink insides, nose twitching happily", rabbit],
+    ["Woodpecker", "Red-crested and busy, tapping away on a tall tree trunk", woodpecker],
+    ["Frog", "Sitting happily on a red spotted toadstool", frog],
+  ];
+})();
+
+/* Sticker book world page "Snow" (the ❄️ world of the path): 9 chibi arctic animals with big anime eyes on snowy
+   backdrops; each holo = the same animal grown up / with its family / crowned, under the northern lights or a night sky.
+   Living sticker: the snowman's snowflakes twinkle. Sets FAN.wsnow */
+(() => {
+  "use strict";
+  const OL = A_OL, OUT = `stroke="${OL}" stroke-width="1.1" stroke-linejoin="round"`, NO = 'stroke="none"';
+  const uid = p => `wn${p}${++aUid}`;
+  const f1 = v => +(+v).toFixed(1);
+  const G = (x, y, s, inner, extra = "") => `<g transform="translate(${x} ${y}) scale(${s})"${extra}>${inner}</g>`;
+  const E = (cx, cy, rx, ry, f, x = OUT) => `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${f}" ${x}/>`;
+  const P = (d, f, x = OUT) => `<path d="${d}" fill="${f}" ${x}/>`;
+  const mirror = d => d.replace(/(-?\d+(?:\.\d+)?),/g, (m, n) => `${f1(-n)},`);   // flip the x of every "x,y" pair
+  const eyes = (x, y, dx, s, iris) => aEye(x - dx, y, iris, s) + aEye(x + dx, y, iris, s);
+  const blush = (x, y, dx, r = 2.6) => aC(x - dx, y, r, "#ff8fa3", 'opacity=".75"') + aC(x + dx, y, r, "#ff8fa3", 'opacity=".75"');
+  const smile = (x, y, w = 3) => `<path d="M${x - w},${y} Q${x - w / 2},${y + w * .8} ${x},${y} Q${x + w / 2},${y + w * .8} ${x + w},${y}" fill="none" stroke="${OL}" stroke-width="1" stroke-linecap="round"/>`;
+  const openMouth = (x, y, w = 3) => `<path d="M${x - w},${y} Q${x},${y + w * 1.7} ${x + w},${y}Z" fill="#c0392b" stroke="${OL}" stroke-width=".9" stroke-linejoin="round"/>` +
+    E(x, y + w * .75, w * .5, w * .3, "#ff8a80", NO);
+  const shadow = (x, y, rx) => `<ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${f1(rx * .18)}" fill="#5a7da8" opacity=".25"/>`;
+  const crown = (x, y, w = 8) => `<g transform="translate(${x} ${y})">${aGoldCrown(0, w)}</g>`;
+
+  /* ---------- backdrops ---------- */
+  const flakes = (seed, n, y0 = 0, y1 = 150, cls = "") => {
+    const R = aRand(seed); let s = "";
+    for (let i = 0; i < n; i++) {
+      const x = f1(4 + R() * 112), y = f1(y0 + R() * (y1 - y0)), r = f1(1.6 + R() * 2.2);
+      s += cls ? aSpark(x, y, r, "#fff", cls, `animation-delay:${f1(R() * 1.8)}s`) : aC(x, y, f1(r * .45), "#fff", 'opacity=".9"');
+    }
+    return s;
+  };
+  const peak = (px, py) => `<path d="M${px},${py} L${px - 7},${py + 12} L${px - 3},${py + 9} L${px},${py + 13} L${px + 4},${py + 9} L${px + 7},${py + 12}Z" fill="#fff"/>`;
+  const mountains = (c = "#a9c8e8") => `<path d="M-5,112 L22,66 L40,92 L62,58 L88,96 L104,74 L125,112Z" fill="${c}"/>` + peak(22, 66) + peak(62, 58) + peak(104, 74);
+  const snowGround = (y = 116, a = "#fff", b = "#e1effa") => `<path d="M-5,${y + 2} Q30,${y - 12} 60,${y - 2} Q90,${y - 12} 125,${y} V158 H-5Z" fill="${a}"/>` +
+    `<path d="M-5,${y + 20} Q40,${y + 10} 125,${y + 22} V158 H-5Z" fill="${b}"/>`;
+  function snowDay(o = {}) {
+    let s = aSky(o.top || "#7fcaf7", o.bot || "#e6f6ff");
+    if (o.sun !== false) s += aSun(98, 20, 9);
+    s += aCloud(6, 14, .8) + aCloud(64, 30, .55) + mountains(o.mtn) + snowGround(o.ground || 116) + flakes(o.seed || 3, 16, 2, 108);
+    return s;
+  }
+  function stars(seed, n, y1 = 90) {
+    const R = aRand(seed); let s = "";
+    for (let i = 0; i < n; i++) s += aC(f1(R() * 120), f1(R() * y1), f1(.35 + R() * .7), "#fff", `opacity="${f1(.5 + R() * .5)}"`);
+    return s + aSpark(16, 20, 3, "#fff") + aSpark(104, 44, 2.4, "#fff");
+  }
+  // the northern lights: curtains, bright at the bottom and fading upwards
+  function aurora(seed = 5, cols = ["#6dffb8", "#4fd8ff", "#c38bff"]) {
+    let s = "";
+    const bands = [["M-10,58 C20,30 40,70 70,40 S112,30 132,52", 0], ["M-10,34 C24,14 50,48 80,22 S118,18 132,30", 1], ["M-10,80 C30,62 60,92 90,66 S124,64 132,74", 2]];
+    bands.forEach(([d, i]) => {
+      const g = uid("au"), c = cols[i % cols.length];
+      s += `<defs><linearGradient id="${g}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c}" stop-opacity="0"/><stop offset="1" stop-color="${c}" stop-opacity=".75"/></linearGradient></defs>`;
+      // the curtain = the wave line, then the same line 26 higher, closed
+      const up = d.replace(/(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/g, (m, x, y) => `${x},${f1(y - 26)}`);
+      const rev = up.replace(/^M/, "");
+      s += `<path d="${d} L132,${-30} L-10,${-30}Z" fill="url(#${g})" opacity="0"/>`;
+      s += `<path d="${d} V-40 H-10Z" fill="url(#${g})" opacity=".0"/>`;
+      s += `<path d="${d}" fill="none" stroke="${c}" stroke-width="9" opacity=".35" stroke-linecap="round"/><path d="${d}" fill="none" stroke="${c}" stroke-width="3.5" opacity=".6" stroke-linecap="round"/>` +
+        `<path d="${up}" fill="none" stroke="${c}" stroke-width="14" opacity=".12" stroke-linecap="round"/>`;
+      void rev;
+    });
+    return s;
+  }
+  function auroraNight(o = {}) {
+    const g = uid("nt");
+    let s = `<defs>${aVGrad(g, o.top || "#081433", o.bot || "#1c4f73")}</defs><rect width="120" height="158" fill="url(#${g})"/>` + stars(o.seed || 9, 30) + aurora(o.seed || 5, o.cols);
+    s += mountains("#30577e") + snowGround(o.ground || 116, "#e3eefa", "#c3d8ee");
+    return s;
+  }
+  function moonNight(o = {}) {
+    const g = uid("mn");
+    let s = `<defs>${aVGrad(g, "#0d1c45", "#3d5d9a")}</defs><rect width="120" height="158" fill="url(#${g})"/>` + stars(o.seed || 11, 34, 110);
+    s += aC(o.mx || 84, o.my || 34, o.mr || 16, "#fff6d0", 'opacity=".25"') + aC(o.mx || 84, o.my || 34, (o.mr || 16) * .82, "#fff6d0") +
+      aC((o.mx || 84) - 4, (o.my || 34) - 3, 2.6, "#efe2a8") + aC((o.mx || 84) + 5, (o.my || 34) + 4, 1.8, "#efe2a8");
+    if (o.ground !== false) s += snowGround(o.ground || 120, "#dde9f8", "#bcd2ec");
+    return s;
+  }
+  function sunsetIce(o = {}) {
+    const g = uid("ss");
+    let s = `<defs>${aVGrad(g, "#ff8fb1", "#ffd9a0")}</defs><rect width="120" height="158" fill="url(#${g})"/>` + aC(60, 100, 20, "#fff1b8", 'opacity=".9"');
+    s += `<path d="M-5,100 L18,74 L34,96 L52,78 L70,100Z M60,100 L86,70 L104,92 L125,80 V100Z" fill="#c6a6d8"/>`;
+    s += `<rect y="98" width="120" height="60" fill="#6fa8dc"/>` + [104, 112, 122].map((y, i) => `<path d="M${i * 6 - 8},${y}${" q5,-2.5 10,0".repeat(15)}" fill="none" stroke="#fff" stroke-width=".9" opacity=".55"/>`).join("");
+    return s;
+  }
+  function seaIce(o = {}) {
+    let s = aSky(o.top || "#78c8f5", o.bot || "#dff3ff") + aSun(20, 22, 9) + aCloud(70, 14, .7);
+    s += `<path d="M-5,96 L10,80 L24,96Z M88,96 L104,74 L124,96Z" fill="#e8f4fd" stroke="#b8d6ee" stroke-width=".8"/>`;
+    s += aWaves(o.sea || 96, "#2f8fd6", "#bfe6ff", 6);
+    return s;
+  }
+  // a flat ice floe to stand on
+  const floe = (x, y, w, c = "#f4fbff") => `<path d="M${x - w},${y} L${x - w + 6},${y - 7} L${x + w - 4},${y - 8} L${x + w},${y} L${x + w - 3},${y + 7} L${x - w + 4},${y + 7}Z" fill="${c}" ${OUT}/>` +
+    `<path d="M${x - w},${y} L${x + w},${y} L${x + w - 3},${y + 7} L${x - w + 4},${y + 7}Z" fill="#b9dcf4" ${NO}/><path d="M${x - w},${y} L${x + w},${y}" stroke="${OL}" stroke-width=".8"/>`;
+
+  /* ---------- the animals (origin = between the feet, about 80 tall at scale 1) ---------- */
+  function penguin(o = {}) {
+    const B = o.body || "#253445", H = o.head || B;
+    let p = "";
+    if (o.wave) p += P("M18,-38 Q32,-48 34,-62 Q28,-60 18,-46Z", B);
+    else p += P("M18,-40 Q31,-30 27,-14 Q21,-22 17,-28Z", B);
+    p += P("M-18,-40 Q-31,-30 -27,-14 Q-21,-22 -17,-28Z", B);
+    p += E(-8, -2, 6.5, 3, "#ff9f1c") + E(8, -2, 6.5, 3, "#ff9f1c");
+    p += E(0, -24, 21, 23, B) + E(0, -20, 14, 17, o.belly || "#fff", NO);
+    p += aC(0, -52, 20, H, OUT) + `<path d="M0,-45 C-6,-63 -19,-55 -16,-44 C-14,-36 -6,-33 0,-35 C6,-33 14,-36 16,-44 C19,-55 6,-63 0,-45Z" fill="#fff"/>`;
+    p += eyes(0, -47, 6.6, 1.05, "#2d6cdf") + P("M-3.4,-40.5 L3.4,-40.5 L0,-36.2Z", "#ff9f1c") + blush(0, -40, 10.5, 2.2);
+    if (o.hat) p += P("M-17,-62 Q-17,-78 0,-78 Q17,-78 17,-62Z", "#e53935") + `<path d="M-9,-76 V-63 M0,-78 V-63 M9,-76 V-63" stroke="#b71c1c" stroke-width="1"/>` +
+      `<rect x="-18.5" y="-64" width="37" height="6" rx="3" fill="#fff" ${OUT}/>` + aC(0, -79, 4.6, "#fff", OUT);
+    return p;
+  }
+  function emperor() {
+    let p = P("M-19,-60 Q-32,-40 -26,-18 Q-20,-30 -17,-40Z", "#232f3e") + P(mirror("M-19,-60 Q-32,-40 -26,-18 Q-20,-30 -17,-40Z"), "#232f3e");
+    p += E(-8, -2, 7, 3, "#ff9f1c") + E(8, -2, 7, 3, "#ff9f1c");
+    p += P("M0,-98 C-18,-98 -22,-82 -22,-64 C-24,-38 -24,-12 -14,-2 L14,-2 C24,-12 24,-38 22,-64 C22,-82 18,-98 0,-98Z", "#232f3e");
+    p += P("M0,-72 C-14,-72 -16,-52 -16,-38 C-16,-20 -12,-6 0,-5 C12,-6 16,-20 16,-38 C16,-52 14,-72 0,-72Z", "#fff", NO);
+    p += E(0, -67, 12, 6, "#ffd54f", NO) + E(0, -62, 13, 5, "#fff3c4", 'stroke="none" opacity=".8"');
+    p += P("M-17,-80 Q-22,-70 -12,-66 Q-11,-74 -14,-79Z", "#ffb300", NO) + P(mirror("M-17,-80 Q-22,-70 -12,-66 Q-11,-74 -14,-79Z"), "#ffb300", NO);
+    p += eyes(0, -84, 6.2, .95, "#2d6cdf") + P("M-3,-77 L3,-77 L0,-70Z", "#ff8a65") + blush(0, -76, 10, 2);
+    return p;
+  }
+  function bear(o = {}) {
+    const F = o.fur || "#f8f5ec", pad = "#d8c3b2";
+    let p = "";
+    if (o.cape) p += P("M-20,-46 Q-36,-14 -32,0 L32,0 Q36,-14 20,-46Z", "#c62828") + P("M-20,-46 Q-28,-20 -26,-2 L-14,-2 Q-16,-24 -10,-44Z", "#a31515", NO);
+    p += E(0, -20, 22, 20, F);
+    p += o.wave ? P("M14,-32 Q26,-42 26,-54 Q30,-60 34,-53 Q33,-38 20,-24Z", F) + E(31, -55, 3, 2.4, pad, NO) : E(19, -22, 6.5, 10, F);
+    p += E(-19, -22, 6.5, 10, F);
+    p += E(-12, -6, 9, 7, F) + E(12, -6, 9, 7, F) + E(-12, -5, 4, 3, pad, NO) + E(12, -5, 4, 3, pad, NO) +
+      [-16, -12, -8, 8, 12, 16].map(x => aC(x, -10, 1.3, pad)).join("");
+    if (o.cape) p += P("M-18,-40 Q0,-30 18,-40 L16,-34 Q0,-26 -16,-34Z", "#fff") + [-12, -6, 0, 6, 12].map(x => aC(x, -33.5, .7, OL)).join("");
+    p += aC(-17, -62, 7, F, OUT) + aC(17, -62, 7, F, OUT) + aC(-17, -62, 3.4, "#f4c9d0") + aC(17, -62, 3.4, "#f4c9d0");
+    p += E(0, -46, 25, 21, F) + E(0, -38, 9.5, 6.8, "#fff");
+    p += eyes(0, -49, 9.5, 1.1, "#6b4223") + E(0, -41.5, 3.6, 2.6, OL) + aC(-1, -42.3, .9, "#fff") + smile(0, -37.5, 2.6) + blush(0, -40, 16);
+    if (o.crown) p += crown(0, -64, 9);
+    return p;
+  }
+  function seal(o = {}) {
+    const F = o.fur || "#fbfbf7";
+    let p = P("M28,-8 Q40,-20 46,-12 Q41,-7 44,0 Q36,-2 28,-2Z", F);
+    p += P("M-28,-16 C-26,-34 2,-32 16,-24 C28,-18 34,-10 32,-2 C20,2 -18,2 -26,-2 C-30,-6 -30,-10 -28,-16Z", F);
+    if (o.spots) p += [[4, -20], [14, -14], [-2, -10], [22, -8]].map(([x, y]) => E(x, y, 2.2, 1.4, o.spots, NO)).join("");
+    else p += `<path d="M2,-22 q3,-2 6,0 M12,-16 q3,-2 6,0 M0,-12 q3,-2 6,0" fill="none" stroke="#c9d6e2" stroke-width=".9"/>`;
+    p += E(-16, -30, 18, 15.5, F) + P("M-4,-8 Q4,-2 0,2 Q-9,1 -12,-6Z", F);
+    p += aEye(-23, -32, "#3b2a1a", 1.05) + aEye(-9, -32, "#3b2a1a", 1.05) + E(-16, -24.5, 3, 2.1, OL) + aC(-17, -25, .7, "#fff") + smile(-16, -21.5, 2.2) + blush(-16, -24, 10, 2.1);
+    p += aC(-21, -22, .5, "#555") + aC(-22.5, -20.5, .5, "#555") + aC(-11, -22, .5, "#555") + aC(-9.5, -20.5, .5, "#555");
+    return p;
+  }
+  function fox(o = {}) {
+    const F = o.fur || "#fbfbfb", IN = "#ffd0d8";
+    let p = P("M13,-6 C40,-2 46,-30 34,-46 C30,-32 27,-22 11,-18Z", F) + `<path d="M34,-46 C32,-38 30,-30 27,-25" fill="none" stroke="#dce6ef" stroke-width="1.2"/>`;
+    p += P("M-15,0 C-19,-16 -14,-34 0,-36 C14,-34 19,-16 15,0Z", F);
+    p += `<path d="M-6,0 V-14 M6,0 V-14" stroke="#cfdbe6" stroke-width="1"/>` + E(-8, -1.5, 5.5, 3, F) + E(8, -1.5, 5.5, 3, F);
+    p += P("M-8,-32 L-5,-24 L-2,-30 L0,-22 L2,-30 L5,-24 L8,-32Z", "#fff", NO);
+    p += P("M-20,-52 L-25,-77 L-7,-60Z", F) + P("M-19,-56 L-22,-71 L-11,-60Z", IN, NO) + P(mirror("M-20,-52 L-25,-77 L-7,-60Z"), F) + P(mirror("M-19,-56 L-22,-71 L-11,-60Z"), IN, NO);
+    p += P("M-24,-52 Q-26,-38 -12,-32 Q0,-27 12,-32 Q26,-38 24,-52 Q14,-62 0,-62 Q-14,-62 -24,-52Z", F);
+    p += P("M-24,-46 L-30,-40 L-22,-40Z M24,-46 L30,-40 L22,-40Z", F);
+    p += eyes(0, -47, 8.4, 1.05, "#38a6e8") + E(0, -37, 2.8, 2, OL) + smile(0, -35, 2.2) + blush(0, -39, 14.5, 2.2);
+    if (o.scarf) p += P("M-13,-33 Q0,-27 13,-33 L14,-28 Q0,-21 -14,-28Z", o.scarf) + P("M6,-28 L12,-14 L17,-17 L12,-29Z", o.scarf);
+    return p;
+  }
+  function walrus(o = {}) {
+    const F = o.fur || "#c98b62", L = "#e7b48d";
+    let p = "";
+    if (o.cape) p += P("M-30,-40 Q-44,-12 -40,0 L40,0 Q44,-12 30,-40Z", "#6a1b9a") + P("M-30,-40 Q-38,-16 -36,-2 L-26,-2 Q-28,-20 -22,-40Z", "#4a148c", NO);
+    p += P("M-31,0 C-37,-22 -27,-56 0,-58 C27,-56 37,-22 31,0Z", F);
+    p += `<path d="M-20,-12 q4,-2 8,0 M10,-18 q4,-2 8,0 M-6,-6 q4,-2 8,0" fill="none" stroke="#a96c45" stroke-width=".9"/>`;
+    p += P("M-26,-8 Q-40,-4 -38,3 Q-27,5 -18,0Z", F) + P(mirror("M-26,-8 Q-40,-4 -38,3 Q-27,5 -18,0Z"), F);
+    if (o.cape) p += P("M-22,-44 Q0,-34 22,-44 L20,-38 Q0,-29 -20,-38Z", "#fff") + [-14, -7, 0, 7, 14].map(x => aC(x, -36.5, .7, OL)).join("");
+    p += P("M-6,-24 L-7,-5 Q-4,-6 -2,-24Z", "#fffdf2") + P(mirror("M-6,-24 L-7,-5 Q-4,-6 -2,-24Z"), "#fffdf2");
+    p += E(-7, -28, 9, 7, L) + E(7, -28, 9, 7, L) + [[-10, -29], [-6, -26], [-11, -25], [10, -29], [6, -26], [11, -25]].map(([x, y]) => aC(x, y, .6, "#7a4a2a")).join("");
+    p += E(0, -34.5, 3.8, 2.6, OL) + aC(-1, -35.3, .9, "#fff");
+    p += eyes(0, -42, 8.5, .95, "#6b4223") + blush(0, -34, 15, 2.3);
+    if (o.crown) p += crown(0, -55, 9);
+    return p;
+  }
+  function owl(o = {}) {
+    const F = "#fff", sp = "#3d4652";
+    let p = "";
+    if (o.fly) {
+      const w = "M-17,-40 C-36,-62 -58,-54 -64,-40 C-55,-42 -51,-36 -57,-29 C-46,-32 -42,-25 -47,-19 C-34,-23 -25,-26 -17,-26Z";
+      p += P(w, F) + P(mirror(w), F) + [[-30, -44], [-40, -40], [-50, -40], [-36, -32], [-46, -30], [-28, -34]].map(([x, y]) => P(`M${x - 2},${y} l2,1.6 l2,-1.6`, "none", `stroke="${sp}" stroke-width="1"`) + P(`M${-x - 2},${y} l2,1.6 l2,-1.6`, "none", `stroke="${sp}" stroke-width="1"`)).join("");
+    }
+    p += P("M0,-62 C-22,-62 -26,-40 -24,-22 C-22,-6 -12,0 0,0 C12,0 22,-6 24,-22 C26,-40 22,-62 0,-62Z", F);
+    if (!o.fly) p += P("M-22,-40 Q-30,-20 -17,-5 Q-15,-24 -19,-40Z", F) + P(mirror("M-22,-40 Q-30,-20 -17,-5 Q-15,-24 -19,-40Z"), F);
+    p += [[-8, -22], [0, -18], [8, -22], [-4, -12], [4, -12], [-14, -14], [14, -14], [-23, -24], [23, -24]].map(([x, y]) => P(`M${x - 2},${y} l2,1.6 l2,-1.6`, "none", `stroke="${sp}" stroke-width="1"`)).join("");
+    p += E(0, -44, 19, 13.5, "#f1f4f7", NO);
+    p += eyes(0, -45, 8.6, 1.25, "#f5c518") + P("M-2.6,-38 L2.6,-38 L0,-33Z", "#3a3a3a");
+    p += blush(0, -38, 14, 2.2);
+    p += o.fly ? `<path d="M-5,0 l-1,4 M-5,0 l1,4 M5,0 l-1,4 M5,0 l1,4" stroke="#3a3a3a" stroke-width="1.2" stroke-linecap="round"/>`
+      : `<path d="M-7,0 l-2,3 M-7,0 l0,3.5 M-7,0 l2,3 M7,0 l-2,3 M7,0 l0,3.5 M7,0 l2,3" stroke="#3a3a3a" stroke-width="1.3" stroke-linecap="round"/>`;
+    if (o.crown) p += crown(0, -60, 8);
+    return p;
+  }
+  function husky(o = {}) {
+    const C = "#6b7a8c", W = "#fff";
+    let p = P("M13,-14 C30,-14 35,-36 24,-40 C26,-30 20,-24 11,-22Z", C) + P("M26,-37 C27,-33 26,-30 24,-28", "none", `stroke="#fff" stroke-width="2"`);
+    p += P("M-16,0 C-20,-18 -14,-36 0,-36 C14,-36 20,-18 16,0Z", C) + E(0, -15, 9, 13, W, NO);
+    p += E(-8, -2.5, 6, 4, W) + E(8, -2.5, 6, 4, W);
+    p += P("M-17,-58 L-21,-80 L-5,-66Z", C) + P("M-16,-62 L-18,-75 L-9,-66Z", "#ffc1cc", NO) + P(mirror("M-17,-58 L-21,-80 L-5,-66Z"), C) + P(mirror("M-16,-62 L-18,-75 L-9,-66Z"), "#ffc1cc", NO);
+    p += E(0, -51, 23, 18.5, C);
+    p += P("M0,-60 C-4,-53 -19,-56 -19,-46 C-19,-37 -8,-33 0,-33 C8,-33 19,-37 19,-46 C19,-56 4,-53 0,-60Z", W, NO);
+    p += E(-8, -59, 2.6, 1.6, W, NO) + E(8, -59, 2.6, 1.6, W, NO);
+    p += eyes(0, -49, 8.3, 1.05, "#4fb3ff") + E(0, -40, 3.2, 2.3, OL) + aC(-1, -40.8, .8, "#fff") + openMouth(0, -37, 2.8) + blush(0, -40, 14, 2.2);
+    if (o.scarf) p += P("M-15,-34 Q0,-28 15,-34 L16,-28 Q0,-21 -16,-28Z", o.scarf) + P("M-10,-28 L-14,-14 L-8,-14 L-5,-27Z", o.scarf) + `<path d="M-13,-18 h5 M-12,-22 h5" stroke="#fff" stroke-width="1.2"/>`;
+    return p;
+  }
+  function orca(o = {}) {
+    const B = "#1c2430";
+    let p = P("M-32,6 L-47,-7 Q-42,3 -52,7 Q-41,13 -33,12Z", B);
+    p += P("M2,-24 L-3,-47 Q9,-35 15,-25Z", B);
+    p += P("M-34,8 C-30,-16 -4,-30 18,-26 C32,-24 41,-14 39,-4 C37,6 24,12 8,12 C-10,12 -24,12 -34,8Z", B);
+    p += P("M-20,8 C-6,2 14,4 34,1 C29,9 16,12 6,12 C-8,12 -16,11 -20,8Z", "#fff", NO);
+    p += `<ellipse cx="18" cy="-15" rx="6.5" ry="3.4" fill="#fff" transform="rotate(-12 18 -15)"/>` + P("M-6,-24 Q4,-20 8,-26", "none", `stroke="#8796a8" stroke-width="2" opacity=".7"`);
+    p += P("M8,8 Q3,20 12,23 Q15,15 15,8Z", B);
+    p += aEye(28, -11, "#3a7be0", .78) + P("M39,-2 Q32,4 25,2", "none", `stroke="#fff" stroke-width="1.1" stroke-linecap="round"`) + aC(30, -3, 2.2, "#ff8fa3", 'opacity=".8"');
+    if (o.crown) p += `<g transform="rotate(-8) translate(26 -24)">${aGoldCrown(0, 6)}</g>`;
+    return p;
+  }
+  const splash = (x, y, s = 1) => G(x, y, s, [[-14, -6, 2.4], [-20, -12, 1.6], [-8, -14, 1.8], [10, -8, 2.2], [17, -14, 1.5], [3, -18, 1.4]].map(([a, b, r]) => aC(a, b, r, "#e9f7ff", `stroke="#5aa9e6" stroke-width=".7"`)).join("") +
+    `<path d="M-22,0 Q-16,-10 -10,-2 Q-4,-12 2,-2 Q8,-12 14,-2 Q19,-9 24,0Z" fill="#e9f7ff" stroke="#5aa9e6" stroke-width=".8"/>`);
+  function snowman(o = {}) {
+    let p = aL([[-13, -54], [-28, -64], [-33, -71]], "#7a4a22", 2.2) + aL([[-28, -64], [-34, -62]], "#7a4a22", 1.8) +
+      aL([[13, -54], [27, -62], [32, -70]], "#7a4a22", 2.2) + aL([[27, -62], [34, -60]], "#7a4a22", 1.8);
+    p += aC(0, -21, 22, "#fff", OUT) + aC(0, -52, 16, "#fff", OUT) + aC(0, -78, 13.5, "#fff", OUT);
+    p += P("M-12,-30 Q-6,-12 8,-6", "none", `stroke="#d4e5f5" stroke-width="2.4" stroke-linecap="round"`) + P("M-9,-58 Q-6,-46 4,-42", "none", `stroke="#d4e5f5" stroke-width="2" stroke-linecap="round"`);
+    p += [-58, -50, -42, -26, -16].map(y => aC(0, y, 1.9, OL)).join("");
+    p += P("M-12,-66 Q0,-61 12,-66 L13,-61 Q0,-55 -13,-61Z", o.scarf || "#e53935") + P("M5,-62 L11,-48 L16,-51 L11,-63Z", o.scarf || "#e53935") + `<path d="M8.5,-55 l5,-1.6 M10,-51.5 l4.6,-1.4" stroke="#fff" stroke-width="1.2"/>`;
+    p += aEye(-5, -80, "#3a2a1a", .78) + aEye(5, -80, "#3a2a1a", .78) + P("M0,-75 L13,-72.5 L0,-71Z", "#ff8f1f") + blush(0, -73.5, 8.5, 1.9);
+    p += [-4, -2, 0, 2, 4].map((x, i) => aC(x, -68.5 + (i === 0 || i === 4 ? -.8 : 0), .75, OL)).join("");
+    if (o.crown) p += crown(0, -89, 8);
+    else p += P("M-11,-86 Q-11,-98 0,-98 Q11,-98 11,-86Z", "#1e88e5") + `<rect x="-12.5" y="-89" width="25" height="5" rx="2.5" fill="#fff" ${OUT}/>` + aC(0, -99, 3.4, "#fff", OUT);
+    return p;
+  }
+
+  /* ---------- the stickers ---------- */
+  const penguinD = () => [snowDay({ seed: 4 }) + shadow(60, 144, 26), aEdge(G(60, 144, 1.25, penguin({ hat: 1, wave: 1 })))];
+  const bearD = () => [snowDay({ seed: 7, top: "#9ad6ff" }) + shadow(60, 142, 30), aEdge(G(60, 142, 1.3, bear({ wave: 1 })))];
+  const sealD = () => [seaIce() + floe(60, 132, 50), aEdge(G(64, 128, 1.45, seal()))];
+  const foxD = () => [snowDay({ seed: 13, top: "#8fd0f0", sun: false }) + aSun(18, 22, 8) + shadow(60, 144, 26), aEdge(G(58, 144, 1.3, fox()))];
+  const walrusD = () => [seaIce({ sea: 104 }) + floe(60, 138, 52), aEdge(G(60, 138, 1.35, walrus()))];
+  const branch = (y) => `<path d="M-5,${y} Q40,${y - 6} 125,${y + 4}" fill="none" stroke="${OL}" stroke-width="7" stroke-linecap="round"/><path d="M-5,${y} Q40,${y - 6} 125,${y + 4}" fill="none" stroke="#8a5a32" stroke-width="5" stroke-linecap="round"/>` +
+    `<path d="M-5,${y - 3} Q40,${y - 9} 125,${y + 1}" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>` + `<path d="M92,${y + 1} l14,-14" stroke="#8a5a32" stroke-width="3" stroke-linecap="round"/>` +
+    [[86, y - 12], [100, y - 16], [106, y - 6]].map(([x, yy]) => `<path d="M${x},${yy} l-4,-6 l6,3 l2,-6 l3,6 l6,-2 l-4,6Z" fill="#2e7d4f"/>`).join("");
+  const owlD = () => [aSky("#a6c9f2", "#eef6ff") + `<path d="M-5,70 L14,30 L32,70Z M90,74 L108,26 L126,74Z" fill="#2e7d4f" opacity=".45"/>` + flakes(17, 22, 2, 150) + branch(132), aEdge(G(60, 130, 1.4, owl()))];
+  const huskyD = () => [snowDay({ seed: 23, top: "#88d0ff" }) + shadow(60, 144, 26), aEdge(G(60, 144, 1.3, husky({ scarf: "#ff7043" })))];
+  const sled = () => `<path d="M30,-2 H66 Q74,-2 72,-8" fill="none" stroke="${OL}" stroke-width="2.6" stroke-linecap="round"/><path d="M30,-2 H66 Q74,-2 72,-8" fill="none" stroke="#ffd54f" stroke-width="1.4" stroke-linecap="round"/>` +
+    `<path d="M36,-2 V-8 M60,-2 V-8" stroke="${OL}" stroke-width="1.6"/>` + aR(32, -22, 38, 14, "#e53935", 'rx="3"') + `<path d="M34,-17 H68" stroke="#ffcdd2" stroke-width="1.2"/>`;
+  const orcaD = () => [seaIce({ sea: 104 }), G(58, 104, 1, splash(0, 0, 1.1)) + aEdge(`<g transform="translate(58 82) rotate(-24) scale(1.15)">${orca()}</g>`)];
+  const snowmanD = () => [snowDay({ seed: 29, sun: false, top: "#6fb6ea" }) + `<g>${flakes(31, 16, 4, 120, "lv-tw")}</g>` + shadow(60, 146, 26), aEdge(G(60, 146, 1.18, snowman()))];
+  FAN.wsnow = [
+    ["Penguin chick", "A baby penguin in a red bobble hat, waving a flipper in the snow", penguinD],
+    ["Polar bear cub", "A fluffy white cub sitting in the snow and waving", bearD],
+    ["Seal pup", "A white fluffy seal pup on an ice floe", sealD],
+    ["Arctic fox", "A snow-white fox with a big bushy tail", foxD],
+    ["Walrus", "A chubby walrus with long tusks and a whiskery moustache", walrusD],
+    ["Snowy owl", "A round white owlet with yellow eyes on a snowy branch", owlD],
+    ["Husky puppy", "A grey and white husky puppy with blue eyes and an orange scarf", huskyD],
+    ["Orca", "A black and white orca leaping out of the icy sea", orcaD],
+    ["Snowman", "A snowman with a carrot nose and a red scarf; the snowflakes twinkle", snowmanD],
+  ];
+  // holo: penguin family under the northern lights; the cub grown into a king with crown and cape at sunset; a grey seal mum
+  // and her pup under the moon; the fox and its kit under the northern lights; the walrus king; the owl flying past the moon
+  // with a crown; the husky pulling a sled with a penguin; orca and calf under the northern lights; the snowman king with friends
+})();
+
+/* Sticker book world page "Desert" (the learning path's fourth world): 9 cute chibi desert animals drawn big, with big
+   anime eyes, on dune / sunset / oasis / rocky-mesa / rock-wall backdrops. The meerkat is the page's living sticker: it
+   bobs up on lookout. */
+(() => {
+  "use strict";
+  const OL = A_OL, OUT = `stroke="${OL}" stroke-width="1.1" stroke-linejoin="round"`;
+  const uid = p => `wd${p}${++aUid}`;
+  const f1 = v => +(+v).toFixed(1);
+  const at = (x, y, s, inner, rot = 0, flip = false) => `<g transform="translate(${x} ${y})${rot ? ` rotate(${rot})` : ""} scale(${flip ? -s : s} ${s})">${inner}</g>`;
+  const blush = (x, y, r = 2.6) => `<ellipse cx="${x}" cy="${y}" rx="${r}" ry="${f1(r * .6)}" fill="#ff7a9a" opacity=".55"/>`;
+  const smile = (x, y, w = 2.6) => `<path d="M${f1(x - w)},${y} Q${x},${f1(y + w * 1.1)} ${f1(x + w)},${y}" fill="none" stroke="${OL}" stroke-width="1" stroke-linecap="round"/>`;
+  // two anime eyes, each with a thin dark rim so they read on any colour
+  const eyes = (x1, x2, y, iris, s = 1) => [x1, x2].map(x => `<ellipse cx="${x}" cy="${y}" rx="${f1(4.5 * s)}" ry="${f1(5.4 * s)}" fill="${OL}"/>` + aEye(x, y, iris, s)).join("");
+
+  /* ---------- backdrops ---------- */
+  function sky(top, bot) { const g = uid("sk"); return `<defs>${aVGrad(g, top, bot)}</defs><rect width="120" height="158" fill="url(#${g})"/>`; }
+  const dune = (y, c, amp = 10) => `<path d="M0,${y} Q30,${f1(y - amp)} 62,${f1(y - amp * .3)} Q95,${f1(y + amp * .5)} 120,${f1(y - amp * .2)} V158 H0Z" fill="${c}"/>`;
+  const tuft = (x, y, c = "#8a6b3a") => [0, 1, 2].map(i => `<path d="M${f1(x + i * 2 - 2)},${y} Q${f1(x + i * 2 - 1)},${f1(y - 6)} ${f1(x + i * 2)},${f1(y - 8)}" fill="none" stroke="${c}" stroke-width="1.2" stroke-linecap="round"/>`).join("");
+  const bgCactus = (x, y, s = 1, c = "#4f8f52") => `<g transform="translate(${x} ${y}) scale(${s})">` +
+    `<path d="M-6,0 Q-6,-26 0,-26 Q6,-26 6,0Z" fill="${c}" ${OUT}/>` +
+    `<path d="M-6,-10 Q-14,-10 -14,-4 Q-14,2 -8,0" fill="${c}" ${OUT}/>` +
+    `<path d="M6,-14 Q14,-14 14,-8 Q14,-2 8,-4" fill="${c}" ${OUT}/></g>`;
+  function dunes(o = {}) {
+    let s = sky(o.top || "#bfe3ff", o.bot || "#ffe9b0");
+    if (o.sun) s += aSun(o.sun[0], o.sun[1], o.sun[2] || 11);
+    s += dune(o.y1 || 70, o.c1 || "#f3cf85", 14) + dune(o.y2 || 96, o.c2 || "#e8b968", 12) + dune(o.y3 || 128, o.c3 || "#dba34f", 10);
+    if (o.tufts !== false) s += tuft(16, 150) + tuft(100, 146) + tuft(60, 154);
+    if (o.cactus) s += bgCactus(o.cactus[0], o.cactus[1], o.cactus[2] || 1, o.cactus[3] || "#4f8f52");
+    return s;
+  }
+  function sunsetDunes() {
+    let s = sky("#ffb37a", "#7a3f8a");
+    s += aC(76, 42, 20, "#ffd77a", `opacity=".9"`) + aC(76, 42, 13, "#fff0bf");
+    s += dune(92, "#9a5a3a", 12) + dune(120, "#7a3f2a", 10) + dune(144, "#5c2c22", 8);
+    return s;
+  }
+  function mesas(o = {}) {
+    let s = sky(o.top || "#aee0ff", o.bot || "#ffe6b0");
+    if (o.sun) s += aSun(o.sun[0], o.sun[1], 10);
+    const mesa = (x, y, w, h, c) => {
+      const top = f1(y - h);
+      return `<path d="M${x},${y} L${f1(x + w * .08)},${f1(y - h * .55)} L${f1(x + w * .24)},${top} L${f1(x + w * .76)},${top} L${f1(x + w * .92)},${f1(y - h * .55)} L${f1(x + w)},${y}Z" fill="${c}" ${OUT}/>` +
+        `<path d="M${f1(x + w * .06)},${f1(y - h * .28)} L${f1(x + w * .94)},${f1(y - h * .28)}" stroke="${OL}" stroke-width="1.3" opacity=".3"/>`;
+    };
+    s += mesa(-12, 120, 54, 36, "#c56a3f") + mesa(54, 126, 68, 50, "#b8572e") + mesa(24, 140, 46, 22, "#d57f4a");
+    if (o.road) s += `<rect y="126" width="120" height="16" fill="#8f969c"/>` + [0, 1, 2, 3].map(i => `<rect x="${4 + i * 32}" y="133" width="16" height="2.6" fill="#f4e27a"/>`).join("");
+    s += dune(144, o.floor || "#e3b878", 8);
+    if (o.cactus) s += bgCactus(o.cactus[0], o.cactus[1], o.cactus[2] || 1, o.cactus[3] || "#4f8f52");
+    return s;
+  }
+  function oasis() {
+    let s = sky("#bfe9ff", "#ffe9b0");
+    s += aSun(104, 20, 9);
+    s += `<path d="M78,118 L99,76 L120,118Z" fill="#dcb876" ${OUT}/><path d="M99,76 L108,118 L120,118Z" fill="#c69d5e"/>`;
+    s += dune(118, "#e8c788", 4);
+    s += `<ellipse cx="30" cy="144" rx="28" ry="8" fill="#5ec1e0" ${OUT}/><ellipse cx="30" cy="141.5" rx="19" ry="3.4" fill="#8fe0f2" opacity=".6"/>`;
+    return s;
+  }
+  const palm = (x, y, s = 1, c = "#3f8f4a") => {
+    const fronds = [-70, -38, -12, 16, 42].map(a => {
+      const r = a * Math.PI / 180, ex = f1(Math.sin(r) * 16), ey = f1(-Math.cos(r) * 10 - 2);
+      return `<path d="M0,0 Q${f1(ex * .5)},${f1(ey - 3)} ${ex},${ey}" fill="none" stroke="${c}" stroke-width="4.4" stroke-linecap="round"/>`;
+    }).join("");
+    return `<g transform="translate(${x} ${y}) scale(${s})"><path d="M0,0 Q-3,-10 0,-20 Q3,-30 1,-38" fill="none" stroke="#8a6a3a" stroke-width="3.4" stroke-linecap="round"/><g transform="translate(1 -38)">${fronds}</g></g>`;
+  };
+
+  /* ---------- the animals (camel, gecko, roadrunner and jerboa in card coordinates; the others drawn around 0,0) ---------- */
+  // a camel with two clear humps, a long neck, knobbly legs and a red blanket between the humps
+  function camel() {
+    const C = "#e2b077", D = "#c48a4e", L = "#f6dcb4";
+    const leg = (x, c) => aL([[x, 96], [x + 1, 116], [x, 133]], c, 6.5) + aC(x + 1, 116, 4.4, c, OUT) +
+      `<ellipse cx="${x + 1.5}" cy="134" rx="5.6" ry="2.8" fill="#8d6e4a" ${OUT}/>`;
+    return leg(38, D) + leg(78, D) +
+      aL([[16, 80], [9, 94]], D, 2.4) + `<ellipse cx="8" cy="97" rx="2.6" ry="4" fill="#6d4c2a" ${OUT}/>` +
+      aP("M14,86 Q12,70 22,64 Q26,47 37,48 Q46,50 48,61 Q52,47 63,48 Q74,50 76,64 Q86,68 89,82 Q90,100 74,103 L26,103 Q13,101 14,86Z", C) +
+      `<path d="M30,58 Q36,52 40,54" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".55"/>` +
+      aP("M38,60 Q48,72 58,60 L61,84 Q48,90 35,84Z", "#e53935") + `<path d="M35,84 Q48,90 61,84" fill="none" stroke="#fdd835" stroke-width="2.4"/>` +
+      [38, 43, 48, 53, 58].map(x => aC(x + 1, 88, 1.4, "#fdd835")).join("") +
+      leg(28, C) + leg(70, C) +
+      aP("M74,72 Q82,60 86,44 L100,47 Q96,64 88,86Z", C) +
+      `<ellipse cx="98" cy="38" rx="16" ry="14" fill="${C}" ${OUT}/>` +
+      `<ellipse cx="109" cy="45" rx="9" ry="7.5" fill="${L}" ${OUT}/>` +
+      `<path d="M112,42 q2,-1 3,1" fill="none" stroke="${OL}" stroke-width="1.1" stroke-linecap="round"/>` +
+      aP("M86,30 Q80,24 84,20 Q90,22 90,28Z", C) +
+      `<path d="M92,25 q2,-6 6,-3 q1,-5 5,-1 q3,-3 4,2" fill="${D}" ${OUT}/>` +
+      eyes(92, 102, 37, "#5a3a1c", .88) + blush(88, 45, 2.2) + smile(109, 49.5, 2.6);
+  }
+  function fennec(o = {}) {
+    const C = o.col || "#e8b67a", W = o.white || "#fff3e0";
+    return `<path d="M14,10 Q28,14 30,24 Q32,30 26,30 Q22,28 20,20 Q14,16 10,14Z" fill="${C}" ${OUT}/>` +
+      `<ellipse cx="22" cy="28" rx="4" ry="2.6" fill="${OL}"/>` +
+      `<ellipse cx="0" cy="8" rx="20" ry="13" fill="${C}" ${OUT}/>` +
+      `<ellipse cx="0" cy="14" rx="13" ry="7" fill="${W}"/>` +
+      `<circle cx="20" cy="-6" r="12" fill="${C}" ${OUT}/>` +
+      `<path d="M20,13 Q18,17 14,16 Q16,11 18,9Z" fill="${W}"/>` +
+      `<path d="M10,-16 L5,-30 L16,-20Z" fill="${C}" ${OUT}/><path d="M8,-17 L6,-27 L13,-20Z" fill="${W}"/>` +
+      `<path d="M28,-16 L33,-30 L22,-20Z" fill="${C}" ${OUT}/><path d="M30,-17 L32,-27 L25,-20Z" fill="${W}"/>` +
+      `<path d="M26,-1 Q32,2 29,6 Q24,5 23,0Z" fill="${OL}"/>` +
+      eyes(15, 25, -7, "#3a2510", .85) + blush(12, -1.5) + blush(28, -1) + smile(20, 1, 2.2);
+  }
+  function meerkat(o = {}) {
+    const C = o.col || "#c9a06a", D = o.dark || "#8a6238", B = o.belly || "#f1e4c6";
+    return aL([[-7, 24], [-8, 34]], D, 4) + aL([[6, 24], [7, 34]], D, 4) +
+      `<path d="M4,20 Q16,24 15,34 Q14,40 7,38 Q4,30 2,24Z" fill="${C}" ${OUT}/>` +
+      `<ellipse cx="0" cy="12" rx="13" ry="18" fill="${C}" ${OUT}/>` +
+      `<ellipse cx="0" cy="16" rx="8" ry="12" fill="${B}"/>` +
+      `<path d="M-13,4 Q-19,8 -17,16 Q-15,18 -11,14Z" fill="${C}" ${OUT}/>` +
+      `<path d="M13,4 Q19,8 17,16 Q15,18 11,14Z" fill="${C}" ${OUT}/>` +
+      `<circle cx="0" cy="-10" r="10" fill="${C}" ${OUT}/>` +
+      `<path d="M-9,-17 Q-11,-22 -6,-22 Q-5,-18 -7,-15Z" fill="${C}" ${OUT}/><path d="M9,-17 Q11,-22 6,-22 Q5,-18 7,-15Z" fill="${C}" ${OUT}/>` +
+      `<path d="M-9,-6 Q-7,-2 0,-2 Q7,-2 9,-6 Q8,-10 0,-9 Q-8,-10 -9,-6Z" fill="${D}" opacity=".5"/>` +
+      eyes(-4.5, 4.5, -10, "#3a250f", .85) + blush(-8, -6, 1.6) + blush(8, -6, 1.6) + smile(0, -5, 2.2);
+  }
+  function scorpion(o = {}) {
+    const C = o.col || "#d9833f", D = o.dark || "#b5672a";
+    return aL([[8, 2], [16, -4], [22, -14], [18, -24], [8, -26]], C, 5) +
+      aC(8, -26, 3.6, C, OUT) + `<path d="M4,-29 L13,-32 L10,-23Z" fill="${OL}"/>` +
+      `<path d="M-13,-2 Q-24,-9 -22,-2 Q-20,4 -11,4Z" fill="${C}" ${OUT}/>` +
+      `<path d="M-13,8 Q-24,8 -22,14 Q-19,19 -11,13Z" fill="${C}" ${OUT}/>` +
+      [0, 1, 2].map(i => aL([[-7 + i * 6, 12], [-9 + i * 6, 18]], D, 2)).join("") +
+      [0, 1, 2].map(i => aL([[3 + i * 5, 12], [2 + i * 5, 18]], D, 2)).join("") +
+      `<ellipse cx="0" cy="4" rx="13" ry="9" fill="${C}" ${OUT}/>` +
+      eyes(-4, 4, -1, "#3a1a08", .8) + blush(-7, 4, 1.4) + blush(1, 3, 1.3) + smile(-2, 5, 2.2);
+  }
+  // a gecko seen from above, clinging to a rock wall: four splayed legs with round sticky toes, a curled tail
+  function gecko() {
+    const C = "#8bd16a", D = "#5aa34a", L = "#c8f0a8";
+    const foot = (pts, angs) => { const [fx, fy] = pts[pts.length - 1];
+      return aL(pts, C, 6) + angs.map(a => { const r = a * Math.PI / 180, tx = f1(fx + 7 * Math.cos(r)), ty = f1(fy + 7 * Math.sin(r));
+        return aL([[fx, fy], [tx, ty]], C, 2.4) + aC(tx, ty, 2.7, L, OUT); }).join(""); };
+    const tail = [[60, 102], [60, 118], [57, 131], [48, 140], [38, 140], [32, 132], [36, 124], [44, 126], [44, 132]], tw = [11, 9.5, 8, 6.5, 5.5, 4.5, 3.6, 3];
+    const seg = (c, add) => tail.slice(1).map((pt, i) => aL([tail[i], pt], c, tw[i] + add, false)).join("");
+    return foot([[50, 68], [36, 63], [30, 51]], [-160, -125, -90, -55]) + foot([[70, 68], [84, 63], [90, 51]], [-125, -90, -55, -20]) +
+      foot([[52, 94], [38, 98], [28, 104]], [110, 145, 180, 215]) + foot([[68, 94], [82, 98], [92, 104]], [-35, 0, 35, 70]) +
+      seg(OL, 2.2) + seg(C, 0) + aC(59, 122, 1.8, D) + aC(52, 136, 1.5, D) + aC(36, 135, 1.2, D) +
+      aP("M60,56 Q76,58 76,78 Q76,98 64,107 L56,107 Q44,98 44,78 Q44,58 60,56Z", C) +
+      aC(53, 70, 2.6, D) + aC(66, 76, 2.4, D) + aC(55, 86, 2.6, D) + aC(66, 94, 2, D) + aC(59, 100, 1.8, D) +
+      `<ellipse cx="60" cy="44" rx="19" ry="16" fill="${C}" ${OUT}/>` +
+      `<path d="M48,33 Q54,29 60,30" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" opacity=".6"/>` +
+      eyes(51.5, 68.5, 42, "#2a6a1a", 1.15) + blush(45, 51, 2.4) + blush(75, 51, 2.4) +
+      `<path d="M54,51 Q60,56 66,51" fill="none" stroke="${OL}" stroke-width="1.2" stroke-linecap="round"/>`;
+  }
+  function tortoise(o = {}) {
+    const S = o.shell || "#a9793f", SK = o.skin || "#d9b06a";
+    return `<path d="M-14,5 Q-24,9 -29,14 Q-26,5 -18,2Z" fill="${SK}" ${OUT}/>` +
+      `<path d="M10,4 Q20,8 27,18 Q17,19 7,9Z" fill="${SK}" ${OUT}/>` +
+      `<ellipse cx="29" cy="-4" rx="10" ry="9" fill="${SK}" ${OUT}/>` +
+      `<path d="M-22,2 Q-20,-20 0,-20 Q20,-20 22,2Z" fill="${S}" ${OUT}/>` +
+      `<path d="M-6,-8 L0,-13 L6,-8 L4,-1 L-4,-1Z M-6,-8 L-13,-11 M6,-8 L13,-11 M-4,-1 L-10,3 M4,-1 L10,3 M0,-13 L0,-19" fill="${o.shell2 || "#c69450"}" stroke="#7a5324" stroke-width="1" stroke-linejoin="round"/>` +
+      `<path d="M-24,2 Q0,7 24,2 Q24,5 20,6 Q0,11 -20,6 Q-24,5 -24,2Z" fill="#e8d49a" ${OUT}/>` +
+      eyes(26, 33, -5, "#4a2a12", .72) + blush(24, 0, 1.6) + smile(29, 1, 2);
+  }
+  // a sleek crested roadrunner mid-dash: long tail up, long legs, long beak
+  function roadrunner() {
+    const C = "#8d6e4f", Dk = "#5d4632", B = "#efe3c8", Lg = "#e0a040";
+    return [[34, 52, 52, Dk], [30, 60, 40, C], [36, 64, 28, Dk]].map(([x, y, r, c]) => `<g transform="rotate(${r} ${x} ${y})"><ellipse cx="${x}" cy="${y}" rx="22" ry="5.6" fill="${c}" ${OUT}/>` +
+        `<path d="M${x - 20},${y} h6" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></g>`).join("") +
+      aL([[60, 92], [54, 110], [40, 121]], Lg, 3) + aL([[40, 121], [33, 119]], Lg, 2.2) + aL([[40, 121], [36, 127]], Lg, 2.2) +
+      aL([[72, 92], [80, 111], [78, 131]], Lg, 3) + aL([[78, 131], [87, 132]], Lg, 2.2) + aL([[78, 131], [71, 134]], Lg, 2.2) +
+      aP("M82,46 L70,27 L84,36 L82,20 L91,35 L96,25 L95,42Z", Dk) +
+      aP("M38,82 Q50,62 76,62 Q92,62 95,76 Q93,92 70,95 Q50,97 38,82Z", C) +
+      `<ellipse cx="76" cy="87" rx="14" ry="6" fill="${B}"/>` +
+      aP("M47,77 Q62,66 81,72 Q70,85 50,84Z", Dk) + [[57, 77], [65, 74], [72, 78], [62, 81]].map(([x, y]) => aC(x, y, 1.3, "#fff")).join("") +
+      aC(92, 54, 14, C, OUT) + `<ellipse cx="97" cy="62" rx="7" ry="5" fill="${B}"/>` +
+      `<path d="M80,50 Q84,47 86,52" fill="none" stroke="#4fc3f7" stroke-width="2.4" stroke-linecap="round"/>` +
+      aP("M104,51 L119,56 L104,61Z", "#ffb300") + `<path d="M105,56 H116" stroke="${OL}" stroke-width=".9"/>` +
+      eyes(88.5, 98.5, 52, "#2a1a0a", .9) + blush(101, 60, 1.8);
+  }
+  // a jerboa: huge ears, giant hind feet, tiny front paws, a long tail with a tuft
+  function jerboa() {
+    const C = "#e8c48e", W = "#fff6e6", P = "#ffb3c1";
+    const ear = (cx, cy, rot) => `<ellipse cx="${cx}" cy="${cy}" rx="8.5" ry="19" fill="${C}" ${OUT} transform="rotate(${rot} ${cx} ${cy})"/>` +
+      `<ellipse cx="${cx}" cy="${cy + 2}" rx="4.8" ry="14" fill="${P}" transform="rotate(${rot} ${cx} ${cy})"/>`;
+    return aL([[46, 110], [30, 119], [16, 113], [10, 99], [12, 86]], C, 2.8) +
+      `<ellipse cx="12" cy="80" rx="5" ry="8" fill="${W}" ${OUT}/><path d="M7.4,77 Q12,68 16.6,77Z" fill="${OL}"/>` +
+      ear(62, 34, -20) +
+      aP("M46,124 L86,129 Q93,132 87,137 L44,135 Q37,130 46,124Z", C) + `<path d="M84,131 l3,3 M80,131 l2,4" stroke="${OL}" stroke-width=".9"/>` +
+      `<ellipse cx="52" cy="112" rx="16" ry="14" fill="${C}" ${OUT}/>` +
+      `<ellipse cx="64" cy="96" rx="21" ry="23" fill="${C}" ${OUT}/><ellipse cx="72" cy="102" rx="11" ry="15" fill="${W}"/>` +
+      `<path d="M44,104 Q48,98 56,100" fill="none" stroke="${OL}" stroke-width="1" opacity=".5"/>` +
+      ear(84, 32, 14) +
+      aP("M56,62 Q56,46 74,46 Q90,46 94,58 Q101,64 99,71 Q95,80 80,80 Q58,80 56,62Z", C) +
+      aC(98.5, 67, 2.2, P, OUT) + `<path d="M95,72 l9,-1 M95,74 l9,2 M94,76 l7,4" stroke="#8a6a4a" stroke-width=".7" stroke-linecap="round"/>` +
+      `<ellipse cx="80" cy="96" rx="3.2" ry="2.4" fill="${C}" ${OUT}/><ellipse cx="86" cy="97" rx="3.2" ry="2.4" fill="${C}" ${OUT}/>` +
+      eyes(72, 85, 61, "#3a2510", 1.0) + blush(66, 71, 2.2) + blush(91, 72, 1.8) + smile(89, 74.5, 2.4);
+  }
+  function cactusFace(o = {}) {
+    const C = o.col || "#5fae5a", D = o.dark || "#448a46";
+    return `<path d="M-6,20 Q-22,18 -20,4 Q-18,-4 -6,-2Z" fill="${C}" ${OUT}/>` +
+      `<path d="M8,16 Q24,14 22,0 Q20,-6 8,-4Z" fill="${C}" ${OUT}/>` +
+      `<path d="M-14,22 Q-16,-10 -8,-28 Q0,-34 8,-28 Q16,-10 14,22Z" fill="${C}" ${OUT}/>` +
+      [0, 1, 2].map(i => `<path d="M${-10 + i * 10},-24 V18" stroke="${D}" stroke-width="1" opacity=".5"/>`).join("") +
+      [...Array(10)].map((_, i) => aC(-12 + (i % 5) * 6, -20 + Math.floor(i / 5) * 20, .6, "#fff", `opacity=".8"`)).join("") +
+      `<path d="M-2,-30 Q0,-36 4,-32 Q6,-28 2,-26Z" fill="#e85d8a" ${OUT}/>` + aC(2, -30, 1.4, "#fff176") +
+      eyes(-4, 6, -6, "#2a4a1a", .9) + blush(-7, -2, 1.6) + blush(9, -2, 1.6) + smile(1, -1, 2.6);
+  }
+  const rockWall = () => { const g = uid("rw");
+    return `<defs>${aVGrad(g, "#e8a468", "#c4703e")}</defs><rect width="120" height="158" fill="url(#${g})"/>` +
+      `<path d="M0,0 H120 V16 Q100,26 80,19 Q60,13 40,21 Q20,28 0,19Z" fill="#aee0ff"/>` + aSun(104, 9, 7) +
+      [44, 74, 104, 134].map((y, i) => `<path d="M0,${y} Q30,${y - 5 + i * 2} 60,${y + 2} Q90,${y + 7} 120,${y - 2}" fill="none" stroke="#a85a30" stroke-width="2" opacity=".45"/>`).join("") +
+      `<path d="M98,60 l6,10 l-3,8 M14,92 l5,8 l-2,9 M100,120 l-5,9" fill="none" stroke="#8a4524" stroke-width="1.4" opacity=".6"/>` +
+      [[106, 92, 3], [12, 140, 2.6], [94, 148, 2.2], [20, 60, 2]].map(([x, y, r]) => aC(x, y, r, "#d98c55", `stroke="#a85a30" stroke-width=".8"`)).join("") +
+      tuft(108, 156, "#6f8f3a") + tuft(10, 156, "#6f8f3a");
+  };
+  const rock = `<path d="M28,154 Q32,138 60,137 Q88,138 92,154Z" fill="#b88a5a" ${OUT}/><path d="M40,142 Q56,139 70,141" fill="none" stroke="#fff" stroke-width="1.6" opacity=".4"/>`;
+  const speed = [[4, 88, 20], [8, 98, 16], [2, 108, 22]].map(([x, y, l]) => `<path d="M${x},${y} h${l}" stroke="#fff" stroke-width="2.2" stroke-linecap="round" opacity=".85"/>`).join("") +
+    aC(30, 128, 4, "#f3dcae", `opacity=".9"`) + aC(23, 125, 3, "#f3dcae", `opacity=".8"`);
+
+  /* ---------- the stickers ---------- */
+  const camelA = () => [dunes({ sun: [58, 20, 9] }), aEdge(camel())];
+  const fennecA = () => [sunsetDunes(), aEdge(at(52, 98, 1.6, fennec()))];
+  const meerkatA = () => [mesas({ sun: [100, 20] }) + rock, aEdge(`<g class="lv-bob">${at(60, 78, 1.75, meerkat())}</g>`)];
+  const scorpA = () => [dunes({ top: "#ffd9a0", bot: "#f3b35a", tufts: false, cactus: [106, 148, .8] }), aEdge(at(58, 94, 2, scorpion()))];
+  const geckoA = () => [rockWall(), aEdge(gecko())];
+  const tortA = () => [dunes({ cactus: [14, 96, .7] }), aEdge(at(54, 104, 1.6, tortoise()))];
+  const roadA = () => [mesas({ road: true }) + speed, aEdge(roadrunner())];
+  const cactA = () => [dunes({ sun: [102, 20, 10], c1: "#f6d79a" }), aEdge(at(58, 100, 1.9, cactusFace()))];
+  const jerboaA = () => [oasis(), aEdge(jerboa())];
+
+  FAN.wdesert = [
+    ["Camel", "A friendly two-humped camel with a red blanket, between the dunes", camelA],
+    ["Fennec fox", "Big ears, tiny fox, under a desert sunset", fennecA],
+    ["Meerkat", "Standing tall on lookout duty on a rocky mesa (it bobs up)", meerkatA],
+    ["Friendly scorpion", "Claws up and smiling, not scary at all", scorpA],
+    ["Gecko", "A spotty green gecko clinging to a warm rock wall with its sticky toes", geckoA],
+    ["Desert tortoise", "Slow and steady by a cactus", tortA],
+    ["Roadrunner", "A crested roadrunner dashing down the desert road", roadA],
+    ["Cactus with a face", "A round cactus with a little pink flower", cactA],
+    ["Jerboa", "A tiny hopping mouse with huge ears, big feet and a tufted tail, by the oasis", jerboaA],
+  ];
+})();
+
+/* Sticker book world page "Volcano" (the 🌋 world of the path): 9 chibi dinosaurs and the friendly volcano; sets FAN.wlava.
+   Normal = a sunny day by the volcano; holo (5 copies) = the same friend grown up / glowing in a night eruption scene.
+   The egg (8) is the living sticker: it wobbles in its nest and the baby peeks out (lv-swing on an upside-down group, so
+   the egg rocks on its bottom, + lv-wink). */
+(() => {
+  "use strict";
+  const OL = A_OL, OUT = `stroke="${OL}" stroke-width="1.1" stroke-linejoin="round"`;
+  const uid = p => `wl${p}${++aUid}`;
+  const f1 = v => +(+v).toFixed(1);
+  const at = (x, y, s, inner, flip) => `<g transform="translate(${x} ${y}) scale(${flip ? -s : s} ${s})">${inner}</g>`;
+  const P = (d, f, x = "") => `<path d="${d}" fill="${f}" ${OUT}${x ? " " + x : ""}/>`;
+  const E = (cx, cy, rx, ry, f, x = "") => `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${f}" ${OUT}${x ? " " + x : ""}/>`;
+  const smile = (d, w = 1.2) => `<path d="${d}" fill="none" stroke="${OL}" stroke-width="${w}" stroke-linecap="round"/>`;
+  const blush = (x, y, r = 2.6) => `<ellipse cx="${x}" cy="${y}" rx="${r}" ry="${r * .6}" fill="#ff7b7b" opacity=".7"/>`;
+  const shine = d => `<path d="${d}" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity=".45"/>`;
+  const spots = (pts, c) => pts.map(([x, y, r]) => `<ellipse cx="${x}" cy="${y}" rx="${r}" ry="${f1(r * .75)}" fill="${c}" opacity=".55"/>`).join("");
+  const toes = pts => pts.map(([x, y]) => aC(x, y, 1.3, "#fffde7", `stroke="${OL}" stroke-width=".6"`)).join("");
+
+  /* ---------- the land ---------- */
+  function volcano(x, y, s, erupt) {
+    let o = "";
+    if (erupt) {
+      o += `<path d="M-5,-36 Q-14,-60 -24,-74 Q-6,-62 0,-80 Q6,-62 24,-74 Q14,-60 5,-36Z" fill="#ffb300"/>` +
+        `<path d="M-3,-36 Q-6,-54 -12,-62 Q-2,-56 0,-68 Q2,-56 12,-62 Q6,-54 3,-36Z" fill="#fff176"/>`;
+      o += [[-30, -66, 3], [28, -70, 2.6], [-18, -86, 2.2], [20, -88, 2.4], [0, -94, 2], [-36, -50, 2], [38, -54, 2.2]].map(([a, b, r]) => aC(a, b, r, "#ff7043", `stroke="${OL}" stroke-width=".7"`)).join("");
+    } else {
+      o += `<g fill="#cfc6d6" opacity=".9">${aC(2, -46, 7, "#cfc6d6")}${aC(10, -54, 8, "#ddd5e3")}${aC(4, -64, 6, "#e8e2ee")}</g>`;
+    }
+    o += `<path d="M-34,0 L-9,-34 Q0,-39 9,-34 L34,0Z" fill="#6d4c41" ${OUT}/>` +
+      `<path d="M9,-34 L34,0 H14 Q12,-20 4,-35Z" fill="#000" opacity=".18"/>` +
+      `<path d="M-9,-34 Q0,-31 9,-34 Q6,-27 4,-20 Q2,-26 0,-22 Q-3,-30 -6,-24 Q-7,-30 -9,-34Z" fill="#ff7043"/>` +
+      `<ellipse cx="0" cy="-34.6" rx="9" ry="2.4" fill="${erupt ? "#fff176" : "#ffb300"}" ${OUT}/>`;
+    return at(x, y, s, o);
+  }
+  const fern = (x, y, s, c = "#4caf50", flip) => at(x, y, s, [-60, -35, -12, 12, 35, 60].map(a =>
+    `<path d="M0,0 Q${f1(Math.sin(a * Math.PI / 180) * 10)},-12 ${f1(Math.sin(a * Math.PI / 180) * 18)},${f1(-22 * Math.cos(a * Math.PI / 180) + 2)}" fill="none" stroke="${c}" stroke-width="3.4" stroke-linecap="round"/>`).join("") +
+    [-60, -35, -12, 12, 35, 60].map(a => aC(f1(Math.sin(a * Math.PI / 180) * 18), f1(-22 * Math.cos(a * Math.PI / 180) + 2), 2, c)).join(""), flip);
+  const palm = (x, y, s, flip) => at(x, y, s,
+    `<path d="M0,0 Q-3,-20 3,-40" fill="none" stroke="${OL}" stroke-width="6.4" stroke-linecap="round"/><path d="M0,0 Q-3,-20 3,-40" fill="none" stroke="#a1734a" stroke-width="4.2" stroke-linecap="round"/>` +
+    [[-22, -34], [-16, -50], [6, -56], [24, -48], [26, -32]].map(([a, b]) => `<path d="M3,-40 Q${f1((a + 3) / 2)},${f1(b - 10)} ${a},${b} Q${f1((a + 3) / 2)},${f1(b - 2)} 3,-40Z" fill="#43a047" ${OUT}/>`).join(""), flip);
+  const rock = (x, y, w, c = "#8d6e63") => `<path d="M${x - w},${y} Q${x - w},${f1(y - w * .9)} ${x},${f1(y - w)} Q${x + w},${f1(y - w * .9)} ${x + w},${y}Z" fill="${c}" ${OUT}/>`;
+  // a sunny day: sky, far hills, the volcano, the ground with a lava stream, ferns and palms
+  function day(o = {}) {
+    let s = aSky(o.top || "#8fd8ff", o.bot || "#ffe0a3");
+    if (o.sun !== false) s += aSun(o.sx || 20, o.sy || 20, 9);
+    s += aCloud(o.cx || 62, 14, .8);
+    s += `<path d="M0,100 Q18,88 36,96 Q58,84 80,94 Q100,86 120,94 V158 H0Z" fill="#b39ddb" opacity=".6"/>`;
+    s += volcano(o.vx === undefined ? 86 : o.vx, o.vy || 104, o.vs || 1, false);
+    s += `<path d="M0,108 Q30,100 60,106 Q90,112 120,102 V158 H0Z" fill="#9ccc65"/>` +
+      `<path d="M0,126 Q34,118 64,124 Q94,130 120,120 V158 H0Z" fill="#c8a165"/>`;
+    if (o.lava !== false) s += `<path d="M120,128 Q96,134 80,146 Q70,154 60,158 H70 Q80,150 90,144 Q104,136 120,134Z" fill="#ff7043"/><path d="M120,130 Q98,136 84,146" fill="none" stroke="#ffeb3b" stroke-width="1.2"/>`;
+    s += rock(10, 146, 6) + rock(108, 152, 5, "#795548");
+    if (o.plants !== false) s += fern(8, 112, .9) + palm(112, 108, .8, true) + fern(20, 124, .7, "#66bb6a");
+    return s;
+  }
+  // a night eruption (the holo scenes): dark red sky, glowing volcano spitting lava, stars, embers
+  function night(o = {}) {
+    const g = uid("ng"), R = aRand(o.seed || 5);
+    let s = `<defs>${aVGrad(g, o.top || "#2a1640", o.bot || "#c2410c")}</defs><rect width="120" height="158" fill="url(#${g})"/>`;
+    s += [...Array(14)].map(() => aC(R() * 120, R() * 50, f1(.4 + R() * .7), "#fff", 'opacity=".8"')).join("");
+    s += `<ellipse cx="${o.vx === undefined ? 70 : o.vx}" cy="70" rx="60" ry="40" fill="#ff9800" opacity=".25"/>`;
+    s += volcano(o.vx === undefined ? 70 : o.vx, o.vy || 106, o.vs || 1.25, true);
+    s += `<path d="M0,110 Q30,102 60,108 Q90,114 120,104 V158 H0Z" fill="#4e342e"/>` +
+      `<path d="M0,128 Q34,120 64,126 Q94,132 120,122 V158 H0Z" fill="#3e2723"/>` +
+      `<path d="M0,140 Q22,132 44,142 Q70,152 120,138" fill="none" stroke="#ff7043" stroke-width="2.4"/><path d="M0,140 Q22,132 44,142 Q70,152 120,138" fill="none" stroke="#ffeb3b" stroke-width=".8"/>`;
+    s += [...Array(10)].map(() => aSpark(f1(R() * 120), f1(20 + R() * 90), f1(1.4 + R() * 1.6), R() < .5 ? "#ffeb3b" : "#ffab40")).join("");
+    if (o.plants !== false) s += fern(6, 116, .9, "#2e7d32") + fern(114, 118, .8, "#2e7d32", true);
+    return s;
+  }
+  const shadow = (x, y, rx) => `<ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${f1(rx * .18)}" fill="#000" opacity=".22"/>`;
+
+  /* ---------- the dinosaurs: drawn facing right, origin = between the feet on the ground ---------- */
+  // T-Rex: o.col, o.belly, o.adult (longer snout, teeth, back spikes, roaring happily)
+  function trex(o = {}) {
+    const c = o.col || "#7cc552", b = o.belly || "#fff3c4", dk = o.dark || "#4e9a2a", s = [];
+    s.push(P("M-8,-34 Q-30,-38 -50,-16 Q-28,-24 -6,-18Z", c));                                     // tail
+    if (o.adult) s.push([[-30, -32], [-20, -38], [-10, -44], [0, -50]].map(([x, y]) => P(`M${x - 4},${y + 2} L${x},${y - 6} L${x + 4},${y + 1}Z`, "#ffb300")).join(""));
+    s.push(P("M-14,-14 Q-16,-4 -12,0 H-1 Q0,-6 -2,-14Z", dk), E(-7, -1, 7, 3, dk), toes([[-11, -1], [-7, .5], [-3, 0]]));   // back leg
+    s.push(E(-1, -30, 19, 18, c));                                                                 // body
+    s.push(`<ellipse cx="6" cy="-26" rx="10" ry="13" fill="${b}"/>`);
+    s.push(P("M2,-16 Q2,-4 6,0 H17 Q17,-8 14,-16Z", c), E(11, -1, 7.5, 3, c), toes([[7, -1], [11, .6], [15, 0]]));   // front leg
+    s.push(spots([[-8, -38, 3], [-14, -28, 2.4], [-2, -44, 2]], dk));
+    // head (big, round, a short snout)
+    const mouth = o.adult ? `<path d="M18,-58 Q30,-50 44,-60 Q42,-52 30,-48 Q20,-50 18,-58Z" fill="#c62828" ${OUT}/>` + P("M24,-56 l1.4,3 l1.4,-2.6 M30,-55.4 l1.4,3 l1.4,-3 M36,-56.4 l1.2,2.8 l1.4,-3", "#fff", 'stroke-width=".6"') +
+      `<ellipse cx="31" cy="-51" rx="5" ry="1.8" fill="#ff8a80"/>` : smile("M20,-58 Q30,-52 40,-60") + P("M26,-56 l1.4,2.6 l1.4,-2.3Z M33,-56.6 l1.4,2.6 l1.4,-2.6Z", "#fff", 'stroke-width=".6"');
+    s.push(P("M2,-62 Q0,-82 20,-84 Q38,-85 44,-72 Q48,-62 42,-58 Q30,-54 18,-56 Q6,-54 2,-62Z", c));
+    s.push(`<path d="M6,-74 Q10,-82 20,-82" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity=".45"/>`);
+    s.push(mouth, aC(41, -71, .9, OL), aEye(18, -69, o.iris || "#6d4c41", 1.15), blush(28, -62));
+    if (!o.adult) s.push(aEye(9, -69.5, o.iris || "#6d4c41", .8).replace(/#fff"/, '#fff"'));
+    // tiny arms
+    s.push(aL([[16, -34], [22, -32], [24, -36]], c, 3.2));
+    return s.join("");
+  }
+  // triceratops: o.col, o.frill, o.gold (golden frill and horns)
+  function trike(o = {}) {
+    const c = o.col || "#64b5f6", fr = o.frill || "#ff8a65", hn = o.gold ? "#ffd54f" : "#fff8e1", dk = o.dark || "#1e88e5", s = [];
+    s.push(P("M-24,-22 Q-40,-20 -46,-8 Q-34,-14 -22,-12Z", c));
+    s.push(P("M-22,-12 V0 H-12 V-12Z", dk), P("M8,-12 V0 H18 V-12Z", dk));                         // far legs
+    s.push(E(-4, -22, 26, 16, c));
+    s.push(`<path d="M-24,-16 Q-4,-6 18,-16 Q16,-8 -2,-7 Q-20,-8 -24,-16Z" fill="#fff" opacity=".35"/>`);
+    s.push(spots([[-14, -30, 3.4], [-2, -33, 2.6], [-20, -22, 2.4], [8, -30, 2.2]], dk));
+    s.push(P("M-16,-12 V2 H-5 V-12Z", c), P("M2,-12 V2 H13 V-12Z", c), toes([[-14, 1], [-10.5, 1.6], [-7, 1], [4, 1], [7.5, 1.6], [11, 1]]));
+    // frill: a scalloped half disc behind the head
+    const fx = 22, fy = -36;
+    s.push(`<path d="${[...Array(9)].map((_, i) => { const a = Math.PI * (.78 + i * .19); return `${i ? "L" : "M"}${f1(fx + 21 * Math.cos(a))},${f1(fy + 21 * Math.sin(a))}`; }).join(" ")} L${fx + 8},${fy + 8}Z" fill="${fr}" ${OUT}/>`);
+    s.push([...Array(9)].map((_, i) => { const a = Math.PI * (.78 + i * .19); return aC(fx + 21 * Math.cos(a), fy + 21 * Math.sin(a), 3.2, fr, OUT); }).join(""));
+    s.push(`<path d="${[...Array(7)].map((_, i) => { const a = Math.PI * (.9 + i * .2); return `${i ? "L" : "M"}${f1(fx + 15 * Math.cos(a))},${f1(fy + 15 * Math.sin(a))}`; }).join(" ")}" fill="none" stroke="${o.gold ? "#fff59d" : "#ffccbc"}" stroke-width="2.4" stroke-linecap="round"/>`);
+    // face
+    s.push(P("M12,-34 Q12,-48 26,-48 Q40,-47 44,-34 Q48,-24 42,-20 Q30,-16 18,-20 Q10,-24 12,-34Z", c));
+    s.push(P("M42,-34 Q52,-30 49,-23 Q46,-20 41,-21Z", "#ffcc80"));                                // beak
+    s.push(P("M38,-40 Q42,-48 44,-54 Q46,-46 43,-38Z", hn));                                       // nose horn
+    s.push(P("M22,-46 Q26,-60 36,-68 Q34,-56 28,-45Z", hn), P("M14,-44 Q14,-58 20,-66 Q22,-54 19,-44Z", hn));   // brow horns
+    s.push(aEye(28, -35, o.iris || "#5d4037", 1.05), blush(36, -27), smile("M30,-24 Q37,-20 42,-25"), aC(45.5, -30, .8, OL));
+    s.push(shine("M16,-38 Q18,-44 24,-45"));
+    return s.join("");
+  }
+  // stegosaurus: o.col, o.plate (one colour or an array), o.glow
+  function stego(o = {}) {
+    const c = o.col || "#aed581", dk = o.dark || "#7cb342", pl = o.plate || ["#ff8a65", "#ffb74d"], s = [];
+    const plate = (x, y, h, r, i) => `<path d="M${x - 5},${y} Q${x - 6},${y - h * .6} ${x},${y - h} Q${x + 6},${y - h * .6} ${x + 5},${y}Z" fill="${Array.isArray(pl) ? pl[i % pl.length] : pl}" ${OUT} transform="rotate(${r} ${x} ${y})"/>`;
+    if (o.glow) s.push(`<g opacity=".55">${[[-26, -24, 12], [-16, -34, 17], [-4, -38, 19], [8, -36, 16], [18, -28, 12]].map(([x, y, h]) => aC(x, y - h * .6, h * .55, "#ffeb3b")).join("")}</g>`);
+    // tail with spikes (left)
+    s.push(P("M-28,-20 Q-44,-24 -52,-36 Q-46,-18 -26,-10Z", c));
+    s.push(P("M-48,-30 L-56,-40 L-50,-28Z", "#fff8e1"), P("M-50,-34 L-50,-46 L-46,-34Z", "#fff8e1"));
+    s.push(P("M-22,-12 V0 H-12 V-12Z", dk), P("M6,-12 V0 H16 V-12Z", dk));
+    s.push([[-26, -24, 12, -40], [-16, -32, 17, -20], [-4, -35, 19, 0], [8, -33, 16, 18], [18, -26, 12, 36]].map(([x, y, h, r], i) => plate(x, y, h, r, i)).join(""));
+    s.push(P("M-30,-14 Q-30,-38 -4,-38 Q20,-38 26,-20 Q28,-10 16,-10 H-24 Q-30,-10 -30,-14Z", c));
+    s.push(`<path d="M-24,-12 Q-2,-6 20,-12" fill="none" stroke="#fff" stroke-width="3" opacity=".3" stroke-linecap="round"/>`);
+    s.push(spots([[-12, -28, 3], [2, -30, 2.4], [-20, -20, 2.2]], dk));
+    s.push(P("M-18,-12 V2 H-7 V-12Z", c), P("M2,-12 V2 H13 V-12Z", c), toes([[-16, 1], [-12.5, 1.6], [-9, 1], [4, 1], [7.5, 1.6], [11, 1]]));
+    // small head low at the right on a short neck
+    s.push(P("M20,-24 Q30,-30 36,-30 Q48,-30 50,-21 Q50,-13 40,-12 Q30,-12 22,-14Z", c));
+    s.push(aEye(38, -23, o.iris || "#5d4037", .85), blush(44, -16, 2), smile("M41,-15 Q45,-13 48,-16"), aC(48, -22, .7, OL));
+    return s.join("");
+  }
+  // brachiosaurus: tall neck up to the right, small head near the top (local height about 120)
+  function brachio(o = {}) {
+    const c = o.col || "#9575cd", dk = o.dark || "#7e57c2", b = o.belly || "#d1c4e9", s = [];
+    s.push(P("M-24,-30 Q-42,-30 -50,-14 Q-38,-22 -22,-20Z", c));
+    s.push(P("M-22,-24 V0 H-11 V-24Z", dk), P("M6,-26 V0 H17 V-26Z", dk));
+    s.push(P("M2,-46 Q8,-80 22,-96 Q28,-102 34,-96 Q24,-78 22,-44Z", c));                           // neck
+    s.push(`<path d="M8,-50 Q14,-78 26,-92" fill="none" stroke="${b}" stroke-width="4" stroke-linecap="round" opacity=".7"/>`);
+    s.push(E(-4, -34, 26, 17, c));
+    s.push(`<ellipse cx="0" cy="-24" rx="18" ry="6" fill="${b}" opacity=".7"/>`);
+    s.push(spots([[-14, -42, 3.2], [-2, -45, 2.4], [-22, -34, 2.6], [14, -66, 2], [18, -80, 1.8]], dk));
+    s.push(P("M-17,-26 V2 H-5 V-26Z", c), P("M1,-26 V2 H13 V-26Z", c), toes([[-15, 1], [-11, 1.6], [-7, 1], [3, 1], [7, 1.6], [11, 1]]));
+    // head, with a bump on top
+    s.push(P("M18,-100 Q16,-112 28,-114 Q34,-120 40,-112 Q50,-110 50,-102 Q50,-94 40,-94 H26 Q18,-94 18,-100Z", c));
+    s.push(aEye(32, -105, o.iris || "#4e342e", .9), blush(40, -98, 2), smile("M38,-97 Q44,-95 48,-99"), aC(48, -106, .7, OL));
+    if (o.leaf) s.push(`<path d="M48,-99 Q56,-104 60,-98 Q54,-94 48,-99Z" fill="#66bb6a" ${OUT}/>`);
+    return s.join("");
+  }
+  // pterodactyl: wings spread, crest, beak; origin = middle of the body
+  function ptero(o = {}) {
+    const c = o.col || "#ff8a65", w = o.wing || "#ffccbc", dk = o.dark || "#e64a19", s = [];
+    const up = o.up ? -14 : 0;
+    s.push(P(`M-6,-2 Q-24,${-18 + up} -50,${-16 + up} Q-40,${-6 + up / 2} -44,${2 + up / 3} Q-32,0 -28,8 Q-16,4 -6,6Z`, c), P(`M-8,0 Q-24,${-12 + up} -44,${-12 + up} Q-30,${-2 + up / 2} -32,4 Q-18,2 -8,4Z`, w, 'stroke="none"'));
+    s.push(P(`M6,-2 Q24,${-18 + up} 50,${-16 + up} Q40,${-6 + up / 2} 44,${2 + up / 3} Q32,0 28,8 Q16,4 6,6Z`, c), P(`M8,0 Q24,${-12 + up} 44,${-12 + up} Q30,${-2 + up / 2} 32,4 Q18,2 8,4Z`, w, 'stroke="none"'));
+    s.push(aL([[-5, 12], [-7, 18]], dk, 2.4), aL([[5, 12], [7, 18]], dk, 2.4));
+    s.push(E(0, 2, 10, 13, c), `<ellipse cx="0" cy="6" rx="6" ry="8" fill="#fff3e0"/>`);
+    // head: round, a long crest back, a long beak to the right
+    s.push(P("M-6,-20 Q-26,-30 -24,-22 Q-16,-16 -6,-14Z", dk));
+    s.push(P("M8,-22 Q30,-18 34,-16 Q30,-12 8,-10Z", "#ffd54f"));
+    s.push(aC(0, -17, 11, c, OUT));
+    s.push(aEye(2, -18, o.iris || "#5d4037", 1), blush(9, -11, 2.2), smile("M10,-14 Q20,-13 30,-15", .9));
+    s.push(shine("M-7,-22 Q-4,-26 1,-27"));
+    return s.join("");
+  }
+  // ankylosaurus: low and wide, armoured back with studs, side spikes, club tail
+  function anky(o = {}) {
+    const c = o.col || "#d7a55a", ar = o.armor || "#a1693a", st = o.stud || "#ffe0b2", s = [];
+    s.push(P("M-28,-14 Q-42,-16 -48,-22 Q-44,-12 -28,-8Z", c));
+    s.push(E(-50, -23, 6, 4.6, ar), P("M-55,-23 l-3,-2 l1,4Z M-50,-27.5 l0,-3 l3,2.4Z", st));
+    s.push(P("M-22,-10 V0 H-12 V-10Z", ar), P("M8,-10 V0 H18 V-10Z", ar));
+    s.push(P("M-34,-12 Q-34,-36 -4,-38 Q26,-38 28,-14 Q28,-8 20,-8 H-28 Q-34,-8 -34,-12Z", ar));
+    const R = [[-24, -18], [-16, -26], [-6, -30], [6, -28], [16, -22], [-26, -12], [-14, -16], [-2, -20], [10, -16], [20, -14], [-6, -12], [6, -10]];
+    s.push(R.map(([x, y]) => `<ellipse cx="${x}" cy="${y}" rx="3.6" ry="2.8" fill="${st}" stroke="${OL}" stroke-width=".7"/>` + aC(x - 1, y - 1, .9, "#fff", 'opacity=".7"')).join(""));
+    s.push([[-30, -12, -1], [-20, -8, -1], [20, -8, 1], [27, -12, 1]].map(([x, y]) => P(`M${x - 3},${y} L${x},${y + 6} L${x + 3},${y}Z`, st)).join(""));
+    s.push(P("M-18,-8 V2 H-7 V-8Z", c), P("M4,-8 V2 H15 V-8Z", c), toes([[-16, 1], [-12.5, 1.6], [-9, 1], [6, 1], [9.5, 1.6], [13, 1]]));
+    s.push(P("M22,-20 Q24,-30 36,-30 Q48,-30 50,-18 Q50,-8 38,-8 Q26,-8 22,-14Z", c));
+    s.push(P("M24,-26 Q30,-34 40,-32 Q46,-31 48,-26 Q38,-29 24,-26Z", ar));
+    s.push(aEye(36, -20, o.iris || "#5d4037", .9), blush(44, -13, 2.2), smile("M40,-12 Q45,-10 48,-14"));
+    return s.join("");
+  }
+  // velociraptor: running, a fluffy feather crest and arm feathers
+  function raptor(o = {}) {
+    const c = o.col || "#4db6ac", f = o.feather || ["#ff7043", "#ffca28", "#ab47bc"], dk = o.dark || "#00897b", s = [];
+    s.push(P("M-10,-34 Q-34,-38 -54,-44 Q-34,-28 -10,-24Z", c));
+    s.push(P("M-46,-44 Q-56,-50 -60,-46 Q-54,-42 -46,-40Z", f[0]), P("M-50,-40 Q-60,-40 -62,-36 Q-56,-34 -48,-38Z", f[1]));
+    s.push(aL([[-6, -20], [-14, -10], [-24, -4]], dk, 4), E(-26, -3, 4.8, 2.4, dk));               // back leg kicking back
+    s.push(E(-2, -30, 14, 10, c, 'transform="rotate(-20 -2 -30)"'));
+    s.push(`<ellipse cx="4" cy="-27" rx="7" ry="5.5" fill="#e0f2f1" transform="rotate(-20 4 -27)"/>`);
+    s.push(aL([[4, -22], [10, -12], [6, -1]], c, 4.6), E(10, 0, 6, 2.6, c), toes([[7, 0], [10, 1], [13, .4]]));
+    s.push(P("M4,-40 Q8,-52 16,-56 L22,-48 Q14,-44 12,-36Z", c));                                // neck
+    s.push(P("M10,-58 Q12,-70 24,-70 Q36,-70 42,-62 Q44,-56 38,-54 Q28,-52 18,-52 Q10,-52 10,-58Z", c));
+    s.push(P("M12,-66 Q4,-78 -2,-72 Q4,-70 6,-64Z", f[0]), P("M16,-69 Q12,-82 4,-80 Q10,-76 12,-68Z", f[1]), P("M20,-70 Q22,-82 14,-84 Q16,-78 16,-70Z", f[2]));
+    s.push(aEye(24, -61, o.iris || "#ffb300", 1), blush(31, -55, 2), smile("M30,-55.5 Q36,-53 41,-57"), aC(40, -62, .8, OL));
+    s.push(P("M12,-34 Q22,-30 24,-24 Q16,-26 10,-30Z", f[0]), P("M14,-32 Q24,-34 28,-30 Q20,-28 12,-30Z", f[1]));   // arm feathers
+    s.push(aL([[12, -36], [20, -32], [26, -34]], c, 2.8));
+    s.push(shine("M14,-62 Q16,-67 22,-68"));
+    return s.join("");
+  }
+  // the egg, origin = its bottom; cracks; the baby's eyes peeking through a gap at the top
+  function egg(o = {}) {
+    const s = [];
+    s.push(P("M0,0 Q-20,0 -20,-24 Q-20,-52 0,-54 Q20,-52 20,-24 Q20,0 0,0Z", o.shell || "#fff3e0"));
+    s.push(spots([[-10, -14, 3.4], [8, -10, 2.8], [10, -30, 3.6], [-8, -36, 2.6], [0, -22, 2.2]], o.spot || "#81c784"));
+    s.push(`<path d="M-14,-40 Q-12,-48 -4,-50" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".7"/>`);
+    s.push(`<path d="M-18,-32 L-12,-36 L-8,-30 L-2,-37 L4,-31 L9,-37 L14,-31 L18,-34" fill="none" stroke="${OL}" stroke-width="1.2" stroke-linejoin="round"/>`);
+    s.push(`<path d="M4,-31 L2,-24 M-8,-30 L-9,-24" fill="none" stroke="${OL}" stroke-width=".9"/>`);
+    return s.join("");
+  }
+  // the baby dino's head (peeking out or hatched), origin = the middle of the face
+  function babyHead(o = {}) {
+    const c = o.col || "#7cc552";
+    return P("M-12,6 Q-16,-12 0,-14 Q16,-12 13,6Z", c) + aEye(-5, -3, "#6d4037", .8) + aEye(5, -3, "#6d4037", .8) + blush(-8, 3, 1.8) + blush(8, 3, 1.8) +
+      smile("M-3,4 Q0,6.5 3,4", 1);
+  }
+  const nest = (gold) => P("M-30,-6 Q-32,8 0,10 Q32,8 30,-6 Q16,2 0,2 Q-16,2 -30,-6Z", gold ? "#e0a82e" : "#a1734a") +
+    `<path d="M-26,-2 Q-10,6 12,0 M-22,4 Q0,10 24,2 M-28,-4 Q-20,0 -10,-2" fill="none" stroke="${gold ? "#fff59d" : "#d7b98f"}" stroke-width="1.2" stroke-linecap="round"/>`;
+  // the volcano friend: a cone with a face, origin = middle of its base
+  function volcFace(o = {}) {
+    const s = [];
+    if (o.erupt) {
+      s.push(`<path d="M-8,-70 Q-24,-100 -44,-112 Q-12,-104 0,-128 Q12,-104 44,-112 Q24,-100 8,-70Z" fill="#ffb300" ${OUT}/>`,
+        `<path d="M-5,-70 Q-10,-92 -20,-102 Q-4,-96 0,-112 Q4,-96 20,-102 Q10,-92 5,-70Z" fill="#fff176"/>`);
+    } else {
+      s.push(`<g class="${o.cls || ""}">${aC(2, -82, 8, "#e0e0e0", OUT)}${aC(12, -92, 9, "#eeeeee", OUT)}${aC(4, -104, 7, "#f5f5f5", OUT)}</g>`);
+    }
+    s.push(P("M-48,0 Q-30,-40 -14,-68 Q0,-76 14,-68 Q30,-40 48,0Z", "#8d6e63"));
+    s.push(`<path d="M14,-68 Q30,-40 48,0 H24 Q22,-40 6,-70Z" fill="#000" opacity=".15"/>`);
+    s.push(P("M-14,-68 Q0,-64 14,-68 Q12,-58 9,-50 Q7,-57 4,-52 Q2,-60 -2,-54 Q-5,-62 -8,-50 Q-11,-60 -14,-68Z", "#ff7043"));
+    s.push(E(0, -69, 14, 3.4, o.erupt ? "#fff176" : "#ffb300"));
+    if (o.wink) s.push(`<path d="M-17,-34 Q-12,-40 -7,-34" fill="none" stroke="${OL}" stroke-width="2" stroke-linecap="round"/>`);
+    else s.push(aEye(-12, -34, "#e65100", 1.4));
+    s.push(aEye(12, -34, "#e65100", 1.4), blush(-22, -24, 4), blush(22, -24, 4));
+    s.push(o.erupt ? `<path d="M-9,-22 Q0,-8 9,-22Z" fill="#c62828" ${OUT}/><ellipse cx="0" cy="-15" rx="4" ry="2" fill="#ff8a80"/>` : smile("M-8,-22 Q0,-15 8,-22", 1.6));
+    s.push(`<path d="M-40,-4 Q-36,-14 -30,-10 Q-24,-18 -18,-10 Q-12,-16 -6,-8 Q2,-14 8,-8 Q16,-16 22,-10 Q30,-18 34,-10 Q40,-14 42,-4" fill="#7cb342" stroke="none" opacity=".9"/>`);
+    return s.join("");
+  }
+
+  const glowRing = (x, y, r, c) => `<circle cx="${x}" cy="${y}" r="${r}" fill="${c}" opacity=".3"/>`;
+
+  FAN.wlava = [
+    ["Baby T-Rex", "a little T-Rex with tiny arms and a big smile",
+      () => [day(), aEdge(shadow(58, 140, 30) + at(54, 140, 1.12, trex()))],
+      () => [night(), aEdge(shadow(54, 142, 36) + at(46, 142, 1.3, trex({ adult: 1, col: "#5fae3c", dark: "#33691e" })) + at(96, 146, .55, trex()))]],
+    ["Triceratops", "three horns and a big frill",
+      () => [day({ vx: 30, sx: 100 }), aEdge(shadow(58, 136, 34) + at(54, 136, 1.15, trike()))],
+      () => [night({ vx: 34 }), aEdge(shadow(58, 138, 36) + at(52, 138, 1.25, trike({ gold: 1, frill: "#ffb300", col: "#42a5f5" })))]],
+    ["Stegosaurus", "plates on its back and a spiky tail",
+      () => [day({ vx: 92 }), aEdge(shadow(60, 138, 34) + at(62, 138, 1.12, stego()))],
+      () => [night({ vx: 30 }), aEdge(shadow(60, 140, 36) + at(62, 140, 1.2, stego({ glow: 1, plate: ["#ff5252", "#ffeb3b", "#69f0ae", "#40c4ff", "#e040fb"] })))]],
+    ["Brachiosaurus", "the tallest neck eats from the treetops",
+      () => [day({ vx: 22, sx: 104, cx: 4, plants: false }) + palm(100, 70, 1.1, true) + fern(10, 120, .9),
+        aEdge(shadow(48, 146, 30) + at(46, 146, 1.08, brachio({ leaf: 1 })))],
+      () => [night({ vx: 92 }), aEdge(shadow(46, 146, 32) + at(44, 146, 1.08, brachio({ col: "#7e57c2", dark: "#5e35b1" })) + shadow(92, 146, 12) + at(92, 146, .42, brachio({ col: "#b39ddb", dark: "#9575cd" })))]],
+    ["Pterodactyl", "glides high over the volcano",
+      () => [day({ vx: 60, vs: .8, sx: 100 }), aEdge(at(60, 66, 1.05, ptero()))],
+      () => [night({ vx: 60, vs: 1.1 }), aEdge(at(60, 52, 1.12, ptero({ up: 1, col: "#ff7043", wing: "#ffe082", dark: "#bf360c" })) + aSpark(18, 30, 4, "#fff59d") + aSpark(102, 34, 3.4, "#fff59d"))]],
+    ["Ankylosaurus", "armour on its back and a club on its tail",
+      () => [day({ vx: 30, sx: 100 }), aEdge(shadow(60, 136, 36) + at(62, 136, 1.2, anky()))],
+      () => [night({ vx: 80 }), aEdge(shadow(60, 138, 38) + at(62, 138, 1.25, anky({ armor: "#ffb300", stud: "#fff59d", col: "#e6b465" })) +
+        [[22, 92, 3.6], [96, 96, 3], [56, 82, 3.2], [36, 120, 2.4]].map(([x, y, r]) => aSpark(x, y, r, "#fffde7")).join(""))]],
+    ["Velociraptor", "the fastest runner with colourful feathers",
+      () => [day({ vx: 96, vs: .9 }), aEdge(`<path d="M8,96 H26 M4,104 H20 M10,112 H24" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".8"/>` + shadow(58, 140, 26) + at(60, 140, 1.25, raptor()))],
+      () => [night({ vx: 28 }), aEdge(`<path d="M2,74 H26 M6,84 H22 M2,94 H18" stroke="#ffeb3b" stroke-width="2" stroke-linecap="round" opacity=".8"/>` + at(62, 128, 1.25, raptor({ col: "#26c6da", dark: "#00838f", feather: ["#ff5252", "#ffeb3b", "#e040fb"] }), false).replace(`translate(62 128)`, `translate(62 128) rotate(-8)`) + shadow(60, 142, 22))]],
+    ["Dinosaur egg", "something is wiggling inside!",
+      () => [day({ vx: 92, lava: false }),
+        aEdge(shadow(60, 140, 34) + at(60, 136, 1.2, nest() + `<g transform="scale(1 -1)"><g class="lv-swing"><g transform="scale(1 -1)">${egg()}${at(0, -40, .9, `<g class="lv-wink">${aEye(-5, 0, "#6d4c41", .7)}${aEye(5, 0, "#6d4c41", .7)}</g>`)}</g></g></g>`))],
+      () => [night({ vx: 30 }), aEdge(glowRing(62, 104, 36, "#fff59d") + shadow(60, 142, 36) + at(60, 138, 1.2, nest(1) +
+        at(-20, -6, .42, egg({ shell: "#ffe082", spot: "#ffb300" })) + at(20, -6, .42, egg({ shell: "#ffe082", spot: "#ffb300" })) +
+        P("M-14,-4 Q-15,-22 0,-22 Q15,-22 14,-4 L10,-10 L6,-4 L2,-10 L-2,-4 L-6,-10 L-10,-4Z", "#fff3e0") +
+        at(0, -30, 1.25, babyHead()) + P("M-10,-45 L-6,-49 L-2,-44 L2,-50 L6,-44 L10,-48 L11,-44 Q0,-58 -11,-44Z", "#fff3e0") + aL([[-12, -18], [-18, -24]], "#7cc552", 3) + aL([[12, -18], [18, -24]], "#7cc552", 3)) +
+        aSpark(28, 78, 4, "#fffde7") + aSpark(94, 84, 3.4, "#fffde7") + aSpark(84, 64, 2.4, "#fffde7"))]],
+    ["Volcano friend", "a happy volcano puffing little clouds",
+      () => [day({ vx: -60, sx: 100 }), aEdge(at(60, 140, 1.15, volcFace()))],
+      () => [night({ vx: -80 }), aEdge(at(60, 140, 1.05, volcFace({ erupt: 1, wink: 1 })) +
+        [[18, 30, "#ff5252"], [100, 26, "#40c4ff"], [104, 70, "#ffeb3b"], [14, 74, "#69f0ae"]].map(([x, y, c]) => `<g stroke="${c}" stroke-width="1.6" stroke-linecap="round">${[...Array(8)].map((_, i) => { const a = i * Math.PI / 4; return `<path d="M${f1(x + 3 * Math.cos(a))},${f1(y + 3 * Math.sin(a))} L${f1(x + 9 * Math.cos(a))},${f1(y + 9 * Math.sin(a))}"/>`; }).join("")}</g>` + aC(x, y, 1.6, "#fff")).join(""))]],
+  ];
+})();
+
+/* Sticker book world page "Castle" (the learning path's 6th world, a fairy-tale castle): 9 cute chibi characters with big
+   anime eyes (knight, princess, baby dragon, wizard, white horse, jester, ghost, owl) and a treasure chest, drawn big in
+   card coordinates. Backdrops: castle walls and towers, a throne room with banners, a moat and drawbridge, a moonlit
+   tower. The castle ghost is the page's living sticker (it floats). */
+(() => {
+  "use strict";
+  const OL = A_OL, OUT = `stroke="${OL}" stroke-width="1.1" stroke-linejoin="round"`;
+  const uid = p => `wc${p}${++aUid}`;
+  const f1 = v => +(+v).toFixed(1);
+  const SKIN = "#ffd9b8";
+  const blush = (x, y, r = 2.6) => `<ellipse cx="${x}" cy="${y}" rx="${r}" ry="${f1(r * .6)}" fill="#ff7a9a" opacity=".55"/>`;
+  const smile = (x, y, w = 2.6) => `<path d="M${f1(x - w)},${y} Q${x},${f1(y + w * 1.1)} ${f1(x + w)},${y}" fill="none" stroke="${OL}" stroke-width="1" stroke-linecap="round"/>`;
+  const grin = (x, y, w = 3) => `<path d="M${f1(x - w)},${y} Q${x},${f1(y + w * 1.4)} ${f1(x + w)},${y}Z" fill="#d6304a" stroke="${OL}" stroke-width=".9" stroke-linejoin="round"/>` +
+    `<ellipse cx="${x}" cy="${f1(y + w * .8)}" rx="${f1(w * .5)}" ry="${f1(w * .25)}" fill="#ff8fa3"/>`;
+  const eyes = (x1, x2, y, iris, s = 1) => [x1, x2].map(x => `<ellipse cx="${x}" cy="${y}" rx="${f1(4.5 * s)}" ry="${f1(5.4 * s)}" fill="${OL}"/>` + aEye(x, y, iris, s)).join("");
+  const eye1 = (x, y, iris, s = 1) => `<ellipse cx="${x}" cy="${y}" rx="${f1(4.5 * s)}" ry="${f1(5.4 * s)}" fill="${OL}"/>` + aEye(x, y, iris, s);
+  const thick = (d, col, w) => `<path d="${d}" fill="none" stroke="${OL}" stroke-width="${f1(w + 2.2)}" stroke-linecap="round" stroke-linejoin="round"/>` +
+    `<path d="${d}" fill="none" stroke="${col}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>`;
+  const glow = (x, y, r, c, op = .9) => { const g = uid("gl"); return `<defs><radialGradient id="${g}"><stop offset="0" stop-color="${c}" stop-opacity="${op}"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></radialGradient></defs><circle cx="${x}" cy="${y}" r="${r}" fill="url(#${g})"/>`; };
+  const ell = (cx, cy, rx, ry, f, extra = OUT) => `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${f}" ${extra}/>`;
+
+  /* ---------- backdrops ---------- */
+  function sky(top, bot) { const g = uid("sk"); return `<defs>${aVGrad(g, top, bot)}</defs><rect width="120" height="158" fill="url(#${g})"/>`; }
+  // stone courses: horizontal joints every 8 and staggered vertical joints
+  function bricks(x, y, w, h, c, op = .45) {
+    let s = `<g stroke="${c}" stroke-width=".7" opacity="${op}" fill="none">`;
+    for (let r = 0, yy = y + 8; yy <= y + h; yy += 8, r++) {
+      s += `<path d="M${x},${yy} H${x + w}"/>`;
+      for (let xx = x + (r % 2 ? 6 : 12); xx < x + w; xx += 12) s += `<path d="M${xx},${yy - 8} V${yy}"/>`;
+    }
+    return s + "</g>";
+  }
+  const crenel = (x, y, w, c) => {
+    const n = Math.max(2, Math.round(w / 9)), mw = w / (2 * n - 1); let s = "";
+    for (let i = 0; i < n; i++) s += `<rect x="${f1(x + i * 2 * mw)}" y="${f1(y - 5)}" width="${f1(mw)}" height="5.6" fill="${c}"/>`;
+    return s;
+  };
+  const flag = (x, y, c) => `<path d="M${x},${y} V${y - 12}" stroke="#5d4037" stroke-width="1"/><path d="M${x},${y - 12} L${x + 9},${y - 9.5} L${x},${y - 7}Z" fill="${c}"/>`;
+  // a round tower with a cone roof, a flag and a slit window
+  const tower = (x, y, w, c, roof, fc = "#e53935") => `<rect x="${x}" y="${y}" width="${w}" height="${158 - y}" fill="${c}"/>` + bricks(x, y, w, 158 - y, "#7d7468", .35) +
+    `<path d="M${f1(x - 3)},${y} L${f1(x + w / 2)},${f1(y - w * 1.15)} L${f1(x + w + 3)},${y}Z" fill="${roof}"/>` + flag(f1(x + w / 2), f1(y - w * 1.15), fc) +
+    `<path d="M${f1(x + w / 2 - 2.5)},${y + 22} V${y + 14} Q${f1(x + w / 2)},${y + 10} ${f1(x + w / 2 + 2.5)},${y + 14} V${y + 22}Z" fill="#3e2f2a"/>`;
+  // castle walls and towers in daylight
+  function walls(o = {}) {
+    let s = sky(o.top || "#8fd3ff", o.bot || "#e6f7ff") + aSun(100, 18, 9) + aCloud(46, 10, .6) + aCloud(74, 30, .45);
+    s += `<path d="M0,112 Q30,98 60,108 T120,102 V158 H0Z" fill="#9ccc65"/>`;
+    const W = o.stone || "#d6cdbf";
+    s += `<rect x="0" y="84" width="120" height="74" fill="${W}"/>` + crenel(0, 84, 120, W) + bricks(0, 84, 120, 74, "#8a8072");
+    s += tower(2, 50, 22, o.t1 || "#cfc5b6", o.roof || "#5c6bc0", "#e53935") + tower(96, 44, 22, o.t1 || "#cfc5b6", o.roof || "#5c6bc0", "#fdd835");
+    s += `<path d="M0,138 Q60,128 120,138 V158 H0Z" fill="#66bb6a"/>` + `<path d="M0,146 Q60,138 120,146 V158 H0Z" fill="#4caf50"/>`;
+    return s;
+  }
+  // inside: warm stone, banners with a gold star, a red carpet
+  function hall(o = {}) {
+    let s = sky(o.top || "#e8d6b6", o.bot || "#c6aa84") + bricks(0, 0, 120, 124, "#9b8263", .4);
+    const ban = (x, c) => `<path d="M${x},9 H${x + 20} V60 L${x + 10},52 L${x},60Z" fill="${c}" ${OUT}/>` +
+      `<path d="M${x + 2.5},11 H${x + 17.5} V55 L${x + 10},48.5 L${x + 2.5},55Z" fill="none" stroke="#ffd54f" stroke-width="1.2"/>` + aStar(x + 10, 30, 6, "#ffd54f");
+    s += `<rect x="0" y="6" width="120" height="3.4" rx="1.7" fill="#c9a227"/>` + ban(5, o.b1 || "#c62828") + ban(95, o.b2 || "#1565c0");
+    if (o.torch) s += torch(12, 74) + torch(108, 74);
+    s += `<rect x="0" y="122" width="120" height="36" fill="${o.floor || "#8d6e63"}"/>` + `<path d="M0,122 H120" stroke="#5d4037" stroke-width="1.4"/>`;
+    s += `<path d="M42,122 H78 L98,158 H22Z" fill="${o.carpet || "#c62828"}"/><path d="M45,122 L27,158 M75,122 L93,158" stroke="#ffd54f" stroke-width="1.6"/>`;
+    return s;
+  }
+  const torch = (x, y) => glow(x, y - 6, 16, "#ffcc66", .7) + `<path d="M${x - 3},${y} H${x + 3} L${x + 1.5},${y + 12} H${x - 1.5}Z" fill="#5d4037"/>` +
+    `<path d="M${x},${y - 12} Q${x + 5},${y - 5} ${x + 3.5},${y} H${x - 3.5} Q${x - 5},${y - 5} ${x},${y - 12}Z" fill="#ff9800"/>` +
+    `<path d="M${x},${y - 7} Q${x + 2.4},${y - 3} ${x + 1.6},${y} H${x - 1.6} Q${x - 2.4},${y - 3} ${x},${y - 7}Z" fill="#ffeb3b"/>`;
+  // a castle gate over the moat, the drawbridge down
+  function moat() {
+    let s = sky("#8fd3ff", "#e6f7ff") + aSun(100, 16, 8) + aCloud(40, 8, .55);
+    const W = "#d6cdbf";
+    s += `<rect x="0" y="44" width="120" height="76" fill="${W}"/>` + crenel(0, 44, 120, W) + bricks(0, 44, 120, 76, "#8a8072");
+    s += `<rect x="0" y="26" width="22" height="94" fill="#cfc5b6"/>` + crenel(0, 26, 22, "#cfc5b6") + `<rect x="98" y="26" width="22" height="94" fill="#cfc5b6"/>` + crenel(98, 26, 22, "#cfc5b6");
+    s += `<path d="M36,118 V80 Q60,52 84,80 V118Z" fill="#3e2723"/>` +
+      `<g stroke="#8d8d8d" stroke-width="1.4">${[44, 52, 60, 68, 76].map(x => `<path d="M${x},${x === 60 ? 66 : 72} V86"/>`).join("")}<path d="M38,80 H82 M38,86 H82"/></g>`;
+    s += `<rect x="0" y="114" width="120" height="44" fill="#3d8fd6"/>` +
+      [[8, 126], [94, 132], [14, 146], [100, 150]].map(([x, y]) => `<path d="M${x},${y} q4,-3 8,0 t8,0" fill="none" stroke="#bfe6ff" stroke-width="1.2" stroke-linecap="round"/>`).join("");
+    s += `<path d="M38,116 H82 L96,158 H24Z" fill="#a1764a"/>` + [124, 133, 143, 153].map(y => `<path d="M${f1(38 - (y - 116) / 42 * 14)},${y} H${f1(82 + (y - 116) / 42 * 14)}" stroke="#6d4c2f" stroke-width="1"/>`).join("");
+    s += `<path d="M36,80 L26,154 M84,80 L94,154" stroke="#555" stroke-width="1.6" stroke-dasharray="2.4 1.6"/>`;
+    s += ell(10, 138, 5, 2.2, "#66bb6a", "") + ell(110, 142, 5, 2.2, "#66bb6a", "");
+    return s;
+  }
+  function starsBg(seed, n, x0, x1, y0, y1) {
+    const R = aRand(seed); let s = "";
+    for (let i = 0; i < n; i++) { const x = x0 + R() * (x1 - x0), y = y0 + R() * (y1 - y0); s += i % 4 ? aC(x, y, f1(.5 + R() * .6), "#fff", `opacity=".85"`) : aSpark(f1(x), f1(y), 2.4, "#fff8d0"); }
+    return s;
+  }
+  const moon = (x, y, r) => glow(x, y, r * 2.2, "#fff6c8", .5) + aC(x, y, r, "#fff6c8") + aC(x - r * .3, y + r * .2, f1(r * .22), "#efe2a8") + aC(x + r * .35, y - r * .3, f1(r * .14), "#efe2a8");
+  // night: moon, stars, a tower with a lit window
+  function night(o = {}) {
+    let s = sky(o.top || "#1b2459", o.bot || "#4a3f8f") + starsBg(o.seed || 7, 22, 4, 116, 30, 120) + moon(98, 24, 10);
+    const side = o.side || "left";
+    if (side === "left") s += tower(0, 62, 26, "#5b5470", "#2c2550", "#fdd835") + `<path d="M10,96 V88 Q13,84 16,88 V96Z" fill="#ffe082"/>`;
+    else s += tower(94, 62, 26, "#5b5470", "#2c2550", "#fdd835") + `<path d="M104,96 V88 Q107,84 110,88 V96Z" fill="#ffe082"/>`;
+    s += `<path d="M0,138 Q60,124 120,136 V158 H0Z" fill="${o.hill || "#2e3b5e"}"/>`;
+    return s;
+  }
+  // a big arched tower window at night (the owl sits on its sill)
+  function towerWindow() {
+    const g = uid("nw");
+    let s = `<rect width="120" height="158" fill="#8d8478"/>` + bricks(0, 0, 120, 158, "#5f574c", .55);
+    const arch = "M18,134 V64 Q18,26 60,24 Q102,26 102,64 V134Z";
+    s += `<defs>${aVGrad(g, "#1b2459", "#4a3f8f")}</defs><path d="${arch}" fill="url(#${g})"/>` + starsBg(3, 14, 24, 96, 34, 120) + moon(86, 46, 8);
+    s += `<path d="${arch}" fill="none" stroke="#b0a696" stroke-width="5"/><path d="${arch}" fill="none" stroke="${OL}" stroke-width="1"/>`;
+    s += `<rect x="8" y="132" width="104" height="9" fill="#b39a7c" ${OUT}/><rect x="8" y="132" width="104" height="2.4" fill="#d7c2a6"/>`;
+    return s;
+  }
+
+  /* ---------- characters ---------- */
+  function knight() {
+    let s = aR(47, 118, 10, 18, "#b0bec5", `rx="3"`) + aR(63, 118, 10, 18, "#b0bec5", `rx="3"`) +
+      aP("M44,142 Q43,133 51,133 H58 V142Z", "#6d4c41") + aP("M62,133 H69 Q77,133 76,142 H62Z", "#6d4c41");
+    s += aP("M40,86 Q37,112 44,124 H76 Q83,112 80,86 Q60,78 40,86Z", "#cfd8dc");
+    s += aP("M49,88 H71 V124 L60,129 L49,124Z", "#2f6fd6") + aStar(60, 104, 7, "#ffd54f");
+    s += aR(42, 113, 36, 5, "#795548", `rx="2"`) + aR(57, 112.4, 6, 7, "#ffca28", `rx="1"`);
+    // sword arm, raised
+    s += thick("M77,92 Q87,92 91,82", "#cfd8dc", 7.5);
+    s += aP("M89,72 V31 L92,24 L95,31 V72Z", "#eceff1") + `<path d="M92,29 V70" stroke="#b0bec5" stroke-width="1.1"/>` +
+      `<path d="M90.4,34 l1,-4" stroke="#fff" stroke-width="1" stroke-linecap="round"/>`;
+    s += aR(90, 75, 4, 10, "#6d4c41") + aR(82, 71, 20, 4.4, "#ffb300", `rx="2"`) + aC(92, 87, 2.6, "#ffb300", OUT) + aC(92, 80, 4.6, SKIN, OUT);
+    // helmet with plume, face in the open visor
+    s += aP("M54,40 Q56,15 84,20 Q77,24 80,30 Q70,28 66,40Z", "#e53935") + `<path d="M60,36 Q64,24 78,23" fill="none" stroke="#ff8a80" stroke-width="1.4" stroke-linecap="round"/>`;
+    s += aC(58, 60, 22, "#cfd8dc", OUT) + `<path d="M44,46 Q50,40 56,39" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" opacity=".7"/>`;
+    s += ell(58, 66, 16, 14, SKIN);
+    s += aP("M39,55 Q58,44 77,55 L77,59 Q58,49 39,59Z", "#90a4ae");
+    s += eyes(52, 64, 67, "#5d4037", .8) + blush(46.5, 73, 2.2) + blush(69.5, 73, 2.2) + grin(58, 73.5, 3);
+    // shield in front, left
+    s += aP("M18,84 H48 V102 Q48,120 33,129 Q18,120 18,102Z", "#e53935") +
+      `<path d="M22.5,88 H43.5 V102 Q43.5,116.5 33,123.5 Q22.5,116.5 22.5,102Z" fill="none" stroke="#ffd54f" stroke-width="2"/>` +
+      `<rect x="31" y="90" width="4" height="31" fill="#ffd54f"/><rect x="24" y="100" width="18" height="4" fill="#ffd54f"/>` +
+      `<path d="M21,88 Q22,96 21,104" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity=".5"/>`;
+    return s;
+  }
+  function princess() {
+    const H = "#f5c542", H2 = "#d9a520";
+    let s = aP("M38,60 Q32,106 42,114 Q60,120 78,114 Q88,106 82,60Z", H);
+    // gown
+    s += aP("M48,82 Q42,104 26,140 Q60,152 94,140 Q78,104 72,82Z", "#f48fb1");
+    s += `<path d="M28,136 Q34,142 40,138 Q46,144 53,139 Q60,145 67,139 Q74,144 80,138 Q86,142 92,136" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".85"/>`;
+    s += [[44, 124], [60, 128], [76, 124], [52, 112], [68, 112]].map(([x, y]) => aStar(x, y, 3, "#fff59d")).join("");
+    s += aP("M48,82 H72 L70,100 Q60,105 50,100Z", "#ec407a") + `<path d="M50,100 Q60,105 70,100" fill="none" stroke="#ffd54f" stroke-width="1.6"/>`;
+    // sleeves, arms, a rose held in both hands
+    s += aC(46, 86, 6.5, "#f8bbd0", OUT) + aC(74, 86, 6.5, "#f8bbd0", OUT);
+    s += thick("M46,90 Q48,102 56,104", SKIN, 4.6) + thick("M74,90 Q72,102 64,104", SKIN, 4.6);
+    s += `<path d="M60,104 V92" stroke="#2e7d32" stroke-width="1.6"/>` + aC(60, 90, 4.4, "#e53935", OUT) + `<path d="M58,89 Q60,87 62,90" fill="none" stroke="#9a1b1b" stroke-width=".8"/>` +
+      aC(56, 104, 3, SKIN, OUT) + aC(64, 104, 3, SKIN, OUT);
+    // head
+    s += aC(60, 62, 20, SKIN, OUT);
+    s += aP("M39,62 Q38,40 60,40 Q82,40 81,62 Q78,52 70,51 Q64,46 58,51 Q50,48 44,54 Q40,57 39,62Z", H) + `<path d="M50,44 Q56,41 62,42" fill="none" stroke="#fff3c4" stroke-width="1.6" stroke-linecap="round"/>`;
+    s += `<path d="M39,62 Q36,76 40,88 M81,62 Q84,76 80,88" fill="none" stroke="${H2}" stroke-width="1"/>`;
+    s += eyes(52.5, 67.5, 65, "#3d7ad6", .9) + blush(46, 72) + blush(74, 72) + smile(60, 73, 2.6);
+    // crown
+    s += aP("M45,47 L43,32 L52,40 L60,27 L68,40 L77,32 L75,47Z", "#ffca28") + aC(60, 42, 2.4, "#e53935", OUT) + aC(51, 44, 1.6, "#42a5f5") + aC(69, 44, 1.6, "#42a5f5") +
+      aC(43, 32, 1.6, "#fff59d") + aC(60, 27, 1.8, "#fff59d") + aC(77, 32, 1.6, "#fff59d");
+    return s + aSpark(86, 36, 4, "#fff") + aSpark(32, 44, 3, "#fff");
+  }
+  function dragon() {
+    const G = "#66bb6a", L = "#a5d6a7";
+    let s = thick("M78,128 Q100,132 104,116 Q106,106 98,102", G, 9) + aP("M98,102 L94,92 L104,96Z", "#ffb74d");
+    s += aP("M42,94 Q18,70 12,90 Q19,90 21,99 Q28,95 31,104 Q37,98 44,104Z", "#ffb74d") + aP("M78,94 Q102,70 108,90 Q101,90 99,99 Q92,95 89,104 Q83,98 76,104Z", "#ffb74d");
+    s += `<path d="M38,92 Q24,84 18,88 M82,92 Q96,84 102,88" fill="none" stroke="#e08a2c" stroke-width="1"/>`;
+    s += ell(60, 112, 26, 26, G);
+    s += ell(60, 116, 15, 19, "#fff3c4") + `<path d="M47,108 H73 M46,116 H74 M47,124 H73" stroke="#e6cf8a" stroke-width="1.2"/>`;
+    s += ell(44, 140, 9, 6, G) + ell(76, 140, 9, 6, G) + [38, 44, 50, 70, 76, 82].map(x => aC(x, 143, 1.4, "#fff")).join("");
+    s += ell(39, 106, 4, 6.5, G, `${OUT} transform="rotate(40 39 106)"`) + ell(81, 106, 4, 6.5, G, `${OUT} transform="rotate(-40 81 106)"`);
+    // head with horns and a little crest
+    s += aP("M42,48 L37,31 L51,42Z", "#fff3c4") + aP("M78,48 L83,31 L69,42Z", "#fff3c4");
+    s += aP("M54,40 L57,32 L60,38 L63,32 L66,40Z", "#ffb74d");
+    s += ell(60, 62, 28, 24, G) + `<path d="M40,52 Q46,44 54,42" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".45"/>`;
+    s += ell(60, 75, 14, 9, L) + aC(55, 72, 1.3, "#2e5d32") + aC(65, 72, 1.3, "#2e5d32");
+    s += eyes(47, 73, 59, "#ff9800", 1.05) + blush(38, 70) + blush(82, 70);
+    s += `<path d="M53,78 Q60,84 67,78" fill="none" stroke="${OL}" stroke-width="1.1" stroke-linecap="round"/><path d="M57,79.6 L58.2,82.4 L59.4,80.6Z" fill="#fff" stroke="${OL}" stroke-width=".5"/>`;
+    // a little puff of smoke
+    s += aC(92, 52, 4, "#eceff1", `stroke="#b0bec5" stroke-width=".8"`) + aC(98, 46, 3, "#eceff1", `stroke="#b0bec5" stroke-width=".8"`) + aC(102, 40, 2.2, "#eceff1", `stroke="#b0bec5" stroke-width=".8"`);
+    return s;
+  }
+  function wizard() {
+    const R = "#3949ab", R2 = "#283593";
+    let s = aP("M44,84 Q38,112 28,144 H92 Q82,112 76,84Z", R);
+    s += [[40, 132], [56, 124], [76, 136], [48, 108], [72, 112]].map(([x, y]) => aStar(x, y, 3.4, "#ffd54f")).join("") + `<path d="M30,140 H90" stroke="#ffd54f" stroke-width="2"/>`;
+    // arms: left hand at the side, right one raises the wand
+    s += thick("M46,92 Q40,102 40,110", R, 9) + aC(40, 113, 4.4, SKIN, OUT);
+    s += `<path d="M86,92 L101,56" stroke="${OL}" stroke-width="4.6" stroke-linecap="round"/><path d="M86,92 L101,56" stroke="#8d5a2b" stroke-width="2.6" stroke-linecap="round"/>`;
+    s += thick("M74,92 Q82,92 86,84", R, 9) + aC(88, 82, 4.6, SKIN, OUT);
+    s += glow(102, 50, 14, "#fff59d", .8) + `<polygon points="${aPts([...Array(10)].map((_, i) => { const r = i % 2 ? 3.4 : 8, a = -Math.PI / 2 + i * Math.PI / 5; return [102 + r * Math.cos(a), 50 + r * Math.sin(a)]; }))}" fill="#ffd54f" ${OUT}/>` +
+      aSpark(92, 38, 3.4) + aSpark(110, 64, 3) + aSpark(111, 40, 2.4);
+    // face and beard
+    s += aC(56, 70, 15, SKIN, OUT);
+    s += aP("M41,72 Q38,98 56,116 Q74,98 71,72 Q66,80 56,80 Q46,80 41,72Z", "#f5f5f5") + `<path d="M49,92 Q52,104 56,110 M63,92 Q60,104 56,110" fill="none" stroke="#cfd8dc" stroke-width="1"/>`;
+    s += eyes(50, 62, 67, "#4e7bd6", .72);
+    s += aP("M45,60 Q49,57 53,61 Q49,60 45,62Z", "#fff") + aP("M59,61 Q63,57 67,60 L67,62 Q63,60 59,61Z", "#fff");
+    s += aC(56, 74, 2.8, "#f4b183", OUT) + aP("M56,77 Q50,73 45,78 Q50,82 56,79 Q62,82 67,78 Q62,73 56,77Z", "#fff");
+    s += blush(46, 73, 2) + blush(66, 73, 2);
+    // starry hat
+    s += aP("M36,60 Q48,44 50,30 Q53,16 74,13 Q66,22 68,32 Q72,46 78,60Z", R);
+    s += aStar(56, 46, 4.4, "#ffd54f") + aStar(66, 32, 3, "#ffd54f") + `<path d="M48,38 a3,3 0 1 0 3,-4 a2.2,2.2 0 1 1 -3,4Z" fill="#fff59d"/>` + aC(74, 13, 2.4, "#ffd54f", OUT);
+    s += ell(57, 60, 27, 6, R2);
+    return s;
+  }
+  function horse() {
+    const W = "#fafafa", M = "#ffd54f";
+    let s = thick("M26,90 Q10,100 14,128", "#f3e2a0", 7) + thick("M26,92 Q16,108 22,126", M, 5);
+    s += aR(30, 106, 9, 32, "#eeeeee", `rx="3"`) + aR(44, 108, 9, 30, "#eeeeee", `rx="3"`) + aR(70, 108, 9, 30, "#eeeeee", `rx="3"`) + aR(83, 106, 9, 32, "#eeeeee", `rx="3"`);
+    s += [[30, 134], [44, 134], [70, 134], [83, 134]].map(([x, y]) => aR(x, y, 9, 6, "#795548", `rx="1.5"`)).join("");
+    s += ell(57, 100, 34, 20, W);
+    // saddle cloth
+    s += aP("M38,84 Q56,78 76,84 L78,112 Q72,117 66,112 Q60,117 54,112 Q48,117 42,112 Q36,117 35,112Z", "#3f51b5") +
+      `<path d="M37,110 Q42,115 47,111 Q53,116 58,111 Q63,116 68,111 Q73,116 77,110" fill="none" stroke="#ffd54f" stroke-width="2"/>` + aStar(57, 97, 6, "#ffd54f");
+    // neck, head, mane
+    s += aP("M66,96 Q70,72 82,54 L100,62 Q92,80 88,102Z", W);
+    s += thick("M84,44 Q76,48 78,56 Q70,62 74,70 Q66,76 70,84 Q64,90 66,96", M, 6);
+    s += aP("M86,44 L83,30 L94,40Z", W) + aP("M86.6,41 L85,34 L90.6,39Z", "#f8bbd0", `stroke="none"`);
+    s += ell(94, 60, 16, 14, W);
+    s += ell(104, 72, 10, 8.4, "#f6dede", `${OUT} transform="rotate(25 104 72)"`) + aC(108, 72, 1.4, "#8d6e63") + `<path d="M100,78 Q104,80 108,78" fill="none" stroke="${OL}" stroke-width="1" stroke-linecap="round"/>`;
+    s += `<path d="M84,64 L98,70 M86,58 Q92,72 99,76" fill="none" stroke="#e53935" stroke-width="1.6"/>` + aC(86, 64, 1.8, "#ffd54f", OUT);
+    s += eye1(94, 58, "#5d4037", .95) + blush(100, 66, 2.2);
+    // plume
+    s += ell(90, 32, 4, 10, "#e53935", `${OUT} transform="rotate(-20 90 32)"`) + ell(97, 33, 3.6, 9, "#42a5f5", `${OUT} transform="rotate(15 97 33)"`) +
+      ell(93, 30, 3.4, 10, "#fff176", `${OUT} transform="rotate(-3 93 30)"`) + aR(89, 40, 8, 4, "#ffb300", `rx="1.4"`);
+    return s;
+  }
+  function jester() {
+    const A = "#e53935", B = "#fdd835", P = "#8e24aa";
+    let s = `<path d="M28,70 Q28,30 60,26 Q92,30 92,70" fill="none" stroke="#fff" stroke-width="1.2" stroke-dasharray="3 3" opacity=".8"/>`;
+    s += aC(36, 39, 5.6, "#42a5f5", OUT) + aC(60, 26, 5.6, "#66bb6a", OUT) + aC(84, 39, 5.6, "#ff7043", OUT) +
+      [[34, 37], [58, 24], [82, 37]].map(([x, y]) => aC(x, y, 1.5, "#fff", `opacity=".8"`)).join("");
+    // legs and curly shoes
+    s += aR(50, 120, 8, 16, A) + aR(62, 120, 8, 16, B);
+    s += aP("M52,135 H58 V142 H44 Q38,142 38,134 Q42,138 46,136Z", P) + aP("M62,135 H68 Q74,138 76,136 Q80,134 82,134 Q82,142 76,142 H62Z", P) + aC(38, 133, 2, "#ffca28", OUT) + aC(82, 133, 2, "#ffca28", OUT);
+    // tunic in two colours with diamonds
+    s += aP("M60,94 Q50,92 44,98 Q40,116 46,124 H60Z", A) + aP("M60,94 Q70,92 76,98 Q80,116 74,124 H60Z", B);
+    s += aP("M52,106 L55,101 L58,106 L55,111Z", B, `stroke="none"`) + aP("M62,106 L65,101 L68,106 L65,111Z", A, `stroke="none"`) +
+      aP("M52,118 L55,113 L58,118 L55,123Z", B, `stroke="none"`) + aP("M62,118 L65,113 L68,118 L65,123Z", A, `stroke="none"`);
+    // arms up to throw
+    s += thick("M46,100 Q34,94 30,76", B, 7) + thick("M74,100 Q86,94 90,76", A, 7) + aC(29, 72, 4.4, SKIN, OUT) + aC(91, 72, 4.4, SKIN, OUT);
+    // zigzag collar with bells
+    s += aP("M44,94 L48,102 L52,95 L56,103 L60,95 L64,103 L68,95 L72,102 L76,94 Q60,86 44,94Z", P) + [48, 56, 64, 72].map(x => aC(x, 103, 1.8, "#ffca28", OUT)).join("");
+    // head
+    s += aC(60, 78, 16, SKIN, OUT);
+    s += eyes(54, 66, 80, "#43a047", .78) + blush(48.5, 86, 2.2) + blush(71.5, 86, 2.2) + grin(60, 86, 3.2);
+    s += aC(60, 82.6, 1.8, "#ff7a7a");
+    // three-point hat
+    s += aP("M46,70 Q34,66 32,54 Q44,56 54,64Z", A) + aP("M74,70 Q86,66 88,54 Q76,56 66,64Z", A) + aP("M52,66 Q54,52 60,44 Q66,52 68,66Z", B);
+    s += aP("M44,74 Q45,61 60,61 Q75,61 76,74 Q60,68 44,74Z", P) + `<path d="M44,74 Q60,68 76,74" fill="none" stroke="#ffca28" stroke-width="1.6"/>`;
+    s += aC(32, 54, 2.8, "#ffca28", OUT) + aC(88, 54, 2.8, "#ffca28", OUT) + aC(60, 44, 2.8, "#ffca28", OUT);
+    return s;
+  }
+  function ghost() {
+    let s = glow(60, 86, 52, "#d9e6ff", .55);
+    s += aP("M26,92 Q14,86 16,76 Q24,78 30,86Z", "#f4f8ff") + aP("M94,88 Q106,80 104,70 Q96,74 90,82Z", "#f4f8ff");
+    s += aP("M30,134 Q26,42 60,38 Q94,42 90,134 Q85,141 80,134 Q75,141 70,134 Q65,141 60,134 Q55,141 50,134 Q45,141 40,134 Q35,141 30,134Z", "#f4f8ff");
+    s += `<path d="M40,54 Q46,44 56,42" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/><path d="M80,64 Q84,96 82,124" fill="none" stroke="#cdd9f0" stroke-width="3" stroke-linecap="round"/>`;
+    s += eyes(48, 72, 72, "#5b6ee1", 1.15) + blush(40, 84, 3) + blush(80, 84, 3);
+    s += ell(60, 88, 3.6, 4.4, "#7a2a44", `stroke="${OL}" stroke-width=".9"`) + ell(60, 90.4, 2, 1.4, "#ff8fa3", "");
+    // a little pink bow
+    s += aP("M60,42 L50,35 L50,47Z", "#f48fb1") + aP("M60,42 L70,35 L70,47Z", "#f48fb1") + aC(60, 42, 2.6, "#ec407a", OUT);
+    return s;
+  }
+  function owl() {
+    const Br = "#8d6e63", D = "#6d4c41", C = "#f3e5d0";
+    let s = aP("M36,58 L32,38 L48,50Z", D) + aP("M84,58 L88,38 L72,50Z", D);
+    s += aP("M60,42 Q92,42 92,92 Q92,128 60,134 Q28,128 28,92 Q28,42 60,42Z", Br);
+    s += aP("M60,82 Q80,84 80,108 Q78,128 60,132 Q42,128 40,108 Q40,84 60,82Z", C);
+    s += [[50, 96], [60, 96], [70, 96], [46, 106], [56, 106], [66, 106], [74, 106], [52, 116], [62, 116], [70, 116], [58, 124]].map(([x, y]) =>
+      `<path d="M${x - 2.6},${y} Q${x},${y + 3} ${x + 2.6},${y}" fill="none" stroke="#c4a37e" stroke-width="1.1" stroke-linecap="round"/>`).join("");
+    // folded wings
+    s += aP("M30,74 Q20,104 36,126 Q42,106 40,82Z", D) + aP("M90,74 Q100,104 84,126 Q78,106 80,82Z", D);
+    // face disc and eyes behind round glasses
+    s += aC(47, 70, 14, "#d7b894", OUT) + aC(73, 70, 14, "#d7b894", OUT);
+    s += eye1(47, 70, "#f5a623", 1.45) + eye1(73, 70, "#f5a623", 1.45);
+    s += `<g fill="none" stroke="#5d4037" stroke-width="1.8"><circle cx="47" cy="71" r="11.5"/><circle cx="73" cy="71" r="11.5"/><path d="M58.5,70 Q60,67 61.5,70"/></g>`;
+    s += aP("M55,80 H65 L60,89Z", "#ffa726");
+    s += `<path d="M44,56 Q50,53 56,57 M64,57 Q70,53 76,56" fill="none" stroke="${D}" stroke-width="2" stroke-linecap="round"/>`;
+    // feet on the sill
+    s += [50, 70].map(x => aP(`M${x - 6},134 Q${x - 6},128 ${x},128 Q${x + 6},128 ${x + 6},134Z`, "#ffa726")).join("");
+    return s;
+  }
+  function chest() {
+    let s = aP("M20,92 L26,56 Q60,46 94,56 L100,92Z", "#8d5a2b") + aP("M25,88 L30,60 Q60,52 90,60 L95,88Z", "#b71c1c");
+    s += `<path d="M24,74 L96,74" stroke="#ffb300" stroke-width="3"/>`;
+    // the gold pile with jewels and a little crown
+    s += aP("M18,94 Q24,72 42,74 Q50,62 60,66 Q70,60 78,72 Q96,70 102,94Z", "#ffc107");
+    s += [[30, 86], [40, 80], [52, 76], [66, 74], [80, 80], [90, 86], [46, 88], [74, 88], [60, 86]].map(([x, y]) =>
+      ell(x, y, 5, 3.4, "#ffe082", `stroke="#c79100" stroke-width=".9"`)).join("");
+    s += aP("M52,64 L50,52 L56,58 L60,49 L64,58 L70,52 L68,64Z", "#ffd54f") + aC(60, 60, 1.8, "#e53935");
+    s += aP("M36,76 L40,70 L44,76 L40,82Z", "#e53935") + `<path d="M38.4,73 L40,71" stroke="#fff" stroke-width="1" stroke-linecap="round"/>`;
+    s += aP("M82,72 L86,68 L90,72 L86,78Z", "#1e88e5") + ell(70, 82, 4, 3, "#43a047") + aC(28, 90, 3, "#ab47bc", OUT);
+    // chest front
+    s += aR(18, 92, 84, 46, "#a0522d", `rx="3"`) + `<path d="M19,107 H101 M19,122 H101" stroke="#6d3b1c" stroke-width="1.2"/>`;
+    s += aR(26, 92, 8, 46, "#ffb300") + aR(86, 92, 8, 46, "#ffb300") + aR(15, 89, 90, 7, "#ffb300", `rx="2"`);
+    s += [[30, 102], [30, 130], [90, 102], [90, 130]].map(([x, y]) => aC(x, y, 1.3, "#8a5a00")).join("");
+    s += aR(51, 99, 18, 20, "#ffca28", `rx="2.5"`) + aC(60, 106, 2.6, "#3e2723") + `<path d="M58.6,107 L61.4,107 L62,113 H58Z" fill="#3e2723"/>`;
+    // pearls hanging over the rim
+    s += [...Array(9)].map((_, i) => { const t = i / 8, x = 36 + t * 14, y = 96 + Math.sin(t * Math.PI) * 10; return aC(x, y, 1.9, "#fafafa", `stroke="#9e9e9e" stroke-width=".6"`); }).join("");
+    // coins spilled on the floor
+    s += [[12, 142], [22, 147], [100, 144], [108, 149], [92, 149]].map(([x, y]) => ell(x, y, 5.4, 2.6, "#ffd54f", `stroke="#c79100" stroke-width=".9"`)).join("");
+    s += aSpark(40, 62, 4) + aSpark(86, 60, 3.4) + aSpark(70, 66, 2.6) + aSpark(104, 82, 3);
+    return s;
+  }
+
+  FAN.wcastle = [
+    ["Brave knight", "A little knight in shining armour with a sword and a shield", () => [walls(), aEdge(knight())]],
+    ["Princess", "A princess with a golden crown, holding a red rose", () => [hall({}), aEdge(princess())]],
+    ["Baby dragon", "A small, friendly green dragon puffing a little smoke", () => [walls({ top: "#ffb88c", bot: "#ffe3b0", roof: "#8e24aa" }), aEdge(dragon())]],
+    ["Wizard", "A wizard in a starry hat waving his magic wand", () => [night({ side: "left", seed: 11 }), aEdge(wizard())]],
+    ["White horse", "A white horse with a feather plume on the drawbridge", () => [moat(), aEdge(horse())]],
+    ["Jester", "A funny jester juggling three balls", () => [hall({ b1: "#6a1b9a", b2: "#2e7d32", carpet: "#6a1b9a" }), aEdge(jester())]],
+    ["Castle ghost", "A cute little ghost with a pink bow (it floats)", () => [night({ side: "right", top: "#24164a", bot: "#5b3f8f", hill: "#2a2244", seed: 19 }), aEdge(`<g class="lv-float">${ghost()}</g>`)]],
+    ["Wise owl", "A wise owl with round glasses in a tower window", () => [towerWindow(), aEdge(owl())]],
+    ["Treasure chest", "A treasure chest full of gold, jewels and pearls", () => [hall({ top: "#6d5a4a", bot: "#3e3029", b1: "#c62828", b2: "#c62828", floor: "#4e3b31", carpet: "#7b1f1f", torch: true }), aEdge(chest())]],
+  ];
+})();
+
+/* Sticker book world page "Space" (the 🚀 world of the learning path): an astronaut kid, the rocket, the Moon, Saturn,
+   the Earth, a friendly alien, a UFO, a Mars rover and a shooting star, chibi style on starry deep-blue backdrops;
+   each holo is the same subject upgraded (flag on the Moon, blast-off, glowing rings, the alien family, ...); sets FAN.wspace */
+(() => {
+  "use strict";
+  const OL = A_OL, OUT = `stroke="${OL}" stroke-width="1.1" stroke-linejoin="round"`;
+  const uid = p => `wp${p}${++aUid}`;
+  const f1 = v => +(+v).toFixed(1);
+  const SKIN = "#f1c27d", HAIR = "#3e2723", SUIT = "#f5f7fa", TRIM = "#ff7a1a";
+  const RAINBOW = ["#ff5252", "#ff9800", "#ffeb3b", "#66bb6a", "#29b6f6", "#ab47bc"];
+
+  /* ---------- backdrops ---------- */
+  // deep space: gradient, two soft nebula clouds, a field of stars and a few static sparkles
+  function space(seed, o = {}) {
+    const g = uid("sky"), R = aRand(seed);
+    const neb = o.neb || ["#8e5cff", "#26c6da"];
+    let defs = aVGrad(g, o.top || "#2b1a72", o.bot || "#0a0b2e"), s = "";
+    neb.forEach((c, i) => {
+      const n = uid("neb");
+      defs += `<radialGradient id="${n}"><stop offset="0" stop-color="${c}" stop-opacity="${o.nebOp || .5}"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></radialGradient>`;
+      s += `<ellipse cx="${f1(15 + R() * 90)}" cy="${f1(20 + R() * 110)}" rx="${f1(40 + R() * 20)}" ry="${f1(22 + R() * 14)}" fill="url(#${n})" transform="rotate(${f1(-30 + R() * 60)} 60 79)"/>`;
+    });
+    const n = o.stars || 46, cols = ["#fff", "#fff", "#fff9c4", "#b3e5fc", "#f8bbd0"];
+    for (let i = 0; i < n; i++) s += aC(R() * 120, R() * 158, f1(.35 + R() * .8), cols[Math.floor(R() * cols.length)], `opacity="${f1(.55 + R() * .45)}"`);
+    for (let i = 0; i < (o.sparks || 5); i++) s += aSpark(f1(8 + R() * 104), f1(8 + R() * 142), f1(1.6 + R() * 1.8), "#fff");
+    return `<defs>${defs}</defs><rect width="120" height="158" fill="url(#${g})"/>${s}`;
+  }
+  // a soft round glow behind the subject (holo)
+  function glow(x, y, r, c, op = .75) {
+    const n = uid("glw");
+    return `<defs><radialGradient id="${n}"><stop offset="0" stop-color="${c}" stop-opacity="${op}"/><stop offset=".55" stop-color="${c}" stop-opacity="${op * .35}"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></radialGradient></defs><circle cx="${x}" cy="${y}" r="${r}" fill="url(#${n})"/>`;
+  }
+  // grey moon ground with craters
+  function moonGround(y, seed = 3, c = "#cfd2dc", d = "#a9adbd") {
+    const R = aRand(seed);
+    let s = `<path d="M0,${y} Q30,${y - 7} 60,${y - 2} T120,${y - 4} V158 H0Z" fill="${c}"/>`;
+    for (let i = 0; i < 6; i++) { const x = 8 + R() * 104, yy = y + 6 + R() * (150 - y), r = 2.5 + R() * 4.5;
+      s += `<ellipse cx="${f1(x)}" cy="${f1(yy)}" rx="${f1(r)}" ry="${f1(r * .38)}" fill="${d}"/><ellipse cx="${f1(x)}" cy="${f1(yy + r * .1)}" rx="${f1(r * .7)}" ry="${f1(r * .22)}" fill="#8e93a6" opacity=".6"/>`; }
+    return s;
+  }
+  // red Mars ground with rocks
+  function marsGround(y, seed = 5, c = "#d9643a", d = "#a8432a") {
+    const R = aRand(seed);
+    let s = `<path d="M0,${y - 14} Q18,${y - 26} 36,${y - 16} Q52,${y - 8} 70,${y - 20} Q92,${y - 34} 120,${y - 18} V${y} H0Z" fill="#b8503a" opacity=".85"/>` +
+      `<path d="M0,${y} Q30,${y - 6} 60,${y - 1} T120,${y - 3} V158 H0Z" fill="${c}"/>`;
+    for (let i = 0; i < 7; i++) { const x = 6 + R() * 108, yy = y + 5 + R() * (150 - y), r = 1.6 + R() * 3;
+      s += `<ellipse cx="${f1(x)}" cy="${f1(yy)}" rx="${f1(r)}" ry="${f1(r * .6)}" fill="${d}"/>`; }
+    return s;
+  }
+  const shadow = (x, y, rx, op = .3) => `<ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${f1(rx * .18)}" fill="#000" opacity="${op}"/>`;
+  // a star polygon with the dark outline
+  function starPoly(x, y, r, fill, inner = .48, rot = 0) {
+    return `<polygon points="${aPts([...Array(10)].map((_, i) => { const rr = i % 2 ? r * inner : r, a = -Math.PI / 2 + rot + i * Math.PI / 5; return [x + rr * Math.cos(a), y + rr * Math.sin(a)]; }))}" fill="${fill}" ${OUT}/>`;
+  }
+  // a chibi face (eyes + smile + blush) around (x, y); s = size; wink = right eye closed
+  function face(x, y, s, iris = "#5d4037", wink = false) {
+    const ex = 5.2 * s;
+    return aEye(f1(x - ex), f1(y), iris, f1(.8 * s)) +
+      (wink ? `<path d="M${f1(x + ex - 3.4 * s)},${f1(y + .6 * s)} Q${f1(x + ex)},${f1(y - 2.8 * s)} ${f1(x + ex + 3.4 * s)},${f1(y + .6 * s)}" fill="none" stroke="#1a1a1a" stroke-width="${f1(1.6 * s)}" stroke-linecap="round"/>` : aEye(f1(x + ex), f1(y), iris, f1(.8 * s))) +
+      `<path d="M${f1(x - 2.6 * s)},${f1(y + 5.2 * s)} Q${f1(x)},${f1(y + 8.6 * s)} ${f1(x + 2.6 * s)},${f1(y + 5.2 * s)}Z" fill="#c0392b" stroke="${OL}" stroke-width="${f1(.8 * s)}" stroke-linejoin="round"/>` +
+      `<ellipse cx="${f1(x - ex - 2.4 * s)}" cy="${f1(y + 4.6 * s)}" rx="${f1(2.2 * s)}" ry="${f1(1.2 * s)}" fill="#ff6f8f" opacity=".55"/>` +
+      `<ellipse cx="${f1(x + ex + 2.4 * s)}" cy="${f1(y + 4.6 * s)}" rx="${f1(2.2 * s)}" ry="${f1(1.2 * s)}" fill="#ff6f8f" opacity=".55"/>`;
+  }
+
+  /* ---------- the astronaut (a kid in a white suit, round helmet); origin = middle of the body ---------- */
+  function astro(pose) {
+    const flag = pose === "flag", s = [];
+    s.push(`<rect x="-15" y="-7" width="30" height="27" rx="5" fill="#b0bec5" ${OUT}/>`, `<rect x="-13" y="-3" width="4" height="12" rx="1.5" fill="#78909c"/>`);
+    const legs = flag ? [[[-6, 16], [-7, 27], [-7, 35]], [[6, 16], [7, 27], [7, 35]]] : [[[-6, 16], [-11, 27], [-9, 35]], [[6, 16], [13, 25], [18, 31]]];
+    legs.forEach(l => { s.push(aL(l, SUIT, 10), aL([l[1], [l[1][0] + (l[2][0] - l[1][0]) * .1, l[1][1] + (l[2][1] - l[1][1]) * .1]], TRIM, 10, false));
+      const f = l[2]; s.push(`<ellipse cx="${f[0]}" cy="${f[1] + 1.5}" rx="6.8" ry="4.2" fill="#78909c" ${OUT}/>`); });
+    s.push(`<rect x="-13" y="-6" width="26" height="26" rx="8" fill="${SUIT}" ${OUT}/>`, `<path d="M6,-5 Q4,7 7,19 H11 Q13,7 12,-3Z" fill="#000" opacity=".08"/>`,
+      `<rect x="-7.5" y="1" width="15" height="9" rx="2" fill="#cfd8dc" ${OUT}/>`, aC(-3.8, 5.5, 1.6, "#ff5252"), aC(0, 5.5, 1.6, "#ffeb3b"), aC(3.8, 5.5, 1.6, "#29b6f6"),
+      `<rect x="-13" y="13" width="26" height="4.5" fill="${TRIM}" ${OUT}/>`, aC(0, 15.2, 1.7, "#ffeb3b", `stroke="${OL}" stroke-width=".7"`));
+    const arms = flag ? [[[-11, -1], [-20, -8], [-23, -19]], [[11, -1], [19, 5], [23, -1]]] : [[[-11, -1], [-20, -9], [-24, -19]], [[11, -1], [21, 4], [28, 1]]];
+    arms.forEach(a => { s.push(aL(a, SUIT, 8), aL([[a[1][0] + (a[2][0] - a[1][0]) * .55, a[1][1] + (a[2][1] - a[1][1]) * .55], a[2]], TRIM, 8, false), aC(a[2][0], a[2][1], 4.6, TRIM, OUT)); });
+    // the helmet: white shell, glass, the kid's face inside, a reflection, an antenna
+    s.push(`<ellipse cx="0" cy="-5" rx="11" ry="3.6" fill="${TRIM}" ${OUT}/>`,
+      `<path d="M9,-34 L13,-42" stroke="${OL}" stroke-width="2.6" stroke-linecap="round"/><path d="M9,-34 L13,-42" stroke="#cfd8dc" stroke-width="1.2" stroke-linecap="round"/>`, aC(13.4, -42.6, 2.4, "#ff5252", OUT),
+      aC(0, -20, 18.5, SUIT, OUT), aC(0, -19.5, 15, "#a8e4ff", `stroke="${OL}" stroke-width=".9"`),
+      aC(0, -17, 11.8, SKIN),
+      `<path d="M-11.8,-18 Q-12.5,-31 0,-30.8 Q12.5,-31 11.8,-18 Q9,-24.5 3,-24 Q0,-21 -3,-24.2 Q-8.5,-24.5 -11.8,-18Z" fill="${HAIR}"/>`,
+      aEye(-4.7, -15.2, "#5d4037", .74), aEye(4.7, -15.2, "#5d4037", .74),
+      `<path d="M-2.4,-9.4 Q0,-6.6 2.4,-9.4Z" fill="#c0392b" stroke="${OL}" stroke-width=".7" stroke-linejoin="round"/>`,
+      `<ellipse cx="-8" cy="-10.6" rx="2" ry="1.1" fill="#ff6f8f" opacity=".55"/><ellipse cx="8" cy="-10.6" rx="2" ry="1.1" fill="#ff6f8f" opacity=".55"/>`,
+      aC(0, -19.5, 15, "#bfe9ff", 'opacity=".16"'),
+      `<path d="M-11,-26 Q-7,-32 0,-32.6" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".85"/>`, aC(9.5, -9.5, 1.3, "#fff", 'opacity=".8"'));
+    if (flag) s.unshift(`<path d="M23,-50 V36" stroke="${OL}" stroke-width="3.4" stroke-linecap="round"/><path d="M23,-50 V36" stroke="#e0e0e0" stroke-width="1.6" stroke-linecap="round"/>`,
+      `<path d="M24,-49 Q34,-53 46,-48 Q44,-41 46,-34 Q34,-39 24,-35Z" fill="#7e57c2" ${OUT}/>`, starPoly(35, -42, 5.2, "#ffd54f"));
+    if (flag) s.push(aC(23, -1, 4.6, TRIM, OUT));
+    return s.join("");
+  }
+  function astronaut() {
+    const bg = space(11, { neb: ["#9c4dff", "#00bcd4"] }) + aC(98, 128, 22, "#5c6bc0") + `<path d="M80,116 Q92,120 104,112 M84,134 Q96,136 112,128" stroke="#7986cb" stroke-width="3" fill="none" stroke-linecap="round"/>` +
+      aC(18, 30, 5, "#ffb74d") + aC(16.5, 28.5, 1.6, "#ffe0b2", 'opacity=".8"');
+    return [bg, `<g class="lv-float">${aEdge(`<g transform="translate(58 82) scale(1.32) rotate(-8)">${astro("float")}</g>`)}</g>`];
+  }
+
+  /* ---------- the rocket; origin = middle, nose at y -48, nozzle to y 35 ---------- */
+  function rocket() {
+    const cp = uid("rk"), body = "M0,-48 C14,-36 16,-14 14,10 L12,28 L-12,28 L-14,10 C-16,-14 -14,-36 0,-48Z", wc = uid("rw");
+    return `<path d="M-12,8 Q-24,16 -26,34 L-12,26Z" fill="#e53935" ${OUT}/><path d="M12,8 Q24,16 26,34 L12,26Z" fill="#e53935" ${OUT}/>` +
+      `<path d="M-8,28 L-10.5,35 H10.5 L8,28Z" fill="#78909c" ${OUT}/>` +
+      `<clipPath id="${cp}"><path d="${body}"/></clipPath><path d="${body}" fill="${SUIT}"/>` +
+      `<g clip-path="url(#${cp})"><rect x="-20" y="-50" width="40" height="23" fill="#e53935"/><rect x="-20" y="-28" width="40" height="3" fill="#ffca28"/>` +
+      `<rect x="-20" y="14" width="40" height="5" fill="#e53935"/><path d="M6,-48 Q12,-10 8,30 H20 V-48Z" fill="#000" opacity=".12"/><path d="M-9,-30 Q-11,-8 -9,10" stroke="#fff" stroke-width="2.4" fill="none" opacity=".8"/></g>` +
+      `<path d="${body}" fill="none" ${OUT}/><path d="M0,10 V34" stroke="${OL}" stroke-width="3.4" stroke-linecap="round"/><path d="M0,12 V33" stroke="#e53935" stroke-width="1.6"/>` +
+      aC(0, -9, 9.6, "#b0bec5", OUT) + `<clipPath id="${wc}"><circle cx="0" cy="-9" r="7.4"/></clipPath>` + aC(0, -9, 7.4, "#90caf9", `stroke="${OL}" stroke-width=".9"`) +
+      `<g clip-path="url(#${wc})">${aC(0, -5.5, 6.4, SKIN)}<path d="M-6.4,-6 Q-6.6,-13 0,-12.8 Q6.6,-13 6.4,-6 Q3,-9.6 0,-8.6 Q-3,-9.6 -6.4,-6Z" fill="${HAIR}"/>` +
+      aEye(-2.6, -4.6, "#5d4037", .42) + aEye(2.6, -4.6, "#5d4037", .42) + `<path d="M-1.3,-1.6 Q0,-.2 1.3,-1.6" stroke="#8d3a2a" stroke-width=".7" fill="none"/></g>` +
+      `<path d="M-5,-14 Q-2.5,-16 1,-16" stroke="#fff" stroke-width="1.6" fill="none" stroke-linecap="round" opacity=".9"/>` +
+      [-12, -6].map(dx => aC(dx + 9, -9, .8, "#78909c")).join("");
+  }
+  function rocketPad() {
+    const bg = space(21, { neb: ["#5e35b1", "#1e88e5"] }) + aC(22, 34, 10, "#fff3c4") + aC(26, 31, 9, "#2b1a72", 'opacity=".0"') +
+      `<path d="M0,134 Q60,122 120,134 V158 H0Z" fill="#4527a0"/><path d="M0,140 Q60,130 120,140 V158 H0Z" fill="#311b92"/>` +
+      // the launch tower: two red posts with white cross braces and an arm to the rocket
+      `<g stroke="${OL}" stroke-width="1"><rect x="14" y="54" width="4" height="80" fill="#e53935"/><rect x="28" y="54" width="4" height="80" fill="#e53935"/></g>` +
+      [0, 1, 2, 3, 4, 5, 6].map(i => `<path d="M18,${58 + i * 11} L28,${68 + i * 11} M28,${58 + i * 11} L18,${68 + i * 11}" stroke="#eceff1" stroke-width="1.2"/>`).join("") +
+      `<rect x="12" y="50" width="22" height="5" fill="#ffca28" stroke="${OL}" stroke-width="1"/><rect x="32" y="84" width="16" height="3.4" fill="#b0bec5" stroke="${OL}" stroke-width=".8"/>` + aC(23, 48, 1.8, "#ff5252");
+    return [bg, aEdge(`<rect x="44" y="128" width="40" height="7" rx="2" fill="#90a4ae" ${OUT}/><g transform="translate(64 89) scale(1.12)">${rocket()}</g>`)];
+  }
+
+  /* ---------- the Moon with craters and a face ---------- */
+  function moonFace(x, y, r, o = {}) {
+    const cp = uid("mn"), base = o.col || "#ece9db", crat = o.crat || "#cbc6b0";
+    return `<clipPath id="${cp}"><circle cx="${x}" cy="${y}" r="${r}"/></clipPath>` + aC(x, y, r, base, `stroke="${OL}" stroke-width="1.6"`) +
+      `<g clip-path="url(#${cp})"><circle cx="${x + r * .45}" cy="${y + r * .35}" r="${r}" fill="#000" opacity=".1"/>` +
+      [[-.55, -.5, .16], [.5, -.55, .12], [-.65, .3, .11], [.62, .35, .14], [.1, .72, .1], [-.2, -.78, .08], [.78, -.1, .07]].map(([dx, dy, k]) =>
+        aC(x + dx * r, y + dy * r, f1(k * r), crat, `stroke="${o.cratOl || "#b3ad94"}" stroke-width=".8"`) + aC(x + dx * r + k * r * .25, y + dy * r + k * r * .25, f1(k * r * .6), o.crat2 || "#d9d5c2")).join("") +
+      `<path d="M${x - r * .7},${y - r * .45} Q${x - r * .55},${y - r * .75} ${x - r * .25},${y - r * .85}" stroke="#fff" stroke-width="${f1(r * .07)}" fill="none" stroke-linecap="round" opacity=".7"/></g>` +
+      face(x, y + r * .02, r / 13, "#5c6bc0", o.wink);
+  }
+  function moon() {
+    return [space(31, { neb: ["#3949ab", "#8e24aa"] }) + glow(60, 76, 58, "#fff8e1", .3), aEdge(moonFace(60, 76, 40))];
+  }
+
+  /* ---------- Saturn ---------- */
+  function saturn(o = {}) {
+    const x = 60, y = 78, r = 25, cp = uid("sat"), rx = 50, ry = 12;
+    const ringStroke = (d, front) => `<path d="${d}" fill="none" stroke="${OL}" stroke-width="11.4"/>` +
+      (o.rainbow ? `<path d="${d}" fill="none" stroke="url(#${o.rainbow})" stroke-width="9"/>` : `<path d="${d}" fill="none" stroke="#e8c98a" stroke-width="9"/><path d="${d}" fill="none" stroke="#c99a52" stroke-width="2.4"/>`) +
+      `<path d="${d}" fill="none" stroke="#fff" stroke-width=".9" opacity="${front ? .7 : .4}" stroke-dasharray="${front ? "none" : "3 3"}"/>`;
+    const back = `M${x - rx},${y} A${rx},${ry} 0 0 1 ${x + rx},${y}`, front = `M${x - rx},${y} A${rx},${ry} 0 0 0 ${x + rx},${y}`;
+    const planet = `<clipPath id="${cp}"><circle cx="${x}" cy="${y}" r="${r}"/></clipPath>` + aC(x, y, r, o.col || "#f6c66b", `stroke="${OL}" stroke-width="1.4"`) +
+      `<g clip-path="url(#${cp})">${[[-20, 5, "#e9a94b"], [-9, 3.5, "#fbe0a0"], [12, 4, "#e9a94b"], [20, 4, "#d98c3a"]].map(([dy, h, c]) => `<rect x="${x - r}" y="${y + dy}" width="${2 * r}" height="${h}" fill="${o.rainbow ? "#ffb74d" : c}" opacity="${o.rainbow ? .5 : 1}"/>`).join("")}` +
+      `<circle cx="${x + 9}" cy="${y + 9}" r="${r}" fill="#000" opacity=".1"/><path d="M${x - 17},${y - 12} Q${x - 12},${y - 20} ${x - 3},${y - 22}" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" opacity=".7"/></g>` +
+      face(x, y - 2, 1.9, "#6d4c41");
+    return `<g transform="rotate(-16 ${x} ${y})">${ringStroke(back, false)}</g>${planet}<g transform="rotate(-16 ${x} ${y})">${ringStroke(front, true)}</g>`;
+  }
+  function saturnD() { return [space(41, { neb: ["#7e57c2", "#ef6c00"], nebOp: .35 }), aEdge(saturn())]; }
+
+  /* ---------- the Earth ---------- */
+  function earth(x, y, r) {
+    const cp = uid("ea");
+    return `<clipPath id="${cp}"><circle cx="${x}" cy="${y}" r="${r}"/></clipPath>` + aC(x, y, r, "#2e86de", `stroke="${OL}" stroke-width="1.5"`) +
+      `<g clip-path="url(#${cp})"><g transform="translate(${x} ${y}) scale(${f1(r / 32)})">` +
+      `<path d="M-30,-20 Q-22,-30 -8,-27 Q-2,-22 -10,-16 Q-18,-14 -16,-6 Q-12,2 -20,6 Q-28,4 -32,-6Z" fill="#4cd964"/>` +
+      `<path d="M8,-30 Q22,-30 30,-18 Q34,-6 26,-4 Q18,-8 14,-16 Q6,-20 8,-30Z" fill="#4cd964"/>` +
+      `<path d="M-4,10 Q6,6 14,12 Q20,22 10,30 Q2,34 -2,26 Q-8,18 -4,10Z" fill="#4cd964"/>` +
+      `<path d="M-30,18 Q-22,14 -14,20 Q-14,28 -24,30Z" fill="#4cd964"/>` +
+      `<path d="M-22,-10 Q-10,-13 2,-10 M6,20 Q16,17 28,21 M-26,24 Q-16,22 -6,25" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round" opacity=".85"/>` +
+      `<path d="M-24,-34 H24 M-30,32 H30" stroke="#fff" stroke-width="5" opacity=".9"/>` +
+      `<circle cx="9" cy="9" r="32" fill="#000" opacity=".12"/><path d="M-22,-14 Q-18,-24 -8,-28" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".7"/></g></g>` +
+      face(x, y + r * .05, r / 15, "#1565c0");
+  }
+  function earthD() { return [space(51, { neb: ["#00b0ff", "#651fff"] }), aEdge(earth(60, 78, 36))]; }
+
+  /* ---------- the friendly alien; origin = middle of the body top ---------- */
+  function alien(o = {}) {
+    const col = o.col || "#7ed957", dk = o.dk || "#4caf50", ball = o.ball || "#ff4fd8", suit = o.suit || "#9575cd", s = [];
+    s.push(`<path d="M-7,-27 Q-11,-34 -13,-41" stroke="${OL}" stroke-width="3.4" fill="none" stroke-linecap="round"/><path d="M-7,-27 Q-11,-34 -13,-41" stroke="${col}" stroke-width="1.6" fill="none" stroke-linecap="round"/>`,
+      `<path d="M7,-27 Q11,-34 13,-41" stroke="${OL}" stroke-width="3.4" fill="none" stroke-linecap="round"/><path d="M7,-27 Q11,-34 13,-41" stroke="${col}" stroke-width="1.6" fill="none" stroke-linecap="round"/>`,
+      aC(-13.4, -42, 3.2, ball, OUT), aC(13.4, -42, 3.2, ball, OUT), aC(-14.4, -43, 1, "#fff"), aC(12.4, -43, 1, "#fff"));
+    if (!o.baby) {
+      [[[-5, 17], [-6, 28]], [[5, 17], [6, 28]]].forEach(l => s.push(aL(l, col, 6), `<ellipse cx="${l[1][0] + (l[1][0] < 0 ? -1.5 : 1.5)}" cy="${l[1][1] + 1.6}" rx="5" ry="3" fill="${dk}" ${OUT}/>`));
+      const arms = o.hold ? [[[-9, 4], [-12, 10], [-4, 14]], [[9, 4], [12, 10], [4, 14]]] : [[[-9, 4], [-15, 10], [-17, 16]], [[9, 4], [16, -2], [20, -10]]];
+      if (o.noWave) arms[1] = [[9, 4], [15, 10], [17, 16]];
+      s.push(`<rect x="-10" y="-1" width="20" height="20" rx="7" fill="${suit}" ${OUT}/><rect x="-10" y="12" width="20" height="3.4" fill="#ffca28" ${OUT}/>`, starPoly(0, 6, 3.4, "#ffeb3b"));
+      if (o.hold) s.push(o.hold);
+      arms.forEach(a => { s.push(aL(a, col, 5.4)); const h = a[2];
+        s.push(aC(h[0], h[1], 3.4, col, OUT), `<path d="M${h[0] - 2.4},${h[1] - 3.4} l-.6,-1.6 M${h[0]},${h[1] - 3.6} v-1.8 M${h[0] + 2.4},${h[1] - 3.4} l.6,-1.6" stroke="${OL}" stroke-width="1" stroke-linecap="round"/>`); });
+    }
+    s.push(`<ellipse cx="0" cy="-14" rx="18" ry="15" fill="${col}" ${OUT}/><path d="M8,-26 Q20,-16 10,-1 Q16,-6 17,-14 Q17,-22 8,-26Z" fill="#000" opacity=".1"/>`,
+      `<path d="M-12,-22 Q-8,-27 -2,-28" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" opacity=".6"/>`,
+      aEye(-7, -13, o.iris || "#7b1fa2", 1.05, o.lash ? 1 : 0), aEye(7, -13, o.iris || "#7b1fa2", 1.05, o.lash ? 1 : 0),
+      `<path d="M-4.4,-3.6 Q0,2.2 4.4,-3.6Z" fill="#c0392b" stroke="${OL}" stroke-width=".8" stroke-linejoin="round"/>`,
+      `<ellipse cx="-12.6" cy="-5.6" rx="2.6" ry="1.3" fill="#ff6f8f" opacity=".6"/><ellipse cx="12.6" cy="-5.6" rx="2.6" ry="1.3" fill="#ff6f8f" opacity=".6"/>`);
+    if (o.bow) s.push(`<g transform="translate(9 -28) rotate(20)"><path d="M0,0 L-7,-4.5 L-7,4.5Z M0,0 L7,-4.5 L7,4.5Z" fill="#ff4081" ${OUT}/>${aC(0, 0, 2, "#ff80ab", OUT)}</g>`);
+    return s.join("");
+  }
+  function alienD() {
+    const bg = space(61, { neb: ["#00e676", "#7c4dff"] }) + `<path d="M0,128 Q60,114 120,128 V158 H0Z" fill="#8e24aa"/><path d="M0,136 Q60,126 120,136 V158 H0Z" fill="#6a1b9a"/>` +
+      aC(24, 140, 4, "#4a148c") + aC(92, 146, 5, "#4a148c") + aC(98, 30, 9, "#ffab40", OUT) + `<ellipse cx="98" cy="30" rx="15" ry="3.4" fill="none" stroke="#ffe0b2" stroke-width="1.4" transform="rotate(-20 98 30)"/>`;
+    return [bg, aEdge(`<g transform="translate(60 92) scale(1.65)">${alien()}</g>`) + shadow(60, 142, 26)];
+  }
+
+  /* ---------- the UFO; origin = middle of the disc ---------- */
+  function ufo(lights) {
+    const cp = uid("uf");
+    const dome = "M-15,-3 Q-15,-25 0,-25 Q15,-25 15,-3Z";
+    return `<clipPath id="${cp}"><path d="${dome}"/></clipPath><path d="${dome}" fill="#b3e5fc" ${OUT}/>` +
+      `<g clip-path="url(#${cp})"><g transform="translate(0 -2) scale(.5)">${alien({ baby: true })}</g></g>` +
+      `<path d="${dome}" fill="#e1f5fe" opacity=".25"/><path d="M-9,-14 Q-8,-21 -2,-22" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" opacity=".9"/>` +
+      `<path d="M-24,5 Q0,18 24,5Z" fill="#78909c" ${OUT}/><ellipse cx="0" cy="0" rx="35" ry="9" fill="#cfd8dc" ${OUT}/><ellipse cx="0" cy="-2.4" rx="27" ry="4.6" fill="#eceff1" stroke="${OL}" stroke-width=".8"/>` +
+      `<path d="M-26,3 Q0,10 26,3" stroke="#fff" stroke-width="1.4" fill="none" opacity=".6"/>` +
+      (lights || ["#ff5252", "#ffeb3b", "#69f0ae", "#40c4ff", "#ff4fd8"]).map((c, i) => aC(-24 + i * 12, 2.4 + (i === 0 || i === 4 ? -1 : i === 2 ? 1 : 0), 2.4, c, `stroke="${OL}" stroke-width=".7"`)).join("") +
+      aC(0, 14.6, 3, "#fff59d", OUT);
+  }
+  function beam(x, y, w0, w1, y1, c, op) {
+    const n = uid("bm");
+    return `<defs><linearGradient id="${n}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c}" stop-opacity="${op}"/><stop offset="1" stop-color="${c}" stop-opacity="${op * .25}"/></linearGradient></defs>` +
+      `<path d="M${x - w0},${y} L${x + w0},${y} L${x + w1},${y1} L${x - w1},${y1}Z" fill="url(#${n})"/>`;
+  }
+  function ufoD() {
+    const bg = space(71, { neb: ["#00e5ff", "#651fff"] }) + `<path d="M0,132 Q30,118 60,126 Q90,134 120,120 V158 H0Z" fill="#283593"/><path d="M0,142 Q60,132 120,142 V158 H0Z" fill="#1a237e"/>` +
+      beam(60, 76, 7, 30, 132, "#fff59d", .55) + `<ellipse cx="60" cy="132" rx="30" ry="4" fill="#fff59d" opacity=".45"/>`;
+    return [bg, aEdge(`<g transform="translate(60 62) scale(1.35)">${ufo()}</g>`)];
+  }
+  function cow() {
+    const cp = uid("cw");
+    return `<g transform="rotate(-14)">` + [[-9, 6], [-4, 7], [5, 7], [10, 6]].map(([x, y]) => aL([[x, y], [x + (x < 0 ? -1.5 : 1.5), y + 6]], "#fff", 3.2)).join("") +
+      `<clipPath id="${cp}"><ellipse cx="0" cy="0" rx="14" ry="8.5"/></clipPath><ellipse cx="0" cy="0" rx="14" ry="8.5" fill="#fff" ${OUT}/>` +
+      `<g clip-path="url(#${cp})"><path d="M-8,-9 Q-2,-4 -7,2 Q-12,0 -14,-6Z" fill="#3e2723"/><path d="M4,0 Q10,-2 12,4 Q8,10 2,7Z" fill="#3e2723"/></g>` +
+      `<path d="M-14,-2 Q-20,-2 -20,4" stroke="${OL}" stroke-width="1.2" fill="none"/>` + aC(-20, 5, 1.6, "#3e2723") +
+      `<path d="M12,-9 l-3,-4 M20,-9 l3,-4" stroke="#f5deb3" stroke-width="2.4" stroke-linecap="round"/><path d="M12,-9 l-3,-4 M20,-9 l3,-4" stroke="${OL}" stroke-width=".6" stroke-linecap="round" opacity=".6"/>` +
+      `<ellipse cx="10" cy="-8" rx="3.4" ry="1.8" fill="#fff" ${OUT} transform="rotate(-25 10 -8)"/><ellipse cx="22" cy="-8" rx="3.4" ry="1.8" fill="#fff" ${OUT} transform="rotate(25 22 -8)"/>` +
+      `<ellipse cx="16" cy="-3" rx="7" ry="7.4" fill="#fff" ${OUT}/><ellipse cx="16" cy="2.6" rx="5.6" ry="3.6" fill="#f8bbd0" ${OUT}/>` + aC(14, 2.4, .8, "#ad1457") + aC(18, 2.4, .8, "#ad1457") +
+      aEye(13.4, -4.6, "#5d4037", .42) + aEye(18.6, -4.6, "#5d4037", .42) + `<path d="M14.6,5 Q16,6.4 17.4,5" stroke="#ad1457" stroke-width=".7" fill="none"/></g>`;
+  }
+
+  /* ---------- the Mars rover robot; origin = the ground under its middle ---------- */
+  function rover(o = {}) {
+    const s = [];
+    s.push(`<path d="M-22,-6 L-11,-16 L0,-6 M0,-6 L11,-16 L22,-6" stroke="${OL}" stroke-width="3.6" fill="none" stroke-linejoin="round"/><path d="M-22,-6 L-11,-16 L0,-6 M0,-6 L11,-16 L22,-6" stroke="#b0bec5" stroke-width="1.8" fill="none" stroke-linejoin="round"/>`);
+    [-22, 0, 22].forEach(x => s.push(aC(x, -6.5, 6.6, "#37474f", OUT), aC(x, -6.5, 3, "#90a4ae", `stroke="${OL}" stroke-width=".8"`),
+      [0, 1, 2, 3, 4, 5].map(i => { const a = i * Math.PI / 3; return `<path d="M${f1(x + 4.6 * Math.cos(a))},${f1(-6.5 + 4.6 * Math.sin(a))} L${f1(x + 6.4 * Math.cos(a))},${f1(-6.5 + 6.4 * Math.sin(a))}" stroke="#78909c" stroke-width="1.2"/>`; }).join("")));
+    // the antenna dish at the back, the body box (gold foil front), the solar panel on top
+    s.push(`<path d="M-20,-30 V-40" stroke="${OL}" stroke-width="2"/><g transform="rotate(-30 -20 -42)"><path d="M-29,-42 Q-20,-34 -11,-42Z" fill="#eceff1" ${OUT}/></g>` + aC(-20, -43, 1.6, "#ff5252", OUT));
+    s.push(`<rect x="-26" y="-28" width="52" height="15" rx="3" fill="#eceff1" ${OUT}/><rect x="-22" y="-25" width="20" height="9" rx="1.5" fill="#ffca28" ${OUT}/>` +
+      `<path d="M-20,-23 l4,5 M-14,-24 l5,6 M-8,-23 l3,4" stroke="#fff59d" stroke-width="1" opacity=".9"/>` + aC(6, -20.5, 2, "#ff5252", OUT) + aC(12, -20.5, 2, "#69f0ae", OUT) + aC(18, -20.5, 2, "#40c4ff", OUT));
+    s.push(`<path d="M-30,-33 H26 L30,-29 H-26Z" fill="#1e3a8a" ${OUT}/><path d="M-16,-33 l4,4 M-2,-33 l4,4 M12,-33 l4,4 M-28,-31 H28" stroke="#64b5f6" stroke-width=".7"/>`);
+    // the mast and the binocular head with two big eyes
+    s.push(`<path d="M17,-33 V-46" stroke="${OL}" stroke-width="4.2"/><path d="M17,-33 V-46" stroke="#cfd8dc" stroke-width="2.2"/>`,
+      `<rect x="2" y="-62" width="30" height="16" rx="6" fill="#eceff1" ${OUT}/><rect x="2" y="-62" width="30" height="5" rx="2.5" fill="#cfd8dc"/>`,
+      aC(10.5, -54, 6.4, "#455a64", OUT), aC(24, -54, 6.4, "#455a64", OUT),
+      aEye(10.5, -54, o.iris || "#29b6f6", .92), aEye(24, -54, o.iris || "#29b6f6", .92), `<path d="M15,-48.6 Q17.2,-47 19.4,-48.6" stroke="${OL}" stroke-width=".8" fill="none" stroke-linecap="round"/>`);
+    if (o.arm) s.push(aL([[26, -18], [36, -26], [42, -38]], "#b0bec5", 2.6), `<path d="M38,-40 l-2,-4 M46,-40 l2,-4" stroke="${OL}" stroke-width="2" stroke-linecap="round"/>`, o.arm);
+    return s.join("");
+  }
+  function roverD() {
+    const bg = `<defs>${aVGrad(uid("ms"), "#2a1250", "#c2542e")}</defs>`.replace(/^/, "");
+    const g = uid("mars");
+    const sky = `<defs>${aVGrad(g, "#2a1250", "#e07a45")}</defs><rect width="120" height="158" fill="url(#${g})"/>` +
+      [[14, 18], [40, 10], [70, 22], [96, 12], [108, 40], [24, 46], [82, 50]].map(([x, y]) => aC(x, y, .9, "#fff")).join("") + aC(96, 30, 8, "#ffe0b2") + aC(94, 28, 3, "#fff3e0");
+    return [bg + sky + marsGround(118, 5), aEdge(`<g transform="translate(58 136) scale(1.4)">${rover()}</g>`) + shadow(58, 137, 40, .25)];
+  }
+
+  /* ---------- the shooting star / comet; origin = the star's middle, tail to -x, the whole rotated by the caller ---------- */
+  function comet(r, cols, len) {
+    const n = cols.length, band = r * .36;
+    const tail = cols.map((c, i) => { const yi = (i - (n - 1) / 2) * band; return `<path d="M${f1(-r * .4)},${f1(yi)} Q${f1(-len * .45)},${f1(yi * 1.3)} ${f1(-len)},${f1(yi * 2.1)}" stroke="${OL}" stroke-width="${f1(band + 2.2)}" stroke-linecap="round" fill="none"/>`; }).join("") +
+      cols.map((c, i) => { const yi = (i - (n - 1) / 2) * band; return `<path d="M${f1(-r * .4)},${f1(yi)} Q${f1(-len * .45)},${f1(yi * 1.3)} ${f1(-len)},${f1(yi * 2.1)}" stroke="${c}" stroke-width="${f1(band)}" stroke-linecap="round" fill="none"/>`; }).join("");
+    return tail;
+  }
+  function shootingStar() {
+    const bg = space(81, { neb: ["#ff4081", "#3d5afe"] });
+    return [bg, aEdge(`<g transform="translate(76 62) rotate(-32)">${comet(17, RAINBOW, 74)}${starPoly(0, 0, 21, "#ffd54f", .52, Math.PI * 32 / 180)}</g>` + face(76, 62, 1.25, "#ef6c00")) +
+      aSpark(30, 118, 3, "#fff59d") + aSpark(98, 120, 2.4, "#fff59d")];
+  }
+
+  FAN.wspace = [
+    ["Astronaut", "a kid astronaut in a white suit and round helmet, floating and waving among the stars", astronaut],
+    ["Rocket", "the red and white rocket on its launch pad, a little pilot at the window", rocketPad],
+    ["The Moon", "the smiling full Moon with its craters", moon],
+    ["Saturn", "the ringed planet with a happy face", saturnD],
+    ["Planet Earth", "our blue and green home planet, smiling", earthD],
+    ["Friendly alien", "a little green alien with two antennae and big eyes, waving hello", alienD],
+    ["UFO", "a flying saucer with a baby alien in its glass dome, shining its beam", ufoD],
+    ["Mars rover", "the robot rover with six wheels, a solar panel and big camera eyes, exploring red Mars", roverD],
+    ["Shooting star", "a smiling star with a rainbow tail zooming through space", shootingStar],
+  ];
+})();
+
+/* Sticker book subject page "Chess": the family's chess gym. Chibi chess pieces with faces (white and black mixed, each
+   with its real shape: the king's cross, the queen's crown points, the rook's battlements, the knight's horse head, the
+   bishop's mitre with its slit, the round-headed pawn), then three scenes: a pawn becoming a queen, a knight's L jump
+   over pawns, and the two kings shaking hands on the board. Living sticker: the kings' handshake (lv-wave). */
+(() => {
+  "use strict";
+  const OL = A_OL;
+  const uid = p => `cs${p}${++aUid}`;
+  const st = (w = 1.4) => `stroke="${OL}" stroke-width="${w}" stroke-linejoin="round" stroke-linecap="round"`;
+  const P = (d, f, w = 1.4, x = "") => `<path d="${d}" fill="${f}" ${st(w)} ${x}/>`;
+  const Pn = (d, f, x = "") => `<path d="${d}" fill="${f}" ${x}/>`;
+  const E = (cx, cy, rx, ry, f, w = 1.4, x = "") => `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${f}" ${st(w)} ${x}/>`;
+  const En = (cx, cy, rx, ry, f, x = "") => `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${f}" ${x}/>`;
+  const line = (d, w = 1.2, c = OL, x = "") => `<path d="${d}" fill="none" stroke="${c}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" ${x}/>`;
+  const at = (s, x, y, k = 1, a = 0) => `<g transform="translate(${x} ${y}) rotate(${a}) scale(${k})">${s}</g>`;
+  const r2 = v => +v.toFixed(2);
+  const sparks = (pts, c = "#fff") => pts.map(([x, y, r]) => aSpark(x, y, r, c)).join("");
+  const shadow = (x, y, rx) => En(x, y, rx, r2(rx * .16), "#000", 'opacity=".22"');
+  const blush = (x, y, r = 3.4) => En(x, y, r, r2(r * .6), "#ff7a9c", 'opacity=".6"');
+  // an eye with a white sclera, a coloured iris, a pupil and two highlights
+  const eyeW = (x, y, rx, ry, iris, dx = 0) => E(x, y, rx, ry, "#fff", 1.1) + En(r2(x + dx), r2(y + ry * .15), r2(rx * .72), r2(ry * .8), iris) +
+    En(r2(x + dx), r2(y + ry * .22), r2(rx * .36), r2(ry * .45), "#141414") + aC(x + dx - rx * .28, y - ry * .2, r2(rx * .28), "#fff") + aC(x + dx + rx * .25, y + ry * .4, r2(rx * .12), "#fff");
+
+  // the two armies
+  const WH = { b: "#fbf4e4", s: "#e8d8b8", d: "#c4a87c", hi: "#fff", iris: "#3d7be0", mo: "#8a5a2b" };
+  const BL = { b: "#3d3549", s: "#2b2535", d: "#1a1520", hi: "#7d7190", iris: "#f0a62a", mo: "#b9b2c4" };
+
+  // a perspective chessboard floor: rows equally spaced in depth, columns converging to (x0, yh)
+  function floor(yh, light, dark, o = {}) {
+    const zn = o.zn || 1, zf = o.zf || 6, R = o.R || 10, S = o.S || 26, x0 = o.x0 || 60, Yb = o.Yb || 166;
+    const j0 = o.j0 ?? -12, j1 = o.j1 ?? 12, K = (Yb - yh) * zn, out = [];
+    const pt = (z, j) => [x0 + j * S / z, yh + K / z];
+    for (let r = 0; r < R; r++) {
+      const za = zf - r * (zf - zn) / R, zb = zf - (r + 1) * (zf - zn) / R;
+      for (let j = j0; j < j1; j++) {
+        const q = [pt(za, j), pt(za, j + 1), pt(zb, j + 1), pt(zb, j)];
+        out.push(`<polygon points="${aPts(q)}" fill="${(r + j) % 2 ? dark : light}"/>`);
+      }
+    }
+    return out.join("");
+  }
+  // the centre of square (r, j) of such a floor (for markers and paths)
+  function sqAt(yh, r, j, o = {}) {
+    const zn = o.zn || 1, zf = o.zf || 6, R = o.R || 10, S = o.S || 26, x0 = o.x0 || 60, Yb = o.Yb || 166;
+    const K = (Yb - yh) * zn, z = zf - (r + .5) * (zf - zn) / R;
+    return [r2(x0 + (j + .5) * S / z), r2(yh + K / z)];
+  }
+  const sky = (a, b) => aSky(a, b);
+  const stars = pts => pts.map(([x, y, r, c = "#fff7c2"]) => aStar(x, y, r, c)).join("");
+
+  /* ---- the pieces, drawn around x 60 with the base at y 146 ---- */
+  function base(c) {
+    return P("M28,146 Q27,135 36,132 H84 Q93,135 92,146Z", c.b) + line("M31,141 H89", 1, c.d) +
+      P("M34,132 Q34,125 41,124 H79 Q86,125 86,132Z", c.s, 1.3);
+  }
+  function skirt(c, top = 90, w = 13) {
+    return P(`M${60 - w},${top} C${58 - w},${top + 14} 39,${top + 26} 37,124 H83 C81,${top + 26} ${62 + w},${top + 14} ${60 + w},${top}Z`, c.b) +
+      Pn(`M${62 - w},${top + 5} C${60 - w},${top + 16} 47,${top + 26} 44,122 H49 C51,${top + 25} ${57 - w + 9},${top + 15} ${66 - w},${top + 5}Z`, c.hi, 'opacity=".3"');
+  }
+  const collar = (c, y = 90, rx = 17) => E(60, y, rx, 4.6, c.s, 1.3);
+  const hands = (c, l = 1, r = 1) => (l ? aC(35, 110, 5.6, c.b, st(1.2)) : "") + (r ? aC(85, 110, 5.6, c.b, st(1.2)) : "");
+  function face(c, cy, k = 1, o = {}) {
+    const t = [eyeW(60 - 10 * k, cy, 5.6 * k, 6.6 * k, c.iris, .7 * k), eyeW(60 + 10 * k, cy, 5.6 * k, 6.6 * k, c.iris, -.7 * k)];
+    if (o.lash) t.push(line(`M${60 - 15.4 * k},${cy - 4 * k} l-2.6,-2.2 M${60 - 14 * k},${cy - 6 * k} l-1.6,-2.8`, 1.2, OL), line(`M${60 + 15.4 * k},${cy - 4 * k} l2.6,-2.2 M${60 + 14 * k},${cy - 6 * k} l1.6,-2.8`, 1.2, OL));
+    if (o.brow) t.push(line(`M${60 - 15 * k},${cy - 10 * k} Q${60 - 10 * k},${cy - 13 * k} ${60 - 5 * k},${cy - 10.5 * k}`, 1.5, o.brow), line(`M${60 + 15 * k},${cy - 10 * k} Q${60 + 10 * k},${cy - 13 * k} ${60 + 5 * k},${cy - 10.5 * k}`, 1.5, o.brow));
+    t.push(blush(60 - 17 * k, cy + 7 * k), blush(60 + 17 * k, cy + 7 * k));
+    const my = cy + 9 * k;
+    if (o.tache) {
+      t.push(P(`M60,${my - 1.5} C56,${my - 4} 50,${my - 3} 47,${my + 1} C51,${my} 55,${my + 1} 60,${my + .5} C65,${my + 1} 69,${my} 73,${my + 1} C70,${my - 3} 64,${my - 4} 60,${my - 1.5}Z`, o.tache, 1));
+      t.push(P(`M56,${my + 2} Q60,${my + 6} 64,${my + 2}Z`, "#c2283b", 1));
+    } else if (o.o) t.push(E(60, my + 1, 3, 3.4, "#c2283b", 1), En(60, my + 2.6, 1.8, 1.1, "#ff8fa0"));
+    else t.push(P(`M${60 - 4.5 * k},${my} Q60,${my + 6 * k} ${60 + 4.5 * k},${my}Z`, "#c2283b", 1), Pn(`M${60 - 2.4 * k},${my + 2.6 * k} Q60,${my + 1.4 * k} ${60 + 2.4 * k},${my + 2.6 * k} Q60,${my + 4.4 * k} ${60 - 2.4 * k},${my + 2.6 * k}Z`, "#ff8fa0"));
+    return t.join("");
+  }
+  const shine = (c, d) => line(d, 2.4, c.hi, 'opacity=".75"');
+
+  function king(c, o = {}) {
+    const t = [base(c), skirt(c), hands(c, o.l ?? 1, o.r ?? 1), collar(c)];
+    t.push(P("M56,36 V25 H48 V17 H56 V8 H64 V17 H72 V25 H64 V36Z", c.b, 1.4));
+    t.push(P("M38,53 Q40,37 60,35 Q80,37 82,53Z", c.b));
+    t.push(P("M36,54 C34,70 40,82 46,89 H74 C80,82 86,70 84,54Z", c.b));
+    t.push(E(60, 54, 25, 5.6, c.s, 1.3), aC(60, 54, 3, "#ffcf3a", st(.9)), aC(47, 55, 2, "#e8455a", st(.7)), aC(73, 55, 2, "#3a8de0", st(.7)));
+    t.push(shine(c, "M40,62 Q40,74 46,82"), shine(c, "M44,45 Q48,40 54,39"));
+    t.push(face(c, 71, .95, { tache: c.mo, brow: c.mo }));
+    return t.join("");
+  }
+  function queen(c) {
+    const t = [base(c), skirt(c), hands(c), collar(c)];
+    t.push(P("M37,55 L35,36 L44,46 L49,30 L55,45 L60,27 L65,45 L71,30 L76,46 L85,36 L83,55Z", c.b));
+    [[35, 35], [49, 29], [71, 29], [85, 35]].forEach(([x, y]) => t.push(aC(x, y, 3.2, c.b, st(1.2))));
+    t.push(aC(60, 21, 5.4, c.b, st(1.3)), aC(58.4, 19.4, 1.6, c.hi, 'opacity=".8"'));
+    t.push(P("M36,54 C34,70 40,82 46,89 H74 C80,82 86,70 84,54Z", c.b));
+    t.push(E(60, 54, 25, 5.6, c.s, 1.3), aC(60, 54, 3, "#ff5fa2", st(.9)), aC(48, 55, 2, "#ffcf3a", st(.7)), aC(72, 55, 2, "#ffcf3a", st(.7)));
+    t.push(shine(c, "M40,62 Q40,74 46,82"));
+    t.push(face(c, 69, 1, { lash: 1 }));
+    return t.join("");
+  }
+  function rook(c) {
+    const t = [base(c)];
+    t.push(P("M39,58 C39,88 37,108 35,125 H85 C83,108 81,88 81,58Z", c.b));
+    t.push(hands(c));
+    t.push(line("M40,100 H80 M42,113 H79 M50,100 V113 M70,100 V113 M60,113 V124", .9, c.d));
+    t.push(P("M33,58 V35 H44 V43 H53 V35 H67 V43 H76 V35 H87 V58Z", c.b));
+    t.push(P("M32,61 Q32,56 37,56 H83 Q88,56 88,61 Q88,64 83,64 H37 Q32,64 32,61Z", c.s, 1.3));
+    t.push(shine(c, "M43,70 Q42,84 42,94"), shine(c, "M36,39 V51"));
+    t.push(P("M54,125 V117 Q60,111 66,117 V125Z", c.d, 1.1));
+    t.push(face(c, 79, 1));
+    return t.join("");
+  }
+  function knight(c, mane) {
+    const t = [base(c)];
+    t.push(P("M62,34 L67,20 L72,35Z", c.s, 1.3));
+    t.push(P("M65,33 C78,35 90,46 93,62 C97,82 92,104 84,126 L91,126 C100,104 103,84 100,67 L104,62 L98,57 L101,50 L94,47 L96,40 L88,39 L89,32 L80,32 L77,27 L70,31Z", mane, 1.3));
+    t.push(P("M38,126 C38,111 44,102 51,96 C42,97 32,98 25,94 C18,90 17,80 23,75 C30,67 38,58 44,50 C47,44 52,40 56,37 L56,22 L66,33 C79,35 90,46 93,62 C97,82 92,104 84,126Z", c.b));
+    t.push(P("M58,27 L58,36 L63,33Z", "#ff9fb5", .8));
+    t.push(shine(c, "M46,104 Q42,112 42,122"), shine(c, "M48,48 Q52,42 56,40"));
+    t.push(line("M51,96 C47,90 46,85 48,79", 1.2, c.d));
+    t.push(eyeW(52, 60, 7.2, 8.4, c.iris, -1.4), line("M44,51 Q50,47 58,50", 1.5, OL));
+    t.push(En(26, 82, 2, 1.5, OL), line("M21,90 Q27,95 34,92", 1.3), blush(40, 72, 4));
+    return t.join("");
+  }
+  function bishop(c) {
+    const t = [base(c), skirt(c), hands(c), collar(c)];
+    t.push(P("M60,25 C81,40 85,68 75,89 H45 C35,68 39,40 60,25Z", c.b));
+    t.push(aC(60, 20, 5.4, c.b, st(1.3)), aC(58.4, 18.4, 1.6, c.hi, 'opacity=".8"'));
+    t.push(P("M62,32 L79,52 L76,56 L60,36Z", c.d, 1.1));
+    t.push(shine(c, "M45,50 Q41,62 43,76"));
+    t.push(face(c, 67, .95));
+    return t.join("");
+  }
+  function pawn(c, o = {}) {
+    const t = [base(c), skirt(c, 87, 12), hands(c), collar(c, 86, 18)];
+    t.push(aC(60, 60, 24, c.b, st(1.4)));
+    t.push(shine(c, "M42,52 Q44,42 52,39"));
+    t.push(face(c, 61, 1, o));
+    return t.join("");
+  }
+  // a golden crown (queen's coronet) for the promotion
+  const crown = (x, y, k = 1) => at(P("M-22,10 L-24,-8 L-14,2 L-8,-14 L-2,1 L0,-18 L2,1 L8,-14 L14,2 L24,-8 L22,10Z", "#ffcf3a", 1.4) +
+    [[-24, -8], [-8, -14], [8, -14], [24, -8]].map(([a, b]) => aC(a, b, 2.6, "#ffe680", st(1))).join("") + aC(0, -19, 3.4, "#ffe680", st(1)) +
+    P("M-22,10 H22 V15 H-22Z", "#f0a91a", 1.3) + aC(0, 4, 2.6, "#e8455a", st(.8)) + aC(-12, 6, 1.8, "#3a8de0", st(.7)) + aC(12, 6, 1.8, "#3a8de0", st(.7)) +
+    line("M-16,-2 L-12,4", 1.4, "#fff8d0"), x, y, k);
+
+  /* ---- backdrops ---- */
+  const curtains = c => P("M-2,-2 H22 Q16,30 22,62 Q10,70 -2,66Z", c, 1.2) + P("M122,-2 H98 Q104,30 98,62 Q110,70 122,66Z", c, 1.2) +
+    line("M8,4 Q6,30 10,60 M112,4 Q114,30 110,60", 1, "#000", 'opacity=".25"');
+
+  /* ---------------- the pieces ---------------- */
+  function wKing() {
+    return [sky("#6a3fc6", "#e9b6f0") + curtains("#c0263c") + stars([[60, 12, 3], [96, 22, 2.4], [26, 46, 2]]) +
+      floor(96, "#f0d9b5", "#b58863") + shadow(60, 146, 34),
+    aEdge(king(WH))];
+  }
+  function bQueen() {
+    return [sky("#ff8fc8", "#ffe6f3") + sparks([[18, 50, 4], [102, 40, 5], [96, 70, 3], [24, 82, 3]]) +
+      floor(96, "#eeeed2", "#769656") + shadow(60, 146, 34),
+    aEdge(queen(BL))];
+  }
+  function wRook() {
+    return [sky("#5bb8ff", "#d8f0ff") + aCloud(84, 16, .9) + aCloud(4, 44, .7) +
+      Pn("M0,98 Q30,84 60,92 T120,88 V110 H0Z", "#7cc95a") + floor(100, "#dee3e6", "#8ca2ad") + shadow(60, 146, 34),
+    aEdge(rook(WH))];
+  }
+  function bKnight() {
+    return [sky("#ff9a4a", "#ffe08a") + aSun(96, 30, 13) + floor(98, "#f0d9b5", "#b58863") + shadow(60, 146, 36),
+    aEdge(knight(BL, "#6c5c84"))];
+  }
+  function wBishop() {
+    const win = Pn("M60,8 C82,8 96,26 96,52 V96 H24 V52 C24,26 38,8 60,8Z", "#3a2a6a") +
+      Pn("M60,14 C78,14 90,30 90,52 V96 H30 V52 C30,30 42,14 60,14Z", "#7fd3ff") +
+      Pn("M30,52 H90 V64 H30Z", "#ffcf3a", 'opacity=".8"') + Pn("M30,64 L60,14 L90,64Z", "#ff7aa8", 'opacity=".55"') + Pn("M30,96 L60,52 L90,96Z", "#8be38b", 'opacity=".6"');
+    return [sky("#2f2560", "#7a5bb5") + win + floor(96, "#e8dcf8", "#8a6cc2") + shadow(60, 146, 34),
+    aEdge(bishop(WH))];
+  }
+  function bPawn() {
+    return [sky("#16204a", "#4a5ba8") + aC(98, 24, 10, "#fff3c4") + aC(103, 20, 9, "#2a376e") +
+      stars([[22, 54, 2.4], [44, 14, 2], [70, 28, 2.8], [88, 60, 2.2], [12, 84, 2], [108, 82, 2.6], [36, 36, 1.6]]) +
+      floor(98, "#c9d4ec", "#5a6aa8") + shadow(60, 146, 34),
+    aEdge(pawn(BL))];
+  }
+
+  /* ---------------- the scenes ---------------- */
+  function promotion() {
+    const g = uid("rd");
+    const glow = (() => { const [x, y] = sqAt(80, 9, -1, { R: 10 }); return En(x, y + 2, 24, 7, "#ffe066", 'opacity=".75"'); })();
+    return [aRadial(g, "#fff3b0", "#ffb52e", ".3") + floor(80, "#fff4d6", "#e2a94a") + glow +
+      sparks([[14, 40, 4], [106, 36, 5], [100, 92, 3.4], [18, 100, 3]]),
+    aEdge(at(pawn(BL, { o: 1 }), 15, 48, .75) + crown(60, 36, 1.15) +
+      sparks([[34, 22, 3.4, "#fff"], [86, 22, 3.6], [96, 50, 2.6], [26, 52, 2.6]], "#fff") +
+      line("M44,32 L38,26 M76,32 L82,26 M60,14 V8", 1.6, "#fff"))];
+  }
+  function knightJump() {
+    const yh = 84, o = { R: 8, S: 22 };
+    const a = sqAt(yh, 7, 1, o), b = sqAt(yh, 2, -3, o);
+    const marks = En(a[0], a[1], 13, 5, "#ffd21f", 'opacity=".8"') + En(b[0], b[1], 8, 3, "#4cd964", 'opacity=".9"');
+    const trail = line(`M${a[0]},${a[1] - 4} C114,96 100,24 62,24 C30,24 18,60 ${b[0]},${b[1] - 4}`, 2.6, "#fff", 'stroke-dasharray="1 5"') +
+      line("M100,62 L110,58 M102,74 L112,72", 2, "#fff");
+    return [sky("#9fe0ff", "#e8f8ff") + aCloud(86, 8, .7) + aCloud(2, 44, .6) + floor(yh, "#eeeed2", "#769656", o) + marks + trail,
+    aEdge(at(pawn(WH), 24.4, 85, .46) + at(pawn(WH), 52.4, 85, .46) + at(knight(BL, "#6c5c84"), 20, 2, .66, -8))];
+  }
+  function handshake() {
+    const wall = sky("#f6d39a", "#f9e6c4") + [0, 1, 2, 3, 4, 5].map(i => Pn(`M${i * 22 + 6},0 V100 H${i * 22 + 14} V0Z`, "#f2c37f", 'opacity=".45"')).join("") +
+      P("M74,6 H112 V44 H74Z", "#1d2a5a", 1.8) + line("M93,6 V44 M74,25 H112", 2, "#8a5a2b") + aC(102, 15, 4, "#fff3c4") + stars([[82, 34, 1.8], [104, 36, 1.6], [84, 13, 1.4]]) +
+      line("M46,0 V14", 1.2) + aC(46, 26, 9, "#fff3c4", 'opacity=".6"') + P("M34,26 L40,14 H52 L58,26Z", "#ff9f43", 1.2);
+    const table = P("M-2,96 H122 V158 H-2Z", "#a0612f", 1.2) + Pn("M-2,96 H122 V100 H-2Z", "#c27c40");
+    const board = P("M10,104 H110 L124,160 H-4Z", "#6b3e1e", 1.2) + floor(46, "#f0d9b5", "#b58863", { R: 8, S: 13, zn: 1, zf: 2.2, j0: -4, j1: 4, Yb: 156 });
+    const kL = at(king(WH, { r: 0 }), -10, 38, .7), kR = at(king(BL, { l: 0 }), 46, 38, .7);
+    const shake = `<g class="lv-wave">${aL([[42, 114], [56, 106]], WH.b, 5.4)}${aL([[78, 114], [64, 106]], BL.b, 5.4)}` +
+      aC(56.5, 105, 5.6, WH.b, st(1.2)) + aC(63.5, 105, 5.6, BL.b, st(1.2)) + line("M60,100 V110", 1, OL) + `</g>`;
+    return [wall + table + board,
+    aEdge(kL + kR + shake + sparks([[60, 88, 4, ""], [48, 92, 2.4], [72, 92, 2.4]], "#ffd21f"))];
+  }
+
+  FAN.chess = [
+    ["White King", "The most important piece: the cross on his crown. Keep him safe!", wKing],
+    ["Black Queen", "The strongest piece: she moves any way, as far as she likes", bQueen],
+    ["White Rook", "The little castle tower: straight lines, up, down and sideways", wRook],
+    ["Black Knight", "The horse: jumps in an L, even over other pieces", bKnight],
+    ["White Bishop", "The bishop with the slit in his hat: slides along the diagonals", wBishop],
+    ["Black Pawn", "Small but brave: one step forward, takes diagonally", bPawn],
+    ["Pawn becomes Queen", "A pawn that reaches the last row can become a queen!", promotion],
+    ["Knight's jump", "Two squares forward, one to the side: the knight jumps over everyone", knightJump],
+    ["Good game!", "The two kings shake hands after the game", handshake],
+  ];
+})();
+
+/* Sticker book page "Jungle" (9 of 9: lion, sloth, elephant, giraffe, zebra, monkey, gorilla, hippo, penguin) */
+(() => {
+  "use strict";
+  const uid = p => `jg${p}${++aUid}`;
+  const r1 = v => +(+v).toFixed(1);
+  const at = (x, y, s, inner, rot = 0) => `<g transform="translate(${x} ${y}) rotate(${rot}) scale(${s})">${inner}</g>`;
+  const blush = (x, y, r = 2.6) => `<ellipse cx="${x}" cy="${y}" rx="${r}" ry="${r1(r * .6)}" fill="#ff7a9a" opacity=".5"/>`;
+  const smile = (x, y, w = 4) => `<path d="M${r1(x - w)},${y} Q${x},${r1(y + w * .9)} ${r1(x + w)},${y}" fill="none" stroke="${A_OL}" stroke-width="1.1" stroke-linecap="round"/>`;
+  // a fluffy ring (mane / fur tuft): n petals between rOut and rIn around (cx,cy)
+  function fur(cx, cy, rOut, rIn, n, col) {
+    let d = "";
+    for (let i = 0; i < n; i++) {
+      const a0 = i * 2 * Math.PI / n, a1 = (i + 1) * 2 * Math.PI / n, am = (a0 + a1) / 2;
+      const x0 = cx + Math.cos(a0) * rOut, y0 = cy + Math.sin(a0) * rOut * .86;
+      const x1 = cx + Math.cos(a1) * rOut, y1 = cy + Math.sin(a1) * rOut * .86;
+      const xm = cx + Math.cos(am) * rIn, ym = cy + Math.sin(am) * rIn * .86;
+      d += (i === 0 ? `M${r1(x0)},${r1(y0)}` : "") + ` Q${r1(xm)},${r1(ym)} ${r1(x1)},${r1(y1)}`;
+    }
+    return `<path d="${d}Z" fill="${col}" ${A_OUT}/>`;
+  }
+  const leaf = (x, y, s, rot, col) => `<g transform="translate(${x} ${y}) rotate(${rot}) scale(${s})"><path d="M0,0 Q11,-7 22,0 Q11,7 0,0Z" fill="${col}" ${A_OUT}/><path d="M1,0 L21,0" stroke="${A_OL}" stroke-width=".6" opacity=".35"/></g>`;
+  const leafCluster = (x, y, s, col) => [[-8, -2, -24], [0, -7, 2], [9, -1, 28], [-3, 5, 195], [8, 6, 158]]
+    .map(([dx, dy, rot]) => leaf(x + dx, y + dy, s, rot, col)).join("");
+  function vine(x, yTop, h, col, sway = 6) {
+    let d = `M${x},${yTop}`;
+    for (let i = 1; i <= 4; i++) d += ` Q${x + (i % 2 ? sway : -sway)},${r1(yTop + h * (i - .5) / 4)} ${x},${r1(yTop + h * i / 4)}`;
+    let s = `<path d="${d}" fill="none" stroke="${col}" stroke-width="2.6" stroke-linecap="round"/>`;
+    s += [1, 2, 3].map(i => { const ey = r1(yTop + h * i / 4); return `<path d="M${x},${ey} q${i % 2 ? 6 : -6},-3 ${i % 2 ? 10 : -10},2" fill="none" stroke="${col}" stroke-width="2" stroke-linecap="round"/>`; }).join("");
+    return s;
+  }
+  // a patch of grass tufts along the ground
+  const tufts = (xs, col) => xs.map(x => `<path d="M${x},158 Q${x + 2},146 ${x + 5},158" fill="none" stroke="${col}" stroke-width="2" stroke-linecap="round"/>`).join("");
+
+  /* ---------- backdrops ---------- */
+  function savanna() {
+    const g = uid("sv");
+    let s = `<defs>${aVGrad(g, "#ffcf6e", "#fff3cf")}</defs><rect width="120" height="158" fill="url(#${g})"/>`;
+    s += aSun(94, 26, 13);
+    s += [[18, 18], [30, 13], [42, 19]].map(([x, y]) => `<path d="M${x - 4},${y} Q${x},${y - 4} ${x + 4},${y} M${x},${y} Q${x},${y - 4} ${x + 4},${y - 2}" fill="none" stroke="${A_OL}" stroke-width="1"/>`).join("");
+    s += aP("M0,118 Q40,104 80,114 Q100,118 120,112 V158 H0Z", "#e8c468");
+    s += `<path d="M98,150 V122" stroke="#5a3b22" stroke-width="3.4" stroke-linecap="round"/>` + aP("M74,118 Q98,99 122,115 Q110,125 98,123 Q86,127 74,118Z", "#5c7a3a");
+    s += aP("M0,140 Q30,126 60,138 Q90,148 120,134 V158 H0Z", "#c7a23e");
+    s += tufts([10, 26, 44, 60, 78, 96, 112], "#a8842e");
+    return s;
+  }
+  function canopy() {
+    const g = uid("cp");
+    let s = `<defs>${aVGrad(g, "#1f6b4a", "#bfe6a0")}</defs><rect width="120" height="158" fill="url(#${g})"/>`;
+    s += `<g opacity=".16" fill="#fff">` + [[8, -8], [44, -12], [80, -4]].map(([a, b]) => `<polygon points="${a},0 ${a + 14},0 ${b + 26},158 ${b},158"/>`).join("") + `</g>`;
+    s += [[14, 10, 1.3, "#2e8b5a"], [46, 4, 1.6, "#3aa468"], [80, 12, 1.3, "#27754a"], [108, 16, 1.1, "#2e8b5a"]].map(([x, y, sc, c]) => leafCluster(x, y, sc, c)).join("");
+    s += vine(26, 0, 68, "#3c8a52") + vine(92, 0, 54, "#2e7a46", -5);
+    s += aP("M0,140 Q40,124 80,140 Q100,146 120,136 V158 H0Z", "#1d5e3c");
+    return s;
+  }
+  function riverJungle() {
+    const g = uid("rj"), wy = 120;
+    let s = `<defs>${aVGrad(g, "#2e8b5a", "#a9e0b0")}</defs><rect width="120" height="158" fill="url(#${g})"/>`;
+    s += [[12, 8, 1.2, "#246b44"], [50, 4, 1.5, "#2e8b5a"], [92, 10, 1.2, "#246b44"]].map(([x, y, sc, c]) => leafCluster(x, y, sc, c)).join("");
+    s += aP(`M0,${wy - 4} Q30,${wy - 14} 60,${wy - 4} Q90,${wy + 4} 120,${wy - 8} V${wy + 6} H0Z`, "#c9a24a");
+    s += aWaves(wy, "#3a9bd6", "#bfe9ff", 4);
+    s += aC(92, 136, 7, "#2e8b5a", A_OUT) + aC(78, 142, 5, "#2e8b5a", A_OUT);
+    return s;
+  }
+  function beach() {
+    let s = aSky("#8fd8f5", "#eaf7ff");
+    s += aCloud(18, 16, .8) + aCloud(90, 10, .6) + aSun(102, 22, 8);
+    s += aWaves(112, "#2f7fb0", "#bfe6f5", 4);
+    s += aP("M-5,158 Q20,118 52,132 Q82,146 125,124 V158Z", "#8d99a2");
+    s += aC(24, 140, 9, "#6b7680", A_OUT) + aC(66, 148, 7, "#8a95a0", A_OUT) + aC(96, 138, 10, "#6b7680", A_OUT);
+    return s;
+  }
+
+  /* ---------- the animals (drawn around 0,0) ---------- */
+  function lionChar() {
+    const mane1 = "#e8a33d", mane2 = "#d4852a", skin = "#f8d49a", belly = "#fdeec4";
+    let s = fur(0, -10, 32, 21, 16, mane1);
+    s += aC(-19, -27, 6, skin, A_OUT) + aC(19, -27, 6, skin, A_OUT);
+    s += aC(-19, -27, 3.2, "#c97b4a") + aC(19, -27, 3.2, "#c97b4a");
+    s += aC(0, -10, 20, skin, A_OUT);
+    s += aP("M-15,8 Q-20,28 -9,36 Q0,40 9,36 Q20,28 15,8 Q0,15 -15,8Z", skin);
+    s += aP("M-8,22 Q0,28 8,22 L6,33 Q0,36 -6,33Z", belly);
+    s += aC(-13,36,4.6,skin,A_OUT) + aC(13,36,4.6,skin,A_OUT);
+    s += `<path d="M14,28 Q33,32 31,12" fill="none" stroke="${skin}" stroke-width="3.4" stroke-linecap="round" ${A_OUT}/>` + fur(31, 10, 5.5, 2.8, 9, mane2);
+    s += aEye(-8, -11, "#3a2410", 1) + aEye(8, -11, "#3a2410", 1);
+    s += aP("M-5,-1 Q0,2.4 5,-1 L3,1.6 Q0,3.4 -3,1.6Z", "#6b3a1e");
+    s += `<path d="M0,1.6 V4.4 M0,4.4 Q-5,8 -9,6 M0,4.4 Q5,8 9,6" fill="none" stroke="${A_OL}" stroke-width="1.1" stroke-linecap="round"/>`;
+    s += blush(-14,-3) + blush(14,-3);
+    return s;
+  }
+  function slothChar() {
+    const fur1 = "#a98f72", fur2 = "#8a7059", face = "#e8d9bc";
+    let s = `<path d="M-16,-46 H18" stroke="#6b4a2e" stroke-width="7" stroke-linecap="round"/><path d="M-16,-46 H18" stroke="#8a633c" stroke-width="2.4" stroke-linecap="round"/>`;
+    s += `<path d="M-9,-42 Q-18,-30 -13,-16" fill="none" stroke="${fur1}" stroke-width="9" stroke-linecap="round" ${A_OUT}/>`;
+    s += `<path d="M9,-42 Q18,-30 13,-16" fill="none" stroke="${fur1}" stroke-width="9" stroke-linecap="round" ${A_OUT}/>`;
+    s += [[-16,-17],[-13,-14]].map(([x,y]) => `<path d="M${x},${y} l-3,2 M${x+1},${y+2} l-3.4,1.6 M${x+2},${y+4} l-3.4,1" stroke="${A_OL}" stroke-width="1" stroke-linecap="round"/>`).join("");
+    s += [[13,-14],[16,-17]].map(([x,y]) => `<path d="M${x},${y} l3,2 M${x-1},${y+2} l3.4,1.6 M${x-2},${y+4} l3.4,1" stroke="${A_OL}" stroke-width="1" stroke-linecap="round"/>`).join("");
+    s += aP("M-18,-10 Q-22,16 -10,30 Q0,38 10,30 Q22,16 18,-10 Q0,2 -18,-10Z", fur1);
+    s += `<path d="M-9,16 Q0,22 9,16 L7,27 Q0,31 -7,27Z" fill="${fur2}"/>`;
+    s += [[-7,34],[7,34]].map(([x,y]) => `<path d="M${x},${y} q-2,4 -5,4 M${x},${y+1} q0,4 -3,5 M${x},${y+1} q3,4 6,2" fill="none" stroke="${A_OL}" stroke-width="1" stroke-linecap="round"/>`).join("");
+    s += aC(0, -6, 15, face, A_OUT);
+    s += aC(-9, -8, 6.5, fur2, A_OUT) + aC(9, -8, 6.5, fur2, A_OUT);
+    s += aEye(-9, -8, "#2a1a10", .72) + aEye(9, -8, "#2a1a10", .72);
+    s += aP("M-3,-1 Q0,1.6 3,-1 L2,.8 Q0,2.2 -2,.8Z", "#6b3a1e");
+    s += `<path d="M-6,3 Q0,7 6,3" fill="none" stroke="${A_OL}" stroke-width="1.1" stroke-linecap="round"/>` +
+      aC(-2.6,4.4,1,"#fff",A_OUT) + aC(2.6,4.4,1,"#fff",A_OUT);
+    s += blush(-11,0) + blush(11,0);
+    return s;
+  }
+  // baby elephant: warm grey, big floppy pink-lined ears, trunk up spraying water, happy
+  function elephantChar() {
+    const skin = "#b7a99a", skin2 = "#9f9080", pink = "#f6b7c6", water = "#6fb8dc", waterL = "#c3e8f7";
+    let s = "";
+    s += aP("M-18,-24 Q-44,-20 -42,8 Q-40,32 -18,30 Q-9,28 -11,8 Q-13,-10 -18,-24Z", skin);
+    s += aP("M18,-24 Q44,-20 42,8 Q40,32 18,30 Q9,28 11,8 Q13,-10 18,-24Z", skin);
+    s += aP("M-20,-14 Q-34,-10 -32,8 Q-30,24 -18,22 Q-13,20 -15,6 Q-16,-4 -20,-14Z", pink);
+    s += aP("M20,-14 Q34,-10 32,8 Q30,24 18,22 Q13,20 15,6 Q16,-4 20,-14Z", pink);
+    s += aP("M-21,10 Q-27,32 -11,42 Q0,47 11,42 Q27,32 21,10 Q0,20 -21,10Z", skin);
+    s += aC(-11,43,5,skin2,A_OUT) + aC(11,43,5,skin2,A_OUT);
+    s += aC(0, -10, 21, skin, A_OUT);
+    s += `<path d="M2,8 Q10,-2 6,-16 Q2,-28 9,-36 Q13,-41 10,-46" fill="none" stroke="${skin}" stroke-width="7.4" stroke-linecap="round" ${A_OUT}/>`;
+    s += `<path d="M9,-46 q-2,-5 1,-9 M9,-46 q4,-3 7,-2" fill="none" stroke="${water}" stroke-width="1.6" stroke-linecap="round"/>`;
+    s += aC(10, -52, 2.4, water) + aC(16, -56, 1.7, waterL) + aC(3, -57, 1.6, waterL) + aC(10, -62, 1.3, water);
+    s += aEye(-8, -14, "#2a1a10", 1, 1) + aEye(8, -14, "#2a1a10", 1, 1);
+    s += aP("M-6,2 Q0,7 6,2 L4.5,5.5 Q0,8.4 -4.5,5.5Z", "#7a4a3a");
+    s += blush(-15,-4) + blush(15,-4);
+    return s;
+  }
+  // tall, gentle, warm-tan with brown patches; short chibi neck so it reads friendly, not spindly
+  function giraffeChar() {
+    const skin = "#f3c87c", patch = "#c8863c", face = "#f7dca3", horn = "#8a5a2e";
+    let s = aP("M-16,36 Q-20,52 -4,56 Q0,57 4,56 Q20,52 16,36 Q0,46 -16,36Z", skin);
+    s += aC(-9,57,4.4,horn,A_OUT) + aC(9,57,4.4,horn,A_OUT);
+    s += `<path d="M-13,-6 Q-16,18 -11,36 M13,-6 Q16,18 11,36" fill="none" stroke="${skin}" stroke-width="13" stroke-linecap="round" ${A_OUT}/>`;
+    s += aC(-2,-22,16,face,A_OUT);
+    s += `<path d="M-2,-40 Q-4,-48 -8,-50 M2,-40 Q4,-48 8,-50" fill="none" stroke="${skin}" stroke-width="4" stroke-linecap="round" ${A_OUT}/>`;
+    s += aC(-8,-50,3.2,horn,A_OUT) + aC(8,-50,3.2,horn,A_OUT);
+    s += aP("M-16,-28 Q-23,-30 -22,-21 Q-21,-15 -14,-17Z", skin) + aP("M16,-28 Q23,-30 22,-21 Q21,-15 14,-17Z", skin);
+    s += [[-9,-8,2.6],[6,-2,2.2],[-4,6,2.4],[10,-14,2],[-14,30,2.6],[8,24,2.3],[-2,32,2.1]].map(([x,y,r]) => aC(x,y,r,patch)).join("");
+    s += aEye(-9, -24, "#2a1a10", 1, 1) + aEye(6, -24, "#2a1a10", 1, 1);
+    s += aP("M-4,-14 Q-1,-10 2,-14 L1,-12 Q-1,-10.6 -3,-12Z", "#6b3a1e");
+    s += blush(-14,-16) + blush(13,-19);
+    return s;
+  }
+  function zebraChar() {
+    const white = "#fbfaf6", mane = "#2a1a10", pink = "#f2b8c6";
+    let s = aP("M-18,6 Q-24,30 -8,40 Q0,45 8,40 Q24,30 18,6 Q0,18 -18,6Z", white);
+    s += ["M-16,10 Q-10,8 -4,12","M-14,20 Q-6,17 2,21","M-10,30 Q-2,27 6,31","M4,16 Q10,14 16,18","M2,26 Q10,23 16,27"]
+      .map(d => `<path d="${d}" fill="none" stroke="${mane}" stroke-width="2.6" stroke-linecap="round"/>`).join("");
+    s += aC(-12,40,4.6,white,A_OUT) + aC(12,40,4.6,white,A_OUT);
+    s += aC(0, -12, 18, white, A_OUT);
+    s += ["M-15,-18 Q-10,-20 -4,-16","M-16,-6 Q-9,-9 -2,-5","M2,-20 Q9,-22 15,-18","M3,-8 Q10,-11 16,-7","M-7,2 Q0,0 7,2"]
+      .map(d => `<path d="${d}" fill="none" stroke="${mane}" stroke-width="2.8" stroke-linecap="round"/>`).join("");
+    s += aP("M-15,-20 Q-20,-30 -12,-32 Q-8,-24 -9,-16Z", white) + aP("M15,-20 Q20,-30 12,-32 Q8,-24 9,-16Z", white);
+    s += aC(-13,-30,2.4,mane,A_OUT) + aC(13,-30,2.4,mane,A_OUT);
+    s += aEye(-7, -13, "#2a1a10", 1) + aEye(7, -13, "#2a1a10", 1);
+    s += aC(0,-2,2.6,pink,A_OUT);
+    s += smile(0, 0, 4);
+    s += blush(-12,-5) + blush(12,-5);
+    return s;
+  }
+  function monkeyChar() {
+    const fur1 = "#8a5a35", fur2 = "#6b4426", face = "#f3d9ab";
+    let s = `<path d="M-6,34 Q-16,46 -10,58 Q-6,64 0,60" fill="none" stroke="${fur1}" stroke-width="6" stroke-linecap="round" ${A_OUT}/>`;
+    s += aP("M-17,6 Q-23,28 -9,38 Q0,44 9,38 Q23,28 17,6 Q0,16 -17,6Z", fur1);
+    s += aC(-11,38,4.6,fur2,A_OUT) + aC(11,38,4.6,fur2,A_OUT);
+    s += aC(-19,-6,8,fur1,A_OUT) + aC(19,-6,8,fur1,A_OUT);
+    s += aC(-19,-6,4.4,face,A_OUT) + aC(19,-6,4.4,face,A_OUT);
+    s += aC(0, -8, 17, fur1, A_OUT);
+    s += aP("M-11,-3 Q0,8 11,-3 Q11,10 0,14 Q-11,10 -11,-3Z", face);
+    s += aEye(-6, -8, "#2a1a10", .85) + aEye(6, -8, "#2a1a10", .85);
+    s += aC(0,0,2,"#7a5236",A_OUT);
+    s += smile(0, 5, 5);
+    s += blush(-13,-2) + blush(13,-2);
+    return s;
+  }
+  function gorillaChar() {
+    const fur1 = "#3a3a3a", fur2 = "#2a2a2a", face = "#6b5544";
+    let s = aP("M-24,2 Q-30,30 -12,44 Q0,51 12,44 Q30,30 24,2 Q0,16 -24,2Z", fur1);
+    s += aC(-14,44,6,fur2,A_OUT) + aC(14,44,6,fur2,A_OUT);
+    s += `<path d="M-24,10 Q-34,18 -30,30 Q-27,36 -20,33" fill="${fur1}" ${A_OUT}/>` + `<path d="M24,10 Q34,18 30,30 Q27,36 20,33" fill="${fur1}" ${A_OUT}/>`;
+    s += aC(-8,34,4,fur2,A_OUT) + aC(8,34,4,fur2,A_OUT);
+    s += aC(-17,-8,7,fur1,A_OUT) + aC(17,-8,7,fur1,A_OUT);
+    s += aC(0, -8, 18, fur1, A_OUT);
+    s += aP("M-11,-10 Q0,-16 11,-10 Q13,-2 9,2 L-9,2 Q-13,-2 -11,-10Z", face);
+    s += aEye(-6, -8, "#2a1a10", .85) + aEye(6, -8, "#2a1a10", .85);
+    s += aP("M-3,0 Q0,2.4 3,0 L2,2 Q0,3.6 -2,2Z", "#2a1a10");
+    s += smile(0, 6, 5);
+    return s;
+  }
+  function hippoChar() {
+    const skin = "#9aa6ae", skin2 = "#8696a0", pink = "#e8899c";
+    let s = aP("M-26,18 Q-30,-2 -10,-8 Q0,-10 10,-8 Q30,-2 26,18 Q0,30 -26,18Z", skin);
+    s += aC(-16,-8,5.4,skin,A_OUT) + aC(16,-8,5.4,skin,A_OUT);
+    s += aC(-16,-8,2.6,skin2) + aC(16,-8,2.6,skin2);
+    s += aEye(-13,-13,"#2a1a10",.8) + aEye(13,-13,"#2a1a10",.8);
+    s += aP("M-20,6 Q0,24 20,6 Q22,16 12,22 Q0,27 -12,22 Q-22,16 -20,6Z", pink);
+    s += `<path d="M-18,8 Q0,22 18,8" fill="none" stroke="${A_OL}" stroke-width="1.1"/>`;
+    s += aC(-10,10,1.6,"#fff",A_OUT) + aC(0,13,1.6,"#fff",A_OUT) + aC(10,10,1.6,"#fff",A_OUT);
+    s += blush(-19,-2) + blush(19,-2);
+    return s;
+  }
+  function penguinChar() {
+    const black = "#20242b", white = "#fdfdfb", beak = "#f4a93a";
+    let s = aP("M-16,-4 Q-22,24 -14,42 Q0,50 14,42 Q22,24 16,-4 Q0,10 -16,-4Z", black);
+    s += aP("M-10,4 Q-14,24 -8,38 Q0,44 8,38 Q14,24 10,4 Q0,14 -10,4Z", white);
+    s += aC(-13,44,4.4,beak,A_OUT) + aC(13,44,4.4,beak,A_OUT);
+    s += aC(0, -14, 15, black, A_OUT);
+    s += aP("M-9,-16 Q-11,-6 -4,-2 Q0,0 4,-2 Q11,-6 9,-16 Q0,-8 -9,-16Z", white);
+    s += aEye(-6, -16, "#2a1a10", .85) + aEye(6, -16, "#2a1a10", .85);
+    s += aP("M-3,-10 Q0,-6 3,-10 Q3,-7 0,-5 Q-3,-7 -3,-10Z", beak);
+    s += `<path d="M-16,2 Q-24,8 -22,18" fill="none" stroke="${black}" stroke-width="6" stroke-linecap="round" ${A_OUT}/>`;
+    s += `<path d="M16,2 Q24,8 22,18" fill="none" stroke="${black}" stroke-width="6" stroke-linecap="round" ${A_OUT}/>`;
+    s += blush(-12,-10) + blush(12,-10);
+    return s;
+  }
+
+  function lion() { return [savanna(), aEdge(at(60, 94, 1.3, lionChar()))]; }
+  function sloth() { return [canopy(), aEdge(`<g class="lv-swing">${at(58, 64, 1.25, slothChar())}</g>`)]; }
+  function elephant() { return [riverJungle(), aEdge(at(60, 100, 1.15, elephantChar()))]; }
+  function giraffe() { return [savanna(), aEdge(at(58, 90, 1.02, giraffeChar()))]; }
+  function zebra() { return [savanna(), aEdge(at(60, 100, 1.2, zebraChar()))]; }
+  function monkey() { return [canopy(), aEdge(at(60, 100, 1.25, monkeyChar()))]; }
+  function gorilla() { return [canopy(), aEdge(at(60, 98, 1.15, gorillaChar()))]; }
+  function hippo() { return [riverJungle(), aEdge(at(60, 104, 1.25, hippoChar()))]; }
+  function penguin() { return [beach(), aEdge(at(60, 96, 1.25, penguinChar()))]; }
+
+  FAN.jungle = [
+    ["Lion", "A golden mane and a happy roar, napping in the warm savanna sun", lion],
+    ["Sloth", "Hanging from a jungle branch, sleepy eyes and a slow smile", sloth],
+    ["Elephant", "A playful baby elephant sprays water from its trunk by the jungle river", elephant],
+    ["Giraffe", "The tallest friend in the savanna, with gentle eyes and brown patches", giraffe],
+    ["Zebra", "Black and white stripes, trotting across the grassy plain", zebra],
+    ["Monkey", "Swinging through the treetops with a cheeky grin", monkey],
+    ["Gorilla", "A big gentle gorilla standing tall in the jungle", gorilla],
+    ["Hippo", "Cooling off with just its head and back above the river", hippo],
+    ["Penguin", "Waddling happily on the rocky beach", penguin],
+  ];
+})();
+
+/* Sticker book subject page "World Cup mascots": nine FIFA World Cup mascots as cute chibi versions (family use), each
+   with a ball in front of a stadium in that tournament's flavour: World Cup Willie (1966), Naranjito (1982), Pique
+   (1986), Striker (1994), Footix (1998), Zakumi (2010), Fuleco (2014), Zabivaka (2018), La'eeb (2022).
+   Living sticker: La'eeb, the keffiyeh ghost, floats (lv-float). */
+(() => {
+  "use strict";
+  const OL = A_OL;
+  const uid = p => `wm${p}${++aUid}`;
+  const st = (w = 1.4) => `stroke="${OL}" stroke-width="${w}" stroke-linejoin="round" stroke-linecap="round"`;
+  const P = (d, f, w = 1.4, x = "") => `<path d="${d}" fill="${f}" ${st(w)} ${x}/>`;
+  const Pn = (d, f, x = "") => `<path d="${d}" fill="${f}" ${x}/>`;
+  const E = (cx, cy, rx, ry, f, w = 1.4, x = "") => `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${f}" ${st(w)} ${x}/>`;
+  const En = (cx, cy, rx, ry, f, x = "") => `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${f}" ${x}/>`;
+  const line = (d, w = 1.2, c = OL, x = "") => `<path d="${d}" fill="none" stroke="${c}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" ${x}/>`;
+  const mir = s => `<g transform="matrix(-1 0 0 1 120 0)">${s}</g>`;
+  const at = (s, x, y, k = 1, a = 0) => `<g transform="translate(${x} ${y}) rotate(${a}) scale(${k})">${s}</g>`;
+  const r2 = v => +v.toFixed(2);
+  const shadow = (x, y, rx) => En(x, y, rx, r2(rx * .16), "#000", 'opacity=".22"');
+  const blush = (x, y, r = 3.4) => En(x, y, r, r2(r * .6), "#ff7a9c", 'opacity=".55"');
+  const sparks = (pts, c = "#fff") => pts.map(([x, y, r]) => aSpark(x, y, r, c)).join("");
+  // a shape with a pattern painted inside it: clip, paint, outline on top
+  function clipped(d, fill, inner, w = 1.4) {
+    const id = uid("cl");
+    return `<defs><clipPath id="${id}"><path d="${d}"/></clipPath></defs>` + Pn(d, fill) + `<g clip-path="url(#${id})">${inner}</g>` + `<path d="${d}" fill="none" ${st(w)}/>`;
+  }
+  // anime eye: dark oval, a coloured lower iris, two white highlights
+  const eye = (x, y, rx, ry, iris = "") => En(x, y, rx, ry, "#1b1b1b") +
+    (iris ? En(x, r2(y + ry * .38), r2(rx * .72), r2(ry * .45), iris) : "") +
+    aC(x - rx * .28, y - ry * .38, r2(rx * .42), "#fff") + aC(x + rx * .3, y + ry * .2, r2(rx * .18), "#fff");
+  // an eye with a white sclera
+  const eyeW = (x, y, rx, ry, iris, dx = 0) => E(x, y, rx, ry, "#fff", 1.1) + En(r2(x + dx), r2(y + ry * .15), r2(rx * .7), r2(ry * .78), iris) +
+    En(r2(x + dx), r2(y + ry * .22), r2(rx * .34), r2(ry * .42), "#141414") + aC(x + dx - rx * .26, y - ry * .2, r2(rx * .26), "#fff");
+  const smile = (y, w = 6, tongue = "#ff7f8e") => P(`M${60 - w},${y} Q60,${y + w * 1.4} ${60 + w},${y} Q60,${y + w * .45} ${60 - w},${y}Z`, "#b3243a", 1.1) +
+    Pn(`M${60 - w * .5},${y + w * .75} Q60,${y + w * .4} ${60 + w * .5},${y + w * .75} Q60,${y + w * 1.15} ${60 - w * .5},${y + w * .75}Z`, tongue);
+
+  /* ---- a chibi body in a football kit, drawn under the head (head around 60,58) ---- */
+  const TOR = "M45,84 Q41,100 44,118 H76 Q79,100 75,84 Q60,79 45,84Z";
+  const ARMS = { up: [[46, 89], [37, 79], [31, 66]], down: [[46, 89], [40, 102], [38, 111]], hip: [[46, 89], [37, 98], [42, 108]] };
+  function limb(pts, fur, sleeve, w = 6.2) {
+    const [a, b] = pts, s = [r2(a[0] + (b[0] - a[0]) * .5), r2(a[1] + (b[1] - a[1]) * .5)], end = pts[pts.length - 1];
+    return aL(pts, fur, w) + (sleeve ? aL([a, s], sleeve, w + 3.4) : "") + aC(end[0], end[1], 4.6, fur, st(1.2));
+  }
+  const mirPts = pts => pts.map(([x, y]) => [120 - x, y]);
+  function kid(o) {
+    const t = [];
+    const sock = o.socks || "#fff", boot = o.boots || "#1b1b1b";
+    t.push(aL([[53, 124], [51, 140]], o.fur, 6.4), aL([[67, 124], [70, 140]], o.fur, 6.4));
+    t.push(aL([[51.6, 133], [50.8, 141]], sock, 7), aL([[69, 133], [70.2, 141]], sock, 7));
+    if (o.sockBand) t.push(aL([[51.6, 133.5], [51.5, 135]], o.sockBand, 7.2, false), aL([[69, 133.5], [69.2, 135]], o.sockBand, 7.2, false));
+    t.push(E(47.5, 144.5, 7.2, 4, boot, 1.3), E(73.5, 144.5, 7.2, 4, boot, 1.3));
+    t.push(P("M43,113 H77 L80,130 H63 L60,124 L57,130 H40Z", o.shorts));
+    t.push(o.art ? clipped(TOR, o.shirt, o.art) : P(TOR, o.shirt));
+    if (o.collar) t.push(P("M52,82 Q60,88 68,82 Q60,85 52,82Z", o.collar, 1.1));
+    const sl = o.sleeve || o.shirt;
+    t.push(limb(ARMS[o.l || "up"], o.fur, sl), limb(mirPts(ARMS[o.r || "down"]), o.fur, sl));
+    return t.join("");
+  }
+  const ball = (x, y, r = 10) => shadow(x, y + r + 1, r * .9) + aFootball(x, y, r);
+
+  /* ---- a stadium backdrop: sky, landmark, stands with a crowd, ad boards, pitch ---- */
+  function stadium(o) {
+    const py = o.py || 104;
+    const t = [aSky(o.sky[0], o.sky[1]), o.back || ""];
+    t.push(P(`M-2,${py - 40} Q60,${py - 52} 122,${py - 40} V${py} H-2Z`, o.stand, 1.1));
+    if (o.standArt) t.push(o.standArt);
+    t.push(aCrowd(0, 122, [py - 38, py - 31, py - 24, py - 17], o.crowd, o.seed || 7, 2.1));
+    t.push([0, 1, 2, 3, 4, 5].map(i => `<rect x="${i * 20}" y="${py - 8}" width="20" height="8" fill="${o.boards[i % o.boards.length]}"/>`).join(""));
+    t.push(aPitch(py, 120, 20), line(`M-4,${py + 34} Q60,${py + 20} 124,${py + 34}`, 1.2, "#fff", 'opacity=".7"'));
+    if (o.front) t.push(o.front);
+    return t.join("");
+  }
+  const flags = (y, cols, n = 9, x0 = 0, x1 = 120) => line(`M${x0},${y} Q${(x0 + x1) / 2},${y + 8} ${x1},${y}`, .8, "#555") +
+    [...Array(n)].map((_, i) => { const x = x0 + (i + .5) * (x1 - x0) / n, yy = y + 8 * (1 - Math.pow((2 * (x - x0) / (x1 - x0)) - 1, 2)); return `<path d="M${r2(x - 3)},${r2(yy)} H${r2(x + 3)} L${r2(x)},${r2(yy + 6)}Z" fill="${cols[i % cols.length]}"/>`; }).join("");
+
+  /* ---------------- 1 World Cup Willie, England 1966 ---------------- */
+  function willie() {
+    const F = "#f6c05a", MANE = "#c8641e";
+    const jack = `<rect x="38" y="76" width="44" height="46" fill="#1e3d8f"/>` + line("M38,76 L82,122 M82,76 L38,122", 7, "#fff") + line("M38,76 L82,122 M82,76 L38,122", 2.4, "#d0202e") +
+      line("M60,76 V122 M38,99 H82", 9, "#fff") + line("M60,76 V122 M38,99 H82", 5, "#d0202e");
+    const t = [kid({ fur: F, shirt: "#1e3d8f", art: jack, shorts: "#fff", socks: "#fff", sockBand: "#d0202e", sleeve: "#d0202e", l: "up" })];
+    const mane = [...Array(28)].map((_, i) => { const a = i * Math.PI / 14, r = i % 2 ? 26 : 34; return [60 + r * Math.cos(a), 55 + r * .95 * Math.sin(a)]; });
+    t.push(`<polygon points="${aPts(mane)}" fill="${MANE}" ${st(1.4)}/>`);
+    t.push(aC(41, 36, 7, F, st(1.2)) + aC(41, 36, 3.6, "#e88a7a"), aC(79, 36, 7, F, st(1.2)) + aC(79, 36, 3.6, "#e88a7a"));
+    t.push(E(60, 58, 22, 20, F));
+    t.push(P("M46,42 Q52,30 58,40 Q62,28 68,39 Q74,32 75,44 Q66,46 60,43 Q53,47 46,42Z", MANE, 1.2));
+    t.push(eye(51, 56, 3.8, 5, "#7a4512"), eye(69, 56, 3.8, 5, "#7a4512"));
+    t.push(E(60, 68, 12, 7.5, "#fff3d6", 1.1), P("M56,63 H64 L60,67.5Z", "#5b2a10", 1), line("M60,67.5 V69.5"), smile(70, 5));
+    t.push(aC(52, 68, .7, OL), aC(54, 70.5, .7, OL), aC(68, 68, .7, OL), aC(66, 70.5, .7, OL), blush(43, 65), blush(77, 65));
+    const towers = [30, 90].map(x => P(`M${x - 8},66 V40 Q${x},26 ${x + 8},40 V66Z`, "#f4efe2", 1.1) + aC(x, 29, 2.2, "#f4efe2", st(.8)) + line(`M${x},27 V18`, .8, "#555") +
+      P(`M${x},18 h7 l-2,2.5 l2,2.5 h-7Z`, "#d0202e", .6) + line(`M${x - 4.5},44 V54 M${x},44 V54 M${x + 4.5},44 V54`, 1.2, "#9a9488")).join("");
+    return [stadium({ sky: ["#8fb6d8", "#e6eef4"], back: aCloud(50, 8, .8) + towers, stand: "#6d7480",
+      crowd: ["#d0202e", "#fff", "#1e3d8f", "#8a8a8a"], seed: 66, boards: ["#fff", "#d0202e", "#1e3d8f"] }) + ball(94, 136, 10),
+    aEdge(t.join(""))];
+  }
+
+  /* ---------------- 2 Naranjito, Spain 1982 ---------------- */
+  function naranjito() {
+    const O = "#ff9a1f", t = [];
+    t.push(aL([[53, 112], [51, 140]], O, 5.4), aL([[67, 112], [70, 140]], O, 5.4));
+    t.push(aL([[51.6, 132], [50.8, 141]], "#fff", 6.4), aL([[69, 132], [70.2, 141]], "#fff", 6.4));
+    t.push(E(47.5, 144.5, 7.2, 4, "#1b1b1b", 1.3), E(73.5, 144.5, 7.2, 4, "#1b1b1b", 1.3));
+    t.push(P("M38,100 Q60,112 82,100 L84,124 H64 L60,118 L56,124 H36Z", "#1b3fa0"));
+    t.push(limb([[30, 84], [22, 72], [18, 60]], O, ""), limb([[90, 86], [98, 96], [96, 106]], O, ""));
+    t.push(aC(60, 80, 34, O, st(1.5)));
+    t.push(En(45, 62, 9, 5, "#fff", 'opacity=".45" transform="rotate(-30 45 62)"'));
+    t.push([[40, 92], [48, 100], [76, 98], [84, 88], [70, 106], [36, 78], [86, 72], [56, 106]].map(([x, y]) => aC(x, y, .9, "#d96d00")).join(""));
+    t.push(P("M60,48 Q48,30 34,36 Q42,52 60,48Z", "#3a9a2e", 1.3), P("M60,48 Q68,28 86,32 Q80,48 60,48Z", "#4cb33c", 1.3));
+    t.push(line("M58,46 Q46,40 38,38 M62,46 Q72,38 82,34", .9, "#22661a"), line("M60,48 L61,43", 2.4, "#6b4a1a"));
+    t.push(eye(49, 72, 5, 6.6, "#6a2c00"), eye(71, 72, 5, 6.6, "#6a2c00"));
+    t.push(line("M43,62 Q49,58 54,62 M66,62 Q71,58 77,62", 1.6));
+    t.push(P("M49,85 Q60,99 71,85 Q60,89 49,85Z", "#b3243a", 1.2), Pn("M54,91 Q60,88 66,91 Q60,96 54,91Z", "#ff7f8e"), blush(40, 84, 4), blush(80, 84, 4));
+    const bunt = flags(10, ["#c60b1e", "#ffc400"], 10);
+    return [stadium({ sky: ["#5fb4ff", "#d9f0ff"], back: aSun(98, 34, 10) + bunt, stand: "#d8c7a4",
+      crowd: ["#c60b1e", "#ffc400", "#fff", "#1b3fa0"], seed: 82, boards: ["#c60b1e", "#ffc400"] }) + ball(96, 136, 10),
+    aEdge(t.join(""))];
+  }
+
+  /* ---------------- 3 Pique, Mexico 1986 ---------------- */
+  function pique() {
+    const G = "#2f9a3a", t = [];
+    t.push(aL([[54, 118], [51, 140]], G, 5), aL([[66, 118], [70, 140]], G, 5));
+    t.push(aL([[51.6, 131], [50.8, 141]], "#d0202e", 6.4), aL([[69, 131], [70.2, 141]], "#d0202e", 6.4));
+    t.push(E(47.5, 144.5, 7.2, 4, "#1b1b1b", 1.3), E(73.5, 144.5, 7.2, 4, "#1b1b1b", 1.3));
+    t.push(P("M44,108 Q60,116 76,108 L78,126 H63 L60,121 L57,126 H42Z", "#fff"));
+    t.push(limb([[42, 84], [30, 74], [26, 60]], G, ""), limb([[78, 86], [88, 96], [92, 106]], G, ""));
+    t.push(P("M60,40 C78,40 84,56 82,78 C81,98 78,112 66,118 C58,122 48,120 44,112 C38,100 37,90 38,76 C38,56 44,40 60,40Z", G, 1.5));
+    t.push(Pn("M45,64 C44,80 45,96 50,108", "none", `stroke="#7fd36b" stroke-width="3.4" stroke-linecap="round" opacity=".7"`));
+    t.push(eyeW(51, 66, 5.2, 6.4, "#5b3a1a", .8), eyeW(69, 66, 5.2, 6.4, "#5b3a1a", -.8));
+    t.push(line("M45,57 Q51,54 56,57 M64,57 Q69,54 75,57", 1.6));
+    t.push(E(60, 74, 3, 2.4, "#24782c", 1));
+    t.push(P("M60,79 C54,75 44,77 40,86 C46,83 52,85 60,83 C68,85 74,83 80,86 C76,77 66,75 60,79Z", "#1b1b1b", 1));
+    t.push(smile(87, 4.5), blush(44, 76, 3.6), blush(76, 76, 3.6));
+    t.push(E(60, 46, 40, 9, "#f2c14e", 1.5), line("M24,48 Q60,62 96,48", 1.6, "#d0202e"));
+    t.push(P("M45,46 C44,26 52,17 60,17 C68,17 76,26 75,46Z", "#f2c14e", 1.5));
+    t.push(P("M45.5,37 H74.5 V43 H45.5Z", "#d0202e", 1.1), line("M47,40 L50,38 L53,42 L56,38 L59,42 L62,38 L65,42 L68,38 L71,42 L73,40", 1, "#3a9a2e"));
+    t.push(line("M50,24 Q54,20 58,20", 1.4, "#fff3c4", 'opacity=".8"'));
+    const cactus = x => P(`M${x - 4},96 V66 Q${x},60 ${x + 4},66 V96Z`, "#3f8f4a", 1) + P(`M${x - 4},80 H${x - 9} V72 Q${x - 11},68 ${x - 13},72 V84 H${x - 4}Z`, "#3f8f4a", 1);
+    const bunt = flags(8, ["#e8322e", "#ff9f1c", "#2ec4b6", "#e71d73", "#3a86ff"], 11);
+    return [stadium({ sky: ["#3aa0ff", "#cfeaff"], back: aSun(100, 34, 10) + bunt, stand: "#a9a39a",
+      crowd: ["#006847", "#fff", "#ce1126", "#f2c14e"], seed: 86, boards: ["#006847", "#fff", "#ce1126"],
+      front: cactus(10) + mir(cactus(10)) }) + ball(96, 136, 10),
+    aEdge(t.join(""))];
+  }
+
+  /* ---------------- 4 Striker, USA 1994 ---------------- */
+  function striker() {
+    const F = "#d08a45", EAR = "#7a4a24";
+    const flag = [0, 1, 2, 3, 4, 5].map(i => `<rect x="38" y="${84 + i * 6}" width="44" height="3" fill="#d0202e"/>`).join("") +
+      `<rect x="38" y="76" width="44" height="13" fill="#1e3a8f"/>` + [44, 52, 60, 68, 76].map(x => aStar(x, 84, 2.2, "#fff")).join("");
+    const t = [kid({ fur: F, shirt: "#fff", art: flag, shorts: "#1e3a8f", socks: "#fff", sockBand: "#d0202e", sleeve: "#1e3a8f", l: "up", collar: "#d0202e" })];
+    t.push(E(60, 58, 24, 22, F));
+    t.push(En(46, 48, 7, 5, "#e8a86a", 'opacity=".8"'));
+    t.push(E(60, 69, 12.5, 9, "#fff4e0", 1.1), E(60, 63, 4.6, 3.3, "#1b1b1b", 1), aC(58.6, 62, 1.1, "#fff"));
+    t.push(line("M60,66 V69"), P("M54,69 Q60,75 66,69 Q60,71 54,69Z", "#b3243a", 1), P("M57,72 Q57,79 60,79 Q63,79 63,72Z", "#ff7f8e", 1));
+    t.push(eye(50, 55, 4, 5.4, "#5b3410"), eye(70, 55, 4, 5.4, "#5b3410"));
+    t.push(line("M45,46 Q50,43 55,46 M65,46 Q70,43 75,46", 1.6));
+    const ear = P("M40,42 Q26,44 28,70 Q32,80 40,72 Q42,58 44,46Z", EAR, 1.3);
+    t.push(ear, mir(ear), blush(44, 66, 3.4), blush(76, 66, 3.4));
+    const palm = x => line(`M${x},100 Q${x + 2},80 ${x - 1},60`, 2.6, "#7a5230") + [[-14, -4], [-10, 8], [12, -6], [14, 6], [0, -12]].map(([dx, dy]) =>
+      P(`M${x - 1},60 Q${x - 1 + dx * .6},${60 + dy * .5 - 6} ${x - 1 + dx},${60 + dy}`, "none", 3)).join("") +
+      [[-14, -4], [-10, 8], [12, -6], [14, 6], [0, -12]].map(([dx, dy]) => line(`M${x - 1},60 Q${x - 1 + dx * .6},${60 + dy * .5 - 6} ${x - 1 + dx},${60 + dy}`, 2, "#3f9a4a")).join("");
+    const hills = Pn("M-2,70 Q20,52 44,64 Q70,48 96,62 Q110,56 122,62 V80 H-2Z", "#b9a7d6", 'opacity=".8"');
+    const stars = [14, 30, 46, 62, 78, 94, 110].map((x, i) => aStar(x, 12 + (i % 2) * 5, 3.4, i % 2 ? "#fff" : "#d0202e")).join("");
+    return [stadium({ sky: ["#4fb0ff", "#e0f4ff"], back: hills + stars, stand: "#c94c3c",
+      crowd: ["#d0202e", "#fff", "#1e3a8f", "#ffd21f"], seed: 94, boards: ["#1e3a8f", "#fff", "#d0202e"], front: palm(12) + palm(110) }) + ball(94, 136, 10),
+    aEdge(t.join(""))];
+  }
+
+  /* ---------------- 5 Footix, France 1998 ---------------- */
+  function footix() {
+    const B = "#2457d6", t = [];
+    t.push(P("M44,96 Q16,92 14,66 Q24,80 38,84Z", "#d0202e", 1.2), P("M44,102 Q14,108 10,84 Q22,96 40,94Z", "#fff", 1.2), P("M44,90 Q24,78 26,54 Q32,72 44,80Z", B, 1.2));
+    const leg = (x, d) => aL([[x, 122], [x + d, 140]], "#f2a01a", 3.6) + line(`M${x + d},140 l-6,4 M${x + d},140 l0,6 M${x + d},140 l6,4`, 3, "#f2a01a") + line(`M${x + d},140 l-6,4 M${x + d},140 l0,6 M${x + d},140 l6,4`, .8, OL, 'opacity=".5"');
+    t.push(leg(52, -2), leg(68, 2));
+    t.push(P("M60,40 C78,40 86,56 84,76 C88,96 86,124 60,128 C34,124 32,96 36,76 C34,56 42,40 60,40Z", B, 1.5));
+    t.push(En(60, 102, 16, 18, "#5b8cf0", 'opacity=".75"'), line("M48,104 H72 M50,111 H70", 2.2, "#fff", 'opacity=".9"'));
+    t.push(P("M38,84 Q22,78 20,62 Q26,66 30,64 Q28,70 34,70 Q32,76 40,78Z", B, 1.3));
+    t.push(P("M82,84 Q98,94 98,110 Q92,104 88,106 Q90,100 84,100 Q86,96 80,94Z", B, 1.3));
+    t.push(P("M48,44 Q42,32 50,30 Q50,20 58,24 Q62,14 68,23 Q76,20 74,32 Q80,36 72,44Z", "#e8322e", 1.4));
+    t.push(eyeW(51, 58, 5.6, 7, "#1e3d8f", .8), eyeW(69, 58, 5.6, 7, "#1e3d8f", -.8));
+    t.push(line("M44,48 Q50,45 56,48 M64,48 Q70,45 76,48", 1.6));
+    t.push(P("M57,77 Q55,88 60,88 Q65,88 63,77Z", "#e8322e", 1.1));
+    t.push(P("M52,68 Q60,64 68,68 L60,80Z", "#ffcc22", 1.3), line("M54,71 Q60,73 66,71", .9));
+    t.push(blush(43, 68, 3.4), blush(77, 68, 3.4));
+    const roof = `<ellipse cx="60" cy="58" rx="70" ry="14" fill="none" stroke="#f4f6fa" stroke-width="5"/>` + line("M-10,58 H130", .6, "#9aa7b8");
+    const eiffel = P("M100,58 L104,20 L108,58 Z", "#6b5b4b", .8) + line("M101.5,44 H106.5 M102.6,32 H105.4", .8, "#6b5b4b");
+    return [stadium({ sky: ["#6fa8ff", "#e6f0ff"], back: aCloud(8, 30, .7) + eiffel + roof, stand: "#8e9bb0",
+      crowd: ["#2457d6", "#fff", "#e8322e"], seed: 98, boards: ["#2457d6", "#fff", "#e8322e"] }) + ball(96, 136, 10),
+    aEdge(t.join(""))];
+  }
+
+  /* ---------------- 6 Zakumi, South Africa 2010 ---------------- */
+  function zakumi() {
+    const Y = "#f7c52b", SP = "#8a5a1a";
+    const t = [aL([[74, 116], [96, 116], [104, 98]], Y, 5.4), aC(104, 97, 4, SP, st(1.1))];
+    t.push(kid({ fur: Y, shirt: "#fff", art: `<rect x="38" y="111" width="44" height="9" fill="#2e9b3a"/>` + line("M38,100 H82", 2.4, "#ffcf00"), shorts: "#2e9b3a", socks: "#fff", sockBand: "#ffcf00", l: "up", collar: "#2e9b3a" }));
+    t.push(aC(40, 38, 7, Y, st(1.2)) + aC(40, 38, 3.4, "#e88a7a"), aC(80, 38, 7, Y, st(1.2)) + aC(80, 38, 3.4, "#e88a7a"));
+    t.push(E(60, 58, 25, 23, Y));
+    t.push([[40, 60], [80, 60], [44, 72], [76, 72], [38, 50], [82, 50]].map(([x, y]) => aC(x, y, 2.2, "none", `stroke="${SP}" stroke-width="1.2"`)).join(""));
+    t.push(P("M40,48 Q37,30 46,34 Q45,20 55,28 Q59,13 66,28 Q74,19 75,34 Q84,30 80,48 Q72,40 66,44 Q60,38 54,44 Q48,40 40,48Z", "#3cb043", 1.4));
+    t.push(line("M50,32 Q52,38 51,42 M62,24 Q64,32 61,38", 1, "#1f7a2a"));
+    t.push(E(60, 69, 12, 8, "#fff7e0", 1.1), P("M55.5,63 H64.5 L60,67.5Z", "#3b2412", 1), line("M60,67.5 V70"), smile(70.5, 5));
+    t.push(eye(50, 56, 4.4, 5.8, "#6b4a12"), eye(70, 56, 4.4, 5.8, "#6b4a12"));
+    t.push(aC(52, 69, .7, OL), aC(54, 71.5, .7, OL), aC(68, 69, .7, OL), aC(66, 71.5, .7, OL), blush(42, 66), blush(78, 66));
+    const mosaic = [...Array(12)].map((_, i) => `<rect x="${i * 10}" y="56" width="10" height="${10 + (i % 3) * 3}" fill="${["#c5652c", "#9c4a22", "#e0954a", "#7a3a1a"][i % 4]}"/>`).join("");
+    const sunset = aC(96, 44, 12, "#ffe08a") + aC(96, 44, 8, "#fff3c4");
+    return [stadium({ sky: ["#ff8a3d", "#ffe3a6"], back: sunset + aCloud(10, 22, .7), stand: "#a5532a", standArt: mosaic,
+      crowd: ["#ffcf00", "#2e9b3a", "#e8322e", "#1e3d8f", "#fff"], seed: 2010, boards: ["#2e9b3a", "#ffcf00", "#1e3d8f"] }) + ball(94, 136, 10),
+    aEdge(t.join(""))];
+  }
+
+  /* ---------------- 7 Fuleco, Brazil 2014 ---------------- */
+  function fuleco() {
+    const Y = "#f6c739", SH = "#2a63c8", SHD = "#173f8a", t = [];
+    t.push(P("M38,82 Q28,104 38,122 H82 Q92,104 82,82Z", SH, 1.3), line("M36,96 Q60,92 84,96 M35,108 Q60,104 85,108", 1.1, SHD));
+    t.push(kid({ fur: Y, shirt: "#fff", art: `<rect x="38" y="112" width="44" height="8" fill="#ffd21f"/>` + line("M38,111 H82", 1.6, "#1f9a4b"), shorts: "#1f9a4b", socks: "#fff", sockBand: "#ffd21f", l: "up", collar: "#1f9a4b" }));
+    t.push(E(41, 34, 5, 7, "#c98a3a", 1.2, 'transform="rotate(-20 41 34)"'), E(79, 34, 5, 7, "#c98a3a", 1.2, 'transform="rotate(20 79 34)"'));
+    t.push(E(60, 60, 24, 22, Y));
+    t.push(P("M34,58 C32,30 88,30 86,58 Q74,48 60,50 Q46,48 34,58Z", SH, 1.4), line("M38,46 Q60,36 82,46 M36,52 Q60,42 84,52", 1.1, SHD), line("M44,40 Q50,37 56,36", 1.6, "#7fb0ff"));
+    t.push(eyeW(50, 62, 5.6, 6.8, "#6b3e1a", .8), eyeW(70, 62, 5.6, 6.8, "#6b3e1a", -.8));
+    t.push(E(60, 73, 8, 5.5, "#fbe08e", 1.1), E(60, 70, 3.4, 2.4, "#3b2412", 1), smile(76, 4.5), blush(42, 70), blush(78, 70));
+    const sugar = Pn("M-4,74 Q8,34 22,40 Q30,46 34,74Z", "#5f8f6a") + Pn("M26,74 Q36,56 46,60 Q52,64 54,74Z", "#6fa07a") +
+      line("M20,40 L104,52", .6, "#555") + `<rect x="60" y="45" width="6" height="4" rx="1" fill="#e8322e"/>`;
+    const christ = Pn("M96,74 Q102,52 112,74Z", "#5f8f6a") + line("M103,48 V58 M99,51 H107", 1.6, "#f4f4f4");
+    return [stadium({ sky: ["#3fb6ff", "#dff6ff"], back: sugar + christ, stand: "#d9d9d9",
+      crowd: ["#ffd21f", "#1f9a4b", "#2a63c8", "#fff"], seed: 2014, boards: ["#ffd21f", "#1f9a4b", "#2a63c8"] }) + ball(94, 136, 10),
+    aEdge(t.join(""))];
+  }
+
+  /* ---------------- 8 Zabivaka, Russia 2018 ---------------- */
+  function zabivaka() {
+    const F = "#9b7653", W = "#fbf6ee";
+    const t = [kid({ fur: F, shirt: "#fff", art: `<rect x="38" y="112" width="44" height="8" fill="#d0202e"/><rect x="38" y="106" width="44" height="6" fill="#1e4fb3"/>`, shorts: "#fff", socks: "#d0202e", sleeve: "#1e4fb3", l: "up", collar: "#1e4fb3" })];
+    const ear = P("M39,48 L35,22 L55,36Z", F, 1.3) + Pn("M40,42 L38,28 L50,37Z", "#f2b8a0");
+    t.push(ear, mir(ear));
+    t.push(E(60, 58, 25, 23, F));
+    t.push(P("M56,36 Q60,28 64,36Z", F, 1.1));
+    t.push(P("M37,64 Q42,50 60,57 Q78,50 83,64 Q81,82 60,82 Q39,82 37,64Z", W, 1.1));
+    t.push(eye(50, 61, 4, 5.4, "#c88a1a"), eye(70, 61, 4, 5.4, "#c88a1a"));
+    t.push(E(60, 70, 8.5, 6, W, 1.1), E(60, 66.5, 4.2, 3, "#1b1b1b", 1), aC(58.6, 65.6, 1, "#fff"), line("M60,69.5 V71.5"), smile(72, 4.4));
+    t.push(line("M35,46 Q60,36 85,46", 4, "#1b1b1b"), line("M35,46 Q60,36 85,46", 2.4, "#ff7a1a"));
+    t.push(E(50, 43, 8, 5.4, "#ff8c1a", 1.3), E(70, 43, 8, 5.4, "#ff8c1a", 1.3), line("M45,41.5 Q48,39.5 52,40 M65,41.5 Q68,39.5 72,40", 1.3, "#ffe0a0"));
+    t.push(blush(42, 70), blush(78, 70));
+    const dome = (x, y, w, h, c1, c2) => P(`M${x - w},${y} Q${x - w * 1.2},${y - h * .6} ${x},${y - h} Q${x + w * 1.2},${y - h * .6} ${x + w},${y}Z`, c1, 1) +
+      line(`M${x - w * .7},${y - h * .25} Q${x},${y - h * .6} ${x + w * .7},${y - h * .25}`, 1.6, c2) + line(`M${x},${y - h} V${y - h - 5}`, 1, "#d4a017");
+    const basil = `<rect x="0" y="50" width="14" height="26" fill="#c0392b"/><rect x="16" y="42" width="14" height="34" fill="#d35400"/>` +
+      dome(7, 50, 8, 18, "#27ae60", "#f1c40f") + dome(23, 42, 8, 20, "#2980b9", "#fff") + `<rect x="96" y="46" width="16" height="30" fill="#c0392b"/>` + dome(104, 46, 9, 20, "#e74c3c", "#fff");
+    return [stadium({ sky: ["#2e4a9a", "#9fc2f0"], back: basil + aStar(60, 14, 2.4, "#fff7c2") + aStar(84, 26, 2, "#fff7c2"), stand: "#b9c2d0",
+      crowd: ["#fff", "#1e4fb3", "#d0202e"], seed: 2018, boards: ["#fff", "#1e4fb3", "#d0202e"] }) + ball(94, 136, 10),
+    aEdge(t.join(""))];
+  }
+
+  /* ---------------- 9 La'eeb, Qatar 2022 (living: floats) ---------------- */
+  function laeeb() {
+    const t = [];
+    t.push(P("M60,30 C84,30 94,48 92,72 C91,94 98,110 110,122 C98,128 86,122 79,116 C76,128 66,136 52,138 C57,130 57,122 52,116 C40,122 30,118 22,112 C33,102 30,88 28,72 C26,48 36,30 60,30Z", "#fff", 1.6));
+    t.push(line("M36,92 Q40,106 34,116 M80,92 Q82,104 92,116 M58,100 Q62,112 60,124", 1.1, "#c9d3de"));
+    t.push(P("M88,74 Q104,70 110,58 Q108,82 90,88Z", "#fff", 1.3), P("M32,76 Q16,78 10,90 Q20,92 32,88Z", "#fff", 1.3));
+    t.push(`<ellipse cx="60" cy="37" rx="22" ry="6" fill="none" stroke="#1b1b1b" stroke-width="3"/><ellipse cx="60" cy="41" rx="23" ry="6" fill="none" stroke="#1b1b1b" stroke-width="2.4"/>`);
+    t.push(line("M40,58 Q47,50 55,55", 3.4, "#1b1b1b"), line("M80,58 Q73,50 65,55", 3.4, "#1b1b1b"));
+    t.push(En(49, 66, 4.4, 6.2, "#1b1b1b"), En(71, 66, 4.4, 6.2, "#1b1b1b"), aC(47.6, 63.4, 1.7, "#fff"), aC(69.6, 63.4, 1.7, "#fff"), aC(50.4, 68.6, .7, "#fff"), aC(72.4, 68.6, .7, "#fff"));
+    t.push(P("M50,76 Q60,92 70,76Z", "#3a1a1a", 1.3), Pn("M54,84 Q60,80 66,84 Q60,90 54,84Z", "#ff7f8e"));
+    t.push(blush(40, 76, 3.6), blush(80, 76, 3.6));
+    const live = `<g class="lv-float">${t.join("")}${aFootball(108, 50, 8.5)}</g>`;
+    const bowl = P("M-2,96 Q60,66 122,96 V104 H-2Z", "#e2a73d", 1.1) + [...Array(13)].map((_, i) => line(`M${i * 10 - 2},${98 - 22 * Math.sin(Math.PI * i / 12)} l5,6 l5,-6`, .9, "#8a5a10", 'opacity=".7"')).join("");
+    const palm = x => line(`M${x},100 Q${x + 2},84 ${x},70`, 2.6, "#5a3a20") + [[-12, -2], [-9, 7], [11, -4], [12, 6], [0, -10]].map(([dx, dy]) => line(`M${x},70 Q${x + dx * .6},${70 + dy * .5 - 5} ${x + dx},${70 + dy}`, 2.2, "#2f7a3a")).join("");
+    const moon = aC(98, 22, 8, "#fff3c4") + aC(102, 19, 7, "#8a1538");
+    return [aSky("#8a1538", "#f2a65a") + moon + aStar(20, 40, 2, "#fff7c2") + aStar(70, 14, 1.8, "#fff7c2") + bowl + aPitch(104, 120, 20) +
+      line("M-4,138 Q60,124 124,138", 1.2, "#fff", 'opacity=".7"') + palm(8) + palm(112) + shadow(62, 148, 30),
+    aEdge(live)];
+  }
+
+  FAN.wcmascots = [
+    ["World Cup Willie", "England 1966: the very first World Cup mascot, a lion in a Union Jack shirt", willie],
+    ["Naranjito", "Spain 1982: a smiling orange with green leaves", naranjito],
+    ["Pique", "Mexico 1986: a jalapeño pepper with a big sombrero and a moustache", pique],
+    ["Striker", "USA 1994: a happy dog in a stars-and-stripes kit", striker],
+    ["Footix", "France 1998: the blue rooster, France's bird", footix],
+    ["Zakumi", "South Africa 2010: a leopard with green hair", zakumi],
+    ["Fuleco", "Brazil 2014: a three-banded armadillo with a blue shell", fuleco],
+    ["Zabivaka", "Russia 2018: a wolf with sporty orange goggles", zabivaka],
+    ["La'eeb", "Qatar 2022: a floating headdress full of fun", laeeb],
+  ];
+})();
+
+/* Sticker book subject page "Trophies and balls": 6 football trophies / medals drawn big with metal gradients and cute
+   sparkles (no faces): the FIFA World Cup, the Jules Rimet trophy, the Champions League cup, the Euro trophy, the Copa
+   América trophy and a gold winner's medal, plus three famous World Cup balls (Telstar 1970, Tango 1978, Al Rihla 2022).
+   Backdrops: stadium lights, a podium with confetti, a trophy cabinet, a green pitch. The Al Rihla ball is the page's
+   living sticker: its panels spin (the shine stays still). */
+(() => {
+  "use strict";
+  const OL = A_OL, OUT = `stroke="${OL}" stroke-width="1.1" stroke-linejoin="round"`;
+  const uid = p => `tr${p}${++aUid}`;
+  const f1 = v => +(+v).toFixed(1);
+  const RAD = Math.PI / 180;
+  const ell = (cx, cy, rx, ry, f, extra = OUT) => `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${f}" ${extra}/>`;
+  const thick = (d, col, w) => `<path d="${d}" fill="none" stroke="${OL}" stroke-width="${f1(w + 2.2)}" stroke-linecap="round" stroke-linejoin="round"/>` +
+    `<path d="${d}" fill="none" stroke="${col}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>`;
+  const glow = (x, y, r, c, op = .9) => { const g = uid("gl"); return `<defs><radialGradient id="${g}"><stop offset="0" stop-color="${c}" stop-opacity="${op}"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></radialGradient></defs><circle cx="${x}" cy="${y}" r="${r}" fill="url(#${g})"/>`; };
+  // a horizontal metal gradient (light in the middle-left, dark at the edges): returns [defs, fill]
+  const METAL = {
+    gold: ["#a8740a", "#ffe58a", "#ffc928", "#d99a0e", "#94650a"],
+    silver: ["#7d8a96", "#f7f9fb", "#cdd5dc", "#a7b2bc", "#6f7c88"],
+  };
+  function metal(kind) {
+    const g = uid("mt"), st = METAL[kind];
+    return [`<defs><linearGradient id="${g}" x1="0" y1="0" x2="1" y2="0">${st.map((c, i) => `<stop offset="${f1(i / (st.length - 1))}" stop-color="${c}"/>`).join("")}</linearGradient></defs>`, `url(#${g})`];
+  }
+  const streak = (d, op = .7, w = 2) => `<path d="${d}" fill="none" stroke="#fff" stroke-width="${w}" stroke-linecap="round" opacity="${op}"/>`;
+  const sparks = list => list.map(([x, y, r]) => aSpark(x, y, r, "#fff")).join("");
+  const pts = a => aPts(a);
+
+  /* ---------- backdrops ---------- */
+  function sky(top, bot) { const g = uid("sk"); return `<defs>${aVGrad(g, top, bot)}</defs><rect width="120" height="158" fill="url(#${g})"/>`; }
+  function crowd(seed, y0, y1, cols) {
+    const R = aRand(seed); let s = "";
+    for (let y = y0; y <= y1; y += 5) for (let x = 2 + (y % 2) * 2; x < 120; x += 5) s += aC(x + R() * 1.4, y + R() * 1.2, 1.5, cols[Math.floor(R() * cols.length)]);
+    return s;
+  }
+  // night stadium: light towers with beams, the crowd, the pitch
+  function stadium(o = {}) {
+    let s = sky(o.top || "#0b1a46", o.bot || "#2a4f9c");
+    if (o.stars) s += [[40, 14, 3], [84, 10, 2.4], [62, 26, 2], [96, 40, 2.6], [30, 46, 2.2], [108, 64, 2], [10, 70, 2.4]].map(([x, y, r]) => aStar(x, y, r, "#fff")).join("");
+    s += `<g fill="#fff" opacity=".09">${[14, 106].map(x => `<polygon points="${x - 7},22 ${x + 7},22 ${x < 60 ? 78 : 64},120 ${x < 60 ? 56 : 42},120"/>`).join("")}</g>`;
+    for (const x of [14, 106]) {
+      s += `<rect x="${x - 1.3}" y="20" width="2.6" height="76" fill="#3a4a6a"/>` + glow(x, 17, 20, "#fff8d0", .75) +
+        aR(x - 9, 11, 18, 11, "#cfd8dc", `rx="1.5"`) + [0, 1, 2].map(i => [0, 1].map(j => aC(x - 5 + i * 5, 14.4 + j * 4.4, 1.7, "#fffde7")).join("")).join("");
+    }
+    s += `<rect x="0" y="92" width="120" height="28" fill="#1b2a50"/>` + crowd(o.seed || 4, 95, 115, o.cols || ["#ef5350", "#ffee58", "#ffffff", "#42a5f5", "#66bb6a", "#ffa726"]);
+    s += `<rect x="0" y="118" width="120" height="40" fill="#2e9d4f"/>` + [126, 142].map(y => `<rect x="0" y="${y}" width="120" height="8" fill="#43b05f"/>`).join("") +
+      `<path d="M0,121 H120" stroke="#fff" stroke-width="1.2" opacity=".85"/>`;
+    return s;
+  }
+  // a podium with confetti (the middle step is where the trophy stands)
+  function podium(o = {}) {
+    let s = sky(o.top || "#6a3fbf", o.bot || "#f48fb1") + glow(60, 84, 62, "#fff3c4", .55);
+    const R = aRand(o.seed || 9), cols = ["#ffd54f", "#ef5350", "#4fc3f7", "#81c784", "#ffffff", "#ff8a65", "#ba68c8"];
+    for (let i = 0; i < 46; i++) {
+      const x = f1(R() * 120), y = f1(R() * 136), c = cols[i % cols.length], r = Math.round(R() * 180);
+      s += i % 3 ? `<rect x="${x}" y="${y}" width="3.4" height="1.8" fill="${c}" transform="rotate(${r} ${x} ${y})"/>` : aC(x, y, 1.2, c);
+    }
+    const py = o.py || 140;
+    s += aR(4, py + 6, 36, 20, "#cfd8dc") + aR(80, py + 10, 36, 16, "#d7a26a") + aR(38, py, 44, 24, "#ffd54f") +
+      `<rect x="5" y="${py + 7}" width="34" height="2.4" fill="#fff" opacity=".6"/><rect x="81" y="${py + 11}" width="34" height="2.4" fill="#fff" opacity=".5"/><rect x="39" y="${py + 1}" width="42" height="2.4" fill="#fff" opacity=".6"/>`;
+    return s;
+  }
+  // a trophy cabinet: wooden frame, red velvet back, a spotlight, glass glints
+  function cabinet(o = {}) {
+    const g = uid("vel");
+    let s = `<rect width="120" height="158" fill="#7b4a2a"/><defs>${aVGrad(g, o.top || "#9c2a3a", o.bot || "#4f1420")}</defs>` +
+      `<rect x="7" y="7" width="106" height="144" rx="2" fill="url(#${g})" stroke="#4e2c14" stroke-width="1.2"/>` + glow(60, 12, 58, "#fff3c4", .5);
+    s += `<rect x="7" y="144" width="106" height="7" fill="#a0683c" stroke="#4e2c14" stroke-width="1"/><rect x="7" y="144" width="106" height="1.8" fill="#c48a58"/>`;
+    s += `<g stroke="#fff" stroke-linecap="round" opacity=".22"><path d="M86,12 L108,40" stroke-width="5"/><path d="M98,12 L110,28" stroke-width="2.4"/><path d="M10,110 L26,136" stroke-width="3"/></g>`;
+    return s;
+  }
+  // a green pitch with stands and a penalty arc
+  function pitch(o = {}) {
+    let s = sky(o.top || "#7cc8ff", o.bot || "#d8f0ff");
+    if (o.sun !== false) s += aSun(102, 14, 8);
+    s += `<rect x="0" y="28" width="120" height="26" fill="${o.stand || "#455a64"}"/>` + crowd(o.seed || 6, 31, 51, o.cols || ["#ef5350", "#ffee58", "#ffffff", "#42a5f5", "#66bb6a", "#ffa726"]);
+    s += `<rect x="0" y="52" width="120" height="106" fill="#3fae55"/>` + [[58, 8], [72, 12], [94, 16], [124, 22]].map(([y, h]) => `<rect x="0" y="${y}" width="120" height="${h}" fill="#56c26a"/>`).join("");
+    s += `<g fill="none" stroke="#fff" stroke-width="1.6" opacity=".9"><path d="M0,62 H120"/><path d="M14,158 Q60,112 106,158"/></g>`;
+    if (o.shadow) s += ell(60, 140, 34, 5, "#000", `opacity=".22"`);
+    return s;
+  }
+
+  /* ---------- trophies ---------- */
+  function worldCup() {
+    const [gd, G] = metal("gold"), D = "#a8740a";
+    let s = gd + glow(60, 70, 54, "#ffe082", .45);
+    s += aP("M38,120 H82 L86,144 H34Z", G) + aP("M37.2,125 H82.8 L83.7,130.4 H36.3Z", "#2e9d4f") + aP("M35.6,135 H84.4 L85.2,140.2 H34.8Z", "#2e9d4f");
+    s += aP("M42,120 Q52,108 52,96 Q50,86 37,74 Q39,63 50,66 Q60,76 70,66 Q81,63 83,74 Q70,86 68,96 Q68,108 78,120Z", G);
+    s += `<path d="M46,118 Q58,104 55,92 Q51,80 41,72 M74,118 Q62,104 65,92 Q69,80 79,72 M50,112 Q64,98 74,80" fill="none" stroke="${D}" stroke-width="1.3" stroke-linecap="round"/>`;
+    // the globe and the arms holding it up
+    s += aC(60, 46, 19, G, OUT) + `<g fill="#d49a12"><path d="M48,36 Q54,32 58,36 Q56,42 50,42 Q46,40 48,36Z"/><path d="M62,44 Q70,40 74,46 Q72,56 66,58 Q62,52 62,44Z"/><path d="M50,50 Q56,50 56,56 Q52,60 48,56Z"/></g>` +
+      `<path d="M41.5,46 H78.5 M60,27 Q50,46 60,65 M60,27 Q70,46 60,65" fill="none" stroke="${D}" stroke-width=".8" opacity=".7"/>`;
+    s += thick("M40,74 Q29,58 43,36", "#f2c230", 5) + thick("M80,74 Q91,58 77,36", "#f2c230", 5);
+    s += streak("M48,32 Q52,29 56,28.4", .85, 2.4) + streak("M45,80 Q48,86 50,92", .55, 1.8) + streak("M40,126 V140", .5, 1.6);
+    return s + sparks([[90, 34, 5], [28, 92, 4], [94, 104, 3.4], [34, 50, 3]]);
+  }
+  function julesRimet() {
+    const [gd, G] = metal("gold"), D = "#a8740a";
+    let s = gd + glow(60, 66, 50, "#ffe082", .4);
+    s += aR(36, 116, 48, 6, G, `rx="1.5"`) + aR(40, 122, 40, 22, "#1f4fb0", `rx="2"`) + aR(50, 128, 20, 9, G, `rx="1"`) +
+      `<path d="M44,126 l6,10 M70,126 l6,12 M42,136 l4,6" stroke="#6f95e0" stroke-width=".9" opacity=".7"/>`;
+    // wings
+    s += aP("M56,88 Q36,82 24,48 Q32,55 38,53 Q33,45 35,38 Q45,52 52,50 Q50,62 58,74Z", G) + aP("M64,88 Q84,82 96,48 Q88,55 82,53 Q87,45 85,38 Q75,52 68,50 Q70,62 62,74Z", G);
+    s += `<path d="M30,56 Q40,70 52,78 M36,48 Q44,64 54,70 M90,56 Q80,70 68,78 M84,48 Q76,64 66,70" fill="none" stroke="${D}" stroke-width="1" stroke-linecap="round"/>`;
+    // the long robe, body, head, arms up holding the cup
+    s += aP("M47,116 Q52,100 54,88 H66 Q68,100 73,116Z", G) + `<path d="M55,92 Q53,104 51,114 M60,92 V115 M65,92 Q67,104 69,114" fill="none" stroke="${D}" stroke-width=".9"/>`;
+    s += aP("M54,89 Q52,78 56,72 H64 Q68,78 66,89Z", G) + aC(60, 66, 6, G, OUT);
+    s += thick("M56,74 Q50,64 50,54", "#f2c230", 3.4) + thick("M64,74 Q70,64 70,54", "#f2c230", 3.4);
+    s += aP("M40,38 H80 L75,51 Q60,58 45,51Z", G) + ell(60, 38, 20, 4.4, "#ffe58a") + `<path d="M48,40 L50,53 M60,42 V56 M72,40 L70,53" stroke="${D}" stroke-width=".9"/>`;
+    s += streak("M44,41 Q46,46 48,50", .75, 1.8) + streak("M57,63 Q58,61 60,60.6", .8, 1.4);
+    return s + sparks([[92, 30, 4.4], [24, 96, 4], [96, 100, 3.2], [30, 30, 0]].filter(p => p[2])) + aSpark(34, 34, 3);
+  }
+  function bigEars() {
+    const [gd, S] = metal("silver"), L = "#e3e9ee";
+    let s = gd + glow(60, 70, 54, "#cfe3ff", .5);
+    s += thick("M40,42 Q6,34 11,66 Q15,94 53,95", L, 8) + thick("M80,42 Q114,34 109,66 Q105,94 67,95", L, 8);
+    s += `<path d="M38,44 Q12,40 15,64" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".8"/>`;
+    s += aP("M35,37 Q37,78 55,98 V112 Q46,116 44,126 H76 Q74,116 65,112 V98 Q83,78 85,37Z", S);
+    s += ell(60, 37, 25, 5.6, "#eef2f5") + ell(60, 37, 21, 3.6, "#8f9ba5", "");
+    s += aR(40, 126, 40, 8, S) + aR(34, 134, 52, 10, S, `rx="2"`) + `<path d="M36,138.6 H84" stroke="#8f9ba5" stroke-width="1"/>`;
+    s += streak("M41,44 Q43,66 52,84", .85, 2.6) + streak("M58,102 V110", .6, 1.4) + streak("M38,137 H50", .6, 1.4);
+    return s + sparks([[100, 26, 4.4], [18, 106, 4], [98, 110, 3.2], [36, 26, 0]].filter(p => p[2]));
+  }
+  function euro() {
+    const [gd, S] = metal("silver");
+    let s = gd + glow(60, 66, 52, "#ffffff", .5);
+    s += aP("M31,36 Q33,70 51,84 Q56,88 56,96 V110 Q46,118 40,132 H80 Q74,118 64,110 V96 Q64,88 69,84 Q87,70 89,36Z", S);
+    s += ell(60, 36, 29, 5.8, "#eef2f5") + ell(60, 36, 25, 3.8, "#8f9ba5", "");
+    s += `<path d="M36,52 Q60,58 84,52" fill="none" stroke="#8f9ba5" stroke-width="1.2"/><path d="M52,96 H68" stroke="#8f9ba5" stroke-width="1.4"/>`;
+    s += aR(36, 132, 48, 8, S, `rx="1.5"`);
+    s += streak("M37,42 Q39,64 50,78", .85, 2.6) + streak("M58,98 V108", .6, 1.4) + streak("M46,124 Q44,128 43,130", .6, 1.4);
+    return s + sparks([[98, 30, 4.4], [20, 92, 3.6], [100, 102, 3.4], [34, 26, 0]].filter(p => p[2]));
+  }
+  function copaAmerica() {
+    const [gd, S] = metal("silver"), W1 = "#5d3a1a", W2 = "#7b4f2a";
+    let s = gd + glow(60, 70, 52, "#ffffff", .45);
+    s += aR(28, 128, 64, 16, W1, `rx="1.5"`) + aR(34, 116, 52, 12, W2, `rx="1.5"`) + aR(40, 106, 40, 10, "#8d5e36", `rx="1.5"`);
+    s += [[32, 132, 12], [46, 132, 12], [62, 132, 12], [76, 132, 12], [38, 119, 10], [55, 119, 10], [72, 119, 10], [46, 108.4, 12], [62, 108.4, 12]].map(([x, y, w]) =>
+      `<rect x="${x}" y="${y}" width="${w}" height="${y > 125 ? 8 : 5.4}" rx=".8" fill="#d5dde4" stroke="#6f7c88" stroke-width=".6"/>`).join("");
+    s += aP("M48,106 Q50,98 56,96 H64 Q70,98 72,106Z", S);
+    s += thick("M42,56 Q28,56 30,72 Q32,82 44,82", "#e3e9ee", 4.2) + thick("M78,56 Q92,56 90,72 Q88,82 76,82", "#e3e9ee", 4.2);
+    s += aP("M56,96 Q38,88 38,66 Q38,50 48,44 H72 Q82,50 82,66 Q82,88 64,96Z", S);
+    s += `<path d="M40,70 Q60,76 80,70" fill="none" stroke="#ffd54f" stroke-width="2.4"/><path d="M42,82 Q60,88 78,82" fill="none" stroke="#8f9ba5" stroke-width="1"/>`;
+    s += aP("M46,44 Q47,34 60,31 Q73,34 74,44Z", S) + ell(60, 44, 15, 3, "#eef2f5") + aR(58, 24, 4, 7, S) + aC(60, 23, 4, "#ffd54f", OUT);
+    s += streak("M44,52 Q42,64 46,80", .85, 2.6) + streak("M51,40 Q54,36 58,35", .7, 1.6);
+    return s + sparks([[96, 30, 4.4], [20, 96, 3.6], [100, 100, 3.4]]);
+  }
+  function medal() {
+    const [gd, G] = metal("gold"), D = "#a8740a";
+    let s = gd + glow(60, 104, 46, "#ffe082", .55);
+    // the ribbon: two straps crossing into a V
+    s += aP("M30,30 H46 L66,86 H54Z", "#1565c0") + `<path d="M36.6,30 L58.6,86" stroke="#fff" stroke-width="2.4"/><path d="M40.2,30 L61.4,86" stroke="#e53935" stroke-width="1.6"/>`;
+    s += aP("M90,30 H74 L54,86 H66Z", "#1976d2") + `<path d="M83.4,30 L61.4,86" stroke="#fff" stroke-width="2.4"/><path d="M79.8,30 L58.6,86" stroke="#e53935" stroke-width="1.6"/>`;
+    s += aC(60, 84, 5, "none", `stroke="${OL}" stroke-width="4.2"`) + aC(60, 84, 5, "none", `stroke="#ffc928" stroke-width="2.4"`);
+    // the medal: rim, laurel wreath, a big star
+    s += aC(60, 110, 31, G, OUT) + aC(60, 110, 23, "#ffd54f", `stroke="${D}" stroke-width="1.2"`);
+    for (const side of [-1, 1]) for (let i = 0; i < 6; i++) {
+      const a = (side < 0 ? 200 - i * 26 : -20 + i * 26) * RAD, x = f1(60 + 27 * Math.cos(a)), y = f1(110 + 27 * Math.sin(a)), r = f1((side < 0 ? 200 - i * 26 : -20 + i * 26) + side * 70);
+      if (y < 92) continue;
+      s += `<ellipse cx="${x}" cy="${y}" rx="3.6" ry="1.6" fill="#e0a512" stroke="${D}" stroke-width=".6" transform="rotate(${r} ${x} ${y})"/>`;
+    }
+    s += `<polygon points="${pts([...Array(10)].map((_, i) => { const r = i % 2 ? 6.4 : 15, a = -Math.PI / 2 + i * Math.PI / 5; return [60 + r * Math.cos(a), 111 + r * Math.sin(a)]; }))}" fill="#ffe58a" stroke="${D}" stroke-width="1.2" stroke-linejoin="round"/>`;
+    s += streak("M38,98 Q40,90 46,86", .85, 2.6) + streak("M55,104 L58,100", .8, 1.4);
+    return s + sparks([[96, 84, 4.4], [24, 120, 4], [92, 136, 3.4], [100, 50, 3]]);
+  }
+
+  /* ---------- balls ---------- */
+  // ball frame: clip + shade + rim; inner(cx, cy, R) draws the panels
+  function ball(cx, cy, R, inner, o = {}) {
+    const c = uid("bc"), sh = uid("bs");
+    const body = `<defs><clipPath id="${c}"><circle cx="${cx}" cy="${cy}" r="${R}"/></clipPath></defs><g clip-path="url(#${c})">${aC(cx, cy, R, "#fbfbf8")}${inner}</g>`;
+    return aC(cx, cy, R + 1.2, OL) + (o.spin ? `<g class="${o.spin}"><circle cx="${cx}" cy="${cy}" r="${f1(R * 1.25)}" fill="none"/>${body}</g>` : body) +
+      `<defs><radialGradient id="${sh}" cx=".36" cy=".3" r=".8"><stop offset=".5" stop-color="#1a2440" stop-opacity="0"/><stop offset="1" stop-color="#1a2440" stop-opacity=".42"/></radialGradient></defs>` +
+      aC(cx, cy, R, `url(#${sh})`) + `<ellipse cx="${f1(cx - R * .38)}" cy="${f1(cy - R * .44)}" rx="${f1(R * .22)}" ry="${f1(R * .12)}" fill="#fff" opacity=".75" transform="rotate(-35 ${f1(cx - R * .38)} ${f1(cy - R * .44)})"/>` +
+      aC(cx, cy, R, "none", `stroke="${OL}" stroke-width="1.4"`);
+  }
+  // a point on the "sphere": direction ang (deg), distance d from the centre, a local offset (u radial, v tangential) squashed by k
+  const place = (cx, cy, ang, d, u, v, k) => { const a = ang * RAD, c = Math.cos(a), s = Math.sin(a); return [cx + (d + u * k) * c - v * s, cy + (d + u * k) * s + v * c]; };
+  function telstar(cx, cy, R) {
+    const a = R * .28, P = "#1b1b1b", S = "#9e9e9e";
+    const cen = [0, 1, 2, 3, 4].map(i => { const t = (-90 + i * 72) * RAD; return [cx + a * Math.cos(t), cy + a * Math.sin(t)]; });
+    let s = `<polygon points="${pts(cen)}" fill="${P}"/>`;
+    [0, 1, 2, 3, 4].forEach(i => {
+      const ang = -90 + i * 72, d = R * .84, k = .55;
+      const pent = [0, 1, 2, 3, 4].map(j => { const t = (180 + j * 72) * RAD; return place(cx, cy, ang, d, a * Math.cos(t), a * Math.sin(t), k); });
+      s += `<polygon points="${pts(pent)}" fill="${P}"/>`;
+      s += `<path d="M${pts([cen[i], pent[0]])}" stroke="${S}" stroke-width="1"/>`;
+      // seams from the side corners of each outer pentagon toward its neighbours
+      const nb = (-90 + (i + 1) * 72), mid = place(cx, cy, (ang + nb) / 2, R * .98, 0, 0, 1);
+      s += `<path d="M${pts([pent[4], mid])}" stroke="${S}" stroke-width="1"/>`;
+      const prev = place(cx, cy, ang - 36, R * .98, 0, 0, 1);
+      s += `<path d="M${pts([pent[1], prev])}" stroke="${S}" stroke-width="1"/>`;
+      // hexagon seam from the central pentagon's edge midpoint outward
+      const e = [(cen[i][0] + cen[(i + 1) % 5][0]) / 2, (cen[i][1] + cen[(i + 1) % 5][1]) / 2];
+      s += `<path d="M${pts([e, place(cx, cy, ang + 36, R * .62, 0, 0, 1)])}" stroke="${S}" stroke-width=".9" opacity=".7"/>`;
+    });
+    return s;
+  }
+  function tango(cx, cy, R) {
+    // white circles packed almost touching on a black ball: thin black seams between two circles and chunky curved
+    // triangles where three meet, the Tango "triads"
+    const rc = R * .38, d = R * .72;
+    let s = aC(cx, cy, R, "#1b1b1b") + aC(cx, cy, f1(rc), "#fbfbf8");
+    for (let i = 0; i < 6; i++) {
+      const ang = -90 + i * 60, [x, y] = place(cx, cy, ang, d, 0, 0, 1);
+      s += `<ellipse cx="${f1(x)}" cy="${f1(y)}" rx="${f1(rc * .8)}" ry="${f1(rc * .94)}" fill="#fbfbf8" transform="rotate(${ang} ${f1(x)} ${f1(y)})"/>`;
+    }
+    for (let i = 0; i < 6; i++) {
+      const ang = -60 + i * 60, [x, y] = place(cx, cy, ang, R * 1.04, 0, 0, 1);
+      s += `<ellipse cx="${f1(x)}" cy="${f1(y)}" rx="${f1(rc * .5)}" ry="${f1(rc * .92)}" fill="#fbfbf8" transform="rotate(${ang} ${f1(x)} ${f1(y)})"/>`;
+    }
+    return s;
+  }
+  function alRihla(cx, cy, R) {
+    // white with bold wing-shaped panels in navy, red, sky blue and gold, five-fold like a pinwheel
+    const cols = ["#1e3a8a", "#e53935", "#29b6f6", "#f5c400", "#1e3a8a"], acc = ["#29b6f6", "#f5c400", "#1e3a8a", "#e53935", "#e53935"];
+    let s = "";
+    for (let i = 0; i < 5; i++) {
+      const t = -90 + i * 72;
+      const p0 = place(cx, cy, t, R * .2, 0, 0, 1), p1 = place(cx, cy, t + 26, R * .98, 0, 0, 1), p2 = place(cx, cy, t + 46, R * .98, 0, 0, 1), c1 = place(cx, cy, t + 6, R * .7, 0, 0, 1), c2 = place(cx, cy, t + 30, R * .5, 0, 0, 1);
+      s += `<path d="M${pts([p0])} Q${pts([c1])} ${pts([p1])} L${pts([p2])} Q${pts([c2])} ${pts([p0])}Z" fill="${cols[i]}"/>`;
+      const q0 = place(cx, cy, t + 48, R * .55, 0, 0, 1), q1 = place(cx, cy, t + 56, R * .98, 0, 0, 1), q2 = place(cx, cy, t + 66, R * .98, 0, 0, 1);
+      s += `<polygon points="${pts([q0, q1, q2])}" fill="${acc[i]}"/>`;
+      const sm = place(cx, cy, t + 36, R * .98, 0, 0, 1);
+      s += `<path d="M${pts([p0])} Q${pts([place(cx, cy, t + 40, R * .55, 0, 0, 1)])} ${pts([sm])}" fill="none" stroke="#c7ccd4" stroke-width=".9"/>`;
+    }
+    const pent = [0, 1, 2, 3, 4].map(i => place(cx, cy, -54 + i * 72, R * .2, 0, 0, 1));
+    return s + `<polygon points="${pts(pent)}" fill="#fbfbf8" stroke="#c7ccd4" stroke-width=".9"/>`;
+  }
+  const ballGlow = (c = "#ffffff") => glow(60, 88, 62, c, .35);
+
+  FAN.trophies = [
+    ["World Cup trophy", "The golden FIFA World Cup: two figures holding up the world, green bands at the base", () => [stadium({ seed: 3 }), aEdge(worldCup())]],
+    ["Jules Rimet trophy", "The first World Cup trophy: a golden winged figure holding up a cup", () => [cabinet(), aEdge(julesRimet())]],
+    ["Champions League cup", "The silver \"big ears\" cup with its huge handles", () => [stadium({ stars: true, top: "#06123a", bot: "#1d3b8c", seed: 8 }), aEdge(bigEars())]],
+    ["Euro trophy", "The silver Henri Delaunay cup of the European Championship", () => [podium({ py: 140 }), aEdge(euro())]],
+    ["Copa América trophy", "The tall silver Copa América trophy on its wooden base", () => [pitch({ seed: 11 }), aEdge(copaAmerica())]],
+    ["Winner's medal", "A shiny gold medal with a star on a ribbon", () => [podium({ top: "#1e5bb8", bot: "#7fd3ff", seed: 21 }), aEdge(medal())]],
+    ["Telstar 1970", "The black and white ball of the 1970 World Cup", () => [pitch({ seed: 14, shadow: true }), aEdge(ballGlow() + ball(60, 88, 48, telstar(60, 88, 48)))]],
+    ["Tango 1978", "The 1978 World Cup ball with its black triads", () => [cabinet({ top: "#2a4f8f", bot: "#14264a" }), aEdge(ballGlow() + ball(60, 92, 48, tango(60, 92, 48)))]],
+    ["Al Rihla 2022", "The colourful ball of the 2022 World Cup (it spins)", () => [stadium({ seed: 17, top: "#2a0f4a", bot: "#7a1f5a" }), aEdge(ballGlow("#fff3c4") + ball(60, 82, 48, alRihla(60, 82, 48), { spin: "lv-spin" }))]],
+  ];
+})();
+
+/* Sticker book subject page "Vehicles": 9 chunky toy vehicles drawn big (side view, facing right) with one face style
+   for all: two anime eyes in the windscreen and an open smile just below it (the steam train wears its face on the
+   round smokebox front). Street / farm / building-site / sky / rails backdrops. The helicopter is the page's living
+   sticker: its tail rotor spins (it turns in the plane of the picture, so a 2D spin looks right). */
+(() => {
+  "use strict";
+  const OL = A_OL, OUT = `stroke="${OL}" stroke-width="1.1" stroke-linejoin="round"`;
+  const uid = p => `vh${p}${++aUid}`;
+  const f1 = v => +(+v).toFixed(1);
+  const GLASS = "#bfe9ff";
+
+  /* ---------- shared parts ---------- */
+  // two anime eyes with a thin dark rim, so they read on glass
+  const eyes = (x1, x2, y, s = .85, iris = "#3a2a1a") => [x1, x2].map(x =>
+    `<ellipse cx="${x}" cy="${y}" rx="${f1(4.5 * s)}" ry="${f1(5.4 * s)}" fill="${OL}"/>` + aEye(x, y, iris, s)).join("");
+  // an open smile with a little tongue
+  const grin = (x, y, w = 4.5) => `<path d="M${f1(x - w)},${y} Q${x},${f1(y + w * 1.5)} ${f1(x + w)},${y}Z" fill="#c0392b" stroke="${OL}" stroke-width="1" stroke-linejoin="round"/>` +
+    `<ellipse cx="${x}" cy="${f1(y + w * .5)}" rx="${f1(w * .42)}" ry="${f1(w * .22)}" fill="#ff8a80"/>`;
+  // a white glint on a window
+  const shine = (x, y, l = 6) => `<path d="M${x},${y} l${f1(l * .55)},${f1(-l)}" stroke="#fff" stroke-width="1.8" stroke-linecap="round" opacity=".75"/>`;
+  const wheel = (x, y, r, hub = "#cfd8dc") => aC(x, y, r, "#263238", OUT) + aC(x, y, f1(r * .55), hub, `stroke="${OL}" stroke-width=".9"`) +
+    aC(x, y, f1(r * .18), "#607d8b") +
+    `<path d="M${f1(x - r * .72)},${f1(y - r * .3)} A${f1(r * .78)},${f1(r * .78)} 0 0 1 ${f1(x - r * .25)},${f1(y - r * .74)}" stroke="#fff" stroke-width="1.3" fill="none" opacity=".35" stroke-linecap="round"/>`;
+  // the dark wheel arch cut into the body
+  const arch = (x, y, r) => `<path d="M${f1(x - r - 3)},${y} A${r + 3},${r + 3} 0 0 1 ${f1(x + r + 3)},${y}Z" fill="#1c2327"/>`;
+  const headlight = (x, y, r = 3) => aC(x, y, r, "#fff59d", OUT) + aC(x - r * .3, y - r * .3, f1(r * .35), "#fff");
+  // flashing-light bar: dark base and coloured domes
+  const lightbar = (x, y, cols) => aR(x, y + 5, cols.length * 10 + 4, 3.4, "#455a64", `rx="1.5"`) +
+    cols.map((c, i) => `<path d="M${x + 2 + i * 10},${y + 5.4} Q${x + 2 + i * 10},${y} ${x + 7 + i * 10},${y} Q${x + 12 + i * 10},${y} ${x + 12 + i * 10},${y + 5.4}Z" fill="${c}" ${OUT}/>` +
+      aC(x + 5 + i * 10, y + 2.2, 1, "#fff", `opacity=".8"`)).join("");
+
+  /* ---------- backdrops ---------- */
+  function sky(top, bot) { const g = uid("sk"); return `<defs>${aVGrad(g, top, bot)}</defs><rect width="120" height="158" fill="url(#${g})"/>`; }
+  const house = (x, y, w, h, c, roof = "#8a4a3a") => `<rect x="${x}" y="${f1(y - h)}" width="${w}" height="${h}" fill="${c}" ${OUT}/>` +
+    `<path d="M${f1(x - 3)},${f1(y - h)} L${f1(x + w / 2)},${f1(y - h - 14)} L${f1(x + w + 3)},${f1(y - h)}Z" fill="${roof}" ${OUT}/>` +
+    `<rect x="${f1(x + w * .2)}" y="${f1(y - h * .62)}" width="${f1(w * .22)}" height="${f1(h * .3)}" fill="${GLASS}" ${OUT}/>` +
+    `<rect x="${f1(x + w * .58)}" y="${f1(y - h * .62)}" width="${f1(w * .22)}" height="${f1(h * .3)}" fill="${GLASS}" ${OUT}/>`;
+  function street(o = {}) {
+    let s = sky(o.top || "#bfe6ff", o.bot || "#eaf7ff");
+    s += aCloud(40, 14, .6) + aCloud(88, 22, .55);
+    s += house(2, 104, 30, 46, o.c1 || "#f2c9a0") + house(42, 104, 28, 38, o.c2 || "#f5e0a8") + house(82, 104, 32, 52, o.c3 || "#c9e0f0");
+    s += `<rect y="104" width="120" height="8" fill="#e0e0e0"/><rect y="112" width="120" height="46" fill="#8f969c"/>`;
+    s += [...Array(5)].map((_, i) => `<rect x="${2 + i * 26}" y="146" width="14" height="3" fill="#f4e27a"/>`).join("");
+    return s;
+  }
+  function farm() {
+    let s = sky("#bfe6ff", "#eafbe0");
+    s += aSun(102, 20, 10) + aCloud(44, 16, .6);
+    s += `<rect y="96" width="120" height="62" fill="#9fcf6a"/><path d="M0,98 Q30,90 60,96 Q90,102 120,94 V158 H0Z" fill="#8fc35e"/>`;
+    s += [...Array(4)].map((_, i) => `<path d="M0,${146 + i * 4} H120" stroke="#7fb04f" stroke-width="1.4"/>`).join("");
+    s += `<path d="M84,96 V80 M84,84 H120 M84,90 H120 M100,96 V80 M116,96 V80" stroke="#a1785a" stroke-width="2"/>`;
+    return s;
+  }
+  function site() {
+    let s = sky("#cfe2ea", "#f0e6cf");
+    s += aSun(100, 20, 9) + aCloud(40, 18, .55);
+    s += `<g transform="translate(14 64)" stroke="#d6a93a" stroke-width="2"><path d="M0,0 V48 M22,0 V48 M0,0 L22,16 L0,32 L22,48 M0,16 H22 M0,32 H22" fill="none"/></g>`;
+    s += `<rect y="112" width="120" height="46" fill="#c9a86a"/><path d="M0,112 Q40,106 80,112 Q100,115 120,110 V158 H0Z" fill="#b8955a"/>`;
+    s += `<path d="M84,140 Q96,120 112,124 Q120,126 120,140Z" fill="#9c7a44" ${OUT}/>`;
+    s += [8, 22].map(x => `<path d="M${x},152 L${x + 5},140 L${x + 10},152Z" fill="#ff7a3c" ${OUT}/><rect x="${x + 2.5}" y="146" width="5" height="2.4" fill="#fff"/>`).join("");
+    return s;
+  }
+  function rails() {
+    let s = sky("#bfe6ff", "#eafbe0");
+    s += aSun(104, 18, 9) + `<path d="M0,104 Q40,96 80,104 Q100,108 120,100 V158 H0Z" fill="#8fc35e"/>`;
+    s += `<rect y="138" width="120" height="20" fill="#9c8255"/>`;
+    s += [...Array(9)].map((_, i) => `<rect x="${-2 + i * 15}" y="141" width="9" height="15" fill="#6d4c2a" transform="skewX(-14)" ${OUT}/>`).join("");
+    s += `<rect y="139" width="120" height="3.4" fill="#6b7076" ${OUT}/><rect y="150" width="120" height="3.4" fill="#6b7076" ${OUT}/>`;
+    return s;
+  }
+
+  /* ---------- the vehicles (card coordinates, 120 x 158) ---------- */
+  function fireEngine() {
+    const R = "#e53935";
+    return aR(8, 74, 74, 52, R, `rx="5"`) +
+      [13, 46].map(x => aR(x, 81, 29, 22, "#dfe4e8", `rx="2"`) + [0, 1, 2, 3].map(i => `<path d="M${x + 2},${86 + i * 5} H${x + 27}" stroke="#9aa5ad" stroke-width="1.2"/>`).join("")).join("") +
+      aP("M78,126 L78,66 Q78,58 86,58 L100,58 Q108,58 111,68 L114,88 L114,126Z", R) +
+      aP("M86,64 L100,64 Q105,64 107,71 L109,90 L86,90Z", GLASS) + shine(103, 72, 5) +
+      `<rect x="8" y="107" width="106" height="4" fill="#fff" opacity=".9"/>` +
+      aR(106, 114, 10, 8, "#cfd8dc", `rx="2"`) + headlight(111.5, 104, 2.8) +
+      // the ladder lies on top, on a turntable
+      aR(60, 66, 16, 8, "#9e9e9e", `rx="2"`) +
+      `<g transform="rotate(-6 80 66)">` + aR(2, 58, 80, 4, "#eceff1") + aR(2, 66, 80, 4, "#eceff1") +
+      [...Array(10)].map((_, i) => `<rect x="${6 + i * 8}" y="62" width="2.6" height="4" fill="#b0bec5" ${OUT}/>`).join("") + `</g>` +
+      lightbar(84, 48, ["#e53935", "#1e88e5"]) +
+      arch(30, 126, 13) + arch(94, 126, 13) + wheel(30, 126, 13) + wheel(94, 126, 13) +
+      eyes(92, 102, 79, .82) + grin(97, 96.5, 6);
+  }
+  function policeCar() {
+    const B = "#1e3a8a";
+    return aP("M26,92 Q32,64 50,62 L80,62 Q92,62 100,92Z", "#fff") +
+      aP("M33,90 Q37,70 50,69 L58,69 L58,90Z", GLASS) + aP("M62,69 L79,69 Q87,69 92,90 L62,90Z", GLASS) + shine(84, 78, 5) +
+      aP("M6,110 Q6,94 20,92 L96,90 Q112,92 114,106 L114,116 Q114,122 108,122 L12,122 Q6,122 6,116Z", B) +
+      aP("M34,93 L96,92 L96,113 L34,113Z", "#fff") + aStar(52, 103, 8, OL) + aStar(52, 103, 6.4, "#fbc02d") +
+      headlight(110, 100, 2.8) + aC(8.5, 102, 2.4, "#ff5252", OUT) +
+      aR(100, 115, 15, 5, "#90a4ae", `rx="2"`) +
+      lightbar(54, 53, ["#e53935", "#1e88e5"]) +
+      arch(28, 122, 12) + arch(90, 122, 12) + wheel(28, 122, 12) + wheel(90, 122, 12) +
+      eyes(71, 81, 79, .78) + grin(76, 97, 5.5);
+  }
+  function ambulance() {
+    const W = "#fafafa", R = "#e53935";
+    return aR(6, 52, 80, 72, W, `rx="7"`) +
+      `<path d="M39,64 h10 v10 h10 v10 h-10 v10 h-10 v-10 h-10 v-10 h10Z" fill="${R}" ${OUT}/>` +
+      aR(66, 58, 14, 12, GLASS, `rx="2"`) +
+      aP("M84,124 L84,72 Q84,66 90,66 L102,66 Q108,66 111,74 L114,92 L114,124Z", W) +
+      aP("M89,71 L101,71 Q105,71 107,77 L109,93 L89,93Z", GLASS) + shine(104, 79, 5) +
+      `<rect x="6" y="108" width="108" height="5" fill="${R}"/>` +
+      aR(104, 116, 12, 6, "#90a4ae", `rx="2"`) + headlight(111.5, 102, 2.6) +
+      lightbar(62, 41, ["#1e88e5", "#e53935"]) +
+      arch(30, 124, 13) + arch(96, 124, 13) + wheel(30, 124, 13) + wheel(96, 124, 13) +
+      eyes(94, 103, 83, .75) + grin(98.5, 98.5, 5.2);
+  }
+  function schoolBus() {
+    const Y = "#fbc02d", SK = ["#f1c27d", "#8d5524", "#ffdbac", "#c68642"], HR = ["#4a2c12", "#1a1a1a", "#e0a030", "#6d3a1a"];
+    return aP("M4,60 Q4,52 12,52 L102,52 Q112,52 114,64 L114,118 Q114,122 110,122 L8,122 Q4,122 4,118Z", Y) +
+      [10, 27, 44, 61].map((x, i) => aR(x, 59, 14, 21, GLASS, `rx="2"`) +
+        `<path d="M${x + 1.5},80 Q${x + 7},73 ${x + 12.5},80Z" fill="${["#e53935", "#43a047", "#1e88e5", "#8e24aa"][i]}"/>` +
+        aC(x + 7, 71, 4.4, SK[i]) + `<path d="M${x + 2.6},70.5 Q${x + 7},${i % 2 ? 63 : 64.5} ${x + 11.4},70.5 Q${x + 7},67.5 ${x + 2.6},70.5Z" fill="${HR[i]}"/>` +
+        aC(x + 5.4, 72, .8, OL) + aC(x + 8.6, 72, .8, OL)).join("") +
+      `<rect x="4" y="88" width="110" height="3" fill="${OL}" opacity=".75"/><rect x="4" y="95" width="80" height="3" fill="${OL}" opacity=".75"/>` +
+      aR(79, 58, 13, 58, GLASS, `rx="1.5"`) + `<path d="M85.5,58 V116" stroke="${OL}" stroke-width="1.1"/>` +
+      aP("M95,58 L106,58 Q112,58 113,66 L113,91 L95,91Z", GLASS) + shine(109, 66, 5) +
+      aR(98, 115, 17, 6, "#455a64", `rx="2"`) + headlight(110, 108, 2.8) +
+      arch(26, 122, 12) + arch(86, 122, 12) + wheel(26, 122, 12) + wheel(86, 122, 12) +
+      eyes(99.5, 108.5, 76, .7) + grin(104, 96, 5.2);
+  }
+  function tractor() {
+    const G = "#43a047", R = "#e53935";
+    return `<path d="M80,72 V52" stroke="#546e7a" stroke-width="4" stroke-linecap="round"/>` + aC(84, 44, 4, "#eceff1", `opacity=".9"`) + aC(92, 36, 5.5, "#eceff1", `opacity=".8"`) +
+      aP("M18,100 L18,50 Q18,44 24,44 L58,44 Q64,44 64,50 L64,100Z", G) + aR(12, 37, 58, 8, "#fafafa", `rx="3"`) +
+      aP("M24,52 L58,52 L58,84 L24,84Z", GLASS) + shine(52, 62, 6) +
+      aP("M60,72 L104,74 Q114,76 114,86 L114,112 L60,112Z", G) +
+      aR(106, 84, 8, 22, "#2e7d32") + [0, 1, 2, 3].map(i => `<path d="M107,${88 + i * 5} H113" stroke="${OL}" stroke-width="1"/>`).join("") +
+      headlight(110, 79, 2.8) +
+      `<path d="M64,92 H104" stroke="#2e7d32" stroke-width="2"/>` +
+      aC(36, 118, 24.5, "none", `stroke="#1c2327" stroke-width="3.4" stroke-dasharray="4 3.3"`) +
+      wheel(36, 118, 22, "#fdd835") + wheel(98, 128, 12, "#fdd835") +
+      aP("M8,116 Q10,86 36,86 Q62,86 64,116 L58,116 Q56,93 36,93 Q16,93 14,116Z", R) +
+      eyes(35, 48, 68, 1) + grin(41.5, 90, 6.5);
+  }
+  function digger() {
+    const Y = "#fbc02d", D = "#37474f";
+    return aR(8, 112, 74, 24, D, `rx="12"`) +
+      `<rect x="8" y="112" width="74" height="24" rx="12" fill="none" stroke="#1c2327" stroke-width="2.6" stroke-dasharray="3 2.6"/>` +
+      aR(15, 117, 60, 14, "#78909c", `rx="7"`) + [22, 36, 50, 64].map(x => aC(x, 124, 5, "#cfd8dc", OUT) + aC(x, 124, 1.6, "#607d8b")).join("") +
+      `<path d="M24,88 V76" stroke="#546e7a" stroke-width="3.4" stroke-linecap="round"/>` +
+      aP("M6,112 L6,96 Q6,88 14,88 L74,88 Q80,88 80,94 L80,112Z", Y) +
+      `<path d="M6,104 h10 M6,98 h6" stroke="${OL}" stroke-width="2.4" opacity=".75"/>` +
+      aP("M36,92 L36,54 Q36,48 42,48 L64,48 Q72,48 74,56 L76,92Z", Y) +
+      aP("M41,54 L63,54 Q68,54 69,60 L70,79 L41,79Z", GLASS) + shine(64, 62, 6) +
+      // the arm: boom, hydraulic ram, stick, bucket
+      aL([[72, 98], [82, 72], [96, 48]], Y, 10) + aL([[64, 92], [86, 64]], "#b0bec5", 3) +
+      aL([[96, 48], [108, 84]], Y, 7) +
+      aP("M102,80 Q120,80 118,98 Q117,110 104,111 L95,106 Q104,104 107,97 Q110,89 101,88Z", "#78909c") +
+      [0, 1, 2].map(i => `<path d="M${96 + i * 3.4},${106.5 + i * 1.4} l-1.6,4 l3.4,-.6Z" fill="${OL}"/>`).join("") +
+      aC(72, 98, 3.4, "#455a64", OUT) + aC(96, 48, 3.4, "#455a64", OUT) + aC(108, 84, 3, "#455a64", OUT) +
+      eyes(49, 61, 67, .9) + grin(55, 83.5, 6);
+  }
+  function rubbishTruck() {
+    const G = "#66bb6a", GD = "#2e7d32";
+    return aP("M36,48 Q28,42 26,32 Q34,34 38,44 Q38,32 43,26 Q46,36 41,46 Q46,38 54,38 Q50,46 42,49Z", "#fdd835") + `<path d="M38,44 V49" stroke="#6d4c2a" stroke-width="2.2"/>` +
+      aP("M10,118 L10,58 Q10,46 24,46 L78,46 Q84,46 84,52 L84,118Z", G) +
+      [30, 48, 66].map(x => `<path d="M${x},50 V114" stroke="${GD}" stroke-width="1.6" opacity=".7"/>`).join("") +
+      // a little wheelie bin painted on the side
+      aR(36, 70, 22, 6, "#455a64", `rx="2"`) + aP("M38,76 L56,76 L54,104 L40,104Z", "#546e7a") + aC(41, 106, 3, "#263238", OUT) +
+      aP("M2,118 L2,72 Q2,64 10,64 L14,64 L14,118Z", GD) +
+      `<rect x="2" y="104" width="12" height="12" fill="#fdd835"/><path d="M2,110 l6,-6 M2,116 l12,-12 M8,116 l6,-6" stroke="${OL}" stroke-width="2"/>` +
+      aC(8, 60, 3.2, "#ffa000", OUT) +
+      aP("M82,124 L82,64 Q82,58 88,58 L102,58 Q108,58 111,66 L114,86 L114,124Z", "#fafafa") +
+      aP("M88,63 L101,63 Q105,63 107,70 L109,88 L88,88Z", GLASS) + shine(104, 71, 5) +
+      `<rect x="82" y="106" width="32" height="4" fill="${GD}"/>` +
+      aR(104, 115, 12, 7, "#90a4ae", `rx="2"`) + headlight(111.5, 100, 2.6) +
+      arch(34, 124, 13) + arch(98, 124, 13) + wheel(34, 124, 13) + wheel(98, 124, 13) +
+      eyes(93.5, 102.5, 76, .76) + grin(98, 93, 5.5);
+  }
+  function helicopter() {
+    const B = "#e53935";
+    return aP("M44,80 L12,82 L12,90 L44,96Z", B) + aP("M8,90 L5,62 Q5,57 10,59 L18,86Z", B) +
+      aL([[46, 124], [104, 124], [112, 117]], "#455a64", 3) + aL([[58, 106], [56, 124]], "#455a64", 2.4) + aL([[92, 106], [94, 124]], "#455a64", 2.4) +
+      aP("M38,84 Q40,58 70,56 Q98,56 108,74 Q116,90 104,103 Q94,111 70,111 Q44,111 38,96Z", B) +
+      `<path d="M40,98 Q70,104 106,98" fill="none" stroke="#fff" stroke-width="3"/>` +
+      aR(48, 64, 20, 20, GLASS, `rx="4"`) + shine(62, 71, 5) +
+      aP("M76,59 Q98,60 106,76 Q110,86 104,92 L76,92Z", GLASS) + shine(100, 72, 6) +
+      aR(66, 46, 8, 11, "#455a64") + aR(10, 42, 108, 4.4, "#546e7a", `rx="2"`) + aR(62, 41, 16, 6, "#37474f", `rx="2"`) +
+      // the tail rotor: two crossed blades centred on the hub (12,68), spinning (the living sticker)
+      `<g class="lv-spin">${aR(0, 66.3, 24, 3.4, "#455a64", `rx="1.7"`)}${aR(10.3, 56, 3.4, 24, "#455a64", `rx="1.7"`)}${aC(12, 68, 2.6, "#cfd8dc", OUT)}</g>` +
+      eyes(85, 96, 77, .9) + grin(91, 96, 6);
+  }
+  function steamTrain() {
+    const BL = "#1e63c4", R = "#e53935", K = "#263238";
+    const rw = (x, y, r) => aC(x, y, r, K, OUT) + aC(x, y, f1(r - 2.4), R, `stroke="${OL}" stroke-width=".8"`) +
+      [0, 45, 90, 135].map(a => `<path d="M${f1(x - (r - 3) * Math.cos(a * Math.PI / 180))},${f1(y - (r - 3) * Math.sin(a * Math.PI / 180))} L${f1(x + (r - 3) * Math.cos(a * Math.PI / 180))},${f1(y + (r - 3) * Math.sin(a * Math.PI / 180))}" stroke="#b71c1c" stroke-width="1.6"/>`).join("") +
+      aC(x, y, f1(r * .25), "#fdd835", OUT);
+    return [[82, 44, 6], [72, 33, 8], [56, 26, 9.5], [40, 34, 7]].map(([x, y, r]) => aC(x, y, r, "#fff", `stroke="#cfd8dc" stroke-width="1.2" opacity=".95"`)).join("") +
+      aP("M8,112 L8,56 L44,56 L44,112Z", BL) + aP("M3,56 Q3,48 11,48 L41,48 Q49,48 49,56Z", R) +
+      aR(15, 62, 22, 18, GLASS, `rx="3"`) + shine(31, 68, 5) +
+      aR(40, 74, 56, 36, BL, `rx="4"`) + [56, 78].map(x => `<rect x="${x}" y="74" width="3.4" height="36" fill="#fdd835" ${OUT}/>`).join("") +
+      aP("M58,74 Q58,63 64,63 Q70,63 70,74Z", "#fdd835") +
+      aP("M79,74 L81,58 L77,51 L93,51 L89,58 L91,74Z", K) +
+      aR(6, 108, 106, 5, R) +
+      aR(100, 113, 16, 6, R) + aP("M96,119 L116,119 L119,136 L96,136Z", R) +
+      [101, 106, 111].map(x => `<path d="M${x},120 L${x + 2},135" stroke="${OL}" stroke-width="1.4"/>`).join("") +
+      aC(98, 92, 19, K, OUT) + aC(98, 92, 15, "#d9dee2", OUT) +
+      rw(30, 125, 14) + rw(62, 125, 14) + rw(87, 130, 8.5) +
+      aR(72, 112, 18, 8, "#78909c", `rx="2"`) + aL([[30, 130], [62, 130], [80, 116]], "#b0bec5", 2.4) +
+      aC(30, 130, 1.8, "#fdd835", OUT) + aC(62, 130, 1.8, "#fdd835", OUT) +
+      eyes(92, 104, 88, .74) + grin(98, 97.5, 5) + `<ellipse cx="88" cy="96" rx="2.4" ry="1.4" fill="#ff7a9a" opacity=".6"/><ellipse cx="108" cy="96" rx="2.4" ry="1.4" fill="#ff7a9a" opacity=".6"/>`;
+  }
+
+  /* ---------- the stickers ---------- */
+  const heliSky = () => sky("#7fd0f6", "#cdeeff") + aCloud(40, 16, .7) + aCloud(86, 126, .6) +
+    `<path d="M0,138 Q40,128 80,138 Q100,143 120,134 V158 H0Z" fill="#8fc35e"/>` + house(8, 156, 20, 14, "#f2c9a0", "#7a2a1e");
+  FAN.vehicles = [
+    ["Fire engine", "Big red fire engine with a long ladder on top and flashing lights", () => [street({ c3: "#e2b0a0" }), aEdge(fireEngine())]],
+    ["Police car", "Blue and white police car with a gold star and flashing lights", () => [street({}), aEdge(policeCar())]],
+    ["Ambulance", "White ambulance with a red cross, ready to help", () => [street({ c1: "#dfe8ea" }), aEdge(ambulance())]],
+    ["School bus", "Big yellow school bus full of happy children", () => [street({ c2: "#f0d9b0" }), aEdge(schoolBus())]],
+    ["Tractor", "Green tractor with a huge back wheel, puffing on the farm", () => [farm(), aEdge(tractor())]],
+    ["Digger", "Yellow digger on tracks, its long arm and bucket ready to scoop", () => [site(), aEdge(digger())]],
+    ["Rubbish truck", "Green rubbish truck collecting the bins (a banana peel peeks out)", () => [street({ c2: "#dfe8c8" }), aEdge(rubbishTruck())]],
+    ["Helicopter", "Red helicopter flying over the houses (its tail rotor spins)", () => [heliSky(), aEdge(helicopter())]],
+    ["Steam train", "Blue steam engine puffing along the rails on big red wheels", () => [rails(), aEdge(steamTrain())]],
+  ];
+})();
+
+/* Sticker book team pages, part 1: the "food" and "national thing" stickers of 9 teams (pt, slb, vsc, cv, es, fr, it,
+   de, nl); sets FAN.food[team] / FAN.thing[team] = [name, what, draw]. draw() = [backdrop with the small flag in the
+   bottom-left corner, the main picture (also the empty slot's silhouette)]. Foods get the same little kawaii face. */
+(() => {
+  "use strict";
+  const OL = A_OL;
+  const uid = p => `c1${p}${++aUid}`;
+  const n = v => +(+v).toFixed(2);
+  const st = (w = 1.4) => `stroke="${OL}" stroke-width="${w}" stroke-linejoin="round" stroke-linecap="round"`;
+  const P = (d, f, w = 1.4, x = "") => `<path d="${d}" fill="${f}" ${st(w)} ${x}/>`;
+  const Pn = (d, f, x = "") => `<path d="${d}" fill="${f}" ${x}/>`;
+  const E = (cx, cy, rx, ry, f, w = 1.4, x = "") => `<ellipse cx="${n(cx)}" cy="${n(cy)}" rx="${n(rx)}" ry="${n(ry)}" fill="${f}" ${st(w)} ${x}/>`;
+  const En = (cx, cy, rx, ry, f, x = "") => `<ellipse cx="${n(cx)}" cy="${n(cy)}" rx="${n(rx)}" ry="${n(ry)}" fill="${f}" ${x}/>`;
+  const line = (d, w = 1.2, c = OL, x = "") => `<path d="${d}" fill="none" stroke="${c}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" ${x}/>`;
+  const mir = s => `<g transform="matrix(-1 0 0 1 120 0)">${s}</g>`;
+  const at = (s, x, y, k = 1, a = 0) => `<g transform="translate(${n(x)} ${n(y)}) rotate(${a}) scale(${k})">${s}</g>`;
+  const R = (x, y, w, h, f, w2 = 1.3, ex = "") => `<rect x="${n(x)}" y="${n(y)}" width="${n(w)}" height="${n(h)}" fill="${f}" ${st(w2)} ${ex}/>`;
+  const Rn = (x, y, w, h, f, ex = "") => `<rect x="${n(x)}" y="${n(y)}" width="${n(w)}" height="${n(h)}" fill="${f}" ${ex}/>`;
+  const sparks = (pts, c = "#fff") => pts.map(([x, y, r]) => aSpark(x, y, r, c)).join("");
+  const shadow = (x, y, rx) => En(x, y, rx, rx * .18, "#000", 'opacity=".18"');
+  const radial = (a, b, cy) => aRadial(uid("rd"), a, b, cy);
+  // a stroked rope (pretzel, oar...): dark outline under a coloured core
+  const rope = (d, w, c, cap = "round") => `<path d="${d}" fill="none" stroke="${OL}" stroke-width="${w + 2.8}" stroke-linecap="${cap}" stroke-linejoin="round"/>` +
+    `<path d="${d}" fill="none" stroke="${c}" stroke-width="${w}" stroke-linecap="${cap}" stroke-linejoin="round"/>`;
+  // a shape clipped to another (patterns on a tart, a waffle, a shield)
+  function clip(d, inner) { const id = uid("cl"); return `<defs><clipPath id="${id}"><path d="${d}"/></clipPath></defs><g clip-path="url(#${id})">${inner}</g>`; }
+
+  // the food face: two shiny dots, an open smile, pink cheeks (the same on every food)
+  const face = (x, y, k = 1) => En(x - 6.5 * k, y, 2.2 * k, 2.8 * k, "#2a1a10") + En(x + 6.5 * k, y, 2.2 * k, 2.8 * k, "#2a1a10") +
+    aC(x - 7.2 * k, y - 1.1 * k, n(.9 * k), "#fff") + aC(x + 5.8 * k, y - 1.1 * k, n(.9 * k), "#fff") +
+    P(`M${n(x - 2.6 * k)},${n(y + 2.4 * k)} Q${n(x)},${n(y + 6.4 * k)} ${n(x + 2.6 * k)},${n(y + 2.4 * k)}Z`, "#c0392b", n(.8 * k)) +
+    En(x - 11 * k, y + 3 * k, 2.8 * k, 1.6 * k, "#ff6f8a", 'opacity=".65"') + En(x + 11 * k, y + 3 * k, 2.8 * k, 1.6 * k, "#ff6f8a", 'opacity=".65"');
+  // a chibi head: skin, hair cap with a fringe, anime eyes (dx = looking sideways), small smile, blush
+  function head(x, y, r, o = {}) {
+    const skin = o.skin || "#ffd9b8", dx = o.dx || 0, s = n(r * .055);
+    let h = aC(x, y, r, skin, st(1.3));
+    if (o.hair !== null) h += P(`M${n(x - r * 1.04)},${n(y + r * .08)} C${n(x - r * 1.1)},${n(y - r * 1.25)} ${n(x + r * 1.1)},${n(y - r * 1.25)} ${n(x + r * 1.04)},${n(y + r * .08)} C${n(x + r * .75)},${n(y - r * .42)} ${n(x + r * .15)},${n(y - r * .58)} ${n(x - r * .15)},${n(y - r * .4)} C${n(x - r * .45)},${n(y - r * .28)} ${n(x - r * .8)},${n(y - r * .3)} ${n(x - r * 1.04)},${n(y + r * .08)}Z`, o.hair || "#3b2314", 1.2);
+    h += aEye(n(x - r * .4 + dx), n(y + r * .2), o.iris || "#5a3a1a", s) + aEye(n(x + r * .4 + dx), n(y + r * .2), o.iris || "#5a3a1a", s);
+    h += En(x - r * .66 + dx * .5, y + r * .55, r * .17, r * .1, "#ff7a8a", 'opacity=".6"') + En(x + r * .66 + dx * .5, y + r * .55, r * .17, r * .1, "#ff7a8a", 'opacity=".6"');
+    h += P(`M${n(x - r * .16 + dx)},${n(y + r * .6)} Q${n(x + dx)},${n(y + r * .82)} ${n(x + r * .16 + dx)},${n(y + r * .6)}Z`, "#c0392b", .8);
+    return h;
+  }
+
+  /* ================= FOOD ================= */
+
+  // Portugal: pastel de nata on a blue azulejo wall
+  function azulejos(c = "#2a5caa") {
+    let s = Rn(0, 0, 120, 158, "#f4f8ff");
+    for (let y = 0; y < 116; y += 24) for (let x = 0; x < 120; x += 24) {
+      s += `<g transform="translate(${x} ${y})"><rect width="24" height="24" fill="none" stroke="${c}" stroke-width=".8" opacity=".55"/>` +
+        `<circle cx="12" cy="12" r="6" fill="none" stroke="${c}" stroke-width="1.4" opacity=".5"/><path d="M12,8 L16,12 L12,16 L8,12Z" fill="${c}" opacity=".5"/>` +
+        `<path d="M0,5 A5,5 0 0 0 5,0 M19,0 A5,5 0 0 0 24,5 M24,19 A5,5 0 0 0 19,24 M5,24 A5,5 0 0 0 0,19" fill="none" stroke="${c}" stroke-width="1.2" opacity=".5"/></g>`;
+    }
+    return s;
+  }
+  const counter = (y, c1 = "#c98b55", c2 = "#a96d3b") => Rn(0, y, 120, 158 - y, c1) + Rn(0, y, 120, 3, c2) +
+    line(`M0,${y + 18} H120 M0,${y + 34} H120`, .8, c2, 'opacity=".6"');
+  function nataChar() {
+    const t = [];
+    t.push(P("M-41,-12 L-32,15 Q0,24 32,15 L41,-12Z", "#d98f3c"));
+    for (let i = -4; i <= 4; i++) t.push(line(`M${n(i * 9.2)},-4 L${n(i * 7.4)},${n(17 + (4 - Math.abs(i)) * .8)}`, 1.1, "#a8601e"));
+    t.push(E(0, -12, 41, 14, "#f0b762"));
+    t.push(E(0, -13, 34, 10.5, "#ffd54f", 1.1));
+    const spot = (x, y, rx, ry, c) => En(x, y, rx, ry, c, 'opacity=".85"');
+    t.push(spot(-14, -15, 6, 3.2, "#8a4a14"), spot(9, -17, 5, 2.6, "#8a4a14"), spot(20, -10, 4, 2.2, "#a85a1a"), spot(-3, -9, 4.5, 2.4, "#b86a24"),
+      spot(-24, -10, 3.4, 2, "#a85a1a"), spot(2, -19, 3, 1.6, "#a85a1a"));
+    t.push(Pn("M-26,-18 Q-14,-22 -4,-21", "none", `stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity=".7"`));
+    t.push(face(0, 3, 1.05));
+    return t.join("");
+  }
+  function nata() {
+    const bg = azulejos() + counter(108) + aFlagAt("pt");
+    const m = shadow(62, 122, 42) + at(nataChar(), 94, 58, .48) + at(nataChar(), 60, 100, 1.1) +
+      sparks([[100, 92, 4, "#fff"], [18, 74, 3.5, "#fff"]], "#ffe9a8");
+    return [bg, aEdge(m)];
+  }
+
+  // Benfica: bifana, a pork-steak roll with mustard
+  function bifana() {
+    const bg = radial("#ff5a5a", "#b0001a") + En(60, 116, 52, 13, "#fff", 'opacity=".95"') + En(60, 116, 40, 9, "#f1f1f1") + aFlagAt("slb");
+    const t = [];
+    t.push(P("M12,92 Q12,112 34,114 H86 Q108,112 108,92Z", "#d79c55"));
+    // pork slices: two wavy layers
+    let w1 = "M8,95", w2 = "M10,88";
+    for (let x = 8; x < 112; x += 13) w1 += ` Q${x + 6.5},${x % 2 ? 104 : 102} ${x + 13},95`;
+    for (let x = 10; x < 110; x += 12.5) w2 += ` Q${n(x + 6.25)},80 ${n(x + 12.5)},88`;
+    t.push(P(w1 + " L112,90 L8,90Z", "#b8653a", 1.2), P(w2 + " L110,96 L10,96Z", "#c97a4a", 1.2));
+    t.push(line("M18,92 Q30,88 40,92 M66,93 Q80,89 92,93", 1.4, "#e7a07a"));
+    t.push(P("M12,90 C12,58 38,46 60,46 C82,46 108,58 108,90 Q60,96 12,90Z", "#e7b268"));
+    t.push(Pn("M22,72 C26,58 42,52 56,51", "none", `stroke="#fff3d6" stroke-width="3" stroke-linecap="round" opacity=".8"`));
+    t.push(line("M44,52 Q60,49 76,52", 1.2, "#b77a35"));
+    // mustard zigzag peeking out
+    t.push(line("M16,90 L22,95 L28,89 L34,95 L40,89 L46,95 L52,89 L58,95 L64,89 L70,95 L76,89 L82,95 L88,89 L94,95 L100,90", 2.6, "#ffcc00"));
+    [[34, 60], [48, 56], [72, 57], [86, 63], [62, 62], [40, 66]].forEach(([x, y]) => t.push(En(x, y, 1.6, 1, "#fff8e8", 'opacity=".9"')));
+    t.push(face(60, 74, 1.1));
+    t.push(sparks([[104, 40, 4.5], [16, 50, 3.5]]));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  // Vitória SC: toucinho-do-céu, an almond cake dusted with sugar
+  function toucinho() {
+    let checks = "";
+    for (let r = 0; r < 4; r++) for (let c = 0; c < 10; c++) if ((r + c) % 2) checks += Rn(c * 12, 106 + r * 13, 12, 13, "#222");
+    const bg = aSky("#f7f2e6", "#e6dcc7") + Rn(0, 106, 120, 52, "#fafafa") + checks + Rn(0, 104, 120, 2.5, "#bba98a") + aFlagAt("vsc");
+    const t = [];
+    t.push(E(56, 112, 50, 12, "#fff", 1.3), En(56, 111, 40, 8.5, "#eef2f5"));
+    // the cake: side, top, sugar
+    t.push(P("M14,78 L16,102 Q52,118 92,102 L94,78Z", "#e0a23a"));
+    t.push(line("M18,92 Q52,104 90,92", 1, "#b9781f", 'opacity=".6"'));
+    t.push(E(54, 78, 40, 13, "#f6cf6a"));
+    t.push(clip("M14,78 A40,13 0 0 1 94,78 A40,13 0 0 1 14,78Z",
+      [[34, 74, 6, 2.4], [56, 70, 7, 2.6], [74, 77, 6, 2.2], [46, 82, 5, 2], [66, 84, 4.5, 1.8], [28, 81, 3.5, 1.5], [84, 74, 3, 1.4], [52, 76, 3, 1.2]]
+        .map(([x, y, rx, ry]) => En(x, y, rx, ry, "#fffdf6", 'opacity=".95"')).join("")));
+    [[40, 72], [62, 75], [76, 70], [48, 80]].forEach(([x, y], i) => t.push(E(x, y, 3.4, 1.6, "#f4e1b8", .8, `transform="rotate(${i * 40 - 30} ${x} ${y})"`)));
+    t.push(face(54, 96, .95));
+    // a slice in front: dusted top, moist yellow inside
+    t.push(P("M72,108 L112,108 L112,118 L72,117Z", "#f4bf3e"));
+    t.push([[82, 112], [92, 114], [100, 111], [107, 114], [88, 110]].map(([x, y]) => aC(x, y, .9, "#d38a1c")).join(""));
+    t.push(P("M72,108 L104,92 Q111,99 112,108Z", "#e9b04a", 1.2));
+    t.push([[96, 98, 3, 1.4], [104, 102, 2.6, 1.2], [88, 104, 2.4, 1.1]].map(([x, y, rx, ry]) => En(x, y, rx, ry, "#fffdf6")).join(""));
+    t.push(sparks([[104, 52, 4.5, "#fff"], [12, 58, 3.5]], "#ffd54f"));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  // Cape Verde: cachupa, the corn-and-bean stew, in a clay pot with a fried egg
+  function cachupa() {
+    const bg = aSky("#7fd3ff", "#d8f4ff") + aSun(98, 18, 10) + aCloud(8, 14, .8) + aWaves(48, "#2fa3d6", "#c8efff", 3) +
+      Pn("M0,70 Q60,62 120,70 V158 H0Z", "#c48a52") + line("M0,90 H120 M0,112 H120 M0,134 H120", .8, "#a06a38", 'opacity=".55"') + aFlagAt("cv");
+    const t = [];
+    t.push(shadow(60, 120, 40));
+    // steam
+    t.push(line("M44,38 q-5,-6 0,-12 q5,-6 0,-12 M60,34 q-5,-6 0,-12 q5,-6 0,-12 M76,38 q-5,-6 0,-12 q5,-6 0,-12", 2.2, "#fff", 'opacity=".85"'));
+    // handles, pot, rim
+    t.push(E(16, 80, 6, 8, "#9a4626"), E(104, 80, 6, 8, "#9a4626"));
+    t.push(P("M18,68 C14,92 30,118 60,118 C90,118 106,92 102,68Z", "#b4572d"));
+    t.push(line("M24,94 Q60,104 96,94", 1.1, "#8a3c1c", 'opacity=".7"'));
+    t.push(Pn("M28,76 C28,92 34,104 44,110", "none", `stroke="#e08a5a" stroke-width="3" stroke-linecap="round" opacity=".7"`));
+    t.push(E(60, 68, 43, 13, "#c4683a"));
+    t.push(E(60, 67, 37, 10, "#8a5a2b", 1.1));
+    // stew: corn, beans, sausage, cabbage, egg
+    const stew = [];
+    [[34, 66], [42, 61], [50, 71], [58, 63], [70, 70], [80, 63], [88, 68], [46, 66], [66, 61], [76, 73], [38, 71], [84, 72]]
+      .forEach(([x, y], i) => stew.push(E(x, y, 2.3, 1.8, "#f7d46a", .6, `transform="rotate(${i * 30} ${x} ${y})"`)));
+    [[40, 67, "#5a1a1a"], [54, 69, "#2a1a1a"], [74, 66, "#6e2020"], [86, 64, "#2a1a1a"], [62, 72, "#6e2020"], [30, 68, "#5a1a1a"]]
+      .forEach(([x, y, c], i) => stew.push(E(x, y, 2.6, 1.6, c, .6, `transform="rotate(${i * 50 - 20} ${x} ${y})"`)));
+    stew.push(E(32, 62, 4.6, 3, "#d0544a", .9) + aC(31, 62, .8, "#fbe0d8") + aC(33.5, 61.5, .7, "#fbe0d8"));
+    stew.push(E(90, 69, 4.6, 3, "#d0544a", .9) + aC(89, 69, .8, "#fbe0d8"));
+    stew.push(P("M74,58 Q82,54 90,60 Q82,62 74,58Z", "#7cc36a", .9));
+    stew.push(P("M48,58 C46,52 58,50 62,54 C70,52 74,60 68,64 C66,70 52,70 50,65 C44,65 44,60 48,58Z", "#fffdf6", 1.1) + E(58, 60, 5, 3.6, "#ffb300", 1) + aC(56.5, 58.8, 1.2, "#fff3c0"));
+    t.push(clip("M23,67 A37,10 0 0 1 97,67 A37,10 0 0 1 23,67Z", stew.join("")), stew[stew.length - 1]);
+    t.push(face(60, 94, 1.1));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  // Spain: paella in its wide pan
+  function shrimp(x, y, a = 0) {
+    return at(P("M-7,-3 C-9,5 1,9 7,4 C9,1 7,-3 3,-1 C0,2 -4,1 -3,-4Z", "#ff7a45", .9) + line("M-5,1 Q-3,0 -3,-3 M-2,4 Q0,2 -1,0 M2,5 Q3,3 2,1", .6, "#c9471c") +
+      P("M-7,-3 L-11,-6 L-10,-1Z", "#ff9a6a", .7) + aC(5.5, 1.5, .8, "#1b1b1b") + line("M7,3 Q12,1 13,-3 M7,4 Q12,4 14,1", .5, "#c9471c"), x, y, 1, a);
+  }
+  function mussel(x, y, a = 0) {
+    return at(E(0, 0, 6, 3.6, "#2b2f45", .9) + En(0, -.4, 4.3, 2.3, "#ff9f4a") + En(-1.2, -1, 1.5, .7, "#ffd0a0"), x, y, 1, a);
+  }
+  function paella() {
+    const bg = radial("#ffe27a", "#f08a1c", ".45") + Rn(0, 112, 120, 46, "#c0392b") + line("M0,118 H120", 2.5, "#ffcc33") + aFlagAt("es");
+    const t = [];
+    t.push(shadow(60, 118, 50));
+    // handles
+    t.push(rope("M14,86 Q2,84 4,94 Q6,100 16,96", 2.6, "#3a3a3a"), rope("M106,86 Q118,84 116,94 Q114,100 104,96", 2.6, "#3a3a3a"));
+    t.push(P("M10,88 L14,100 Q60,122 106,100 L110,88Z", "#2f3236"));
+    t.push(E(60, 88, 50, 21, "#4b5056"));
+    t.push(E(60, 88, 45, 18, "#f2b31f", 1.1));
+    const rice = [];
+    for (let i = 0; i < 60; i++) { const a = i * 2.4, r = 6 + (i * 37 % 40); rice.push(En(60 + Math.cos(a) * r, 88 + Math.sin(a) * r * .4, 1.3, .6, "#ffd769")); }
+    t.push(clip("M15,88 A45,18 0 0 1 105,88 A45,18 0 0 1 15,88Z", rice.join("") +
+      [[30, 82], [44, 98], [78, 99], [92, 86], [70, 76], [52, 76]].map(([x, y]) => aC(x, y, 1.8, "#5cb531", st(.5))).join("") +
+      [[36, 92, -20], [84, 80, 25], [64, 100, 10], [48, 82, -40]].map(([x, y, a]) => at(R(-5, -1.2, 10, 2.4, "#e53935", .5, 'rx="1.2"'), x, y, 1, a)).join("")));
+    t.push(shrimp(30, 90, -10), shrimp(88, 92, 20), shrimp(42, 76, -30), shrimp(80, 77, 30));
+    t.push(mussel(24, 84, -15), mussel(96, 85, 15), mussel(56, 101, 0), mussel(70, 72, 5));
+    // lemon wedge
+    t.push(P("M64,102 Q74,92 84,100 Q74,108 64,102Z", "#fff176", 1) + line("M66,101 Q74,96 82,100", .7, "#e8c400"));
+    t.push(face(60, 86, .95));
+    t.push(sparks([[16, 40, 4], [104, 46, 5]]));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  // France: a croissant in front of a baguette, under a bakery awning
+  function croissant() {
+    let aw = "";
+    for (let i = 0; i < 8; i++) aw += Pn(`M${i * 15},0 H${i * 15 + 15} V22 Q${i * 15 + 7.5},30 ${i * 15},22Z`, ["#1f4fa8", "#fff", "#e53935", "#fff"][i % 4]);
+    const bg = aSky("#fff3dc", "#f6e2bf") + aw + line("M0,24 H120", 1, "#c7a777") + counter(114, "#b97a43", "#8f5a2c") + aFlagAt("fr");
+    const t = [];
+    // baguette, slanted
+    t.push(at(R(-56, -11, 112, 22, "#d8923a", 1.4, 'rx="11"') + [-36, -18, 0, 18, 36].map(x => P(`M${x - 6},-5 Q${x},-9 ${x + 6},-3 Q${x},-2 ${x - 6},-5Z`, "#f6cf8a", .8)).join("") +
+      Pn("M-46,-6 Q-20,-10 20,-8", "none", `stroke="#f8dba6" stroke-width="2.2" stroke-linecap="round" opacity=".7"`), 64, 58, 1, 32));
+    // croissant: segments from the tips in to the fat middle
+    const seg = (x, y, rx, ry, a) => E(x, y, rx, ry, "#e3a13f", 1.3, `transform="rotate(${a} ${n(x)} ${n(y)})"`) +
+      En(x - rx * .2, y - ry * .45, rx * .5, ry * .18, "#ffd890", `transform="rotate(${a} ${n(x)} ${n(y)})" opacity=".8"`);
+    const cx = 60, cy = 94;
+    t.push(shadow(60, 121, 40));
+    for (const s of [-1, 1]) t.push(seg(cx + s * 36, cy + 20, 4.6, 6, s * 45), seg(cx + s * 29, cy + 13, 7.5, 9, s * 38), seg(cx + s * 17, cy + 5, 11, 13, s * 22));
+    t.push(seg(cx, cy, 15, 17, 0));
+    t.push(line(`M${cx - 10},${cy - 12} Q${cx},${cy - 15} ${cx + 10},${cy - 12}`, .9, "#b46d22"));
+    t.push(face(cx, cy + 3, .85));
+    t.push(sparks([[18, 96, 3.5], [104, 104, 4]], "#fff8e1"));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  // Italy: a Margherita pizza with one slice pulled out
+  function pizza() {
+    let checks = "";
+    for (let r = 0; r < 12; r++) for (let c = 0; c < 9; c++) if ((r + c) % 2) checks += Rn(c * 14, r * 14, 14, 14, "#e53935", 'opacity=".85"');
+    const bg = Rn(0, 0, 120, 158, "#fff") + checks + aFlagAt("it");
+    const C = [58, 72], Rr = 44, a1 = 20 * Math.PI / 180, a2 = 65 * Math.PI / 180, am = (a1 + a2) / 2;
+    const pt = (c, r, a) => `${n(c[0] + r * Math.cos(a))},${n(c[1] + r * Math.sin(a))}`;
+    const C2 = [C[0] + 9 * Math.cos(am), C[1] + 9 * Math.sin(am)];
+    const pie = (c, r) => `M${c[0]},${c[1]} L${pt(c, r, a2)} A${r},${r} 0 1 1 ${pt(c, r, a1)}Z`;
+    const sl = (c, r) => `M${n(c[0])},${n(c[1])} L${pt(c, r, a1)} A${r},${r} 0 0 1 ${pt(c, r, a2)}Z`;
+    const t = [];
+    t.push(aC(58, 74, 50, "#b97a43", st(1.4)) + aC(58, 74, 50, "none", `stroke="#d9a06a" stroke-width="1" opacity=".6" transform="scale(1)"`));
+    const tops = (c, list) => list.map(([a, r, k]) => { const x = c[0] + r * Math.cos(a), y = c[1] + r * Math.sin(a);
+      return k === "m" ? P(`M${n(x - 6)},${n(y)} C${n(x - 6)},${n(y - 6)} ${n(x + 6)},${n(y - 6)} ${n(x + 6)},${n(y)} C${n(x + 6)},${n(y + 5)} ${n(x - 6)},${n(y + 5)} ${n(x - 6)},${n(y)}Z`, "#fff8e6", .8)
+        : at(P("M0,-5 C5,-4 5,4 0,5 C-5,4 -5,-4 0,-5Z", "#3f9a3a", .8) + line("M0,-4 V4", .5, "#2a6b25"), x, y, 1, a * 57); }).join("");
+    t.push(P(pie(C, Rr), "#e2a24e"));
+    t.push(Pn(pie(C, Rr - 6), "#d8392a"));
+    [[1.5, 30], [2.4, 34], [3.3, 36], [4.2, 32], [5.1, 36]].forEach(([a, r]) => t.push(aC(C[0] + (r + 7) * Math.cos(a), C[1] + (r + 7) * Math.sin(a), 1.3, "#a8642a")));
+    t.push(tops(C, [[1.6, 26, "m"], [2.6, 18, "m"], [3.5, 28, "m"], [4.4, 20, "m"], [5.3, 28, "m"], [5.9, 14, "m"], [3.6, 8, "m"], [2.1, 30, "b"], [3.0, 26, "b"], [4.0, 30, "b"], [4.9, 14, "b"], [5.7, 31, "b"]]));
+    // cheese strings across the gap
+    t.push(line(`M${pt(C, 22, a1 + .05)} Q${pt(C, 26, am)} ${pt(C2, 22, a1 + .05)}`, 1.6, "#fff4c8"), line(`M${pt(C, 30, a2 - .06)} Q${pt(C, 33, am)} ${pt(C2, 30, a2 - .06)}`, 1.4, "#fff4c8"));
+    t.push(P(sl(C2, Rr), "#e2a24e"));
+    t.push(Pn(sl(C2, Rr - 6).replace(/^M[^L]+/, `M${n(C2[0] + 3 * Math.cos(am))},${n(C2[1] + 3 * Math.sin(am))} `), "#d8392a"));
+    t.push(tops(C2, [[am - .18, 36, "m"], [am + .2, 16, "b"]]));
+    t.push(face(C2[0] + 24 * Math.cos(am), C2[1] + 24 * Math.sin(am) - 1, .72));
+    t.push(sparks([[104, 22, 4.5], [14, 24, 3.5]]));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  // Germany: a big salty pretzel on Bavarian diamonds
+  function pretzel() {
+    const pid = uid("pt");
+    const bg = `<defs><pattern id="${pid}" width="20" height="14" patternUnits="userSpaceOnUse"><rect width="20" height="14" fill="#fff"/><path d="M10,0 L20,7 L10,14 L0,7Z" fill="#4aa0e6"/></pattern></defs>` +
+      Rn(0, 0, 120, 158, `url(#${pid})`) + Rn(0, 0, 120, 158, "#fff", 'opacity=".25"') + aFlagAt("de");
+    const B = "#a8561e";
+    const t = [];
+    t.push(shadow(60, 126, 42));
+    const loop = "M40,104 C46,88 66,74 74,62 C82,48 102,42 104,64 C106,90 86,116 60,116 C34,116 14,90 16,64 C18,42 38,48 46,62 C54,74 74,88 80,104";
+    t.push(rope(loop, 12, B));
+    t.push(rope("M100,84 C94,104 78,116 60,116 C42,116 26,104 20,84", 17, B));
+    t.push(`<path d="M30,108 C40,116 54,118 66,118" fill="none" stroke="#7d3c12" stroke-width="2" stroke-linecap="round" opacity=".5"/>`);
+    t.push(aC(40, 104, 7.4, B, st(1.4)), aC(80, 104, 7.4, B, st(1.4)));
+    t.push(rope("M40,104 C46,88 66,74 74,62", 12, B, "butt"), rope("M46,62 C54,74 74,88 80,104", 12, B, "butt"));
+    t.push(`<path d="M20,64 C20,48 34,46 42,58 M100,64 C100,48 86,46 78,58 M44,100 C50,88 62,78 68,70" fill="none" stroke="#d98a48" stroke-width="3" stroke-linecap="round" opacity=".8"/>`);
+    [[22, 56, 10], [30, 49, -20], [92, 50, 30], [100, 58, 0], [52, 70, 40], [68, 72, -40], [62, 82, 20], [26, 98, 30], [94, 98, -30], [44, 92, 0], [78, 92, 10], [104, 72, 20], [16, 74, 0]]
+      .forEach(([x, y, a]) => t.push(R(x - 1.6, y - 1.3, 3.2, 2.6, "#fff", .6, `rx=".6" transform="rotate(${a} ${x} ${y})"`)));
+    t.push(face(60, 109, .55));
+    t.push(sparks([[106, 26, 4.5, "#fff"], [14, 30, 3.5]], "#ffe082"));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  // Netherlands: a stroopwafel warming on a Delft-blue mug
+  function stroopwafel() {
+    const bg = radial("#ffb04a", "#f06a00", ".45") + Rn(0, 118, 120, 40, "#a8693a") + Rn(0, 118, 120, 2.5, "#7d4a24") + aFlagAt("nl");
+    const t = [];
+    t.push(shadow(60, 128, 34));
+    t.push(line("M48,40 q-5,-6 0,-12 q5,-6 0,-12 M72,40 q-5,-6 0,-12 q5,-6 0,-12", 2.2, "#fff", 'opacity=".85"'));
+    // mug
+    t.push(rope("M88,90 Q104,90 102,104 Q100,116 86,114", 4, "#fafafa"));
+    t.push(P("M32,80 L34,122 Q60,130 86,122 L88,80Z", "#fafafa"));
+    t.push([0, 1, 2, 3, 4, 5].map(i => En(60 + 6 * Math.cos(i * 1.047), 104 + 6 * Math.sin(i * 1.047), 3.6, 2.4, "#2a5caa", `transform="rotate(${i * 60} ${n(60 + 6 * Math.cos(i * 1.047))} ${n(104 + 6 * Math.sin(i * 1.047))})"`)).join("") +
+      aC(60, 104, 2.6, "#fafafa") + line("M38,90 Q48,86 52,94 M82,90 Q72,86 68,94 M40,118 Q60,124 80,118", 1.2, "#2a5caa") + line("M36,86 H84", 2, "#2a5caa"));
+    // the wafer: bottom layer, caramel, top layer with a grid
+    t.push(E(60, 78, 44, 13, "#c98b3e"));
+    t.push(Pn("M18,74 Q20,79 26,80 Q28,86 31,80 Q60,86 89,80 Q92,87 95,80 Q100,79 102,74Z", "#9a4f12"));
+    t.push(E(60, 72, 44, 13, "#e2ab5c"));
+    const grid = [];
+    for (let i = -60; i <= 60; i += 8) grid.push(line(`M${60 + i - 20},58 L${60 + i + 20},88 M${60 + i + 20},58 L${60 + i - 20},88`, 1.2, "#b9772c", 'opacity=".8"'));
+    t.push(clip("M16,72 A44,13 0 0 1 104,72 A44,13 0 0 1 16,72Z", grid.join("")));
+    t.push(E(60, 72, 44, 13, "none", 1.4));
+    t.push(P("M36,82 Q36,90 39,90 Q42,90 41,83Z", "#9a4f12", .9) + P("M80,83 Q80,93 83,93 Q86,93 85,82Z", "#9a4f12", .9));
+    t.push(Pn("M26,68 Q40,62 56,61", "none", `stroke="#fff3d6" stroke-width="2.4" stroke-linecap="round" opacity=".7"`));
+    t.push(face(60, 72, .8));
+    t.push(sparks([[104, 30, 4.5], [14, 40, 3.5]]));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  /* ================= NATIONAL THINGS ================= */
+
+  // Portugal: the yellow tram 28 climbing a Lisbon street
+  function tram() {
+    const road = x => n(115.5 - .176 * (x - 65.6));
+    const houses = [[-2, 28, "#f6c4a8"], [24, 22, "#fff1c9"], [46, 18, "#bfe0f2"], [70, 12, "#f9d5e0"], [94, 8, "#ffe0a3"]].map(([x, top, c]) =>
+      R(x, top + 14, 26, 120 - top, c, 1) + P(`M${x - 2},${top + 14} L${x + 13},${top + 2} L${x + 28},${top + 14}Z`, "#d9663a", 1) +
+      [0, 1].map(r => [0, 1].map(k => R(x + 5 + k * 10, top + 22 + r * 16, 6, 9, "#5b8fb5", .8)).join("")).join("")).join("");
+    const bg = aSky("#8fd3ff", "#e4f6ff") + aCloud(70, 6, .7) + houses +
+      Pn(`M0,${road(0)} L120,${road(120)} V158 H0Z`, "#d6cfc2") +
+      [10, 22, 34].map(d => line(`M0,${n(road(0) + d)} L120,${n(road(120) + d)}`, .7, "#b5ab9a", 'opacity=".8"')).join("") +
+      line(`M0,${n(road(0) + 3)} L120,${n(road(120) + 3)} M0,${n(road(0) + 7)} L120,${n(road(120) + 7)}`, 1.4, "#8a8278") +
+      line("M0,31.6 L120,10.5", .9, "#333") + aFlagAt("pt");
+    const Y = "#f8c01b", t = [];
+    t.push(line("M8,-30 L-14,-62", 1.8, "#333") + aC(-14, -62, 2, "#555", st(.8)));
+    t.push(P("M-44,-22 Q-44,-31 -35,-31 H35 Q44,-31 44,-22Z", "#f3efe4"));
+    t.push(R(-46, -24, 92, 50, Y, 1.4, 'rx="4"'));
+    t.push(Rn(-46, 0, 92, 3, "#fffaf0"));
+    t.push(R(-44, 24, 88, 6, "#4a4a4a", 1.1));
+    for (let i = 0; i < 5; i++) t.push(R(-40 + i * 15, -19, 11, 15, "#9fd4ef", 1.1, 'rx="1.5"') + line(`M${-38 + i * 15},-9 L${-32 + i * 15},-17`, 1.2, "#fff", 'opacity=".8"'));
+    t.push(R(36, -19, 7, 15, "#9fd4ef", 1.1, 'rx="1.5"'));
+    t.push(R(-6, 4, 12, 20, "#e2a400", 1.1), line("M0,4 V24", .9));
+    t.push(R(-30, -29, 22, 5, "#2a2a2a", .9));
+    t.push(aC(41, 14, 3.4, "#fff8c4", st(1)) + aC(-41, 14, 2.4, "#ff6b4a", st(.8)));
+    t.push(R(-40, 8, 28, 10, "#ffd54a", .9, 'rx="1"') + R(10, 8, 26, 10, "#ffd54a", .9, 'rx="1"'));
+    t.push(aC(-26, 31, 5, "#333", st(1)) + aC(26, 31, 5, "#333", st(1)) + aC(-26, 31, 1.8, "#999") + aC(26, 31, 1.8, "#999"));
+    return [bg, aEdge(at(t.join(""), 60, 84, 1, -10))];
+  }
+
+  // Benfica: the eagle Vitória flying over the stadium
+  function eagle() {
+    const bg = radial("#ff4d4d", "#9e0016", ".4") + Pn("M0,128 Q60,108 120,128 V158 H0Z", "#5a0010", 'opacity=".55"') +
+      [16, 34, 52, 70, 88, 106].map(x => aC(x, 122 - Math.abs(60 - x) * -.08 - 6, 2, "#ffe9a0")).join("") + aFlagAt("slb");
+    const BR = "#6b3f1f", t = [];
+    const wing = P("M52,74 C40,58 22,44 4,36 C8,44 10,48 8,52 L17,54 L12,60 L22,61 L19,68 L30,68 L29,75 L42,78Z", BR) +
+      line("M14,48 L30,58 M22,46 L36,60 M30,48 L42,64", 1, "#9a6a3e", 'opacity=".8"') + Pn("M8,52 L17,54 L12,60 L22,61 L19,68 L30,68 L29,75", "none", `stroke="#a8784a" stroke-width="1.6" opacity=".7"`);
+    t.push(wing, mir(wing));
+    t.push(P("M50,102 L44,122 L52,119 L60,126 L68,119 L76,122 L70,102Z", "#fff"));
+    t.push(E(60, 86, 16, 21, BR));
+    t.push(P("M52,104 l-3,6 m3,-6 l0,6 m0,-6 l3,6", "none", 1.3) + P("M68,104 l-3,6 m3,-6 l0,6 m0,-6 l3,6", "none", 1.3));
+    t.push(E(54, 104, 4, 3, "#ffc61a", 1.1) + E(66, 104, 4, 3, "#ffc61a", 1.1));
+    // scarf: red with white stripes
+    t.push(P("M44,68 Q60,76 76,68 L76,74 Q60,82 44,74Z", "#e3001b", 1.2) + P("M66,76 L74,94 L66,96 L62,78Z", "#e3001b", 1.1) + line("M66,86 L72,85 M64,80 L70,79", 1.5, "#fff"));
+    t.push(aC(60, 54, 17, "#fff", st(1.4)));
+    t.push(P("M44,48 Q50,40 56,46 Q50,44 44,48Z M76,48 Q70,40 64,46 Q70,44 76,48Z", "#e8e8e8", .8));
+    t.push(aEye(52, 53, "#c98a00", .72) + aEye(68, 53, "#c98a00", .72));
+    t.push(P("M54,61 Q60,56 66,61 Q68,69 61,73 Q62,67 60,66 Q56,66 54,61Z", "#ffc61a", 1.2));
+    t.push(En(46, 61, 3, 1.8, "#ff8aa0", 'opacity=".6"') + En(74, 61, 3, 1.8, "#ff8aa0", 'opacity=".6"'));
+    t.push(sparks([[16, 20, 4.5], [104, 18, 5], [100, 100, 3.5]], "#ffe082"));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  // Vitória SC: Afonso Henriques, the first king, with sword and shield
+  function afonso() {
+    const bg = aSky("#ffd9a8", "#fff3dd") + aSun(96, 30, 12) + aCloud(10, 22, .8) +
+      Pn("M0,108 Q40,94 80,104 T120,100 V158 H0Z", "#7cc36a") + Pn("M0,124 Q50,112 120,122 V158 H0Z", "#5aa84a") + aFlagAt("vsc");
+    const t = [];
+    t.push(shadow(62, 128, 30));
+    // cape
+    t.push(P("M44,74 Q34,100 30,124 Q62,130 94,124 Q88,100 78,74Z", "#c62828"));
+    // legs and boots
+    t.push(R(50, 104, 8, 16, "#9aa5ab", 1.2) + R(64, 104, 8, 16, "#9aa5ab", 1.2));
+    t.push(E(53, 122, 7, 4, "#6b3e1f") + E(69, 122, 7, 4, "#6b3e1f"));
+    // mail shirt and white surcoat with the blue cross
+    t.push(P("M44,76 Q60,70 78,76 L80,106 Q60,112 42,106Z", "#9aa5ab"));
+    t.push([[48, 82], [52, 90], [72, 84], [74, 94], [46, 98], [76, 102]].map(([x, y]) => line(`M${x - 2},${y} q2,2 4,0`, .7, "#5d6a70")).join(""));
+    t.push(P("M50,76 Q61,73 72,76 L74,108 Q61,112 48,108Z", "#fafafa", 1.2));
+    t.push(Rn(58.5, 78, 5, 30, "#1f4fa8") + Rn(50, 86, 23, 5, "#1f4fa8"));
+    t.push(R(47, 97, 28, 4, "#7a4a22", 1, 'rx="1"') + R(58, 96.5, 6, 5, "#ffc107", .8));
+    // sword arm, raised: grip in the hand, blade up
+    t.push(rope("M48,80 L36,72", 6, "#9aa5ab"));
+    t.push(P("M27,64 L13,24 L17,22 L31,62Z", "#e6edf1", 1.2) + line("M29,62 L15,23", .7, "#aab6bc"));
+    t.push(R(-7, -1.6, 14, 3.2, "#ffc107", 1, 'transform="translate(30 65) rotate(-20)"') + R(-1.6, 0, 3.2, 9, "#7a4a22", 1, 'transform="translate(31 66) rotate(-20)"'));
+    t.push(aC(33, 71, 4.4, "#ffd9b8", st(1.2)));
+    // shield
+    const sh = "M72,80 H100 V96 Q100,112 86,120 Q72,112 72,96Z";
+    t.push(P(sh, "#fafafa", 1.5) + clip(sh, Rn(83.5, 78, 5, 44, "#1f4fa8") + Rn(70, 92, 32, 5, "#1f4fa8")) + Pn(sh, "none", `stroke="#b0bec5" stroke-width="2.5" transform="translate(86 99) scale(.9) translate(-86 -99)"`) + P(sh, "none", 1.5));
+    // head: beard, face, helmet with a gold crown band
+    t.push(head(61, 52, 18, { hair: null, iris: "#4a2c14" }));
+    t.push(P("M45,56 Q46,74 61,76 Q76,74 77,56 Q74,66 68,66 Q61,70 54,66 Q48,66 45,56Z", "#6b3e1f", 1.2));
+    t.push(P("M56,64 Q61,67 66,64 Q61,70 56,64Z", "#c0392b", .8));
+    t.push(P("M42,50 C42,30 52,24 61,16 C70,24 80,30 80,50Z", "#cfd8dc"));
+    t.push(Pn("M50,44 C50,32 56,26 61,20", "none", `stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".8"`));
+    t.push(P("M41,50 L41,43 L47,46 L54,40 L61,45 L68,40 L75,46 L81,43 L81,50Z", "#ffc107", 1.2) + aC(61, 47.5, 1.6, "#e53935") + aC(50, 47.5, 1.1, "#1f88e5") + aC(72, 47.5, 1.1, "#1f88e5"));
+    t.push(R(59.5, 50, 3, 9, "#cfd8dc", 1));
+    t.push(sparks([[104, 60, 4], [20, 96, 3.5]], "#fff"));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  // Cape Verde: baby sea turtles scurrying to the sea
+  function turtleChar() {
+    return P("M-12,4 L-21,10 L-9,8Z", "#5aa86a", 1.1) +
+      P("M3,4 C9,9 16,14 20,12 C17,7 12,3 6,2Z", "#5aa86a", 1.1) +
+      P("M-15,5 C-15,-11 13,-13 15,5Z", "#3f8f4a") +
+      line("M-8,4 L-6,-5 L2,-7 L8,-2 L9,4 M-6,-5 L-11,-1 M2,-7 L1,-10 M8,-2 L12,-2", 1, "#9ed27a") +
+      R(-16, 3, 32, 4, "#2c6b36", 1.1, 'rx="2"') +
+      E(20, -2, 7.5, 6.5, "#7fc28a", 1.2) + aEye(21.5, -3.5, "#3a2a1a", .42) +
+      P("M21.5,1.5 Q24,3.4 26,1.4Z", "#c0392b", .6) + En(17, 1, 1.8, 1, "#ff8aa0", 'opacity=".6"');
+  }
+  function turtles() {
+    const shore = "M0,74 Q40,62 70,60 T120,52";
+    const bg = aSky("#ffb38a", "#ffe7c4") + aSun(26, 36, 13) + Pn("M0,34 H120 V60 Q90,56 70,60 Q40,62 0,74Z", "#2a9fd0") +
+      line("M6,44 h10 M40,40 h14 M84,42 h12 M60,50 h10 M14,56 h12", 1.2, "#fff", 'opacity=".7"') +
+      Pn(`${shore} V158 H0Z`, "#f0d29a") + `<path d="${shore}" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>` +
+      Pn("M0,80 Q40,68 70,66 T120,58 V52 Q90,56 70,60 Q40,62 0,74Z", "#d9b778") +
+      [[54, 134, 66, 118], [22, 110, 30, 98], [82, 88, 89, 78]].map(([x1, y1, x2, y2]) => {
+        let s = ""; for (let k = 0; k <= 4; k++) { const x = x1 + (x2 - x1) * k / 4, y = y1 + (y2 - y1) * k / 4; s += En(x - 3, y, 1.4, .9, "#c9a466") + En(x + 3, y + 1, 1.4, .9, "#c9a466"); } return s;
+      }).join("") + aStar(100, 140, 4, "#ff9e80") + aFlagAt("cv");
+    const t = at(turtleChar(), 78, 104, 1.25, -28) + at(turtleChar(), 42, 86, .95, -32) + at(turtleChar(), 98, 66, .8, -24);
+    return [bg, aEdge(t + sparks([[110, 30, 3.5], [70, 24, 3]], "#fff"))];
+  }
+
+  // Spain: castells, a human tower (red shirts, white trousers, black sash)
+  function casteller(x, y, k = 1, shirt = "#d32f2f", o = {}) {
+    const g = [];
+    if (!o.noArms) g.push(rope("M-20,-22 H20", 4.5 , shirt));
+    g.push(R(-7, -10, 6, 10, "#fafafa", 1.1) + R(1, -10, 6, 10, "#fafafa", 1.1));
+    g.push(E(-4, 0.5, 4, 2, "#222", .8) + E(4, 0.5, 4, 2, "#222", .8));
+    g.push(R(-9, -25, 18, 13, shirt, 1.2, 'rx="3"'));
+    g.push(R(-9, -13, 18, 4, "#1b1b1b", 1, 'rx="1"'));
+    g.push(head(0, -32, 7.6, { hair: o.hair || "#2b1b10", iris: "#3a2614" }));
+    if (o.band) g.push(P("M-7.4,-36 Q0,-40 7.4,-36 L7.6,-33.6 Q0,-37.6 -7.6,-33.6Z", "#ffc107", .8));
+    return at(g.join(""), x, y, k);
+  }
+  function castells() {
+    let bunt = "";
+    for (let i = 0; i < 10; i++) bunt += P(`M${i * 12},${10 + (i % 2)} L${i * 12 + 12},${10 + ((i + 1) % 2)} L${i * 12 + 6},${20}Z`, i % 2 ? "#ffcc00" : "#d32f2f", .6);
+    const bg = aSky("#8fd3ff", "#d8f1ff") + R(-2, 26, 124, 140, "#f2d8a7", 1) +
+      [[8, 40], [44, 40], [80, 40], [8, 76], [80, 76]].map(([x, y]) => aArch(x + 6, y, 20, 26, "#6b5136") + Rn(x + 3, y + 26, 26, 3, "#3a3a3a") + line(`M${x + 5},${y + 26} V${y + 20} M${x + 27},${y + 26} V${y + 20} M${x + 5},${y + 20} H${x + 27}`, 1, "#3a3a3a")).join("") +
+      line("M0,10 Q60,16 120,10", .8, "#555") + bunt +
+      [...Array(9)].map((_, i) => aC(40 + i * 10, 134 + (i % 2) * 2, 5, ["#8d6e63", "#ffcc80", "#5d4037", "#ffe0b2"][i % 4], st(.8))).join("") + aFlagAt("es");
+    const t = [];
+    t.push(casteller(36, 132), casteller(84, 132), casteller(60, 132));
+    t.push(casteller(48, 108, 1, "#d32f2f", { band: 1 }), casteller(72, 108, 1, "#d32f2f", { band: 1 }));
+    t.push(casteller(60, 84, .9, "#d32f2f", { noArms: 1 }));
+    // the enxaneta on top: a small kid with a helmet, one hand up
+    const e = [];
+    e.push(rope("M52,62 L58,47 M68,62 L62,47", 4, "#fafafa"));
+    e.push(rope("M64,40 L72,24", 3.5, "#d32f2f") + aC(73, 21, 3.2, "#ffd9b8", st(1)));
+    e.push(rope("M56,40 L48,46", 3.5, "#d32f2f") + aC(47, 47, 3, "#ffd9b8", st(1)));
+    e.push(R(53, 35, 14, 13, "#d32f2f", 1.2, 'rx="3"') + R(53, 44, 14, 3, "#1b1b1b", .9));
+    e.push(head(60, 28, 7, { hair: "#5a3214", iris: "#3a2614" }));
+    e.push(P("M52.6,27 C52,18 68,18 67.4,27Z", "#fafafa", 1.1) + line("M55,22 Q60,19 65,22", .8, "#bbb"));
+    t.push(e.join(""));
+    t.push(sparks([[102, 38, 4], [18, 30, 3.5]], "#fff"));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  // France: a Tour de France rider in the yellow jersey among sunflowers
+  function cyclist() {
+    const flowers = [[8, 92], [22, 88], [100, 90], [112, 86], [94, 80], [14, 80], [108, 98]].map(([x, y]) =>
+      line(`M${x},${y} V${y + 10}`, 1.2, "#3c8f2a") + [...Array(8)].map((_, i) => En(x + 3.4 * Math.cos(i * .785), y + 3.4 * Math.sin(i * .785), 2.2, 1.2, "#ffcc00", `transform="rotate(${i * 45} ${n(x + 3.4 * Math.cos(i * .785))} ${n(y + 3.4 * Math.sin(i * .785))})"`)).join("") + aC(x, y, 2.2, "#6b3e1f")).join("");
+    const bg = aSky("#7fcfff", "#dff4ff") + aCloud(70, 12, .8) + aSun(20, 20, 9) +
+      Pn("M0,72 Q30,60 60,68 T120,62 V158 H0Z", "#9bd36a") + Pn("M0,84 Q50,74 120,84 V158 H0Z", "#6fbf4a") + flowers +
+      Rn(0, 112, 120, 30, "#7d7d82") + line("M4,127 H18 M30,127 H44 M56,127 H70 M82,127 H96 M108,127 H120", 2, "#fff") + Rn(0, 142, 120, 16, "#6fbf4a") + aFlagAt("fr");
+    const t = [];
+    t.push(line("M4,74 H18 M2,84 H14 M6,96 H16", 1.8, "#fff", 'opacity=".9"'));
+    const wheel = (x, y) => aC(x, y, 14, "none", `stroke="${OL}" stroke-width="4.2"`) + aC(x, y, 14, "none", 'stroke="#2b2b2b" stroke-width="2.6"') +
+      [0, 1, 2, 3, 4, 5].map(i => line(`M${n(x + 13 * Math.cos(i * 1.047))},${n(y + 13 * Math.sin(i * 1.047))} L${n(x - 13 * Math.cos(i * 1.047))},${n(y - 13 * Math.sin(i * 1.047))}`, .5, "#999")).join("") + aC(x, y, 2, "#ccc", st(.8));
+    t.push(wheel(34, 112), wheel(88, 112));
+    // frame
+    t.push(rope("M34,112 L58,112 L50,90 Z M58,112 L80,88 L50,90 M80,88 L88,112", 2.6, "#e53935"));
+    t.push(rope("M80,88 L82,82 L90,82 Q94,84 92,88", 2, "#333"));
+    t.push(R(44, 86.5, 12, 3.4, "#222", .9, 'rx="1.5"'));
+    t.push(aC(58, 112, 3.4, "#555", st(1)));
+    // rider: far leg, body, near leg, arm, head
+    t.push(rope("M54,88 L62,100 L54,108", 5.5, "#ffd9b8"), E(53, 109, 3.6, 2.2, "#fff", .9));
+    t.push(P("M46,90 Q48,82 54,80 L60,90 Q54,94 46,90Z", "#1b1b1b", 1.2));
+    t.push(P("M50,84 C54,70 66,62 76,64 L80,72 C72,74 64,80 58,90Z", "#ffd500", 1.3));
+    t.push(line("M56,78 C62,72 68,68 76,67", 1.4, "#e0b000"));
+    t.push(rope("M54,88 L66,98 L64,114", 5.5, "#ffd9b8"), E(65, 115, 3.6, 2.2, "#fff", .9));
+    t.push(R(50, 86, 10, 6, "#1b1b1b", 1, 'rx="2"'));
+    t.push(rope("M72,68 L84,82", 4.6, "#ffd500") + aC(86, 83, 3, "#ffd9b8", st(1)));
+    t.push(head(82, 54, 13, { hair: "#6b3e1f", dx: 2.5, iris: "#3a5f8a" }));
+    t.push(P("M68,52 C66,38 80,34 92,40 C97,43 98,48 96,50 C88,46 78,46 68,52Z", "#ffd500", 1.3) +
+      line("M74,44 L78,40 M82,42 L86,38", 1.2, "#1b1b1b") + line("M70,52 Q66,58 70,64", 1, OL));
+    t.push(sparks([[108, 56, 4], [40, 50, 3]], "#fff"));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  // Italy: a gondola in a Venice canal
+  function gondola() {
+    const house = (x, w, top, c, win) => R(x, top, w, 110 - top, c, 1) + Rn(x - 1, top - 3, w + 2, 4, "#8a4a2a") +
+      [0, 1, 2].map(r => [...Array(Math.floor(w / 9))].map((_, k) => aArch(x + 3 + k * 9, top + 6 + r * 17, 5, 10, win)).join("")).join("");
+    const pole = (x, c) => R(x - 1.6, 70, 3.2, 52, "#fff", .9) + [0, 1, 2, 3].map(i => Rn(x - 1.6, 72 + i * 12, 3.2, 5, c)).join("") + aC(x, 69, 2.4, "#ffc107", st(.8));
+    const bg = aSky("#ffd9a8", "#cdeefc") + aCloud(46, 10, .7) +
+      house(-2, 30, 26, "#e08a5a", "#5a3a2a") + house(28, 18, 50, "#f6d38a", "#4a4a5a") + house(92, 30, 20, "#d0573f", "#5a3a2a") + house(74, 18, 44, "#f3b7a0", "#4a4a5a") +
+      Rn(0, 104, 120, 54, "#2e9c9a") + [112, 124, 136, 148].map((y, i) => line(`M${i % 2 * 10},${y} q6,-3 12,0 t12,0 M${50 + i % 2 * 8},${y + 4} q6,-3 12,0 t12,0 M${88 - i * 4},${y - 2} q6,-3 12,0`, 1.1, "#bff0ec", 'opacity=".7"')).join("") +
+      pole(48, "#1f4fa8") + pole(80, "#e53935") + En(62, 122, 50, 5, "#0d4a49", 'opacity=".4"') + aFlagAt("it");
+    const t = [];
+    // oar behind the hull
+    t.push(rope("M42,74 L72,128", 2.2, "#b97a43") + P("M68,120 L76,134 L72,136 L64,122Z", "#b97a43", 1));
+    // hull
+    t.push(P("M10,92 Q16,110 32,111 L90,109 Q104,106 110,86 Q106,112 92,118 L32,120 Q14,118 10,92Z", "#1b1b1b"));
+    t.push(line("M14,100 Q20,110 32,111 L90,109 Q102,106 108,92", 1.4, "#ffc107"));
+    t.push(P("M52,108 Q52,98 58,98 H76 Q82,98 82,108Z", "#c62828", 1.1) + line("M56,101 H78", .8, "#ffc107"));
+    // ferro on the prow
+    t.push(P("M106,92 L110,72 L114,72 L112,92Z", "#e0e0e0", 1) + [76, 80, 84, 88].map(y => R(104, y, 6, 2, "#e0e0e0", .8)).join("") + P("M110,72 Q112,66 116,68 L114,72Z", "#e0e0e0", .9));
+    // gondolier on the stern deck
+    t.push(R(25, 92, 6, 16, "#1b1b1b", 1.1) + R(35, 92, 6, 16, "#1b1b1b", 1.1) + E(28, 108, 4.4, 2.2, "#222", .8) + E(38, 108, 4.4, 2.2, "#222", .8));
+    const shirt = "M22,68 Q33,62 44,68 L44,94 H22Z";
+    t.push(P(shirt, "#fafafa", 1.2) + clip(shirt, [70, 76, 82, 88].map(y => Rn(20, y, 26, 3, "#1a2a5a")).join("")) + P(shirt, "none", 1.2));
+    t.push(rope("M42,70 Q46,74 44,76", 4.2, "#fafafa") + rope("M24,70 Q30,78 40,78", 4.2, "#fafafa"));
+    t.push(aC(43, 76, 3.2, "#ffd9b8", st(1)) + aC(41, 79, 3, "#ffd9b8", st(1)));
+    t.push(head(33, 54, 12, { hair: "#2b1b10", dx: 1.5, iris: "#3a2614" }));
+    t.push(E(33, 44, 17, 3.4, "#f3d27a", 1.2) + P("M24,44 Q24,34 33,34 Q42,34 42,44Z", "#f3d27a", 1.2) + Rn(24.5, 39.5, 17, 3.2, "#e53935") + P("M24,44 Q24,34 33,34 Q42,34 42,44Z", "none", 1.2));
+    t.push(sparks([[100, 40, 3.5], [60, 30, 3]], "#fff"));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  // Germany: Neuschwanstein, the fairy-tale castle in the mountains
+  function castle() {
+    const fir = (x, y, k) => at(Pn("M0,-14 L7,0 H-7Z", "#2e6b3a") + Pn("M0,-8 L8,6 H-8Z", "#2e6b3a") + Rn(-1, 6, 2, 3, "#5a3a2a"), x, y, k);
+    const bg = aSky("#8fd0ff", "#e8f7ff") + aCloud(6, 16, .7) +
+      Pn("M-10,84 L22,40 L44,72 L70,30 L104,76 L130,50 V158 H-10Z", "#8aa2b8") + Pn("M22,40 L30,51 L26,50 L20,54 L15,50Z M70,30 L80,44 L74,42 L68,47 L62,42Z", "#fff") +
+      Pn("M0,104 Q40,90 70,98 T120,92 V158 H0Z", "#5aa84a") + Pn("M0,124 Q60,112 120,124 V158 H0Z", "#3f8f3a") +
+      [[8, 108, 1], [18, 112, .9], [104, 104, 1.1], [114, 110, .9], [94, 116, .8]].map(([x, y, k]) => fir(x, y, k)).join("") + aFlagAt("de");
+    const W = "#f4efe6", S = "#5f7d95", t = [];
+    const win = (x, y, w = 3, h = 5) => P(`M${x},${y + h} V${y + w / 2} A${w / 2},${w / 2} 0 0 1 ${x + w},${y + w / 2} V${y + h}Z`, "#2f4a6a", .6);
+    const cone = (x, y, w, h, c = S) => P(`M${x - 1},${y} L${x + w / 2},${y - h} L${x + w + 1},${y}Z`, c, 1.1);
+    t.push(P("M34,126 Q38,114 48,112 L98,110 Q108,114 110,126Z", "#9a9c96") + line("M50,118 l6,4 M80,116 l8,5 M94,120 l5,-3", .8, "#6b6d68"));
+    // tall tower at the back right
+    t.push(R(86, 40, 14, 72, W, 1.2) + cone(86, 40, 14, 30) + win(91, 50) + win(91, 64) + win(91, 78));
+    t.push(line("M93,10 V4", 1, OL) + P("M93,4 L99,6 L93,8Z", "#4aa0e6", .7));
+    // palace block with steep roof
+    t.push(R(52, 56, 34, 56, W, 1.2) + P("M50,56 L69,28 L88,56Z", S, 1.2));
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 4; c++) t.push(win(56 + c * 7.5, 62 + r * 14, 3.4, 6));
+    // slim corner turret
+    t.push(R(80, 50, 8, 40, W, 1.1) + cone(80, 50, 8, 18));
+    // red gatehouse in front with two turrets
+    t.push(R(30, 82, 26, 30, "#cf8a6a", 1.2) + P("M38,112 V102 A5,5 0 0 1 48,102 V112Z", "#5a3a2a", 1) + win(34, 88) + win(46, 88));
+    t.push(R(27, 72, 8, 40, "#cf8a6a", 1.1) + cone(27, 72, 8, 16) + R(51, 72, 8, 40, "#cf8a6a", 1.1) + cone(51, 72, 8, 16));
+    t.push(aMerlons(35, 51, 82, "#cf8a6a"));
+    t.push(sparks([[16, 66, 4], [104, 24, 3.5]], "#fff"));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  // Netherlands: skating on a frozen canal between gabled houses
+  function skating() {
+    const gable = (x, w, top, c) => P(`M${x},92 V${top + 10} H${x + 3} V${top + 5} H${x + 6} V${top} H${x + w - 6} V${top + 5} H${x + w - 3} V${top + 10} H${x + w} V92Z`, c, 1) +
+      [0, 1, 2].map(r => [0, 1].map(k => R(x + 4 + k * (w - 13), top + 14 + r * 14, 5, 8, "#fff7d6", .7)).join("")).join("") + P(`M${x + w / 2 - 2},${top + 6} h4 v5 h-4Z`, "#fff", .6);
+    const bg = aSky("#bcdcf2", "#eef7fd") +
+      gable(-4, 22, 30, "#9c3b2a") + gable(18, 20, 22, "#3b4a6b") + gable(38, 22, 34, "#6b3e1f") + gable(60, 20, 26, "#b55a2a") + gable(80, 22, 18, "#2f5a4a") + gable(102, 22, 30, "#8a2a2a") +
+      Pn("M0,92 H120 V100 H0Z", "#fff") + Rn(0, 100, 120, 58, "#bfe6f5") +
+      line("M10,112 l26,4 M60,108 l30,-3 M30,130 l40,6 M84,124 l26,2 M44,146 l40,-2", 1, "#fff", 'opacity=".9"') +
+      [[14, 20], [52, 12], [96, 16], [30, 50], [76, 46], [108, 60], [8, 66]].map(([x, y]) => aC(x, y, 1.6, "#fff")).join("") + aFlagAt("nl");
+    const t = [];
+    t.push(En(64, 128, 30, 3, "#5a8aa8", 'opacity=".3"'));
+    // back leg stretched out behind, with its skate
+    t.push(rope("M58,96 L44,106 L34,112", 7, "#1f3c6e"));
+    t.push(at(E(0, 0, 5, 3, "#5a3a2a", 1) + line("M-8,4 H8 Q11,4 11,1", 1.4, "#9aa5ab"), 33, 112, 1, 24));
+    // scarf tail flying back
+    t.push(P("M56,64 Q42,58 30,64 L32,70 Q44,66 56,70Z", "#ff7a00", 1.2) + line("M36,64 V70 M42,62 V68", 1, "#fff"));
+    // body: coat, arms behind the back
+    t.push(P("M54,64 Q68,60 76,68 L74,98 Q62,102 52,96Z", "#2e7ad1"));
+    t.push(rope("M58,70 Q50,82 56,88", 5.5, "#2e7ad1") + aC(57, 89, 3, "#e53935", st(1)));
+    // front leg bent, skate under it
+    t.push(rope("M66,96 L74,108 L70,118", 7, "#1f3c6e"));
+    t.push(E(72, 120, 6, 3.2, "#5a3a2a", 1) + line("M60,124 H80 Q86,124 86,118", 1.6, "#9aa5ab") + line("M66,122 V124 M78,122 V124", 1, "#9aa5ab"));
+    t.push(rope("M70,70 Q80,80 74,88", 5.5, "#2e7ad1") + aC(73, 89, 3, "#e53935", st(1)));
+    t.push(P("M54,64 Q64,70 76,66 L76,72 Q64,76 54,70Z", "#ff7a00", 1.2));
+    // head with a knitted hat and pompom
+    t.push(head(68, 52, 14, { hair: "#e3b84f", dx: 2, iris: "#3a7ab8" }));
+    t.push(P("M54,50 C52,32 82,30 82,48 Q68,42 54,50Z", "#e53935", 1.3) + P("M53,50 Q68,42 83,48 L83,52 Q68,46 53,54Z", "#fff", 1.1) + aC(68, 33, 4.4, "#fff", st(1.1)));
+    t.push(sparks([[100, 80, 4], [16, 86, 3.5]], "#fff"));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  FAN.food = FAN.food || {};
+  FAN.thing = FAN.thing || {};
+  Object.assign(FAN.food, {
+    pt: ["Pastel de nata", "A crispy custard tart, warm and dusted with cinnamon", nata],
+    slb: ["Bifana", "A soft roll full of juicy pork with a stripe of mustard", bifana],
+    vsc: ["Toucinho-do-céu", "Golden almond cake from Guimarães, snowy with sugar", toucinho],
+    cv: ["Cachupa", "A big pot of corn and beans with a fried egg on top", cachupa],
+    es: ["Paella", "Yellow rice with shrimps, mussels and lemon in a giant pan", paella],
+    fr: ["Croissant and baguette", "Fresh from the French bakery, flaky and crunchy", croissant],
+    it: ["Pizza Margherita", "Tomato, mozzarella and basil: red, white and green like the flag", pizza],
+    de: ["Pretzel", "A big twisted pretzel sprinkled with salt", pretzel],
+    nl: ["Stroopwafel", "A caramel waffle warming up on a cup of hot chocolate", stroopwafel],
+  });
+  Object.assign(FAN.thing, {
+    pt: ["Tram 28", "The little yellow tram climbing the hills of Lisbon", tram],
+    slb: ["Eagle Vitória", "Benfica's eagle flying over the stadium", eagle],
+    vsc: ["Afonso Henriques", "The first king of Portugal, born in Guimarães", afonso],
+    cv: ["Baby sea turtles", "Little turtles hatch on the beach and run to the sea", turtles],
+    es: ["Castells", "A human tower: the smallest climbs to the top and waves", castells],
+    fr: ["Tour de France", "The leader of the big bike race wears the yellow jersey", cyclist],
+    it: ["Gondola", "Sailing along the canals of Venice", gondola],
+    de: ["Neuschwanstein", "A fairy-tale castle high in the mountains", castle],
+    nl: ["Ice skating", "Skating on a frozen canal in winter", skating],
+  });
+})();
+
+/* Sticker book team pages, part 2: the "food" and "national thing" stickers of 8 teams (ch, en, no, br, ar, cn, jp,
+   kr); sets FAN.food[team] / FAN.thing[team] = [name, what, draw]. draw() = [backdrop with the small flag in the
+   bottom-left corner, the main picture (also the empty slot's silhouette)]. Same helpers and style as countries1.js. */
+(() => {
+  "use strict";
+  const OL = A_OL;
+  const uid = p => `c2${p}${++aUid}`;
+  const n = v => +(+v).toFixed(2);
+  const st = (w = 1.4) => `stroke="${OL}" stroke-width="${w}" stroke-linejoin="round" stroke-linecap="round"`;
+  const P = (d, f, w = 1.4, x = "") => `<path d="${d}" fill="${f}" ${st(w)} ${x}/>`;
+  const Pn = (d, f, x = "") => `<path d="${d}" fill="${f}" ${x}/>`;
+  const E = (cx, cy, rx, ry, f, w = 1.4, x = "") => `<ellipse cx="${n(cx)}" cy="${n(cy)}" rx="${n(rx)}" ry="${n(ry)}" fill="${f}" ${st(w)} ${x}/>`;
+  const En = (cx, cy, rx, ry, f, x = "") => `<ellipse cx="${n(cx)}" cy="${n(cy)}" rx="${n(rx)}" ry="${n(ry)}" fill="${f}" ${x}/>`;
+  const line = (d, w = 1.2, c = OL, x = "") => `<path d="${d}" fill="none" stroke="${c}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" ${x}/>`;
+  const at = (s, x, y, k = 1, a = 0) => `<g transform="translate(${n(x)} ${n(y)}) rotate(${a}) scale(${k})">${s}</g>`;
+  const R = (x, y, w, h, f, w2 = 1.3, ex = "") => `<rect x="${n(x)}" y="${n(y)}" width="${n(w)}" height="${n(h)}" fill="${f}" ${st(w2)} ${ex}/>`;
+  const Rn = (x, y, w, h, f, ex = "") => `<rect x="${n(x)}" y="${n(y)}" width="${n(w)}" height="${n(h)}" fill="${f}" ${ex}/>`;
+  const sparks = (pts, c = "#fff") => pts.map(([x, y, r]) => aSpark(x, y, r, c)).join("");
+  const shadow = (x, y, rx) => En(x, y, rx, rx * .18, "#000", 'opacity=".18"');
+  const radial = (a, b, cy) => aRadial(uid("rd"), a, b, cy);
+  const rope = (d, w, c, cap = "round") => `<path d="${d}" fill="none" stroke="${OL}" stroke-width="${w + 2.8}" stroke-linecap="${cap}" stroke-linejoin="round"/>` +
+    `<path d="${d}" fill="none" stroke="${c}" stroke-width="${w}" stroke-linecap="${cap}" stroke-linejoin="round"/>`;
+  function clip(d, inner) { const id = uid("cl"); return `<defs><clipPath id="${id}"><path d="${d}"/></clipPath></defs><g clip-path="url(#${id})">${inner}</g>`; }
+  const hl = (d, w = 2.4, o = .75) => Pn(d, "none", `stroke="#fff" stroke-width="${w}" stroke-linecap="round" opacity="${o}"`);
+
+  // the food face (the same as countries1)
+  const face = (x, y, k = 1) => En(x - 6.5 * k, y, 2.2 * k, 2.8 * k, "#2a1a10") + En(x + 6.5 * k, y, 2.2 * k, 2.8 * k, "#2a1a10") +
+    aC(x - 7.2 * k, y - 1.1 * k, n(.9 * k), "#fff") + aC(x + 5.8 * k, y - 1.1 * k, n(.9 * k), "#fff") +
+    P(`M${n(x - 2.6 * k)},${n(y + 2.4 * k)} Q${n(x)},${n(y + 6.4 * k)} ${n(x + 2.6 * k)},${n(y + 2.4 * k)}Z`, "#c0392b", n(.8 * k)) +
+    En(x - 11 * k, y + 3 * k, 2.8 * k, 1.6 * k, "#ff6f8a", 'opacity=".65"') + En(x + 11 * k, y + 3 * k, 2.8 * k, 1.6 * k, "#ff6f8a", 'opacity=".65"');
+  // a chibi head (as countries1)
+  function head(x, y, r, o = {}) {
+    const skin = o.skin || "#ffd9b8", dx = o.dx || 0, s = n(r * .055);
+    let h = aC(x, y, r, skin, st(1.3));
+    if (o.hair !== null) h += P(`M${n(x - r * 1.04)},${n(y + r * .08)} C${n(x - r * 1.1)},${n(y - r * 1.25)} ${n(x + r * 1.1)},${n(y - r * 1.25)} ${n(x + r * 1.04)},${n(y + r * .08)} C${n(x + r * .75)},${n(y - r * .42)} ${n(x + r * .15)},${n(y - r * .58)} ${n(x - r * .15)},${n(y - r * .4)} C${n(x - r * .45)},${n(y - r * .28)} ${n(x - r * .8)},${n(y - r * .3)} ${n(x - r * 1.04)},${n(y + r * .08)}Z`, o.hair || "#3b2314", 1.2);
+    h += aEye(n(x - r * .4 + dx), n(y + r * .2), o.iris || "#5a3a1a", s) + aEye(n(x + r * .4 + dx), n(y + r * .2), o.iris || "#5a3a1a", s);
+    h += En(x - r * .66 + dx * .5, y + r * .55, r * .17, r * .1, "#ff7a8a", 'opacity=".6"') + En(x + r * .66 + dx * .5, y + r * .55, r * .17, r * .1, "#ff7a8a", 'opacity=".6"');
+    h += P(`M${n(x - r * .16 + dx)},${n(y + r * .6)} Q${n(x + dx)},${n(y + r * .82)} ${n(x + r * .16 + dx)},${n(y + r * .6)}Z`, "#c0392b", .8);
+    return h;
+  }
+  // a table top from y down, gingham (two colours) or plain wood
+  function gingham(y, c = "#e53935", step = 10) {
+    let s = Rn(0, y, 120, 158 - y, "#fff");
+    for (let x = 0; x < 120; x += step * 2) s += Rn(x, y, step, 158 - y, c, 'opacity=".45"');
+    for (let yy = y; yy < 158; yy += step * 2) s += Rn(0, yy, 120, step, c, 'opacity=".45"');
+    return s + Rn(0, y, 120, 2.5, "#000", 'opacity=".15"');
+  }
+  const wood = (y, c1 = "#c98b55", c2 = "#a96d3b") => Rn(0, y, 120, 158 - y, c1) + Rn(0, y, 120, 3, c2) +
+    line(`M0,${y + 16} H120 M0,${y + 32} H120`, .8, c2, 'opacity=".6"');
+
+  /* ================= FOOD ================= */
+
+  // Switzerland: cheese fondue, a red pot on its burner, a bread cube dipped on a long fork
+  function fondue() {
+    const bg = aSky("#ffe6b8", "#fff6e2") + gingham(112) + aFlagAt("ch");
+    const t = [];
+    t.push(shadow(60, 132, 38));
+    // stand + burner
+    t.push(rope("M36,108 L30,130 M84,108 L90,130", 2.4, "#555"));
+    t.push(R(50, 120, 20, 10, "#9e9e9e", 1.1, 'rx="2"'));
+    t.push(P("M60,107 Q53,114 56,119 Q60,122 64,119 Q67,114 60,107Z", "#ff9800", 1) + Pn("M60,112 Q57,116 60,119 Q63,116 60,112Z", "#ffeb3b"));
+    // the pot
+    t.push(rope("M92,86 L114,78", 4, "#8d5a2b"));
+    t.push(P("M26,82 Q24,116 60,118 Q96,116 94,82Z", "#d32f2f"));
+    [[34, 96], [44, 110], [80, 108], [88, 94], [70, 114]].forEach(([x, y]) => t.push(aC(x, y, 2.2, "#fff", 'opacity=".9"')));
+    t.push(hl("M31,90 Q32,104 40,111", 2.6, .45));
+    t.push(E(60, 82, 34, 9, "#b71c1c"));
+    t.push(E(60, 82, 29, 6.5, "#ffd54f", 1.1));
+    t.push(En(52, 81, 9, 2.2, "#fff3b0", 'opacity=".8"'));
+    // a second bread cube bobbing in the cheese
+    t.push(P("M70,80 L72,74 L82,74 L84,80Z", "#e3b26a", 1.1) + Pn("M71,80 Q77,82 83,80", "none", 'stroke="#ffd54f" stroke-width="2"'));
+    // cheese strings from the dipped bread down into the pot
+    t.push(line("M47,70 Q46,76 48,81 M53,71 Q55,76 54,81 M59,70 Q60,75 61,80", 2.2, "#ffc93c"));
+    // the fork: handle from the top right, tines in the bread
+    t.push(rope("M108,30 L66,58", 2.2, "#bdbdbd"));
+    t.push(rope("M108,30 L96,38", 4.2, "#c62828"));
+    t.push(P("M44,54 L66,52 L68,66 L46,70Z", "#e8b56b", 1.3));
+    t.push(P("M45,63 L67,60 L68,66 Q64,72 60,68 Q56,74 52,69 Q48,73 46,70Z", "#ffd54f", 1.1));
+    t.push(Pn("M48,56 L60,55", "none", 'stroke="#fff3d6" stroke-width="2" stroke-linecap="round" opacity=".8"'));
+    t.push(face(60, 97, 1.15));
+    t.push(sparks([[100, 104, 4], [18, 62, 3.5], [104, 56, 3]], "#fff"));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  // England: fish and chips in a paper cone with a lemon wedge
+  function fishChips() {
+    const bg = aSky("#9ed8ff", "#e8f7ff") + aCloud(76, 10, .7) + Pn("M0,100 H120 V112 H0Z", "#3d8fd1") +
+      line("M6,104 q4,-3 8,0 M40,106 q4,-3 8,0 M86,104 q4,-3 8,0", 1, "#fff", 'opacity=".7"') + wood(112, "#d7b48a", "#b8915f") + aFlagAt("en");
+    const t = [];
+    t.push(shadow(66, 134, 22));
+    // the fish, leaning out of the cone to the left
+    const fish = "M-34,0 C-32,-12 -16,-18 0,-16 C12,-15 20,-10 26,-6 L38,-16 Q40,-4 36,0 Q40,6 38,16 L26,6 C18,12 6,16 -8,16 C-24,16 -36,10 -34,0Z";
+    t.push(at(P(fish, "#e8a23a", 1.4) + clip(fish, [[-26, -8, 5], [-14, -12, 6], [0, -10, 5], [12, -6, 5], [-20, 8, 6], [-4, 10, 5], [10, 6, 5], [24, 0, 4]].map(([x, y, r]) => aC(x, y, r, "#f5bd5a", 'opacity=".8"')).join("")) +
+      hl("M-26,-6 Q-16,-14 -2,-13", 2.6) + face(-6, 1, 1.05), 44, 56, 1, 26));
+    // chips on the right
+    [[64, 34, 6], [74, 36, 14], [84, 42, 24], [70, 46, 8], [92, 52, 32], [60, 46, -2]].forEach(([x, y, a]) =>
+      t.push(at(R(-3.5, 0, 7, 32, "#ffcf4d", 1.1, 'rx="1.5"') + Rn(-2, 2, 2, 22, "#fff2b8", 'opacity=".8"'), x, y, 1, a)));
+    // the paper cone (newspaper)
+    const cone = "M30,74 L102,66 L70,138Z";
+    t.push(P(cone, "#f7f3e8", 1.4));
+    t.push(clip(cone, line("M40,82 L92,77 M44,90 L88,86 M48,98 L84,95 M54,106 L80,104 M58,114 L76,113", 1.6, "#b0aca2", 'stroke-dasharray="5 2"') +
+      Rn(66, 80, 14, 10, "#c6c2b8", 'opacity=".8"')));
+    t.push(P("M30,74 L102,66 L98,76 L34,82Z", "#e9e2cf", 1.2));
+    // lemon wedge
+    t.push(P("M90,68 A12,12 0 0 1 112,60 Z", "#ffe14d", 1.2) + line("M101,64 L96,59 M101,64 L103,53 M101,64 L108,58", .9, "#e0b800"));
+    t.push(sparks([[16, 92, 3.5], [108, 92, 4]], "#fff"));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  // Norway: heart-shaped waffles, one heart broken off with jam and cream
+  const HEART = "M0,0 C-6,-8 -22,-16 -20,-28 C-18,-38 -6,-38 0,-30 C6,-38 18,-38 20,-28 C22,-16 6,-8 0,0Z";
+  function heartW(c = "#f2c063") {
+    let grid = "";
+    for (let i = -40; i <= 40; i += 6) grid += `M${i},-40 L${i + 40},0 M${i},0 L${i + 40},-40 `;
+    return P(HEART, c, 1.3) + clip(HEART, line(grid, 1, "#c98a2e", 'opacity=".7"')) + P(HEART, "none", 1.3);
+  }
+  function waffles() {
+    const bg = radial("#e3f2ff", "#6fa8dc", ".35") + E(60, 116, 56, 14, "#fff", 1.2) + En(60, 115, 44, 9, "#eef4fa") + aFlagAt("no");
+    const t = [];
+    // the flower of hearts behind (one heart missing at the bottom)
+    let fl = "";
+    for (let i = 0; i < 5; i++) if (i !== 0) fl += at(heartW("#e9b257"), 0, 0, 1, 180 + i * 72);
+    t.push(at(fl, 62, 62, .95));
+    t.push(at(E(0, 0, 7, 5, "#fafafa", 1.1) + En(-2, -1.6, 3, 1.4, "#fff"), 62, 52));
+    // the front heart
+    t.push(shadow(62, 133, 30));
+    t.push(at(heartW(), 62, 134, 1.45));
+    // jam and cream on top
+    t.push(P("M38,90 Q36,82 46,82 Q54,78 58,86 Q62,94 54,96 Q52,104 48,98 Q40,100 38,90Z", "#d81b46", 1.2) + En(45, 86, 3.2, 1.6, "#ff8aa8", 'opacity=".8"'));
+    t.push(P("M66,90 Q64,80 74,80 Q82,78 84,86 Q88,94 78,96 Q70,98 66,90Z", "#fffdf6", 1.2) + Pn("M70,86 Q75,82 80,85", "none", 'stroke="#e6dccb" stroke-width="1.2"'));
+    t.push(aC(55, 78, 4.2, "#e53950", st(1)) + Pn("M53,74 L55,76 L57,74", "none", 'stroke="#3c8f2a" stroke-width="1.6" stroke-linecap="round"'));
+    t.push(face(62, 112, 1.1));
+    t.push(sparks([[104, 40, 4.5], [16, 52, 3.5], [104, 100, 3]], "#fff"));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  // Brazil: brigadeiros, chocolate truffles with sprinkles in paper cups
+  function cup(x, y, w, h, c) {
+    const top = y, bot = y + h, wb = w * .7;
+    let s = P(`M${n(x - w / 2)},${top} L${n(x - wb / 2)},${bot} L${n(x + wb / 2)},${bot} L${n(x + w / 2)},${top}Z`, c, 1.3);
+    for (let i = 1; i < 6; i++) { const f = i / 6; s += line(`M${n(x - w / 2 + w * f)},${top} L${n(x - wb / 2 + wb * f)},${bot}`, .8, "#000", 'opacity=".25"'); }
+    let sc = `M${n(x - w / 2 - 2)},${top}`;
+    for (let i = 0; i < 6; i++) sc += ` q${n((w + 4) / 12)},-4 ${n((w + 4) / 6)},0`;
+    return s + P(sc + ` L${n(x + w / 2)},${top + 3} L${n(x - w / 2)},${top + 3}Z`, c, 1.1);
+  }
+  function truffle(x, y, r, spr) {
+    let s = aC(x, y, r, "#5a3420", st(1.4));
+    const seed = [.3, 1.2, 2.1, 2.9, 3.8, 4.6, 5.5, .8, 1.7, 2.5, 3.4, 4.2, 5.0, 5.9];
+    seed.forEach((a, i) => {
+      const d = r * (i < 7 ? .72 : .4), px = x + d * Math.cos(a), py = y + d * Math.sin(a);
+      s += Rn(px - 2, py - .8, 4, 1.6, spr ? spr[i % spr.length] : "#2b160c", `rx=".8" transform="rotate(${n(a * 57 + i * 23)} ${n(px)} ${n(py)})"`);
+    });
+    return s + hl(`M${n(x - r * .6)},${n(y - r * .4)} Q${n(x - r * .3)},${n(y - r * .75)} ${n(x + r * .1)},${n(y - r * .8)}`, 2.2, .45);
+  }
+  function brigadeiros() {
+    const bg = radial("#fff176", "#1e9e4a", ".38") + wood(116, "#e6c79a", "#c9a26b") + aFlagAt("br");
+    const t = [];
+    const fun = ["#ff5a8a", "#ffd23f", "#3ec7ff", "#7cdb5a", "#fff"];
+    t.push(shadow(24, 130, 14), shadow(98, 130, 14));
+    t.push(truffle(24, 106, 12, fun), cup(24, 113, 26, 14, "#3ec7ff"));
+    t.push(truffle(98, 106, 12), cup(98, 113, 26, 14, "#1fa64a"));
+    t.push(shadow(62, 134, 28));
+    t.push(truffle(61, 82, 26), cup(61, 94, 54, 30, "#ffd23f"));
+    t.push(face(61, 108, 1.1));
+    t.push(sparks([[104, 30, 4.5], [14, 52, 3.5], [104, 78, 3.5]], "#fff"));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  // Argentina: empanadas with their twisted edge, and a little bowl of chimichurri
+  function empanada(big) {
+    const body = "M-38,8 C-38,-24 -16,-34 0,-34 C16,-34 38,-24 38,8 Q0,16 -38,8Z";
+    let s = P(body, big ? "#e9a940" : "#e3a03a", 1.4);
+    s += clip(body, [[-20, -14, 7], [4, -22, 8], [18, -6, 7], [-6, 0, 6]].map(([x, y, r]) => aC(x, y, r, "#f4c063", 'opacity=".7"')).join("") +
+      [[-24, -2], [10, -14], [24, 0]].map(([x, y]) => En(x, y, 2.6, 1.6, "#b86e1c", 'opacity=".7"')).join(""));
+    // the repulgue: twisted rope along the curved edge
+    let tw = "";
+    for (let i = 0; i <= 12; i++) {
+      const a = Math.PI + i * Math.PI / 12, x = 40 * Math.cos(a), y = -2 + 34 * Math.sin(a) * (i === 0 || i === 12 ? .3 : 1);
+      tw += E(x, y, 4.2, 3, "#d58c2c", 1, `transform="rotate(${n(a * 57 + 40)} ${n(x)} ${n(y)})"`);
+    }
+    s += tw + hl("M-26,-20 Q-14,-30 2,-30", 2.4, .6);
+    return s;
+  }
+  function empanadas() {
+    const bg = radial("#e4f3ff", "#74b9f0", ".35") + aSun(98, 24, 9) + wood(110, "#b97a45", "#93592b") + aFlagAt("ar");
+    const t = [];
+    t.push(E(62, 118, 54, 10, "#c48a52", 1.3) + En(62, 116, 46, 6.5, "#d79e66"));
+    t.push(at(empanada(false), 84, 70, .66, 14));
+    t.push(at(empanada(false), 38, 66, .6, -16));
+    // chimichurri bowl
+    t.push(E(98, 112, 13, 5, "#fff", 1.2) + P("M85,112 Q86,124 98,125 Q110,124 111,112Z", "#fff", 1.2) + En(98, 111.5, 10, 3.4, "#4e8a2a") +
+      [[94, 111], [100, 110], [103, 112], [96, 113]].map(([x, y]) => aC(x, y, .9, "#c62828")).join(""));
+    t.push(at(empanada(true), 56, 104, 1.05));
+    t.push(face(56, 96, 1.1));
+    t.push(sparks([[18, 92, 3.5], [108, 54, 4]], "#fff"));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  // China: dumplings in a bamboo steamer, steam curling up
+  function dumpling(k = 1) {
+    return P("M-16,6 Q-19,-6 -5,-13 Q0,-16 5,-13 Q19,-6 16,6 Q0,11 -16,6Z", "#fffaf0", 1.3) +
+      line("M0,-13 L-9,2 M0,-13 L-3,4 M0,-13 L4,4 M0,-13 L10,2", .8, "#c8bca8") + aC(0, -13, 2, "#f3ead8", st(.8)) +
+      hl("M-11,-2 Q-9,-7 -5,-9", 1.8, .9);
+  }
+  function steamer() {
+    const bg = radial("#ff7a5c", "#b3121b", ".4") + [[16, 40], [104, 30], [100, 78], [14, 88]].map(([x, y]) => aC(x, y, 1.6, "#ffd54f", 'opacity=".8"')).join("") +
+      wood(118, "#7b3f1d", "#5c2d12") + aFlagAt("cn");
+    const t = [];
+    t.push(shadow(60, 132, 46));
+    // the basket: side band, weave, rim, inside
+    t.push(P("M14,92 L16,120 Q60,136 104,120 L106,92Z", "#d9b273", 1.4));
+    t.push(line("M15,104 Q60,118 105,104 M16,114 Q60,128 104,114", 1, "#a77d3c"));
+    for (let x = 22; x < 104; x += 8) t.push(line(`M${x},${n(104 + (1 - Math.abs(60 - x) / 46) * 6)} V${n(112 + (1 - Math.abs(60 - x) / 46) * 6)}`, .8, "#a77d3c", 'opacity=".7"'));
+    t.push(E(60, 92, 46, 16, "#e6c487", 1.4));
+    t.push(En(60, 93, 40, 12.5, "#b98d4c"));
+    t.push(En(60, 95, 37, 10.5, "#d7f0c4", 'opacity=".55"'));
+    // dumplings: three behind, the big one in front with the face
+    t.push(at(dumpling(), 36, 90, .9), at(dumpling(), 84, 90, .9), at(dumpling(), 60, 84, .8));
+    t.push(at(dumpling(), 60, 96, 1.55));
+    t.push(face(60, 98, .9));
+    // chopsticks resting on the rim
+    t.push(rope("M96,70 L114,40", 2.4, "#c0392b"), rope("M102,72 L117,44", 2.4, "#c0392b"));
+    // steam
+    t.push(line("M44,64 Q38,56 44,48 Q50,40 44,32 M62,60 Q56,50 62,42 Q68,34 62,26 M78,64 Q72,56 78,48 Q84,40 78,34", 3, "#fff", 'opacity=".8"'));
+    t.push(sparks([[104, 100, 3.5], [20, 64, 3]], "#ffe082"));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  // Japan: nigiri and maki on a wooden board, chopsticks resting on top
+  function nigiri(fish, stripe) {
+    return E(0, 6, 20, 10, "#fdfdf8", 1.3) + Pn("M-14,4 Q-6,8 2,6 M6,10 Q12,8 16,6", "none", 'stroke="#e4e4dc" stroke-width="1"') +
+      P("M-24,0 Q-22,-12 0,-12 Q24,-12 25,-2 Q24,6 0,4 Q-22,6 -24,0Z", fish, 1.3) +
+      (stripe ? line("M-14,-9 Q-12,-2 -10,3 M-4,-11 Q-2,-4 0,3 M6,-11 Q8,-4 10,3 M16,-9 Q17,-3 18,1", 1.3, stripe, 'opacity=".85"') : "") +
+      hl("M-16,-7 Q-6,-11 6,-10", 2, .6);
+  }
+  function maki(x, y, r, core) {
+    return aC(x, y, r, "#1d2a1f", st(1.3)) + aC(x, y, r * .78, "#fdfdf8") +
+      [0, 1, 2, 3, 4, 5].map(i => aC(x + r * .62 * Math.cos(i), y + r * .62 * Math.sin(i), .9, "#e8e8e0")).join("") +
+      aC(x, y, r * .36, core, st(.9)) + (core === "#ff8a3d" ? aC(x - r * .1, y - r * .12, r * .12, "#ffc49a") : "");
+  }
+  function sushi() {
+    const bg = radial("#fff6f2", "#f2a7a0", ".38") + Rn(0, 108, 120, 50, "#e9d6b4") + Rn(0, 108, 120, 2.5, "#c9b38a") + aFlagAt("jp");
+    const t = [];
+    // the geta board
+    t.push(R(8, 72, 106, 42, "#c8935a", 1.4, 'rx="3"') + R(16, 112, 12, 12, "#a87340", 1.1) + R(94, 112, 12, 12, "#a87340", 1.1));
+    t.push(line("M10,84 H112 M10,98 H112", .8, "#a87340", 'opacity=".6"'));
+    // maki in a row at the back, a salmon nigiri behind
+    t.push(maki(26, 66, 12, "#ff8a3d"), maki(48, 62, 12, "#d81b46"), maki(94, 64, 12, "#7cbf4a"));
+    t.push(at(nigiri("#d83a3a"), 78, 72, .8));
+    // the big nigiri (salmon) in front with the face
+    t.push(at(nigiri("#ff9a6a", "#ffe2cf"), 56, 96, 1.5));
+    t.push(face(56, 103, .95));
+    // ginger and wasabi
+    t.push(P("M90,92 Q100,84 106,92 Q100,98 90,92Z", "#ffc6c6", 1) + P("M96,102 Q100,96 106,100 Q104,106 96,102Z", "#9ccc3c", 1));
+    // chopsticks
+    t.push(rope("M30,46 L112,30", 2.2, "#3a2a20"), rope("M34,52 L114,38", 2.2, "#3a2a20"));
+    t.push(sparks([[18, 92, 3], [104, 54, 3.5]], "#fff"));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  // South Korea: kimbap slices with their colourful middles
+  function kimSlice(x, y, r) {
+    const f = [["#ffd23f", -.3, -.45], ["#ff8a3d", .32, -.4], ["#3c9a2e", -.38, .02], ["#ff7aa2", .35, .05], ["#8a5a2b", 0, -.1]];
+    return aC(x, y, r, "#1d2a1f", st(1.4)) + aC(x, y, r * .86, "#fdfdf8") +
+      [0, 1, 2, 3, 4, 5, 6, 7].map(i => aC(x + r * .7 * Math.cos(i * .8), y + r * .7 * Math.sin(i * .8), r * .03 + .6, "#e6e6de")).join("") +
+      f.map(([c, dx, dy]) => R(x + dx * r * .9 - r * .12, y + dy * r * .9 - r * .12, r * .24, r * .24, c, .7, 'rx="1"')).join("");
+  }
+  function kimbap() {
+    const bg = radial("#f4fbff", "#9fc9ee", ".38") + wood(114, "#e8d0a8", "#c8a776") + aFlagAt("kr");
+    const t = [];
+    t.push(E(60, 120, 54, 11, "#fff", 1.3) + En(60, 119, 44, 7, "#eef2f5"));
+    // a row of slices going back
+    t.push(kimSlice(94, 58, 15), kimSlice(80, 72, 19));
+    // sesame seeds
+    [[104, 82, 0], [108, 92, 1], [26, 70, 2], [34, 62, 3]].forEach(([x, y, i]) => t.push(En(x, y, 1.6, .9, "#fff8e0", st(.4) + ` transform="rotate(${i * 40} ${x} ${y})"`)));
+    // the big slice in front
+    t.push(shadow(60, 132, 30));
+    const x = 54, y = 98, r = 31;
+    t.push(aC(x, y, r, "#1d2a1f", st(1.5)) + aC(x, y, r * .87, "#fdfdf8"));
+    [[-22, -4], [-18, 14], [20, 14], [22, -4], [-8, 22], [8, 22]].forEach(([dx, dy]) => t.push(aC(x + dx, y + dy, 1.1, "#e6e6de")));
+    t.push(R(x - 15, y - 21, 9, 9, "#ffd23f", .9, 'rx="1.5"') + R(x - 4.5, y - 24, 9, 9, "#ff8a3d", .9, 'rx="1.5"') + R(x + 6, y - 21, 9, 9, "#3c9a2e", .9, 'rx="1.5"') +
+      R(x - 10, y - 13, 8, 6, "#ff7aa2", .9, 'rx="1.5"') + R(x + 2, y - 13, 8, 6, "#8a5a2b", .9, 'rx="1.5"'));
+    t.push(hl(`M${x - 24},${y - 12} Q${x - 18},${y - 24} ${x - 6},${y - 27}`, 2, .35));
+    t.push(face(x, y + 9, .95));
+    t.push(sparks([[18, 46, 4], [108, 30, 3.5]], "#fff"));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  /* ================= NATIONAL THINGS ================= */
+
+  // Switzerland: an alpine cow with a big bell and a flower crown, green alps behind (no Matterhorn)
+  function cow() {
+    const bg = aSky("#8fd3ff", "#e6f7ff") + aCloud(78, 12, .7) +
+      Pn("M0,70 L22,40 L38,58 L56,30 L78,60 L96,42 L120,66 V100 H0Z", "#9fb4c8") +
+      Pn("M17,47 L22,40 L27,46 L24,44 L21,48Z M50,38 L56,30 L62,38 L58,36 L55,40Z M92,47 L96,42 L101,48 L97,46Z", "#fff") +
+      Pn("M0,84 Q30,66 60,78 T120,72 V158 H0Z", "#8fd16a") + Pn("M0,104 Q50,90 120,102 V158 H0Z", "#6cbb4a") +
+      [[14, 96], [100, 94], [88, 112], [22, 116], [106, 128]].map(([x, y]) => aC(x, y, 2, "#fff") + aC(x, y, .9, "#ffd23f")).join("") + aFlagAt("ch");
+    const t = [];
+    t.push(shadow(60, 134, 34));
+    // body sitting, legs, tail
+    const body = "M34,96 Q32,130 60,132 Q88,130 86,96 Q60,86 34,96Z";
+    t.push(P(body, "#fff", 1.4) + clip(body, E(42, 116, 10, 8, "#7a4a2a", 0) + E(80, 104, 9, 11, "#7a4a2a", 0)) + P(body, "none", 1.4));
+    t.push(rope("M86,118 Q100,118 102,104", 2, "#fff") + P("M99,100 Q104,96 106,102 Q104,108 100,105Z", "#7a4a2a", 1));
+    t.push(E(44, 130, 9, 5, "#fff") + E(76, 130, 9, 5, "#fff") + E(44, 132.5, 7, 2.8, "#4a3426", 1) + E(76, 132.5, 7, 2.8, "#4a3426", 1));
+    // collar and the bell
+    t.push(P("M38,92 Q60,104 82,92 L82,98 Q60,110 38,98Z", "#c62828", 1.2) + [44, 52, 68, 76].map(x => aC(x, n(97 + (1 - Math.abs(60 - x) / 22) * 4), 1.3, "#fff")).join(""));
+    t.push(P("M50,104 Q50,96 60,96 Q70,96 70,104 L74,118 Q60,122 46,118Z", "#f2b51e", 1.4) + aC(60, 120, 3, "#9a6a10", st(1)) +
+      R(57, 92, 6, 5, "#c9901a", 1) + hl("M54,104 Q54,99 58,98", 2, .7));
+    // head: ears, horns, face, muzzle
+    t.push(P("M30,52 Q16,48 14,56 Q22,62 32,60Z", "#fff", 1.3) + P("M90,52 Q104,48 106,56 Q98,62 88,60Z", "#fff", 1.3) +
+      En(20, 56, 4, 2, "#ffb3c1") + En(100, 56, 4, 2, "#ffb3c1"));
+    t.push(P("M38,40 Q30,34 32,24 Q38,30 44,36Z", "#f3e6c8", 1.2) + P("M82,40 Q90,34 88,24 Q82,30 76,36Z", "#f3e6c8", 1.2));
+    const hd = "M30,60 C28,38 44,32 60,32 C76,32 92,38 90,60 C90,78 78,90 60,90 C42,90 30,78 30,60Z";
+    t.push(P(hd, "#fff", 1.4) + clip(hd, E(80, 44, 12, 10, "#7a4a2a", 0)) + P(hd, "none", 1.4));
+    t.push(E(60, 78, 19, 11, "#ffc2cc", 1.2) + En(53, 78, 2.4, 3, "#c2707e") + En(67, 78, 2.4, 3, "#c2707e"));
+    t.push(aEye(48, 60, "#5a3a1a", .8, 1) + aEye(72, 60, "#5a3a1a", .8, 1));
+    t.push(En(39, 69, 3.4, 2, "#ff7a8a", 'opacity=".6"') + En(81, 69, 3.4, 2, "#ff7a8a", 'opacity=".6"'));
+    t.push(line("M56,85 Q60,88 64,85", 1.2));
+    // flower crown
+    const fl = [[38, 40, "#ff5a8a"], [47, 34, "#ffd23f"], [56, 31, "#7cc8ff"], [65, 31, "#fff"], [74, 34, "#ff5a8a"], [83, 40, "#ffd23f"]];
+    t.push(line("M36,42 Q60,26 84,42", 2.4, "#3c8f2a"));
+    fl.forEach(([x, y, c]) => { for (let i = 0; i < 5; i++) t.push(aC(x + 3 * Math.cos(i * 1.257), y + 3 * Math.sin(i * 1.257), 2.4, c, st(.7))); t.push(aC(x, y, 1.7, "#ffb300")); });
+    t.push(P("M58,24 Q54,18 60,16 Q66,18 62,24Z M60,24 L60,30", "#fff", .9));
+    t.push(sparks([[108, 82, 3.5], [12, 74, 3]], "#fff"));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  // England: a red double-decker bus on a London street of terraced houses
+  function bus() {
+    const houses = [[0, "#c96b4b"], [30, "#e1c9a3"], [60, "#b5584a"], [90, "#d9b98f"]].map(([x, c]) =>
+      Rn(x, 26, 30, 90, c) + line(`M${x},26 V116`, .8, "#7a4a3a", 'opacity=".5"') + Rn(x, 22, 30, 5, "#8a8a8a") +
+      [0, 1, 2].map(r => Rn(x + 7, 34 + r * 22, 16, 13, "#eaf4fb") + line(`M${x + 15},${34 + r * 22} V${47 + r * 22}`, .8, "#fff")).join("")).join("");
+    const bg = aSky("#bfe3ff", "#eef8ff") + aCloud(84, 4, .6) + houses + Rn(0, 112, 120, 8, "#cfcac0") +
+      Rn(0, 120, 120, 38, "#6d6f74") + line("M0,140 H14 M30,140 H50 M66,140 H86 M102,140 H120", 2, "#fff") + aFlagAt("en");
+    const RED = "#d6211f", t = [];
+    t.push(shadow(60, 129, 50));
+    t.push(R(10, 36, 100, 86, RED, 1.5, 'rx="7"'));
+    t.push(Rn(12, 37, 96, 4, "#ff5a52", 'opacity=".7"'));
+    // upper deck windows
+    for (let i = 0; i < 5; i++) t.push(R(15 + i * 18, 44, 15, 18, "#bfe4f7", 1.1, 'rx="2"') + line(`M${17 + i * 18},58 L${25 + i * 18},46`, 1.2, "#fff", 'opacity=".8"'));
+    // cream band between the decks
+    t.push(R(10, 67, 100, 6, "#f4ead2", 1.1));
+    // lower deck: windows, the open platform at the back (left), the driver's window at the front (right)
+    for (let i = 0; i < 4; i++) t.push(R(30 + i * 15, 78, 12, 18, "#bfe4f7", 1.1, 'rx="2"'));
+    t.push(R(14, 78, 12, 34, "#3d2a26", 1.1, 'rx="1.5"') + rope("M20,80 V110", 1.6, "#f2b51e"));
+    t.push(R(92, 78, 14, 18, "#bfe4f7", 1.1, 'rx="2"') + R(92, 47, 14, 6, "#222", .9) + Rn(94, 49, 10, 2, "#ffd54a"));
+    t.push(R(10, 112, 100, 6, "#222", 1.1));
+    t.push(aC(106, 106, 3.4, "#fff8c4", st(1)) + aC(14, 106, 2.4, "#ff6b4a", st(.8)));
+    t.push(R(40, 102, 30, 4, "#f2b51e", .9, 'rx="1"'));
+    const wheel = x => aC(x, 120, 9, "#2b2b2b", st(1.3)) + aC(x, 120, 4, "#bdbdbd", st(.9)) + aC(x, 120, 1.4, "#666");
+    t.push(Pn("M24,116 A12,12 0 0 1 48,116Z M78,116 A12,12 0 0 1 102,116Z", "#1a1a1a"));
+    t.push(wheel(36), wheel(90));
+    t.push(sparks([[112, 30, 3.5]], "#fff"));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  // Norway: a Viking ship with a dragon prow, a striped sail and a row of shields
+  function viking() {
+    const bg = aSky("#ffb877", "#ffe9c9") + aSun(30, 72, 12) + aCloud(84, 18, .7) + aWaves(98, "#2f7fc1", "#7cc3f0", 3) + aFlagAt("no");
+    const t = [];
+    // oars
+    [26, 40, 54, 68, 82].forEach(x => t.push(rope(`M${x},100 L${x - 10},124`, 1.8, "#b07a40")));
+    // mast and the striped sail
+    t.push(rope("M60,96 V20", 3, "#8a5a2b"));
+    const sail = "M32,28 H88 Q92,56 86,80 Q60,74 34,80 Q28,56 32,28Z";
+    t.push(P(sail, "#fff", 1.4) + clip(sail, [36, 52, 68, 84].map(x => Rn(x - 4, 20, 8, 70, "#d32f2f")).join("") + Rn(56, 20, 0, 0, "none")) + P(sail, "none", 1.4));
+    t.push(rope("M30,28 H90", 2.4, "#8a5a2b"));
+    // hull with planks, the tail curl at the back and the dragon at the front
+    const hull = "M14,84 Q20,108 52,110 H76 Q104,108 106,84 Z";
+    t.push(P(hull, "#a8682e", 1.5) + clip(hull, line("M10,92 Q60,100 110,92 M10,100 Q60,108 110,100", 1.2, "#7a4a1c")) + P(hull, "none", 1.5));
+    t.push(rope("M16,86 Q8,74 10,62 Q12,52 20,54 Q26,58 20,64", 4, "#a8682e"));
+    t.push(rope("M104,86 Q112,74 108,60", 5, "#a8682e"));
+    // dragon head
+    t.push(P("M100,62 Q98,48 108,44 Q118,42 118,52 Q118,58 112,60 L114,64 Q106,66 100,62Z", "#4caf50", 1.3) +
+      P("M104,46 L100,38 L108,44Z M110,44 L110,36 L114,44Z", "#ffd23f", 1) + aEye(108, 51, "#c98a00", .5) + line("M113,58 L117,57", 1) + aC(116, 51, .9, OL));
+    // shields along the side
+    const SC = ["#ffd23f", "#1f6fd1", "#d32f2f", "#fff", "#ffd23f", "#1f6fd1"];
+    for (let i = 0; i < 6; i++) { const x = 24 + i * 14.4; t.push(aC(x, 87, 6.4, SC[i], st(1.2)) + aC(x, 87, 2, "#9e9e9e", st(.8)) + line(`M${x - 6},87 H${x - 2} M${x + 2},87 H${x + 6}`, .8, "#000", 'opacity=".3"')); }
+    t.push(sparks([[108, 24, 4], [14, 108, 3]], "#fff"));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  // Brazil: a carnival dancer with a big feather headdress
+  function samba() {
+    const confetti = [[14, 40, "#ffd23f"], [100, 24, "#3ec7ff"], [108, 70, "#ff5a8a"], [12, 92, "#7cdb5a"], [96, 110, "#ffd23f"], [20, 64, "#ff5a8a"], [104, 96, "#3ec7ff"]]
+      .map(([x, y, c], i) => Rn(x - 2.5, y - 1.2, 5, 2.4, c, `transform="rotate(${i * 37} ${x} ${y})"`)).join("");
+    const bg = radial("#b84fd6", "#3a0f6b", ".4") + confetti + Pn("M0,124 Q60,116 120,124 V158 H0Z", "#2b0a4f", 'opacity=".6"') + aFlagAt("br");
+    const t = [];
+    // the feather fan behind the head
+    const FC = ["#1fa64a", "#ffd23f", "#2a6bd6", "#ff5a8a", "#1fa64a", "#ffd23f", "#2a6bd6", "#ff5a8a", "#1fa64a"];
+    for (let i = 0; i < 9; i++) {
+      const a = -152 + i * 15.5, r = a * Math.PI / 180, x = 60 + 30 * Math.cos(r), y = 56 + 30 * Math.sin(r);
+      t.push(E(x, y, 9, 25, FC[i], 1.2, `transform="rotate(${n(a + 90)} ${n(x)} ${n(y)})"`) + line(`M60,56 L${n(60 + 50 * Math.cos(r))},${n(56 + 50 * Math.sin(r))}`, .8, "#fff", 'opacity=".6"'));
+    }
+    t.push(shadow(60, 134, 22));
+    // legs: one straight, one bent in a samba step
+    t.push(rope("M56,110 L52,130", 5, "#c68b5e"), rope("M64,110 L74,120 L70,130", 5, "#c68b5e"));
+    t.push(E(50, 132, 5, 2.6, "#ffd23f", 1) + E(70, 132, 5, 2.6, "#ffd23f", 1));
+    // arms raised
+    t.push(rope("M52,80 L40,70 L34,56", 4.4, "#c68b5e"), rope("M68,80 L80,70 L86,56", 4.4, "#c68b5e"));
+    t.push(aC(34, 54, 3.6, "#c68b5e", st(1.1)) + aC(86, 54, 3.6, "#c68b5e", st(1.1)));
+    // sparkly costume: top, belt, fringed skirt
+    t.push(P("M50,78 Q60,74 70,78 L68,98 Q60,100 52,98Z", "#ffd23f", 1.3));
+    t.push(P("M48,98 Q60,102 72,98 L84,118 Q60,124 36,118Z", "#1fa64a", 1.3));
+    for (let x = 40; x <= 80; x += 5) t.push(line(`M${x},${n(116 + (1 - Math.abs(60 - x) / 24) * 3)} l${n((x - 60) * .08)},7`, 1.6, "#ffd23f"));
+    t.push(R(48, 96, 24, 4, "#2a6bd6", 1, 'rx="1.5"'));
+    [[55, 84], [64, 86], [58, 92], [44, 110], [60, 112], [74, 108]].forEach(([x, y]) => t.push(aSpark(x, y, 2.2, "#fff")));
+    // head with a jewel band
+    t.push(head(60, 58, 15, { skin: "#c68b5e", hair: "#2a1a10", iris: "#3a2210" }));
+    t.push(P("M45,50 Q60,40 75,50 L74,54 Q60,45 46,54Z", "#ffd23f", 1.1) + aC(60, 45.5, 2.6, "#ff5a8a", st(.8)));
+    t.push(P("M44,62 Q40,70 44,78 Q47,70 46,62Z M76,62 Q80,70 76,78 Q73,70 74,62Z", "#2a1a10", 1));
+    t.push(sparks([[16, 20, 3.5], [104, 44, 4]], "#ffe082"));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  // Argentina: Magellanic penguins on a Patagonian beach
+  function penguin(k = 1, flip = false) {
+    const t = [];
+    t.push(E(-8, 30, 7, 3, "#ff9eb0", 1.1) + E(8, 30, 7, 3, "#ff9eb0", 1.1));
+    t.push(P("M-20,-8 Q-28,8 -26,18 Q-22,16 -18,8Z", "#1d1d24", 1.2) + P("M20,-8 Q28,8 26,18 Q22,16 18,8Z", "#1d1d24", 1.2));
+    t.push(E(0, 6, 20, 26, "#1d1d24", 1.4));
+    t.push(E(0, 10, 15, 20, "#fff", 1));
+    // the two black chest bands
+    t.push(Pn("M-15,-3 Q0,7 15,-3 L15,0 Q0,10 -15,0Z", "#1d1d24") + Pn("M-13.5,9 Q0,17 13.5,9 L13,11.6 Q0,19.6 -13,11.6Z", "#1d1d24"));
+    // head: black, with the white C-shaped stripe on each side (above the eye, round behind it, down to the throat)
+    t.push(aC(0, -22, 15, "#1d1d24", st(1.4)));
+    t.push(Pn("M-4,-35 Q-16,-34 -15,-22 Q-14,-12 -5,-8 L-4,-11 Q-11,-14 -11,-22 Q-11,-31 -3,-32Z M4,-35 Q16,-34 15,-22 Q14,-12 5,-8 L4,-11 Q11,-14 11,-22 Q11,-31 3,-32Z", "#fff"));
+    t.push(En(-5.5, -22, 4.4, 4.8, "#ffc0cc") + En(5.5, -22, 4.4, 4.8, "#ffc0cc"));
+    t.push(aEye(-5.5, -22, "#3a2a20", .55) + aEye(5.5, -22, "#3a2a20", .55));
+    t.push(P("M-3.4,-15 L3.4,-15 L0,-9Z", "#444", .9));
+    const s = t.join("");
+    return `<g transform="scale(${flip ? -k : k} ${k})">${s}</g>`;
+  }
+  function penguins() {
+    const bg = aSky("#8fd3ff", "#e6f7ff") + aCloud(12, 34, .7) + aCloud(84, 14, .8) +
+      Pn("M66,70 L84,52 L98,64 L110,50 L120,58 V78 H66Z", "#9a8a7a") +
+      aWaves(74, "#3a8fd0", "#8fd0f5", 2) + Pn("M0,98 Q40,90 80,96 T120,92 V158 H0Z", "#ecd9a8") + Pn("M0,98 Q40,90 80,96 T120,92", "none", 'stroke="#fff" stroke-width="2.4" opacity=".8"') +
+      E(98, 130, 10, 6, "#9e9e9e", 1) + E(16, 118, 6, 3.5, "#b0a090", 1) + aFlagAt("ar");
+    const t = [];
+    t.push(shadow(72, 130, 24), shadow(36, 128, 14));
+    t.push(at(penguin(1), 72, 94, 1.15));
+    t.push(at(penguin(1, true), 36, 108, .66));
+    t.push(sparks([[108, 96, 3.5], [48, 22, 3.5]], "#fff"));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  // China: a dragon dance, the red-and-gold dragon held up on poles under lanterns
+  function lantern(x, y, k = 1) {
+    return at(line("M0,-16 V-10", 1.2) + E(0, 0, 11, 10, "#e53935", 1.3) + line("M-5,-9 Q-8,0 -5,9 M5,-9 Q8,0 5,9", .9, "#b71c1c") +
+      R(-5, -12, 10, 3, "#ffc107", 1) + R(-5, 9, 10, 3, "#ffc107", 1) + line("M0,12 V20", 1.6, "#ffc107"), x, y, k);
+  }
+  function dragonDance() {
+    const bg = radial("#d7263d", "#5c0712", ".4") + lantern(100, 18, .8) + lantern(14, 50, .7) + lantern(106, 108, .7) +
+      Pn("M0,126 H120 V158 H0Z", "#3a0a10", 'opacity=".6"') + aFlagAt("cn");
+    const t = [];
+    // poles
+    [[30, 96], [52, 106], [74, 92]].forEach(([x, y]) => t.push(rope(`M${x},${y} L${x},132`, 2.4, "#c98a3a")));
+    // the body: a thick red wave with gold scales and a white fringe
+    const bd = "M20,100 C26,82 40,82 48,96 C56,112 70,108 76,90";
+    t.push(rope(bd, 18, "#e53935", "round"));
+    t.push(Pn(bd, "none", 'stroke="#ffc107" stroke-width="7" stroke-dasharray="4 4" stroke-linecap="round" opacity=".9" transform="translate(0 -3)"'));
+    t.push(line("M14,108 l-2,6 M22,110 l0,6 M38,104 l-1,6 M48,112 l0,6 M58,116 l1,6 M68,110 l2,6", 2, "#fff"));
+    t.push(P("M14,100 Q6,94 8,86 Q14,92 18,90 Q14,84 18,80 Q22,88 24,94Z", "#ffc107", 1.2));
+    // the head, facing us: mane, horns, face, big snout, open mouth, whiskers
+    const hx = 78, hy = 62;
+    let mn = "";
+    for (let i = 0; i < 22; i++) { const a = i * Math.PI / 11, r = i % 2 ? 26 : 34; mn += `${i ? "L" : "M"}${n(hx + r * Math.cos(a))},${n(hy + 2 + r * .95 * Math.sin(a))} `; }
+    t.push(P(mn + "Z", "#ffb300", 1.3));
+    t.push(E(hx, hy + 2, 27, 25, "#fff4d6", 1.1));
+    t.push(P(`M${hx - 12},${hy - 18} Q${hx - 20},${hy - 34} ${hx - 30},${hy - 38} Q${hx - 20},${hy - 26} ${hx - 19},${hy - 15}Z M${hx + 12},${hy - 18} Q${hx + 20},${hy - 34} ${hx + 30},${hy - 38} Q${hx + 20},${hy - 26} ${hx + 19},${hy - 15}Z`, "#ffd54f", 1.2));
+    t.push(E(hx, hy - 1, 22, 20, "#e53935", 1.4));
+    // bulging eyes under bushy gold brows
+    [-1, 1].forEach(sd => t.push(aC(hx + sd * 9, hy - 7, 6.8, "#fff", st(1.2)) + aC(hx + sd * 9 + sd * .8, hy - 6, 3.8, "#1d1d1d") + aC(hx + sd * 9 - 1, hy - 8, 1.4, "#fff") +
+      P(`M${hx + sd * 2},${hy - 13} Q${hx + sd * 9},${hy - 22} ${hx + sd * 18},${hy - 14} Q${hx + sd * 10},${hy - 16} ${hx + sd * 2},${hy - 13}Z`, "#ffd54f", 1)));
+    t.push(aC(hx, hy - 17, 2.6, "#1fa64a", st(.9)));
+    // snout and wide grinning mouth with teeth
+    t.push(E(hx, hy + 8, 15, 7.5, "#ff8a65", 1.2) + aC(hx - 5, hy + 7, 1.4, "#7a1a10") + aC(hx + 5, hy + 7, 1.4, "#7a1a10"));
+    t.push(P(`M${hx - 16},${hy + 14} Q${hx},${hy + 32} ${hx + 16},${hy + 14} Q${hx},${hy + 19} ${hx - 16},${hy + 14}Z`, "#7a1010", 1.2) +
+      P(`M${hx - 6},${hy + 23} Q${hx},${hy + 28} ${hx + 6},${hy + 23} Q${hx},${hy + 20} ${hx - 6},${hy + 23}Z`, "#ff6f8a", .8) +
+      P(`M${hx - 13},${hy + 15.5} L${hx - 11},${hy + 20} L${hx - 9},${hy + 16.5}Z M${hx + 13},${hy + 15.5} L${hx + 11},${hy + 20} L${hx + 9},${hy + 16.5}Z`, "#fff", .7));
+    t.push(En(hx - 17, hy + 4, 3.4, 2, "#ff9aa8", 'opacity=".7"') + En(hx + 17, hy + 4, 3.4, 2, "#ff9aa8", 'opacity=".7"'));
+    t.push(line(`M${hx - 14},${hy + 10} Q${hx - 30},${hy + 8} ${hx - 34},${hy + 20} Q${hx - 36},${hy + 28} ${hx - 28},${hy + 28} M${hx + 14},${hy + 10} Q${hx + 30},${hy + 8} ${hx + 34},${hy + 22}`, 1.8, "#ffc107"));
+    t.push(sparks([[30, 24, 4], [60, 14, 3], [16, 78, 3]], "#ffe082"));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  // Japan: the Shinkansen bullet train racing past green fields
+  function shinkansen() {
+    const bg = aSky("#7fcfff", "#e2f5ff") + aCloud(16, 40, .8) + aCloud(84, 20, .7) +
+      Pn("M0,88 Q40,78 80,86 T120,82 V158 H0Z", "#9bd36a") + Pn("M0,108 H120 V158 H0Z", "#6fbf4a") +
+      [0, 1, 2].map(i => line(`M${i * 40},${120 + i * 4} l30,-6`, 1, "#4e9a3a", 'opacity=".6"')).join("") +
+      Rn(0, 98, 120, 6, "#b8bcc2") + Rn(0, 104, 120, 3, "#7d8288") + [10, 50, 90].map(x => Rn(x, 107, 7, 30, "#b8bcc2")).join("") + aFlagAt("jp");
+    const t = [];
+    t.push(line("M4,60 H18 M2,72 H12 M6,84 H16", 1.8, "#fff", 'opacity=".9"'));
+    // body and the long duck-bill nose
+    const body = "M14,62 H64 C86,62 104,70 114,86 Q116,92 108,94 H14 Q10,94 10,90 V66 Q10,62 14,62Z";
+    t.push(P(body, "#fbfbfd", 1.5));
+    t.push(clip(body, Rn(0, 84, 120, 5, "#1f4fb8") + Rn(0, 89, 120, 6, "#c9d2e0")));
+    t.push(P("M84,66 Q98,70 106,80 L92,80 Q88,72 84,66Z", "#1d2a3a", 1.2) + hl("M88,70 Q94,72 98,76", 1.6, .7));
+    for (let i = 0; i < 6; i++) t.push(R(16 + i * 11, 68, 7, 8, "#1d2a3a", .9, 'rx="1.5"') + line(`M${18 + i * 11},74 L${21 + i * 11},70`, .9, "#fff", 'opacity=".6"'));
+    t.push(line("M70,66 V92", 1, "#9aa5b4") + R(72, 70, 6, 13, "#e6eaf0", .9, 'rx="1"'));
+    t.push(aC(108, 89, 1.8, "#fff8c4", st(.7)));
+    t.push(hl("M16,64 H62", 1.8, .9));
+    t.push(sparks([[104, 44, 4], [30, 108, 3]], "#fff"));
+    return [bg, aEdge(`<g transform="rotate(-6 60 79)">${t.join("")}</g>`)];
+  }
+
+  // South Korea: a taekwondo kid in a white dobok kicking a board in two
+  function taekwondo() {
+    const mat = [...Array(4)].map((_, r) => [...Array(6)].map((_, c) => Rn(c * 20, 112 + r * 12, 20, 12, (r + c) % 2 ? "#e53950" : "#2f6fd6")).join("")).join("");
+    const bg = aSky("#fff2dc", "#ffe0b8") + Rn(0, 28, 120, 6, "#c98b55") + Rn(0, 34, 120, 78, "#f6e6c8") +
+      line("M0,60 H120", 1, "#d9c29a") + mat + Rn(0, 112, 120, 2, "#000", 'opacity=".2"') + aFlagAt("kr");
+    const t = [];
+    t.push(shadow(44, 134, 16));
+    // standing leg
+    t.push(rope("M42,96 L40,130", 9, "#fff"));
+    t.push(E(40, 132, 6, 3, "#ffd9b8", 1.1));
+    // kicking leg up to the right, the foot in the board
+    t.push(rope("M48,94 L96,66", 9, "#fff"));
+    t.push(P("M94,60 Q104,58 106,64 Q104,70 96,72Z", "#ffd9b8", 1.1));
+    // the board breaking in two, splinters
+    t.push(at(R(-6, -14, 12, 14, "#e2b36a", 1.2) + line("M-3,-12 V-2 M2,-12 V-2", .7, "#b9873e"), 106, 56, 1, 24));
+    t.push(at(R(-6, 0, 12, 14, "#e2b36a", 1.2) + line("M-3,2 V12 M2,2 V12", .7, "#b9873e"), 110, 72, 1, -18));
+    t.push(line("M98,44 L94,38 M108,42 L110,34 M116,62 L119,60", 1.6, "#fff"));
+    // jacket (dobok) with the black V collar and belt
+    t.push(P("M30,64 Q42,58 56,64 L58,96 Q44,100 30,96Z", "#fff", 1.4));
+    t.push(P("M38,62 L44,76 L50,62 L47,61 L44,70 L41,61Z", "#1d1d1d", 1));
+    t.push(R(29, 88, 30, 5, "#1d1d1d", 1, 'rx="1.5"') + rope("M40,92 L36,102 M44,92 L46,102", 2, "#1d1d1d"));
+    // arms in guard: fists in front of the chest
+    t.push(rope("M52,68 L62,76 L60,66", 6, "#fff") + aC(60, 64, 3.6, "#ffd9b8", st(1.1)));
+    t.push(rope("M32,68 L24,78 L30,86", 6, "#fff") + aC(31, 87, 3.6, "#ffd9b8", st(1.1)));
+    // head with a determined look
+    t.push(head(44, 46, 16, { hair: "#1d1d1d", dx: 2, iris: "#3a2210" }));
+    t.push(line("M36,44 L42,46 M54,44 L48,46", 1.6));
+    t.push(sparks([[104, 96, 3.5], [80, 34, 3.5]], "#fff"));
+    return [bg, aEdge(t.join(""))];
+  }
+
+  FAN.food = FAN.food || {};
+  FAN.thing = FAN.thing || {};
+  Object.assign(FAN.food, {
+    ch: ["Cheese fondue", "Dip bread on a long fork into a pot of melted cheese", fondue],
+    en: ["Fish and chips", "Crispy fish and golden chips in a paper cone", fishChips],
+    no: ["Heart waffles", "Waffles shaped like hearts, with jam and sour cream", waffles],
+    br: ["Brigadeiros", "Little chocolate balls rolled in sprinkles", brigadeiros],
+    ar: ["Empanadas", "Golden pastries with a twisted edge, full of meat", empanadas],
+    cn: ["Dumplings", "Soft dumplings steaming in a bamboo basket", steamer],
+    jp: ["Sushi", "Rice with fish on top and seaweed rolls, eaten with chopsticks", sushi],
+    kr: ["Kimbap", "Rice rolled in seaweed with egg, carrot and spinach inside", kimbap],
+  });
+  Object.assign(FAN.thing, {
+    ch: ["Alpine cow", "A happy cow in the mountains with a big bell and a crown of flowers", cow],
+    en: ["Double-decker bus", "The red London bus with two floors: sit upstairs!", bus],
+    no: ["Viking ship", "A long ship with a dragon head, a striped sail and round shields", viking],
+    br: ["Carnival", "Dancing samba at the carnival with giant feathers", samba],
+    ar: ["Magellanic penguins", "Penguins with two black stripes on a beach in Patagonia", penguins],
+    cn: ["Dragon dance", "A long red-and-gold dragon dancing on poles at the New Year", dragonDance],
+    jp: ["Shinkansen", "The super-fast bullet train with its long nose", shinkansen],
+    kr: ["Taekwondo", "A big kick in a white dobok: the board breaks in two!", taekwondo],
+  });
 })();
 
 /* ================= coach: your own games vs the repertoire, timed answers, playing out the plan ================= */
