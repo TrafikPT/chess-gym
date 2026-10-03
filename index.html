@@ -547,7 +547,7 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
 .anav button.lock { opacity: .55; }
 /* a shiny copy (1 card in 50): the picture in another palette, a rainbow rim and a sparkle in the corner */
 .stk.shiny { background: linear-gradient(135deg, #ff8a80, #ffd180, #ffff8d, #b9f6ca, #80d8ff, #ea80fc); }
-.stk .sshiny { position: absolute; z-index: 3; top: 2%; right: 3%; width: calc(var(--cw) * .2); height: calc(var(--cw) * .2); }
+.stk .sin > .sshiny { position: absolute; z-index: 3; top: 2%; right: 3%; width: calc(var(--cw) * .2); height: calc(var(--cw) * .2); }
 /* a full page joins into one big picture (aBigPicture): drawn over the grid, the slots' seams on top; tapping it shows the stickers again */
 .agrid { position: relative; }
 .abig { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: calc(var(--cw) * .09); box-shadow: 0 2px 8px rgba(0,0,0,.3); animation: abigin .6s ease-out; cursor: pointer; }
@@ -584,6 +584,144 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
 @keyframes lvdrift { from { transform: translateX(3px); } to { transform: translateX(-3px); } }
 .lv-streak { opacity: 0; animation: lvstreak 1.7s ease-in-out infinite alternate; }
 @keyframes lvstreak { 0%, 30% { opacity: 0; } 50% { opacity: .9; } 70%, 100% { opacity: 0; } }
+/* the Marvel page's own animations (tier 4, js/fan/marvel.js: milesVenom … antmanWalk); transform and opacity only */
+.an-mv-moon { animation: anmvmoon 3.2s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes anmvmoon { 0%, 100% { transform: scale(1); opacity: .75; } 50% { transform: scale(1.1); opacity: 1; } }
+.an-mv-camo { animation: anmvcamo 3.2s linear infinite; }
+@keyframes anmvcamo { 0%, 36% { opacity: 1; } 40% { opacity: .35; } 42% { opacity: .9; } 46% { opacity: .2; } 49% { opacity: .6; } 54%, 72% { opacity: .08; } 84%, 100% { opacity: 1; } }
+.an-mv-zap { animation: anmvzap 1.6s step-end infinite; }
+@keyframes anmvzap { 0% { opacity: 1; } 12% { opacity: 0; } 25% { opacity: 1; } 37% { opacity: .2; } 50% { opacity: 1; } 62% { opacity: 0; } 75% { opacity: 1; } 87% { opacity: .3; } 100% { opacity: 1; } }
+.an-mv-bob { animation: anmvbob 2.4s ease-in-out infinite; }
+@keyframes anmvbob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+.an-mv-beam { animation: anmvbeam 1.6s ease-out infinite; transform-box: fill-box; transform-origin: 0 50%; }
+@keyframes anmvbeam { 0% { transform: scaleX(.05); opacity: 0; } 8% { opacity: 1; } 40% { transform: scaleX(1); opacity: 1; } 65% { transform: scaleX(1); opacity: 0; } 100% { transform: scaleX(.05); opacity: 0; } }
+.an-mv-blast { animation: anmvblast 1.6s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes anmvblast { 0%, 100% { transform: scale(.85); } 10% { transform: scale(1.35); } 40% { transform: scale(1.05); } }
+.an-mv-jet { animation: anmvjet 1.4s linear infinite; transform-box: fill-box; transform-origin: 50% 0; }
+@keyframes anmvjet { 0%, 100% { transform: scaleY(1); opacity: 1; } 20% { transform: scaleY(.7); opacity: .8; } 40% { transform: scaleY(1.25); opacity: 1; } 60% { transform: scaleY(.8); opacity: .85; } 80% { transform: scaleY(1.15); opacity: 1; } }
+.an-mv-pass { animation: anmvpass 2.4s linear infinite; }
+@keyframes anmvpass { 0% { transform: translate(28px, -12px); opacity: 0; } 20%, 75% { opacity: 1; } 100% { transform: translate(-28px, 12px); opacity: 0; } }
+.an-mv-whoosh { animation: anmvwhoosh 1.4s linear infinite; }
+@keyframes anmvwhoosh { 0% { transform: translateX(18px); opacity: 0; } 30%, 60% { opacity: 1; } 100% { transform: translateX(-18px); opacity: 0; } }
+.an-mv-hop { animation: anmvhop 2s ease-in-out infinite; }
+@keyframes anmvhop { 0%, 72%, 100% { transform: translateY(0) scale(1, 1); } 10% { transform: translateY(0) scale(1.06, .92); animation-timing-function: ease-out; }
+  34% { transform: translateY(-13px) scale(.98, 1.03); animation-timing-function: ease-in; } 50% { transform: translateY(0) scale(1, 1); } 55% { transform: translateY(0) scale(1.1, .86); } 64% { transform: translateY(0) scale(.98, 1.03); } }
+.an-mv-hshadow { animation: anmvhshadow 2s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes anmvhshadow { 0%, 72%, 100% { transform: scale(1); } 10% { transform: scale(1.06); animation-timing-function: ease-out; } 34% { transform: scale(.6); animation-timing-function: ease-in; } 50% { transform: scale(1); } 55% { transform: scale(1.12); } }
+.an-mv-shake { animation: anmvshake 2s linear infinite; }
+@keyframes anmvshake { 0%, 50%, 70%, 100% { transform: translate(0, 0); } 53% { transform: translate(-2.5px, 1px); } 56% { transform: translate(2.5px, -1px); } 59% { transform: translate(-2px, 1px); } 62% { transform: translate(1.5px, 0); } 66% { transform: translate(-1px, 0); } }
+.an-mv-flash { animation: anmvflash 2s linear infinite; }
+@keyframes anmvflash { 0%, 49%, 100% { opacity: 0; } 52% { opacity: 1; } 64% { opacity: .8; } 82% { opacity: 0; } }
+.an-mv-rocks { animation: anmvrocks 2s ease-out infinite; }
+@keyframes anmvrocks { 0%, 50%, 70%, 78%, 100% { transform: translateY(0); } 60% { transform: translateY(-10px); } 74% { transform: translateY(-2px); } }
+.an-mv-rocks2 { animation: anmvrocks2 2s ease-out infinite; }
+@keyframes anmvrocks2 { 0%, 52%, 72%, 100% { transform: translateY(0); } 63% { transform: translateY(-6px); } }
+.an-mv-dust { animation: anmvdust 2s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes anmvdust { 0%, 50% { transform: scale(.3); opacity: 0; } 54% { opacity: .9; } 80% { transform: scale(1.3); opacity: 0; } 100% { transform: scale(.3); opacity: 0; } }
+.an-mv-throw { animation: anmvthrow 2.8s ease-in-out infinite; }
+@keyframes anmvthrow { 0%, 14%, 92%, 100% { transform: translate(0, 0) scale(1); } 22% { transform: translate(5px, -2px) scale(1.04); } 34% { transform: translate(-30px, -22px) scale(.75); }
+  46% { transform: translate(-72px, -40px) scale(.5); } 56% { transform: translate(-72px, 14px) scale(.5); } 70% { transform: translate(-34px, 12px) scale(.75); } 82% { transform: translate(0, 0) scale(1); } 87% { transform: translate(3px, -2px) scale(1.02); } }
+.an-mv-spin { animation: anmvspin 2.8s linear infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes anmvspin { 0%, 20% { transform: rotate(0); } 82%, 100% { transform: rotate(1080deg); } }
+.an-mv-ring { opacity: 0; animation: anmvring 2s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes anmvring { 0% { transform: scale(.35); opacity: 0; } 10% { opacity: .9; } 100% { transform: scale(1.5); opacity: 0; } }
+.an-mv-pglow { animation: anmvpglow 2s ease-in-out infinite; }
+@keyframes anmvpglow { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+.an-mv-slash { opacity: 0; animation: anmvslash 2s ease-out infinite; transform-box: fill-box; transform-origin: 0 50%; }
+@keyframes anmvslash { 0% { transform: scaleX(.05); opacity: 0; } 4% { opacity: 1; } 18% { transform: scaleX(1); opacity: 1; } 36% { transform: scaleX(1); opacity: 0; } 100% { transform: scaleX(.05); opacity: 0; } }
+.an-mv-raise { animation: anmvraise 2.4s ease-in-out infinite; }
+@keyframes anmvraise { 0%, 36%, 100% { transform: rotate(0); } 18% { transform: rotate(9deg); } 30% { transform: rotate(-3deg); } }
+.an-mv-bolt { opacity: 0; animation: anmvbolt 2.4s linear infinite; }
+@keyframes anmvbolt { 0%, 32%, 100% { opacity: 0; } 34% { opacity: 1; } 37% { opacity: .2; } 40% { opacity: 1; } 52% { opacity: .9; } 60% { opacity: 0; } }
+.an-mv-sky { opacity: 0; animation: anmvsky 2.4s linear infinite; }
+@keyframes anmvsky { 0%, 32%, 100% { opacity: 0; } 34% { opacity: .5; } 37% { opacity: .05; } 40% { opacity: .35; } 50% { opacity: 0; } }
+.an-mv-hglow { animation: anmvhglow 2.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes anmvhglow { 0%, 100% { transform: scale(.7); opacity: .5; } 34% { transform: scale(1.3); opacity: 1; } 60% { transform: scale(.9); opacity: .7; } }
+.an-mv-fall { animation: anmvfall 3.2s linear infinite; }
+.an-mv-fall2 { animation: anmvfall 1.4s linear infinite; }
+@keyframes anmvfall { from { transform: translateY(0); } to { transform: translateY(158px); } }
+.an-mv-halo { animation: anmvhalo 1.6s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes anmvhalo { 0%, 100% { transform: scale(1); opacity: .7; } 50% { transform: scale(1.15); opacity: 1; } }
+.an-mv-mglow { animation: anmvpglow 1.6s ease-in-out infinite; }
+.an-mv-trail { animation: anmvtrail 1.4s ease-in-out infinite; }
+@keyframes anmvtrail { 0%, 50%, 100% { opacity: 1; } 25%, 75% { opacity: .35; } }
+.an-mv-leg { animation: anmvleg 1.6s ease-in-out infinite alternate; }
+.an-mv-leg2 { animation: anmvleg2 1.6s ease-in-out infinite alternate; }
+@keyframes anmvleg { from { transform: rotate(-8deg); } to { transform: rotate(8deg); } }
+@keyframes anmvleg2 { from { transform: rotate(8deg); } to { transform: rotate(-8deg); } }
+.an-mv-step { animation: anmvstep 1.6s ease-in-out infinite; }
+@keyframes anmvstep { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+.an-mv-grass { animation: anmvgrass 3.2s linear infinite; }
+@keyframes anmvgrass { from { transform: translateX(0); } to { transform: translateX(-120px); } }
+.an-mv-wave { animation: anmvwave 1.4s ease-in-out infinite alternate; }
+@keyframes anmvwave { from { transform: rotate(-16deg); } to { transform: rotate(10deg); } }
+/* the DC page's own animations (tier 4, js/fan/dc.js; transform-origin set inline where it's a point of the drawing) */
+.an-dc-billow { animation: andcbillow 2.2s ease-in-out infinite; }
+@keyframes andcbillow { 0%, 100% { transform: scale(1, 1) skewX(0deg); } 50% { transform: scale(1.1, 1.04) skewX(-6deg); } }
+.an-dc-sweep { animation: andcsweep 3s ease-in-out infinite alternate; }
+@keyframes andcsweep { from { transform: rotate(-8deg); } to { transform: rotate(3deg); } }
+.an-dc-fly { animation: andcfly 3.4s linear infinite; }
+@keyframes andcfly { 0% { transform: translate(-20px, 0); } 25% { transform: translate(20px, -5px); } 50% { transform: translate(60px, 2px); } 75% { transform: translate(100px, -4px); } 100% { transform: translate(140px, 0); } }
+.an-dc-flap { animation: andcflap 1.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes andcflap { 0%, 50%, 100% { transform: scaleY(1); } 25%, 75% { transform: scaleY(.3); } }
+.an-dc-flutter { animation: andcflutter 1.5s ease-in-out infinite alternate; }
+@keyframes andcflutter { from { transform: rotate(-3deg) scale(1.04, .97); } to { transform: rotate(3deg) scale(.97, 1.04); } }
+.an-dc-fall { animation: andcfall 2.6s linear infinite; }
+@keyframes andcfall { from { transform: translate(14px, -170px); } to { transform: translate(-14px, 170px); } }
+.an-dc-stream { animation: andcstream 2.6s linear infinite; }
+@keyframes andcstream { from { transform: translate(-160px, -120px); } to { transform: translate(160px, 120px); } }
+.an-dc-bob { animation: andcbob 1.8s ease-in-out infinite alternate; }
+@keyframes andcbob { from { transform: translateY(-2px); } to { transform: translateY(2px); } }
+.an-dc-lasso { animation: andclasso 1.4s ease-in-out infinite alternate; }
+@keyframes andclasso { from { transform: rotate(-5deg); } to { transform: rotate(5deg); } }
+.an-dc-glow { animation: andcglow 1.4s ease-in-out infinite alternate; }
+@keyframes andcglow { from { opacity: .35; } to { opacity: 1; } }
+.an-dc-spin { animation: andcspin 1.4s linear infinite; }
+@keyframes andcspin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.an-dc-unspin { animation: andcunspin 1.4s linear infinite; }
+@keyframes andcunspin { from { transform: rotate(0deg); } to { transform: rotate(-360deg); } }
+.an-dc-twirl { animation: andcspin 1.6s linear infinite; }
+.an-dc-gleam { animation: andcgleam 2s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes andcgleam { 0%, 40%, 100% { opacity: 0; transform: scale(.3) rotate(0deg); } 65% { opacity: 1; transform: scale(1.2) rotate(45deg); } }
+.an-dc-zoom { animation: andczoom 1.4s linear infinite; }
+@keyframes andczoom { from { transform: translateX(0); } to { transform: translateX(-120px); } }
+.an-dc-road { animation: andcroad 1.4s linear infinite; }
+@keyframes andcroad { from { transform: translateX(0); } to { transform: translateX(-56px); } }
+.an-dc-crackle { animation: andccrackle 1.4s linear infinite; }
+@keyframes andccrackle { 0%, 26%, 60%, 100% { opacity: 1; } 8% { opacity: .25; } 14% { opacity: 1; } 20% { opacity: .4; } 66% { opacity: .3; } 72% { opacity: 1; } }
+.an-dc-hop { animation: andchop 1.4s ease-in-out infinite; }
+@keyframes andchop { 0%, 25%, 50%, 75%, 100% { transform: translateY(0); } 12.5%, 37.5%, 62.5%, 87.5% { transform: translateY(-3px); } }
+.an-dc-runA { animation: andcruna 1.4s linear infinite; }
+@keyframes andcruna { 0%, 24.9%, 50%, 74.9%, 100% { opacity: 1; } 25%, 49.9%, 75%, 99.9% { opacity: 0; } }
+.an-dc-runB { animation: andcrunb 1.4s linear infinite; }
+@keyframes andcrunb { 0%, 24.9%, 50%, 74.9%, 100% { opacity: 0; } 25%, 49.9%, 75%, 99.9% { opacity: 1; } }
+.an-dc-shimmer { animation: andcshimmer 2.6s ease-in-out infinite alternate; }
+@keyframes andcshimmer { from { opacity: .45; transform: translateX(-3px); } to { opacity: 1; transform: translateX(3px); } }
+.an-dc-rise { animation: andcrise 3s linear infinite; }
+@keyframes andcrise { 0% { opacity: 0; transform: translate(0, 0); } 15%, 85% { opacity: 1; } 50% { transform: translate(2px, -30px); } 100% { opacity: 0; transform: translate(-1px, -60px); } }
+.an-dc-swimL { animation: andcswiml 3.4s linear infinite; }
+@keyframes andcswiml { from { transform: translateX(140px); } to { transform: translateX(-140px); } }
+.an-dc-swimR { animation: andcswimr 3.4s linear infinite; }
+@keyframes andcswimr { from { transform: translateX(-140px); } to { transform: translateX(140px); } }
+.an-dc-sway { animation: andcsway 2.4s ease-in-out infinite alternate; }
+@keyframes andcsway { from { transform: rotate(-5deg); } to { transform: rotate(5deg); } }
+.an-dc-hair { animation: andchair 1.4s ease-in-out infinite alternate; }
+@keyframes andchair { from { transform: rotate(-4deg) scale(1, .97); } to { transform: rotate(3deg) scale(1, 1.04); } }
+.an-dc-tail { animation: andctail 1.6s ease-in-out infinite alternate; }
+@keyframes andctail { from { transform: rotate(-7deg); } to { transform: rotate(6deg); } }
+.an-dc-boomer { animation: andcboomer 2.8s linear infinite; }
+@keyframes andcboomer { 0%, 10%, 90%, 100% { transform: translate(0, 0); } 20% { transform: translate(5px, -12px); } 30% { transform: translate(4px, -22px); } 40% { transform: translate(-14px, -28px); }
+  50% { transform: translate(-32px, -25px); } 60% { transform: translate(-34px, -14px); } 70% { transform: translate(-22px, -7px); } 80% { transform: translate(-9px, -3px); } }
+.an-dc-rangspin { animation: andcrangspin 2.8s linear infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes andcrangspin { 0%, 10% { transform: rotate(0deg); } 90%, 100% { transform: rotate(1440deg); } }
+.an-dc-throwfx { animation: andcthrowfx 2.8s linear infinite; }
+@keyframes andcthrowfx { 0%, 8%, 24%, 100% { opacity: 0; } 12% { opacity: 1; } }
+.an-dc-punch { animation: andcpunch 2.2s ease-in-out infinite; }
+@keyframes andcpunch { 0%, 100% { transform: translate(-6.2px, 6.5px); } 16% { transform: translate(1px, -1.1px); } 26%, 55% { transform: translate(0, 0); } }
+.an-dc-beam { animation: andcbeam 2.2s ease-in-out infinite; }
+@keyframes andcbeam { 0%, 100% { transform: scaleX(.28); } 16% { transform: scaleX(1.12); } 26%, 55% { transform: scaleX(1); } }
+.an-dc-ringglow { animation: andcringglow 2.2s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes andcringglow { 0%, 100% { transform: scale(.9); opacity: .7; } 15% { transform: scale(1.5); opacity: 1; } 40% { transform: scale(1); opacity: .9; } }
 .lv-shot { animation: lvshot 3.2s ease-in infinite; }
 @keyframes lvshot { 0%, 22% { transform: translate(0, 0); opacity: 1; } 48%, 86% { transform: translate(52px, -44px); opacity: 1; } 92% { transform: translate(52px, -44px); opacity: 0; } 96% { transform: translate(0, 0); opacity: 0; } 100% { opacity: 1; } }
 .lv-net { animation: lvnet 3.2s ease-out infinite; transform-box: fill-box; transform-origin: 0 50%; }
@@ -667,6 +805,9 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
 .aladder .l0 { background: #fff; } .aladder .l1 { background: linear-gradient(135deg, #8d9399, #f4f6f8, #7d848b); }
 .aladder .l2 { background: linear-gradient(135deg, #a8761c, #ffe58a, #9b6a12); } .aladder .l3 { background: conic-gradient(#ff5e5e, #ffd84d, #5eff8a, #4dd2ff, #b06bff, #ff5e5e); }
 .aladder .l4 { background: radial-gradient(#fff59d, #ffb300); box-shadow: 0 0 10px #ffb300; }
+/* a page's living sticker (the owl's wink, the team's goal…) lies still until it's gold (3 copies), the owner: "shouldn't it
+   be after we get a few copies?"; still = each lv- element's own resting state. The full page's big picture still moves */
+.stk.t0 [class*="lv-"], .stk.t1 [class*="lv-"] { animation: none; }
 /* tier 4: a sticker's own animation (one copy past holo): the holo frame with a pulsing gold glow */
 .stk.t4 { box-shadow: 0 0 0 2px #ffd54f, 0 0 14px 4px rgba(255, 193, 7, .75); animation: aspin 3s linear infinite, at4 1.6s ease-in-out infinite; }
 @keyframes at4 { 50% { box-shadow: 0 0 0 2px #fff59d, 0 0 22px 8px rgba(255, 193, 7, .9); } }

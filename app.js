@@ -3475,7 +3475,7 @@ function aFigure(o) {
   if (o.num !== undefined) s.push(`<text x="50" y="64" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="13" fill="${o.trim}" stroke="${o.numStroke || "none"}" stroke-width=".7" paint-order="stroke">${o.num}</text>`);
   (P.over ? top : s).push(arm(P.fa));
   if (P.ball && !P.over) s.push(P.ball[0] === "f" ? aFootball(...P.ball.slice(1)) : aBasketball(...P.ball.slice(1)));
-  s.push(an ? an.head() : aKidHead({ ...o, mouth: o.mouth || P.mouth }));
+  if (!o.noHead) s.push(an ? an.head() : aKidHead({ ...o, mouth: o.mouth || P.mouth }));
   if (o.crown) s.push(aCrown());
   if (P.cup) s.push(aCup());
   s.push(...top);
@@ -3803,18 +3803,27 @@ function aConfetti(n, cols, seed) {
 Object.assign(A_POSES, {
   photo: { ba: [[39, 49], [33, 59], [33, 69]], fa: [[61, 49], [67, 59], [67, 69]], bl: [[45, 78], [44, 91], [43, 103]], bb: [41, 107, 0], fl: [[55, 78], [56, 91], [57, 103]], fb: [59, 107, 0] },
   strike: { ...A_POSES.kick, ball: undefined }, hooray: { ...A_POSES.cheer, ball: undefined } });
+/* the comic's bicycle kick: the body lying back in the air, head low on the left, the kicking foot up at the ball in the
+   burst; the head is drawn apart, tilted up towards the ball about the neck (a whole upside-down figure read as a bearded
+   face, the owner found sticker 256 weird) */
+function aComicKick(o) {
+  const R = -118, X = 6, Y = 40, K = 1.12, HR = -25, a = R * Math.PI / 180;
+  const nx = X + K * (50 + 19 * Math.sin(a)), ny = Y + K * (60 - 19 * Math.cos(a));
+  return aEdge(aFig({ ...o, noHead: 1 }, X, Y, K, "", `rotate(${R} 50 60)`) +
+    `<g transform="translate(${nx.toFixed(1)} ${ny.toFixed(1)}) scale(${K}) rotate(${HR}) translate(-50 -41)">${aKidHead({ ...o, mouth: "shout" })}</g>`);
+}
 const A_YSCENES = {
   land: t => A_LAND[t](),
   comic: t => {       // a bicycle kick: halftone, a burst, speed lines
     const ht = aU("aht"), k = aKitOf(t), rgb = h => [1, 3, 5].map(i => parseInt(h.length < 5 ? h[1 + (i >> 1)].repeat(2) : h.slice(i, i + 2), 16));
     const far = c => rgb(c).reduce((s, v, i) => s + Math.abs(v - rgb(k.stripes || k.shirt)[i]) + Math.abs(v - rgb(k.shirt)[i]), 0);
-    const bg = ["#4fc3f7", "#ff8a80", "#b9f6ca", "#ffd180", "#ea80fc"].reduce((a, c) => far(c) > far(a) ? c : a);
+    const bg = ["#4fc3f7", "#ff8a80", "#ffd180", "#ea80fc"].reduce((a, c) => far(c) > far(a) ? c : a);
     const burst = (cx, cy, r1, r2, n, f, x = "") => `<polygon points="${aPts([...Array(n * 2)].map((_, i) => { const r = i % 2 ? r2 : r1, a = i * Math.PI / n + .2; return [cx + r * Math.cos(a), cy + r * Math.sin(a)]; }))}" fill="${f}" ${x} stroke-linejoin="round"/>`;
     return [`<defs><pattern id="${ht}" width="6" height="6" patternUnits="userSpaceOnUse"><circle cx="1.5" cy="1.5" r="1.3" fill="#000" opacity=".25"/><circle cx="4.5" cy="4.5" r="1.3" fill="#000" opacity=".25"/></pattern></defs>` +
       `<rect width="120" height="158" fill="${bg}"/><rect width="120" height="158" fill="url(#${ht})"/>` + burst(84, 32, 50, 30, 14, "#fff", `stroke="${A_OL}" stroke-width="1.4"`) + burst(84, 32, 30, 18, 12, "#ffeb3b") +
       [[-6, 150, 58, 92], [4, 158, 64, 100], [-6, 134, 48, 84], [20, 160, 74, 108], [-6, 118, 40, 78]].map(([a, b, c, d]) => `<path d="M${a},${b} L${c},${d}" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".9"/>`).join("") +
       `<rect y="140" width="120" height="18" fill="#43a047"/>${[...Array(16)].map((_, i) => `<path d="M${i * 8 + 2},141 l2,-5 l2,5" fill="#2e7d32"/>`).join("")}` + aYFlag(t),
-      aYFig({ ...k, pose: "kick", hs: "curly", num: 7, ...aLook(t, 6) }, 112, 22, 1, "scale(-1 1) rotate(195 50 60)") +
+      aComicKick({ ...k, pose: "kick", hs: "curly", num: 7, ...aLook(t, 6) }) +
       `<path d="M70,66 Q94,62 98,46" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/><path d="M64,74 Q92,72 104,52" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".8"/>` +
       `<path d="M100,10 l4,-6 M108,16 l7,-3 M110,28 l7,1" stroke="${A_OL}" stroke-width="2" stroke-linecap="round"/>`];
   },
@@ -4491,7 +4500,8 @@ function albumParentsWire(pl) {
   };
 }
 
-/* Sticker book theme page: Heroes 1 (Marvel), nine chibi superheroes in the album's anime style; sets FAN.marvel = [[name, what, draw], ...] */
+/* Sticker book theme page: Heroes 1 (Marvel), nine chibi superheroes in the album's anime style; sets FAN.marvel = [[name, what, draw, anim], ...]
+   (anim = the sticker's own animation, tier 4: see spidermanSwing and the eight after it, at the end) */
 (() => {
   "use strict";
   /* ---------- small drawing helpers (card coordinates 120 x 158 unless said otherwise) ---------- */
@@ -4539,6 +4549,8 @@ function albumParentsWire(pl) {
   const cloud = (x, y, s, c, op = 1) => `<g opacity="${op}" fill="${c}">${[[0, 0, 9], [10, -4, 10], [21, 0, 8], [9, 4, 9]].map(([a, b, r]) => `<circle cx="${f1(x + a * s)}" cy="${f1(y + b * s)}" r="${f1(r * s)}"/>`).join("")}</g>`;
   const bolt = (pts, w = 2.2) => S(aPtsD(pts), "#fff59d", w + 3, `opacity=".45"`) + S(aPtsD(pts), "#fffde7", w);
   const aPtsD = pts => "M" + pts.map(p => p.map(f1).join(",")).join(" L");
+  // electric crackle: n short zigzag bolts radiating from x, y (starting at radius r), turned by a0
+  const zap = (x, y, r, a0 = 0, n = 5, w = 1.3) => [...Array(n)].map((_, i) => { const a = a0 + i * 2 * Math.PI / n, c = Math.cos(a), s = Math.sin(a), p = (d, j) => [x + r * (d * c - j * s), y + r * (d * s + j * c)]; return bolt([p(1, 0), p(1.4, .3), p(1.75, -.2), p(2.15, .15)], w); }).join("");
 
   /* ---------- spider pieces ---------- */
   // a spider web (radial lines + sagging rings) centred at cx, cy
@@ -4600,15 +4612,17 @@ function albumParentsWire(pl) {
   }
 
   /* ---------- 2 Miles Morales: crouched on a rooftop before a huge moon, night city ---------- */
-  function miles() {
+  function miles(o = {}) {
     const K = "#17171d", R = "#e3262d";
-    const bg = back("#2a1a6e", "#a2489e") + stars(21, 26, 0, 80) +
-      // a huge glowing moon right behind him, so the black suit stands out
-      C(60, 78, 56, "#ff8fd0", 0, `opacity=".22"`) + C(60, 78, 46, "#ffc4e6", 0, `opacity=".35"`) + C(60, 78, 38, "#fff0d6", 0) + C(74, 66, 6, "#f3dcc0", 0) + C(46, 96, 4.5, "#f3dcc0", 0) + C(70, 104, 3, "#f3dcc0", 0) +
+    const sky = back("#2a1a6e", "#a2489e") + stars(21, 26, 0, 80);
+    // a huge glowing moon right behind him, so the black suit stands out (o.parts: the halo apart, it pulses in milesVenom)
+    const halo = C(60, 78, 56, "#ff8fd0", 0, `opacity=".22"`) + C(60, 78, 46, "#ffc4e6", 0, `opacity=".35"`);
+    const rest = C(60, 78, 38, "#fff0d6", 0) + C(74, 66, 6, "#f3dcc0", 0) + C(46, 96, 4.5, "#f3dcc0", 0) + C(70, 104, 3, "#f3dcc0", 0) +
       city(3, 140, ["#3b2a78", "#4a3590", "#33246a"], "#ffd54f", 18, 46, .45) +
       // Spider-Verse glitch squares
       [[8, 60, "#ff2e88"], [104, 52, "#26e0ff"], [14, 72, "#26e0ff"], [99, 88, "#ff2e88"], [30, 42, "#ffeb3b"]].map(([x, y, c]) => `<rect x="${x}" y="${y}" width="5" height="5" fill="${c}" opacity=".75"/><rect x="${x + 6}" y="${y + 3}" width="2.5" height="2.5" fill="${c}" opacity=".6"/>`).join("") +
       `<rect x="0" y="138" width="120" height="20" fill="#120d2a"/><rect x="0" y="138" width="120" height="2.5" fill="#3a2d6e"/>`;
+    const bg = sky + halo + rest;
     const shoe = (x, y, dir) => E(x, y, 8, 4.6, K, 1.2) + Pn(`M${x - 7.5},${y + 1.5} Q${x},${y + 6} ${x + 7.5},${y + 1.5} L${x + 7.8},${y + 3} Q${x},${y + 7.4} ${x - 7.8},${y + 3}Z`, R) + S(`M${x - 2 * dir},${y - 3.6} l${4 * dir},1.6`, "#fff", 1);
     const tor = "M47,78 Q60,74 73,78 Q76,92 71,108 L49,108 Q44,92 47,78Z";
     const body =
@@ -4624,7 +4638,9 @@ function albumParentsWire(pl) {
       head(spideyHead(K, R, .28), 60, 50, 1.4, 6);
     // bigger, with a cyan rim light around the black suit
     const fig = `<g transform="translate(60 139) scale(1.13) translate(-60 -139)">${body}</g>`;
-    return [bg + aSpark(18, 44, 3, "#fff") + aSpark(112, 104, 2.5, "#26e0ff") + glow(fig, "#5ff3ff", 1.6, 1.6), aEdge(fig)];
+    const sp = aSpark(18, 44, 3, "#fff") + aSpark(112, 104, 2.5, "#26e0ff");
+    if (o.parts) return { sky, halo, rest, sp, fig };
+    return [bg + sp + glow(fig, "#5ff3ff", 1.6, 1.6), aEdge(fig)];
   }
 
   /* ---------- 3 Iron Man: flying, a repulsor blast from the palm ---------- */
@@ -4641,14 +4657,15 @@ function albumParentsWire(pl) {
     return C(x, y, r * 1.9, "#7ff6ff", 0, `opacity=".25"`) + C(x, y, r * 1.3, "#b8fbff", 0, `opacity=".55"`) + C(x, y, r * .8, "#fff", 0) +
       [...Array(8)].map((_, i) => { const a = i * Math.PI / 4 + .2; return S(`M${f1(x + r * 1.1 * Math.cos(a))},${f1(y + r * 1.1 * Math.sin(a))} L${f1(x + r * 2.2 * Math.cos(a))},${f1(y + r * 2.2 * Math.sin(a))}`, "#e0ffff", 1.1, `opacity=".9"`); }).join("");
   }
-  function ironman() {
+  function ironman(o = {}) {
     const Rd = "#c8102e", G = "#f4c22b";
-    const bg = back("#ff8a3d", "#ffe0a3") + A_RAYS + cloud(4, 120, 1.3, "#fff", .8) + cloud(76, 132, 1.1, "#fff", .7) + cloud(70, 24, .7, "#ffd6b0", .8) +
-      [[6, 40, 30], [10, 56, 22], [4, 72, 26]].map(([x, y, l]) => S(`M${x},${y} h${l}`, "#fff", 1.6, `opacity=".75"`)).join("");
+    // o.parts: the sky, each cloud, the speed lines, the boot jets and the rest of the body apart (ironmanFly)
+    const sky = back("#ff8a3d", "#ffe0a3") + A_RAYS, cl = [cloud(4, 120, 1.3, "#fff", .8), cloud(76, 132, 1.1, "#fff", .7), cloud(70, 24, .7, "#ffd6b0", .8)],
+      lines = [[6, 40, 30], [10, 56, 22], [4, 72, 26]].map(([x, y, l]) => S(`M${x},${y} h${l}`, "#fff", 1.6, `opacity=".75"`)).join("");
+    const bg = sky + cl.join("") + lines;
     const jet = (x, y) => Pn(`M${x - 4.5},${y} Q${x},${y + 22} ${x + 4.5},${y}Z`, "#7ff6ff", `opacity=".55"`) + Pn(`M${x - 2.6},${y} Q${x},${y + 13} ${x + 2.6},${y}Z`, "#fff");
     const tor = TORSO;
-    const body =
-      jet(41, 140) + jet(56, 139) +
+    const rest =
       limb([[54, 101], [48, 118], [42, 134]], G, 9, Rd, boot(42, 137, Rd, -1, 6, 4)) +
       limb([[66, 101], [62, 118], [57, 133]], G, 9, Rd, boot(57, 136, Rd, 0, 6, 4)) +
       P(tor, Rd, 1.3) + P("M48.5,90 L60,99 L71.5,90 L72,104 L48,104Z", G, 1) + S("M54,74 L60,86 L66,74", "#8e0b20", .9) + shadeOn(tor, 66) +
@@ -4659,16 +4676,20 @@ function albumParentsWire(pl) {
       limb([[48, 76], [39, 88], [31, 97]], Rd, 8, G, fist(30, 99, 5, Rd)) +
       limb([[72, 76], [84, 68], [95, 61]], Rd, 8, G, fist(97, 60, 5.2, Rd)) +
       head(ironHead(), 60, 44, 1.45, 4);
-    return [bg, `<g transform="translate(57 90) scale(1.15) rotate(14) translate(-60 -90)">` + aEdge(body) + blast(97, 60, 6) + blast(30, 100, 3.6) + `</g>`];
+    const body = jet(41, 140) + jet(56, 139) + rest, tf = `<g transform="translate(57 90) scale(1.15) rotate(14) translate(-60 -90)">`;
+    if (o.parts) return { sky, cl, lines, jet, rest, tf };
+    return [bg, tf + aEdge(body) + blast(97, 60, 6) + blast(30, 100, 3.6) + `</g>`];
   }
 
   /* ---------- 4 Hulk: fists up, the ground cracking under his feet ---------- */
-  function hulk() {
+  function hulk(o = {}) {
     const G = "#5fb532", Gd = "#3f8a1f", Pu = "#6b3fa6";
-    const bg = back("#ffb347", "#ffe8b0") + A_RAYS + city(15, 136, ["#d9905a", "#c97f4d", "#e2a06c"], "#ffe0a0", 20, 54, .3, .7) +
-      Pn("M0,132 L120,132 L120,158 L0,158Z", "#9b7653") + Pn("M0,132 L120,132 L120,136 L0,136Z", "#7d5a3c") +
-      S("M60,140 L46,148 L40,158 M60,140 L74,150 L78,158 M60,140 L60,158 M46,148 L30,150 M74,150 L94,147 L108,152 M30,150 L12,147", "#3e2a1a", 1.5) +
-      [[14, 118, 4, 20], [104, 114, 3.4, -30], [24, 104, 2.6, 40], [96, 98, 2.4, 10], [8, 136, 3, 0], [113, 134, 3.6, 0]].map(([x, y, r, a]) => P(`M${x - r},${y} L${x - r * .4},${y - r} L${x + r},${y - r * .6} L${x + r * .8},${y + r * .7} L${x - r * .2},${y + r}Z`, "#a9845f", 1, `transform="rotate(${a} ${x} ${y})"`)).join("");
+    // o.parts: sky, ground, the cracks (and their path CR) and each rock apart (hulkSmash)
+    const sky = back("#ffb347", "#ffe8b0") + A_RAYS + city(15, 136, ["#d9905a", "#c97f4d", "#e2a06c"], "#ffe0a0", 20, 54, .3, .7),
+      ground = Pn("M0,132 L120,132 L120,158 L0,158Z", "#9b7653") + Pn("M0,132 L120,132 L120,136 L0,136Z", "#7d5a3c"),
+      CR = "M60,140 L46,148 L40,158 M60,140 L74,150 L78,158 M60,140 L60,158 M46,148 L30,150 M74,150 L94,147 L108,152 M30,150 L12,147", cracks = S(CR, "#3e2a1a", 1.5),
+      rk = [[14, 118, 4, 20], [104, 114, 3.4, -30], [24, 104, 2.6, 40], [96, 98, 2.4, 10], [8, 136, 3, 0], [113, 134, 3.6, 0]].map(([x, y, r, a]) => P(`M${x - r},${y} L${x - r * .4},${y - r} L${x + r},${y - r * .6} L${x + r * .8},${y + r * .7} L${x - r * .2},${y + r}Z`, "#a9845f", 1, `transform="rotate(${a} ${x} ${y})"`));
+    const bg = sky + ground + cracks + rk.join("");
     const face = `<path d="${A_FACE}" fill="${G}" stroke="${OL}" stroke-width="1.1"/>`;
     const hhead =
       C(33.4, 27, 3.4, G, 1.1) + C(66.6, 27, 3.4, G, 1.1) + face + clipD(A_FACE, En(62, 28, 8, 18, "#000", `opacity=".14"`)) +
@@ -4694,7 +4715,9 @@ function albumParentsWire(pl) {
       limb([[86, 71], [107, 72], [101, 56]], G, 15, null, C(100, 50, 10.5, G, 1.3) + kn(100, 46)) +
       S("M18,68 q6,-6 13,-3 M102,68 q-6,-6 -13,-3", Gd, .9) +
       head(hhead, 60, 38, 1.38);
-    return [bg + aSpark(98, 18, 3.4) + aSpark(8, 92, 2.6), aEdge(body)];
+    const sp = aSpark(98, 18, 3.4) + aSpark(8, 92, 2.6);
+    if (o.parts) return { sky, ground, CR, cracks, rk, sp, body };
+    return [bg + sp, aEdge(body)];
   }
 
   /* ---------- 5 Captain America: the round shield up ---------- */
@@ -4713,22 +4736,23 @@ function albumParentsWire(pl) {
       S("M46.6,15.5 L50,8.5 L53.4,15.5 M47.8,13 H52.2", OL, 3.6) + S("M46.6,15.5 L50,8.5 L53.4,15.5 M47.8,13 H52.2", "#fff", 1.7) + wing(0) + wing(1) +
       Pn("M45.5,38.6 Q50,40.2 54.5,38.6", "none", `stroke="${OL}" stroke-width=".9" stroke-linecap="round"`);
   }
-  function captain() {
+  function captain(o = {}) {
     const BL = "#2347a8", Rd = "#d62b2b";
     const bg = back("#1d3b8f", "#7fb4ff") + A_RAYS + [[12, 20, 4], [104, 16, 3.4], [100, 96, 3], [18, 64, 2.6], [108, 54, 2.6], [10, 112, 3]].map(([x, y, r]) => aStar(x, y, r, "#fff")).join("") +
       [0, 1, 2, 3, 4, 5].map(i => `<rect x="0" y="${134 + i * 4}" width="120" height="4" fill="${i % 2 ? "#fff" : "#d62b2b"}" opacity=".85"/>`).join("");
     const tor = TORSO;
-    const body =
+    const pre =
       limb([[67, 101], [75, 118], [80, 132]], BL, 9, Rd, boot(81, 136, Rd, 1)) +
       limb([[53, 101], [48, 119], [44, 133]], BL, 9, Rd, boot(43, 137, Rd, -1)) +
       P(tor, BL, 1.3) + clipD(tor, [52, 56, 60, 64, 68].map((x, i) => `<rect x="${x}" y="88" width="4" height="14" fill="${i % 2 ? "#fff" : Rd}"/>`).join("")) +
       S("M47.5,88 H72.5", OL, 1) + aStar(60, 79, 7.2, "#fff").replace("/>", ` stroke="${OL}" stroke-width=".9" stroke-linejoin="round"/>`) +
       P("M48,100 Q60,103 72,100 L72.3,104.5 Q60,107 47.7,104.5Z", "#8d5a2b", 1) + shadeOn(tor, 66) +
       limb([[72, 75], [85, 66], [91, 51]], BL, 8, Rd, fist(92, 48, 5.6, Rd)) +
-      limb([[48, 75], [37, 86], [33, 97]], BL, 8, Rd, fist(33, 99, 5, Rd)) +
-      shield(31, 100, 22) +
-      head(capHead(), 61, 44, 1.45, -3);
-    return [bg + aSpark(108, 40, 3.4) + aSpark(28, 146, 3, "#ffeb3b"), aEdge(`<g transform="translate(9 7)">${body}</g>`)];
+      limb([[48, 75], [37, 86], [33, 97]], BL, 8, Rd, fist(33, 99, 5, Rd));
+    // o.parts: the body without the shield and the head apart (captainThrow throws the shield)
+    const hd = head(capHead(), 61, 44, 1.45, -3), body = pre + shield(31, 100, 22) + hd, sp = aSpark(108, 40, 3.4) + aSpark(28, 146, 3, "#ffeb3b");
+    if (o.parts) return { bg: bg + sp, pre, hd };
+    return [bg + sp, aEdge(`<g transform="translate(9 7)">${body}</g>`)];
   }
 
   /* ---------- 6 Black Panther: claws out, purple kinetic glow, Wakanda at night ---------- */
@@ -4740,7 +4764,7 @@ function albumParentsWire(pl) {
       S("M50,7.5 V19 M50,19 L46,22.5 M50,19 L54,22.5 M37,31 Q43,38 50,39 Q57,38 63,31 M50,31 V36", Si, .75) + S("M42,12 L45.5,17 M58,12 L54.5,17", Si, .7) +
       eye(0) + eye(1);
   }
-  function panther() {
+  function panther(o = {}) {
     const K = "#1d1d26", Si = "#c7ccd6", Pu = "#b44dff";
     const bg = back("#1b0b38", "#6a2fa3") + stars(9, 22, 0, 70, "#e6d0ff") + C(26, 28, 11, "#f3e5ff", 0, `opacity=".9"`) +
       Pn("M0,118 L14,96 L26,110 L40,86 L56,108 L70,92 L84,110 L100,90 L120,108 L120,158 L0,158Z", "#3a1766") +
@@ -4763,15 +4787,18 @@ function albumParentsWire(pl) {
       limb([[72, 75], [85, 82], [98, 75]], K, 8, null, claws(100, 74, 1) + E(100, 74, 5, 4.6, K)) +
       S("M30,80 l6,-1 M90,80 l-6,-1", Pu, 1) +
       head(pantherHead(), 60, 44, 1.45);
-    return [bg + aSpark(12, 56, 3, "#e1b3ff") + aSpark(108, 50, 3.4, "#e1b3ff") + aSpark(60, 150, 2.6, "#e1b3ff") + glow(body, Pu, 2.5, 3.2), aEdge(body)];
+    const sp = aSpark(12, 56, 3, "#e1b3ff") + aSpark(108, 50, 3.4, "#e1b3ff") + aSpark(60, 150, 2.6, "#e1b3ff");
+    if (o.parts) return { bg: bg + sp, body };
+    return [bg + sp + glow(body, Pu, 2.5, 3.2), aEdge(body)];
   }
 
   /* ---------- 7 Thor: Mjolnir raised, lightning, stormy sky ---------- */
-  function thor() {
+  function thor(o = {}) {
     const Ar = "#3a4250", Si = "#cfd8dc", Rc = "#c62828";
-    const bg = back("#1c2436", "#55678c") + cloud(-8, 22, 1.2, "#2a3348") + cloud(60, 14, 1.3, "#313b52") + cloud(30, 40, .9, "#3b4661", .9) +
-      bolt([[16, 48], [24, 64], [18, 68], [28, 90]], 1.6) + bolt([[108, 70], [100, 86], [106, 90], [96, 112]], 1.4) +
-      Pn("M0,140 L120,140 L120,158 L0,158Z", "#2b3245");
+    // o.parts: the side bolts, the bolts over the hammer and the hammer arm apart (thorStorm)
+    const sky = back("#1c2436", "#55678c") + cloud(-8, 22, 1.2, "#2a3348") + cloud(60, 14, 1.3, "#313b52") + cloud(30, 40, .9, "#3b4661", .9),
+      sb = bolt([[16, 48], [24, 64], [18, 68], [28, 90]], 1.6) + bolt([[108, 70], [100, 86], [106, 90], [96, 112]], 1.4), ground = Pn("M0,140 L120,140 L120,158 L0,158Z", "#2b3245");
+    const bg = sky + sb + ground;
     const hammer = (x, y) => SO(`M${x},${y + 30} V${y + 6}`, "#8d5a2b", 2.6) + S(`M${x - 1.6},${y + 26} l3.2,-2 M${x - 1.6},${y + 21} l3.2,-2 M${x - 1.6},${y + 16} l3.2,-2`, "#5d3a1a", .7) +
       SO(`M${x},${y + 30} q-3,4 -1,7`, "#8d5a2b", .9) +
       P(`M${x - 12},${y - 6} L${x + 12},${y - 6} L${x + 12},${y + 7} L${x - 12},${y + 7}Z`, "#9aa5ad", 1.3) + Pn(`M${x - 12},${y - 6} L${x + 12},${y - 6} L${x + 12},${y - 2} L${x - 12},${y - 2}Z`, "#fff", `opacity=".35"`) +
@@ -4785,26 +4812,30 @@ function albumParentsWire(pl) {
     const tor = TORSO;
     const cape = P("M47,72 Q30,96 10,140 Q26,134 36,142 Q46,134 56,140 L60,98Z", Rc, 1.3) + S("M28,112 Q30,124 34,138 M46,108 Q46,124 48,138", "#8e1b1b", 1) +
       P("M73,72 Q86,96 98,136 Q88,132 80,138 L70,98Z", Rc, 1.3);
-    const body =
+    const pre =
       cape +
       limb([[53, 101], [49, 119], [46, 133]], "#2b2f38", 9, "#141414", boot(45, 137, "#141414", -1)) +
       limb([[67, 101], [73, 118], [76, 133]], "#2b2f38", 9, "#141414", boot(78, 137, "#141414", 1)) +
       P(tor, Ar, 1.3) + [78, 87, 96].map(y => [54.5, 65.5].map(x => C(x, y, 3.4, Si, 1) + C(x, y, 1.6, "#9aa5ad", .6)).join("")).join("") + shadeOn(tor, 66) +
       E(47, 74, 5.5, 4.6, Si, 1.1) + E(73, 74, 5.5, 4.6, Si, 1.1) +
       limb([[48, 76], [38, 88], [42, 99]], A_SKIN[0], 7.5, Si, fist(43, 101, 5, A_SKIN[0])) +
-      head(thead, 58, 46, 1.42, -4) +
-      limb([[72, 76], [86, 66], [91, 50]], A_SKIN[0], 7.5, Si) + hammer(92, 22) + fist(92, 50, 5.4, A_SKIN[0]);
+      head(thead, 58, 46, 1.42, -4);
+    const arm = limb([[72, 76], [86, 66], [91, 50]], A_SKIN[0], 7.5, Si) + hammer(92, 22) + fist(92, 50, 5.4, A_SKIN[0]), body = pre + arm;
     // the lightning Mjolnir calls down sits behind the hammer head
-    return [bg + bolt([[92, 14], [86, 6], [94, 3], [88, -4]], 1.8) + bolt([[100, 18], [110, 10], [106, 6], [118, 0]], 1.5) + bolt([[82, 18], [74, 10], [78, 6], [70, 0]], 1.3) +
-      aSpark(108, 30, 3, "#fffde7") + aSpark(76, 30, 2.4, "#fffde7"), aEdge(body)];
+    const tb = bolt([[92, 14], [86, 6], [94, 3], [88, -4]], 1.8) + bolt([[100, 18], [110, 10], [106, 6], [118, 0]], 1.5) + bolt([[82, 18], [74, 10], [78, 6], [70, 0]], 1.3),
+      sp = aSpark(108, 30, 3, "#fffde7") + aSpark(76, 30, 2.4, "#fffde7");
+    if (o.parts) return { sky, sb, ground, tb, sp, pre, arm };
+    return [bg + tb + sp, aEdge(body)];
   }
 
   /* ---------- 8 Captain Marvel: flying up with glowing fists, space ---------- */
-  function marvel() {
+  function marvel(o = {}) {
     const BL = "#1f3c94", Rd = "#d32f2f", Go = "#ffcc33";
-    const bg = back("#0e0b2e", "#4b2380") + stars(5, 40, 0, 158) + C(98, 128, 18, "#5c6bc0", 0) + clipD("M80,128 A18,18 0 0 0 116,128 A18,18 0 0 0 80,128Z", En(104, 122, 14, 16, "#8c9eff", `opacity=".5"`)) +
-      E(98, 128, 28, 5, "none", 0, `stroke="#ffcc80" stroke-width="1.5" opacity=".8" transform="rotate(-18 98 128)"`) +
-      C(60, 70, 46, Go, 0, `opacity=".12"`) + C(60, 70, 30, Go, 0, `opacity=".12"`);
+    // o.parts: the stars, the planet, the halo, the trail and the body apart (marvelSoar)
+    const sky = back("#0e0b2e", "#4b2380"), st = stars(5, 40, 0, 158), planet = C(98, 128, 18, "#5c6bc0", 0) + clipD("M80,128 A18,18 0 0 0 116,128 A18,18 0 0 0 80,128Z", En(104, 122, 14, 16, "#8c9eff", `opacity=".5"`)) +
+      E(98, 128, 28, 5, "none", 0, `stroke="#ffcc80" stroke-width="1.5" opacity=".8" transform="rotate(-18 98 128)"`),
+      halo = C(60, 70, 46, Go, 0, `opacity=".12"`) + C(60, 70, 30, Go, 0, `opacity=".12"`);
+    const bg = sky + st + planet + halo;
     const hairB = "M31,20 Q29,38 32,46 Q40,48 44,42 L56,42 Q60,48 68,46 Q71,38 69,20Z";
     const mhead = P(hairB, "#f2cf5b", 1.1) + aKidHead({ skin: A_SKIN[0], hair: "#f2cf5b", hs: "neat", eyes: "#3a7bd5", mouth: "smile", lash: 1 });
     const glowFist = (x, y) => C(x, y, 11, "#ffd54f", 0, `opacity=".35"`) + C(x, y, 7.5, "#ffe082", 0, `opacity=".6"`) + fist(x, y, 5.2, Rd) + aSpark(x, y, 9, "#fff8e1");
@@ -4820,8 +4851,10 @@ function albumParentsWire(pl) {
       limb([[48, 75], [38, 88], [30, 98]], BL, 8, Rd, glowFist(28, 100)) +
       limb([[72, 75], [86, 62], [96, 44]], BL, 8, Rd, glowFist(98, 40)) +
       head(mhead, 59, 45, 1.42, -6);
-    return [bg + S("M44,152 L48,142 M58,156 L60,146 M34,148 L40,138", "#ffe082", 1.6, `opacity=".8"`) + aSpark(16, 50, 3.4, "#fff") + aSpark(112, 70, 2.6, "#ffe082") +
-      `<g transform="translate(7 5) rotate(-8 60 90)">` + glow(body, Go, 2.5, 3.5) + `</g>`, `<g transform="translate(7 5) rotate(-8 60 90)">` + aEdge(body) + `</g>`];
+    const trail = S("M44,152 L48,142 M58,156 L60,146 M34,148 L40,138", "#ffe082", 1.6, `opacity=".8"`), sp = aSpark(16, 50, 3.4, "#fff") + aSpark(112, 70, 2.6, "#ffe082"),
+      tf = `<g transform="translate(7 5) rotate(-8 60 90)">`;
+    if (o.parts) return { sky, st, planet, halo, trail, sp, tf, body };
+    return [bg + trail + sp + tf + glow(body, Go, 2.5, 3.5) + `</g>`, tf + aEdge(body) + `</g>`];
   }
 
   /* ---------- 9 Ant-Man: tiny, riding a giant friendly ant through giant grass ---------- */
@@ -4835,22 +4868,24 @@ function albumParentsWire(pl) {
       lens(42.6) + lens(57.4) +
       P("M42,33.5 Q50,30.5 58,33.5 Q57.5,41 50,42 Q42.5,41 42,33.5Z", "#7d8891", 1) + S("M46,34 V40 M50,33 V41 M54,34 V40", "#4c565e", .8);
   }
-  function antman() {
+  function antman(o = {}) {
     const Rd = "#d62828", K = "#1c1c22", Si = "#c9d1d8", A = "#6b4430", Ad = "#3e2619", Al = "#8d5c40";
     const blade = (x, h, lean, c, w = 7) => P(`M${x - w},158 Q${x - w * .3 + lean * .5},${158 - h * .6} ${x + lean},${158 - h} Q${x + w * .4 + lean * .5},${158 - h * .55} ${x + w},158Z`, c, 1);
     // a dew drop as big as his head hanging from a blade of grass: everything around him is giant
     const drop = (x, y, r) => P(`M${x},${y - r * 1.7} Q${x + r * .35},${y - r * .9} ${x + r},${y} A${r},${r} 0 0 1 ${x - r},${y} Q${x - r * .35},${y - r * .9} ${x},${y - r * 1.7}Z`, "#bfeaff", 1, `opacity=".95"`) +
       En(x - r * .38, y - r * .15, r * .22, r * .38, "#fff") + En(x + r * .3, y + r * .45, r * .3, r * .14, "#fff", `opacity=".7"`);
-    const bg = back("#7fd4ff", "#e7f8ff") + A_RAYS + C(28, 50, 8, "#fff59d", 0) +
+    // o.parts: the sky, the grass (blades, drop, ground), each leg, the ant's body, Ant-Man's waving arm apart (antmanWalk)
+    const sky = back("#7fd4ff", "#e7f8ff") + A_RAYS + C(28, 50, 8, "#fff59d", 0), grass =
       blade(6, 150, 10, "#58b04a", 8) + blade(30, 128, -14, "#6cc35a") + blade(106, 156, -22, "#4fa543", 9) + blade(118, 112, -10, "#6cc35a") +
       blade(64, 92, 14, "#79c967", 6) + drop(85, 24, 7.5) + blade(-4, 74, 10, "#4c9c3e", 9) + blade(124, 64, -8, "#4c9c3e", 9) +
-      `<rect x="0" y="146" width="120" height="12" fill="#6d4c2f"/>` + [8, 30, 52, 74, 96, 114].map((x, i) => En(x, 149 + (i % 2) * 4, 3, 1.4, "#5a3d25")).join("") +
-      aSpark(12, 58, 3) + aSpark(110, 44, 2.6);
+      `<rect x="0" y="146" width="120" height="12" fill="#6d4c2f"/>` + [8, 30, 52, 74, 96, 114].map((x, i) => En(x, 149 + (i % 2) * 4, 3, 1.4, "#5a3d25")).join(""),
+      sp = aSpark(12, 58, 3) + aSpark(110, 44, 2.6);
+    const bg = sky + grass + sp;
     // the giant ant (facing right, smiling): six legs, abdomen, waist, thorax, a big round head
     const legs = [[56, 116, 40, 128, 34, 148], [62, 118, 58, 132, 54, 149], [68, 117, 80, 130, 84, 149], [52, 114, 30, 122, 18, 146], [64, 119, 70, 134, 68, 150], [72, 114, 92, 126, 100, 146]];
     const AB = "M2,110 A22,17 0 0 0 46,110 A22,17 0 0 0 2,110Z", HD = "M74,97 A20,18 0 0 0 114,97 A20,18 0 0 0 74,97Z";
-    const ant =
-      legs.map(([a, b, c, d, e, f]) => aL([[a, b], [c, d], [e, f]], Ad, 3)).join("") +
+    const leg = ([a, b, c, d, e, f]) => aL([[a, b], [c, d], [e, f]], Ad, 3);
+    const antB =
       Pn(AB, A) + clipD(AB, En(26, 120, 22, 8, "#000", `opacity=".2"`) + S("M10,101 Q20,95 32,96", "#fff", 2.2, `opacity=".3"`) + S("M16,95 Q13,110 17,125 M28,93 Q26,110 28,127", Ad, 1.1)) + P(AB, "none", 1.4) +
       E(49, 113, 5.5, 4.6, A, 1.2) + E(62, 110, 13, 10, A, 1.4) + En(60, 106, 7, 3, Al, `opacity=".7"`) +
       SO("M86,82 Q82,64 74,54", Ad, 1.6) + C(73, 52.5, 3, Ad, 1) + SO("M100,81 Q106,62 114,56", Ad, 1.6) + C(115, 54.5, 3, Ad, 1) +
@@ -4858,15 +4893,16 @@ function albumParentsWire(pl) {
       aEye(87, 96, "#3b2a1a", 1.15) + aEye(102, 96, "#3b2a1a", 1.15) +
       P("M88,105 Q94.5,112 101,105 Q94.5,107 88,105Z", "#c0392b", 1) +
       S("M80,103 l1.6,-1.8 M82.4,103.4 l1.6,-1.8 M105.6,103.4 l1.6,-1.8 M108,103 l1.6,-1.8", "#ff8a80", 1);
+    const ant = legs.map(leg).join("") + antB;
     // Ant-Man riding on the ant's back, waving: much smaller than the ant
     const tor = "M50,72 Q60,69 70,72 Q72,84 69,96 L51,96 Q48,84 50,72Z";
-    const man =
+    const manA =
       limb([[56, 94], [48, 102], [47, 114]], Rd, 7.5, K, E(46, 116, 5, 3.4, K)) +
       P(tor, Rd, 1.2) + clipD(tor, Pn("M50,72 L55,72 L54,96 L50,96Z", K) + Pn("M70,72 L65,72 L66,96 L70,96Z", K) + S("M60,72 V92", K, 2)) +
       P("M50.5,90 Q60,93 69.5,90 L69.8,95 Q60,98 50.2,95Z", Si, .9) + C(60, 93.4, 2.6, "#ff5252", .8) + shadeOn(tor, 64) +
-      limb([[68, 76], [76, 86], [82, 96]], Rd, 6.5, K, fist(83, 98, 4, K)) +
-      limb([[52, 76], [42, 66], [38, 54]], Rd, 6.5, K, fist(37, 51, 4.6, K)) +
-      head(antHelmet(), 60, 52, 1.2, -6);
+      limb([[68, 76], [76, 86], [82, 96]], Rd, 6.5, K, fist(83, 98, 4, K));
+    const wave = limb([[52, 76], [42, 66], [38, 54]], Rd, 6.5, K, fist(37, 51, 4.6, K)), helm = head(antHelmet(), 60, 52, 1.2, -6), man = manA + wave + helm;
+    if (o.parts) return { sky, grass, sp, legs, leg, antB, manA, wave, helm };
     return [bg, aEdge(shadow(60, 148, 50, 2.6) + ant + `<g transform="translate(20 34) scale(.7)">${man}</g>`)];
   }
 
@@ -4880,16 +4916,85 @@ function albumParentsWire(pl) {
       `<g class="lv-pend" style="transform-origin:128.7px -2.5px"><g transform="translate(60 100) scale(.85) translate(-60 -100)">${main}</g></g>`];
   }
 
+  /* The other eight own animations (an-mv-… classes in template.html, transform/opacity only). Each takes the drawing's
+     parts (draw({ parts: 1 })) and wraps the moving ones in class groups, never on an element with a transform= attribute */
+  const cls = (c, s, st = "") => `<g class="${c}"${st ? ` style="${st}"` : ""}>${s}</g>`;
+  // Miles: venom sparks crackle on both hands, then the camouflage: he glitches out almost invisible and back; the moon glows
+  function milesVenom() {
+    const q = miles({ parts: 1 });
+    // the hands in card coordinates (the figure is scaled 1.13 about 60, 139)
+    const ven = a0 => zap(107.5, 46.3, 7.5, a0, 5, 1.5) + zap(48.7, 131.1, 7.5, a0 + 1, 5, 1.5);
+    return [q.sky + cls("an-mv-moon", q.halo) + q.rest + q.sp + cls("an-mv-camo", glow(q.fig, "#5ff3ff", 1.6, 1.6)),
+      cls("an-mv-camo", aEdge(q.fig) + cls("an-mv-zap", ven(0)) + cls("an-mv-zap", ven(.63), "animation-delay:-.2s"))];
+  }
+  // Iron Man: the repulsor beam pulses out of his palm, the boot jets flicker, clouds and speed lines stream past, a slight bob;
+  // a bit smaller and further left than the plain card so the beam has room before the edge
+  function ironmanFly() {
+    const q = ironman({ parts: 1 });
+    const beam = `<g transform="translate(97 60) rotate(-33)">${cls("an-mv-beam", Pn("M3,-4.5 L80,-8 L80,8 L3,4.5Z", "#7ff6ff", `opacity=".55"`) + Pn("M3,-2 L80,-3.4 L80,3.4 L3,2Z", "#fff"))}</g>`;
+    const jets = cls("an-mv-jet", q.jet(41, 140)) + cls("an-mv-jet", q.jet(56, 139), "animation-delay:-.35s");
+    return [q.sky + q.cl.map((c, i) => cls("an-mv-pass", c, `animation-delay:-${i * .8}s`)).join("") + cls("an-mv-whoosh", q.lines) + cls("an-mv-whoosh", q.lines, "animation-delay:-.7s"),
+      cls("an-mv-bob", `<g transform="translate(-12 4) translate(57 90) scale(.88) translate(-57 -90)">${q.tf}${aEdge(jets + q.rest)}${beam}${cls("an-mv-blast", blast(97, 60, 6))}${blast(30, 100, 3.6)}</g></g>`)];
+  }
+  // Hulk: a hop and a ground slam: he squashes on landing, the cracks flash, the rocks jump, the ground shakes, dust puffs
+  function hulkSmash() {
+    const q = hulk({ parts: 1 });
+    const hot = S(q.CR, "#ffb300", 4.5, `opacity=".75"`) + S(q.CR, "#fff59d", 1.8);
+    const puff = (x, y) => cls("an-mv-dust", cloud(x, y, .55, "#e8d3b0", .9));
+    const ground = q.ground + q.cracks + cls("an-mv-flash", hot) + cls("an-mv-hshadow", En(60, 141, 26, 3.6, "#000", `opacity=".25"`)) +
+      cls("an-mv-rocks", q.rk.filter((_, i) => i % 2 === 0).join("")) + cls("an-mv-rocks2", q.rk.filter((_, i) => i % 2).join(""));
+    return [`<g transform="translate(60 79) scale(1.05) translate(-60 -79)">${cls("an-mv-shake", q.sky + ground)}</g>` + q.sp,
+      cls("an-mv-hop", `<g transform="translate(60 141) scale(.92) translate(-60 -141)">${aEdge(q.body)}</g>`, "transform-origin:60px 141px") + puff(20, 137) + puff(88, 137)];
+  }
+  // Captain America: the shield flies out spinning, up and away off the left edge (smaller = further), and curves back onto his arm from below
+  function captainThrow() {
+    const q = captain({ parts: 1 });
+    return [q.bg, aEdge(`<g transform="translate(9 7)">${q.pre + q.hd}</g>`) +
+      aEdge(cls("an-mv-throw", `<g transform="translate(9 7)">${cls("an-mv-spin", shield(31, 100, 22))}</g>`, "transform-origin:40px 107px"))];
+  }
+  // Black Panther: kinetic energy rings pulse out from his chest, the purple glow throbs, claw slashes swipe on each side in turn
+  function pantherPulse() {
+    const q = panther({ parts: 1 });
+    const ring = d => cls("an-mv-ring", `<circle cx="60" cy="86" r="40" fill="none" stroke="#c77dff" stroke-width="4" opacity=".8"/><circle cx="60" cy="86" r="40" fill="none" stroke="#f3e5ff" stroke-width="1.4"/>`, `animation-delay:-${d}s`);
+    const streak = (y, l) => `<path d="M0,${y - 2.8} Q${l * .55},${y - 4.6} ${l},${y + 1} Q${l * .5},${y + 1.4} 0,${y + 2.8}Z" fill="#fff" stroke="#b44dff" stroke-width="1.6" stroke-linejoin="round"/>`;
+    const slash = (x, y, a, fl, d) => `<g transform="translate(${x} ${y}) rotate(${a})${fl ? " scale(1 -1)" : ""}">${cls("an-mv-slash", streak(-8, 44) + streak(0, 50) + streak(8, 44), `animation-delay:-${d}s`)}</g>`;
+    return [q.bg + ring(0) + ring(1) + cls("an-mv-pglow", glow(q.body, "#b44dff", 2.5, 3.2)), aEdge(q.body), slash(88, 30, 66, 0, 0) + slash(32, 30, 114, 1, 1)];
+  }
+  // Thor: he swings Mjolnir back and up, then the lightning strikes: bolts and the sky flash, sparks crackle on the glowing hammer
+  // (its glow, behind the figure, swings with the arm: the same class and pivot)
+  function thorStorm() {
+    const q = thor({ parts: 1 });
+    const hglow = C(92, 22.5, 19, "#81d4fa", 0, `opacity=".45"`) + C(92, 22.5, 12, "#e1f5fe", 0, `opacity=".7"`);
+    return [q.sky + cls("an-mv-bolt", q.sb) + q.ground + cls("an-mv-raise", cls("an-mv-hglow", hglow), "transform-origin:72px 76px") + cls("an-mv-bolt", q.tb + zap(92, 22.5, 10, .3, 6, 1.4)) + q.sp +
+      `<rect class="an-mv-sky" width="120" height="158" fill="#e3f2fd"/>`, aEdge(q.pre + cls("an-mv-raise", q.arm, "transform-origin:72px 76px"))];
+  }
+  // Captain Marvel: the stars and speed streaks stream down past her as she flies up, her golden glow and halo pulse, a slight bob
+  function marvelSoar() {
+    const q = marvel({ parts: 1 });
+    const fall = (c, s) => cls(c, s + `<g transform="translate(0 -158)">${s}</g>`);     // two copies one card apart: a seamless loop
+    const streaks = [[14, 18, 18], [34, 64, 12], [104, 28, 20], [92, 96, 14], [20, 116, 16], [112, 136, 12], [70, 4, 12], [4, 70, 10]].map(([x, y, l]) => S(`M${x},${y} v${l}`, "#fff", 1.2, `opacity=".75"`)).join("");
+    return [q.sky + fall("an-mv-fall", q.st) + fall("an-mv-fall2", streaks) + q.planet + cls("an-mv-halo", q.halo) + cls("an-mv-trail", q.trail) + q.sp +
+      cls("an-mv-bob", q.tf + cls("an-mv-mglow", glow(q.body, "#ffcc33", 2.5, 3.5)) + `</g>`), cls("an-mv-bob", q.tf + aEdge(q.body) + `</g>`)];
+  }
+  // Ant-Man: the giant ant walks (its legs swing in two sets of three, the body bobs), the grass drifts past, Ant-Man waves
+  function antmanWalk() {
+    const q = antman({ parts: 1 });
+    const legs = q.legs.map((l, i) => cls(i % 2 ? "an-mv-leg2" : "an-mv-leg", q.leg(l), `transform-origin:${l[0]}px ${l[1]}px`)).join("");
+    const tile = s => cls("an-mv-grass", [-120, 0, 120].map(x => x ? `<g transform="translate(${x} 0)">${s}</g>` : s).join(""));    // three copies: seamless
+    return [q.sky + tile(q.grass) + q.sp, aEdge(shadow(60, 148, 50, 2.6) + legs +
+      cls("an-mv-step", q.antB + `<g transform="translate(20 34) scale(.7)">${q.manA + cls("an-mv-wave", q.wave, "transform-origin:52px 76px") + q.helm}</g>`))];
+  }
+
   FAN.marvel = [
     ["Spider-Man", "red and blue suit, web lines, big white lenses; swinging over the skyscrapers, the web-shooter hand shooting a web", spiderman, spidermanSwing],
-    ["Miles Morales", "black suit with red web lines and red spider, a cyan rim light; crouched on a rooftop before a huge glowing moon", miles],
-    ["Iron Man", "red and gold armour, glowing arc reactor and eye slits; flying, repulsor blast", ironman],
-    ["Hulk", "huge and green, messy black hair, torn purple shorts; flexing both fists, the ground cracking", hulk],
-    ["Captain America", "winged helmet with the A, star and stripes; the round shield up", captain],
-    ["Black Panther", "cat-ear mask, bold silver fang necklace, white claws out; purple kinetic glow over Wakanda", panther],
-    ["Thor", "red cape, silver discs, blond hair, short beard and a big grin; Mjolnir raised with lightning, stormy sky", thor],
-    ["Captain Marvel", "red and blue suit, gold star; flying up with glowing fists in space", marvel],
-    ["Ant-Man", "silver helmet with antennae and red lenses; tiny, riding a giant friendly ant past a giant dew drop in giant grass", antman],
+    ["Miles Morales", "black suit with red web lines and red spider, a cyan rim light; crouched on a rooftop before a huge glowing moon", miles, milesVenom],
+    ["Iron Man", "red and gold armour, glowing arc reactor and eye slits; flying, repulsor blast", ironman, ironmanFly],
+    ["Hulk", "huge and green, messy black hair, torn purple shorts; flexing both fists, the ground cracking", hulk, hulkSmash],
+    ["Captain America", "winged helmet with the A, star and stripes; the round shield up", captain, captainThrow],
+    ["Black Panther", "cat-ear mask, bold silver fang necklace, white claws out; purple kinetic glow over Wakanda", panther, pantherPulse],
+    ["Thor", "red cape, silver discs, blond hair, short beard and a big grin; Mjolnir raised with lightning, stormy sky", thor, thorStorm],
+    ["Captain Marvel", "red and blue suit, gold star; flying up with glowing fists in space", marvel, marvelSoar],
+    ["Ant-Man", "silver helmet with antennae and red lenses; tiny, riding a giant friendly ant past a giant dew drop in giant grass", antman, antmanWalk],
   ];
 })();
 
@@ -4904,6 +5009,11 @@ function albumParentsWire(pl) {
   const sparks = (pts, c = "#fff") => pts.map(([x, y, r]) => aSpark(x, y, r, c)).join("");
   const back = (id, a, b) => `<defs>${aVGrad(id, a, b)}</defs><rect width="120" height="158" fill="url(#${id})"/>`;
   const lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+  // the stickers' own animations (tier 4, stkAnim): each drawing takes k = 1 for its animated version (live(f), the rows'
+  // 4th entry); an() wraps a part in an an-dc-* group (CSS in template.html), st = inline style: transform-origin in the
+  // part's own coordinates, a delay. The class never sits on an element with a transform= attribute.
+  const an = (c, svg, st = "") => `<g class="an-dc-${c}"${st ? ` style="${st}"` : ""}>${svg}</g>`;
+  const live = f => () => f(1);
 
   /* ---------- body: a chibi hero in figure coordinates (as aFigure: head ~50,25, feet ~107) ---------- */
   // o: pose {ba, fa, bl, fl: 3 points each, bb, fb: [x, y, rot] boots}, skin, suit, sleeve, legs, glove (+ gloveAt 0..1 from
@@ -4998,51 +5108,64 @@ function albumParentsWire(pl) {
   const cloud = (x, y, s, c = "#fff", op = 1) => `<g transform="translate(${x} ${y}) scale(${s})" fill="${c}" opacity="${op}">${aC(0, 0, 8, c)}${aC(9, -3, 10, c)}${aC(19, 1, 7, c)}<rect x="-6" y="0" width="30" height="7" rx="3.5"/></g>`;
 
   /* ---------- 1 Batman ---------- */
-  function batman() {
+  // k: the bat-signal sweeps (beam and signal turn about the searchlight at the bottom right), bats flap across the sky,
+  // the cape billows
+  function batman(k) {
     const g = U("g"), suit = "#8a96a3", dk = "#262a35";
     const cape = P("M41,42 Q29,50 15,62 L9,104 Q17,97 24,106 Q31,98 38,108 Q44,100 50,108 Q56,100 62,108 Q69,98 76,106 Q83,97 91,104 L85,62 Q71,50 59,42Z", dk) +
       `<path d="M50,46 V104 M30,56 L22,102 M70,56 L78,102" stroke="#3a4050" stroke-width="1.6" fill="none"/>`;
     const fig = hero({
       pose: { ba: [[39, 47], [28, 54], [19, 61]], fa: [[61, 47], [72, 54], [81, 61]], bl: [[45, 72], [41, 88], [39, 102]], bb: [36, 106, 0, 7], fl: [[55, 72], [59, 88], [61, 102]], fb: [64, 106, 0, 7] },
-      skin: A_SKIN[0], suit, legs: suit, glove: dk, gloveAt: 0, boot: dk, bootAt: .25, trunks: dk, capeBack: cape,
+      skin: A_SKIN[0], suit, legs: suit, glove: dk, gloveAt: 0, boot: dk, bootAt: .25, trunks: dk, capeBack: k ? an("billow", cape, "transform-origin:50px 42px") : cape,
       belt: "#ffc400", buckle: [41, 46, 54, 59].map(x => `<rect x="${x - 1.8}" y="64.2" width="3.6" height="3.2" rx=".6" fill="#e0a800" stroke="${OL}" stroke-width=".6"/>`).join(""),
       chest: batOval(50, 51, 1.05) + `<path d="M36.5,45 Q40,43 41,42 M63.5,45 Q60,43 59,42" stroke="${dk}" stroke-width="3" fill="none"/>`,
       head: face(A_SKIN[0]) + cowl(dk) + lenses(-1.4) + cocky(37) + `<path d="M47,34.6 Q50,35.6 53,34.6" fill="none" stroke="#c99a7a" stroke-width=".8"/>`,
     });
+    const signal = `<path d="M124,158 L84,26 L112,26 Z" fill="#fff59d" opacity=".16"/>` + aC(98, 24, 15, "#fff59d", `opacity=".35"`) + aC(98, 24, 12.5, "#ffee58", `stroke="#fff9c4" stroke-width="1.4"`) + bat(98, 24.5, .92);
+    const flyer = (y, s, d) => an("fly", `<g transform="translate(0 ${y}) scale(${s})">${an("flap", `<path d="${BAT}" fill="#0a0d1a" stroke="#9fb3e8" stroke-width="1.1" stroke-linejoin="round"/>`)}</g>`, `animation-delay:-${d}s`);
     return [back(g, "#0b1640", "#29407a") + stars(11, 30, 70) +
-      `<path d="M124,158 L84,26 L112,26 Z" fill="#fff59d" opacity=".16"/>` + aC(98, 24, 15, "#fff59d", `opacity=".35"`) + aC(98, 24, 12.5, "#ffee58", `stroke="#fff9c4" stroke-width="1.4"`) + bat(98, 24.5, .92) +
-      city(5, "#141c3a", "#ffd54f", 96) + shadow(60, 142, 34) + sparks([[16, 50, 2.6], [108, 48, 2]]),
+      (k ? an("sweep", signal, "transform-origin:122px 158px") : signal) +
+      city(5, "#141c3a", "#ffd54f", 96) + (k ? flyer(34, 1, 0) + flyer(14, .8, 1.2) + flyer(56, .72, 2.3) : "") + shadow(60, 142, 34) + sparks([[16, 50, 2.6], [108, 48, 2]]),
       aEdge(place(fig, 4, 19, 1.12))];
   }
 
   /* ---------- 2 Superman ---------- */
-  function superman() {
+  // k: the clouds and wind lines stream down past him as he flies up, the cape ripples, he bobs a little
+  function superman(k) {
     const g = U("g"), blue = "#1e5bd8", red = "#e01e2b";
     const cape = P("M40,43 Q31,70 24,104 Q32,98 38,108 Q45,99 52,110 Q58,99 65,106 Q70,96 76,100 Q68,72 60,43Z", red) +
       `<path d="M44,52 Q40,80 38,104 M56,52 Q60,80 64,102" stroke="#a5121c" stroke-width="1.6" fill="none"/>`;
     const fig = hero({
       pose: { ba: [[39, 47], [33, 58], [32, 68]], fa: [[61, 46], [70, 32], [75, 15]], bl: [[46, 72], [45, 87], [44, 98]], bb: [44, 103, 85], fl: [[54, 72], [58, 83], [57, 94]], fb: [57.6, 99, 75] },
-      skin: A_SKIN[1], suit: blue, legs: blue, boot: red, bootAt: .4, bootShape: 1, trunks: red, capeBack: cape, belt: "#ffd600", frontOver: 1,
+      skin: A_SKIN[1], suit: blue, legs: blue, boot: red, bootAt: .4, bootShape: 1, trunks: red, capeBack: k ? an("flutter", cape, "transform-origin:50px 43px") : cape, belt: "#ffd600", frontOver: 1,
       chest: sShield(50, 51, .95) + P("M37,44 Q38,41 43,41 L41,47Z", red) + P("M63,44 Q62,41 57,41 L59,47Z", red),
       head: `<g transform="rotate(-18 50 40)">` + neatHair("#141414") + face(A_SKIN[1]) + fringe("#141414") + `<path d="M48,13 q-4,3 -1,6 q3,2 0,5" fill="none" stroke="#141414" stroke-width="2.2" stroke-linecap="round"/>` + shine(46, 8) +
         eyes("#2a6fdb") + aBlush() + grin() + `</g>` });
-    return [back(g, "#2f8ff0", "#bfe6ff") + aC(98, 22, 30, "#fff", `opacity=".25"`) +
-      cloud(6, 132, 1.4) + cloud(70, 142, 1.6) + cloud(84, 30, .9, "#fff", .9) + cloud(-4, 46, .8, "#fff", .8) +
-      [[10, 112], [16, 122], [6, 100], [24, 130]].map(([x, y], i) => `<path d="M${x},${y} l${-10 + i},${12 - i}" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".8"/>`).join("") +
-      sparks([[104, 70, 3.4], [40, 22, 2.6]]),
-      aEdge(place(fig, -6, 9, 1.25, "16 50 60"))];
+    const clouds = [cloud(6, 132, 1.4), cloud(70, 142, 1.6), cloud(84, 30, .9, "#fff", .9), cloud(-4, 46, .8, "#fff", .8)],
+      streak = ([x, y], i) => `<path d="M${x},${y} l${-10 + i},${12 - i}" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".8"/>`,
+      wind = [[10, 112], [16, 122], [6, 100], [24, 130]].map(streak), man = aEdge(place(fig, -6, 9, 1.25, "16 50 60"));
+    // animated: the four clouds evenly spaced in time, faster wind lines spread over the card
+    if (k) return [back(g, "#2f8ff0", "#bfe6ff") + aC(98, 22, 30, "#fff", `opacity=".25"`) +
+      clouds.map((c, i) => an("fall", c, `animation-delay:-${i * .65}s`)).join("") +
+      [[76, 60], [100, 96], [8, 100], [44, 122]].map(streak).map((c, i) => an("fall", c, `animation-delay:-${i * .4 + .2}s;animation-duration:1.6s`)).join("") +
+      sparks([[104, 70, 3.4], [40, 22, 2.6]]), an("bob", man)];
+    return [back(g, "#2f8ff0", "#bfe6ff") + aC(98, 22, 30, "#fff", `opacity=".25"`) + clouds.join("") + wind.join("") +
+      sparks([[104, 70, 3.4], [40, 22, 2.6]]), man];
   }
 
   /* ---------- 3 Wonder Woman ---------- */
-  function wonderWoman() {
+  // k: the lasso's loop twirls overhead (it sways about her hand while glints run round it: a dot spun in a frame squashed
+  // to the loop's ellipse, counter-spun so it stays round), its glow pulses, the bracelets gleam
+  function wonderWoman(k) {
     const g = U("g"), red = "#d81e2c", blue = "#1d3fa0", gold = "#f6c21c", skin = A_SKIN[2];
     const hair = P("M33,18 Q26,40 28,62 Q34,58 37,64 Q40,54 41,44 L59,44 Q60,54 63,64 Q66,58 72,62 Q74,40 67,18Z", "#1b1b2a");
-    const loop = `cx="58" cy="-3" rx="23" ry="7.4" fill="none"`;
-    const lasso = `<ellipse ${loop} stroke="#ffeb3b" stroke-width="6" opacity=".35"/>` +
-      `<ellipse ${loop} stroke="${OL}" stroke-width="3.6"/><ellipse ${loop} stroke="${gold}" stroke-width="2.2"/>` +
-      `<path d="M27,25 Q27,8 36.4,.6" fill="none" stroke="${OL}" stroke-width="3.6"/><path d="M27,25 Q27,8 36.4,.6" fill="none" stroke="${gold}" stroke-width="2.2"/>` +
-      `<path d="M27,28 Q14,44 18,70 Q20,86 12,100" fill="none" stroke="${OL}" stroke-width="3.6"/><path d="M27,28 Q14,44 18,70 Q20,86 12,100" fill="none" stroke="${gold}" stroke-width="2.2"/>` +
-      `<ellipse ${loop} stroke="#fff" stroke-width=".7" stroke-dasharray="2 3"/>`;
+    const loop = `cx="58" cy="-3" rx="23" ry="7.4" fill="none"`, halo = `<ellipse ${loop} stroke="#ffeb3b" stroke-width="6" opacity=".35"/>`,
+      ring = `<ellipse ${loop} stroke="${OL}" stroke-width="3.6"/><ellipse ${loop} stroke="${gold}" stroke-width="2.2"/>`, dash = `<ellipse ${loop} stroke="#fff" stroke-width=".7" stroke-dasharray="2 3"/>`,
+      ropes = `<path d="M27,25 Q27,8 36.4,.6" fill="none" stroke="${OL}" stroke-width="3.6"/><path d="M27,25 Q27,8 36.4,.6" fill="none" stroke="${gold}" stroke-width="2.2"/>` +
+      `<path d="M27,28 Q14,44 18,70 Q20,86 12,100" fill="none" stroke="${OL}" stroke-width="3.6"/><path d="M27,28 Q14,44 18,70 Q20,86 12,100" fill="none" stroke="${gold}" stroke-width="2.2"/>`;
+    const glint = d => an("spin", `<g transform="translate(23 0)">${an("unspin", `<ellipse rx="1.7" ry="${(1.7 * 23 / 7.4).toFixed(2)}" fill="#fff"/>`, `animation-delay:-${d}s`)}</g>`, `transform-origin:0 0;animation-delay:-${d}s`);
+    const lasso = k ? an("lasso", an("glow", halo) + ring + dash + `<g transform="translate(58 -3) scale(1 ${(7.4 / 23).toFixed(4)})">${glint(0) + glint(.47) + glint(.93)}</g>`, "transform-origin:36.4px .6px") + ropes
+      : halo + ring + ropes + dash;
     const skirt = P("M38.5,63 H61.5 L66,79 Q50,82 34,79Z", blue) + [[42, 70], [50, 74], [58, 70], [45, 77], [56, 77]].map(([x, y]) => aStar(x, y, 2.3, "#fff")).join("");
     const fig = hero({
       pose: { ba: [[39, 47], [31, 37], [27, 26]], fa: [[61, 47], [72, 50], [72, 38]], bl: [[45, 76], [40, 90], [37, 102]], bb: [35, 106, 0, 6.6], fl: [[55, 76], [60, 90], [63, 102]], fb: [65, 106, 0, 6.6] },
@@ -5052,7 +5175,7 @@ function albumParentsWire(pl) {
         P("M38.5,62.6 H61.5 V66.2 H38.5Z", gold),
       head: face(skin) + fringe("#1b1b2a") + P("M35,17 Q50,9.5 65,17 L64,19.6 Q50,13 36,19.6Z", gold) + aStar(50, 14.4, 3.6, red) + shine(42, 8) +
         eyes("#3a7bd5", 1) + aBlush() + smile(),
-      gripBack: lasso });
+      gripBack: lasso, ...(k ? { top: aSpark(27.4, 31.4, 5.4, "#fff59d", "an-dc-gleam") + aSpark(70.6, 42.5, 5.4, "#fff59d", "an-dc-gleam", "animation-delay:-1s") } : {}) });
     return [back(g, "#ff9a5a", "#ffe0a3") + A_RAYS +
       `<rect x="0" y="110" width="120" height="48" fill="#4fb3d9"/><path d="M0,112 Q15,108 30,112 T60,112 T90,112 T120,112" stroke="#fff" stroke-width="1.4" fill="none" opacity=".7"/>` +
       [6, 102].map(x => `<rect x="${x}" y="40" width="12" height="76" fill="#fff8e7" ${O}/><rect x="${x - 3}" y="34" width="18" height="7" fill="#fff8e7" ${O}/><rect x="${x - 3}" y="112" width="18" height="6" fill="#fff8e7" ${O}/>` +
@@ -5062,28 +5185,37 @@ function albumParentsWire(pl) {
   }
 
   /* ---------- 4 The Flash ---------- */
-  function flash() {
+  // k: he runs: two poses alternate (a full stride, then knee up and arms swapped: an-dc-runA / runB) with a hop, the speed lines rush past
+  // to the left (drawn twice, 120 apart, so the loop is seamless), the lightning bolts and his trail crackle
+  function flash(k) {
     const g = U("g"), red = "#e3141e", gold = "#ffc107";
     const ears = side => `<g transform="translate(50 0) scale(${side} 1) translate(-50 0)">` + P("M33.4,25 L21,17 L26,19 L19,10 L29,16.4 L28,12.6 L34,19.4Z", gold) + `</g>`;
     const trail = aL([[34, 52], [14, 46], [6, 54], [-14, 44]], gold, 3.4) + aL([[30, 66], [10, 62], [2, 72], [-16, 66]], gold, 3.4) + aL([[24, 84], [8, 80], [0, 88], [-14, 84]], gold, 2.6);
-    const fig = hero({
-      pose: { ba: [[39, 47], [30, 55], [23, 49]], fa: [[61, 47], [69, 41], [76, 47]], bl: [[45, 72], [36, 82], [26, 85]], bb: [24, 87, -30, 7], fl: [[55, 72], [61, 86], [58, 100]], fb: [61, 104, 0, 7] },
-      skin: A_SKIN[0], suit: red, legs: red, glove: red, boot: gold, bootAt: .35, trunks: red, belt: gold, behind: trail,
+    const stride = { ba: [[39, 47], [30, 55], [23, 49]], fa: [[61, 47], [69, 41], [76, 47]], bl: [[45, 72], [36, 82], [26, 85]], bb: [24, 87, -30, 7], fl: [[55, 72], [61, 86], [58, 100]], fb: [61, 104, 0, 7] },
+      stride2 = { ba: [[39, 47], [31, 40], [35, 32]], fa: [[61, 47], [70, 54], [78, 50]], bl: [[45, 72], [57, 77], [56, 90]], bb: [58, 93, 15, 7], fl: [[55, 72], [52, 87], [45, 100]], fb: [44, 104, 0, 7] };
+    const body = (pose, behind) => hero({ pose,
+      skin: A_SKIN[0], suit: red, legs: red, glove: red, boot: gold, bootAt: .35, trunks: red, belt: gold, behind,
       buckle: `<path d="M48,63.8 L52,63.8 L49.6,66 H52.4 L48.4,69.4 L49.6,66.6 H47Z" fill="#fff59d"/>`,
       chest: flashEmblem(50, 51, 1.05),
       head: face(A_SKIN[0]) + P("M32.6,40 Q30.2,24 33.4,14 Q38,5 50,5 Q62,5 66.6,14 Q69.8,24 67.4,40 L62.6,39 Q63,35.4 61.4,33.6 Q56,33 50,35.4 Q44,33 38.6,33.6 Q37,35.4 37.4,39Z", red) +
         shine(46, 8) + ears(1) + ears(-1) + eyes("#2a6fdb") + grin(36.6) });
-    const streaks = [[4, 30, 40], [0, 52, 30], [10, 92, 26], [0, 118, 44], [60, 134, 50], [70, 20, 40]].map(([x, y, w]) =>
-      `<path d="M${x},${y} h${w}" stroke="#fff" stroke-width="1.8" stroke-linecap="round" opacity=".55"/>`).join("");
+    const lines = dx => [[4, 30, 40], [0, 52, 30], [10, 92, 26], [0, 118, 44], [60, 134, 50], [70, 20, 40]].map(([x, y, w]) =>
+      `<path d="M${x + dx},${y} h${w}" stroke="#fff" stroke-width="1.8" stroke-linecap="round" opacity=".55"/>`).join(""), streaks = lines(0);
     const zig = (x, y, s, r) => `<path d="${BOLT}" fill="${gold}" stroke="#fff59d" stroke-width=".6" transform="translate(${x} ${y}) scale(${s}) rotate(${r})"/>`;
+    const road = w => `<path d="M0,146 H${w}" stroke="#ffc107" stroke-width="1.6" stroke-dasharray="8 6"/>`, ground = `<rect x="0" y="136" width="120" height="22" fill="#3b1530"/>`;
+    if (k) return [back(g, "#2a0d4a", "#7b1f3a") + `<g opacity=".25">${A_RAYS}</g>` + an("zoom", streaks + lines(120)) + an("crackle", zig(104, 112, 1.4, 20)) + an("crackle", zig(100, 22, 1.1, 10), "animation-delay:-.7s") +
+      ground + an("road", road(176)) + sparks([[96, 70, 3, "#fff59d"]]),
+      an("hop", an("runA", aEdge(place(body(stride, an("crackle", trail, "animation-delay:-.3s")), 14, 20, 1.1, "10 50 60"))) +
+        an("runB", aEdge(place(body(stride2, an("crackle", trail, "animation-delay:-.3s")), 14, 20, 1.1, "10 50 60"))))];
     return [back(g, "#2a0d4a", "#7b1f3a") + `<g opacity=".25">${A_RAYS}</g>` + streaks + zig(104, 112, 1.4, 20) + zig(100, 22, 1.1, 10) +
-      `<rect x="0" y="136" width="120" height="22" fill="#3b1530"/><path d="M0,146 H120" stroke="#ffc107" stroke-width="1.6" stroke-dasharray="8 6"/>` +
-      sparks([[96, 70, 3, "#fff59d"]]),
-      aEdge(place(fig, 14, 20, 1.1, "10 50 60"))];
+      ground + road(120) + sparks([[96, 70, 3, "#fff59d"]]),
+      aEdge(place(body(stride, trail), 14, 20, 1.1, "10 50 60"))];
   }
 
   /* ---------- 5 Aquaman ---------- */
-  function aquaman() {
+  // k: bubbles rise and fade, the fish swim across, the light rays shimmer, the seaweed sways, the trident glows and its
+  // tip gleams
+  function aquaman(k) {
     const g = U("g"), org = "#f39c12", grn = "#1e9e4a", gold = "#f6c21c", skin = A_SKIN[2], hair = "#e8b443";
     const scales = [...Array(6)].map((_, r) => [...Array(7)].map((_, c) => `<path d="M${33 + c * 5 + (r % 2) * 2.5},${43 + r * 4.4} q2.5,3 5,0" fill="none" stroke="#c46a00" stroke-width=".8"/>`).join("")).join("");
     const hairBack = P("M32,16 Q22,36 26,60 Q31,56 34,62 Q37,52 38,44 L62,44 Q63,52 66,62 Q69,56 74,60 Q78,36 68,16Z", hair);
@@ -5096,31 +5228,40 @@ function albumParentsWire(pl) {
       head: neatHair(hair) + face(skin) +
         P("M33.6,27 Q34,41 50,43.6 Q66,41 66.4,27 Q64,36 59,37 Q55,34.6 50,35.4 Q45,34.6 41,37 Q36,36 33.6,27Z", "#d9a032") +
         fringe(hair) + shine(46, 8) + eyes("#1e88e5", 0, .95, 27.8) + `<path d="M46.4,37.4 Q50,40 53.6,37.4Z" fill="#c0392b" stroke="${OL}" stroke-width=".8"/>`,
-      top: prongs });
+      top: prongs + (k ? aSpark(76, -17, 4.4, "#fff", "an-dc-gleam") : "") });
     const fish = (x, y, s, c, flip = 1) => `<g transform="translate(${x} ${y}) scale(${s * flip} ${s})"><path d="M-7,0 Q0,-6 7,0 Q0,6 -7,0Z M7,0 L12,-4 L12,4Z" fill="${c}" ${O}/>${aC(-3.4, -.8, 1, "#111")}</g>`;
-    const R = aRand(55), bub = [...Array(12)].map(() => aC(R() * 120, 20 + R() * 120, .8 + R() * 1.8, "none", `stroke="#e0f7fa" stroke-width=".8" opacity=".8"`)).join("");
-    return [back(g, "#28c3d4", "#0b3d7a") + `<g opacity=".18">${[10, 40, 70, 100].map(x => `<polygon points="${x},0 ${x + 12},0 ${x + 30},158 ${x + 10},158" fill="#fff"/>`).join("")}</g>` +
-      `<path d="M0,8 Q10,4 20,8 T40,8 T60,8 T80,8 T100,8 T120,8 V0 H0Z" fill="#9be7f0" opacity=".7"/>` + bub +
-      fish(14, 52, 1, "#ff7043") + fish(104, 80, .9, "#ffd54f", -1) + fish(16, 92, .7, "#ffd54f") + fish(102, 40, .7, "#ff7043", -1) +
-      [8, 20, 96, 110].map((x, i) => `<path d="M${x},160 Q${x - 6},${140 - i * 3} ${x + 2},${128 - i * 4} Q${x + 8},${116 - i * 3} ${x},${104 + i * 2}" fill="none" stroke="#2e7d32" stroke-width="3" stroke-linecap="round"/>`).join("") +
+    const R = aRand(55), bubs = [...Array(12)].map(() => aC(R() * 120, 20 + R() * 120, .8 + R() * 1.8, "none", `stroke="#e0f7fa" stroke-width=".8" opacity=".8"`));
+    const rays = `<g opacity=".18">${[10, 40, 70, 100].map(x => `<polygon points="${x},0 ${x + 12},0 ${x + 30},158 ${x + 10},158" fill="#fff"/>`).join("")}</g>`;
+    const fishes = [fish(14, 52, 1, "#ff7043"), fish(104, 80, .9, "#ffd54f", -1), fish(16, 92, .7, "#ffd54f"), fish(102, 40, .7, "#ff7043", -1)];
+    const weed = [8, 20, 96, 110].map((x, i) => `<path d="M${x},160 Q${x - 6},${140 - i * 3} ${x + 2},${128 - i * 4} Q${x + 8},${116 - i * 3} ${x},${104 + i * 2}" fill="none" stroke="#2e7d32" stroke-width="3" stroke-linecap="round"/>`);
+    // animated: fish facing left (flip 1) swim left, the others right, each at its own speed; bubbles and weeds out of step
+    return [back(g, "#28c3d4", "#0b3d7a") + (k ? an("shimmer", rays) : rays) +
+      `<path d="M0,8 Q10,4 20,8 T40,8 T60,8 T80,8 T100,8 T120,8 V0 H0Z" fill="#9be7f0" opacity=".7"/>` +
+      (k ? bubs.map((b, i) => an("rise", b, `animation-delay:-${(i * 1.37 % 3).toFixed(2)}s`)).join("") : bubs.join("")) +
+      (k ? fishes.map((f, i) => an(i % 2 ? "swimR" : "swimL", f, `animation-duration:${[3.4, 3, 2.6, 3.2][i]}s;animation-delay:-${[.4, 1.9, 1.4, .2][i]}s`)).join("") : fishes.join("")) +
+      (k ? weed.map((w, i) => an("sway", w, `transform-origin:${[8, 20, 96, 110][i]}px 160px;animation-delay:-${i * .6}s`)).join("") : weed.join("")) +
       `<path d="M0,150 Q30,140 60,148 T120,146 V158 H0Z" fill="#e8c27a"/>` +
-      shadow(60, 143, 28) + sparks([[28, 44, 2.4]]),
+      shadow(60, 143, 28) + sparks([[28, 44, 2.4]]) + (k ? an("glow", aC(87.6, 20, 15, "#fff59d", `opacity=".55"`)) : ""),
       aEdge(place(fig, 4, 25, 1.1))];
   }
 
   /* ---------- 6 Robin ---------- */
-  function robin() {
+  // k: he twirls the bo staff in his raised fist (re-drawn centred on the fist, spun about it, a faint whoosh ring behind)
+  function robin(k) {
     const g = U("g"), red = "#e0202b", grn = "#2e9b3e", yel = "#ffcc00";
     const cape = P("M42,42 Q28,56 10,88 Q20,86 24,94 Q30,86 36,92 Q40,80 46,64Z", yel) + P("M42,42 Q34,52 26,70 Q32,66 40,68 Q43,56 46,50Z", "#1b1b1b");
     const staff = `<path d="M90,8 L50,76" stroke="${OL}" stroke-width="4.6" stroke-linecap="round"/><path d="M90,8 L50,76" stroke="#8d6e63" stroke-width="2.6" stroke-linecap="round"/>` +
       `<path d="M88.4,10.8 L86,15 M52.4,72 L54.8,68" stroke="#cfd8dc" stroke-width="2.6"/>`;
+    const sp = `<path d="M93.8,.2 L55.2,65.8" stroke="${OL}" stroke-width="4.6" stroke-linecap="round"/><path d="M93.8,.2 L55.2,65.8" stroke="#8d6e63" stroke-width="2.6" stroke-linecap="round"/>` +
+      `<path d="M92.2,3 L89.8,7.2 M56.8,63 L59.2,58.8" stroke="#cfd8dc" stroke-width="2.6"/>`;
+    const twirl = an("glow", aC(74.5, 33, 37, "none", `stroke="#fff" stroke-width="5" opacity=".22"`)) + an("twirl", sp, "transform-origin:74.5px 33px");
     const fig = hero({
       pose: { ba: [[39, 47], [29, 52], [21, 46]], fa: [[61, 47], [71, 44], [74.5, 33]], bl: [[45, 72], [35, 79], [31, 92]], bb: [29, 96, 10, 6.6], fl: [[55, 72], [65, 81], [62, 94]], fb: [65, 98, 0, 6.6] },
       skin: A_SKIN[1], suit: red, sleeve: grn, glove: grn, gloveAt: .1, legs: grn, boot: "#1b1b1b", bootAt: .3, trunks: grn, capeBack: cape, belt: yel,
       buckle: [43, 50, 57].map(x => `<rect x="${x - 1.6}" y="64.3" width="3.2" height="3" rx=".5" fill="#ffe082" stroke="${OL}" stroke-width=".5"/>`).join(""),
       chest: `<path d="M46,41.5 L50,46 L54,41.5" fill="none" stroke="#1b1b1b" stroke-width="1.6"/>` + aC(54.8, 52, 4.8, yel, O) +
         `<text x="54.8" y="54.9" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="7.8" fill="#111">R</text>`,
-      grip: staff, frontOver: 0,
+      grip: k ? twirl : staff, frontOver: 0,
       head: aKidHead({ skin: A_SKIN[1], hair: "#141414", hs: "spiky", eyes: "#333", mouth: "" }).split("<ellipse cx=\"43.3\"")[0] +
         P("M33.6,26 Q37,22 44,24 Q50,25.6 56,24 Q63,22 66.4,26 Q66,33 59,33.4 Q53,33 50,30.6 Q47,33 41,33.4 Q34,33 33.6,26Z", "#141414") + lenses(-.4, .82) + aBlush() + cocky(36.6) });
     return [back(g, "#ff8a3d", "#ffd27a") + aC(92, 34, 18, "#fff3c4", `opacity=".7"`) +
@@ -5132,7 +5273,8 @@ function albumParentsWire(pl) {
 
   /* ---------- 7 Supergirl ---------- */
   // flying to the left (Superman flies up to the right): the whole body tilted, fist ahead, cape and hair streaming behind
-  function supergirl() {
+  // k: the clouds and wind lines stream past down to the right, the cape and the hair flutter, she bobs a little
+  function supergirl(k) {
     const g = U("g"), blue = "#2266e0", red = "#e01e2b", capeRed = "#c4141f", hair = "#f3cf5a", hairDk = "#c99a1e", skin = A_SKIN[0];
     const cape = P("M41,43 Q30,64 30,88 Q30,102 22,114 Q31,111 35,118 Q41,109 48,116 Q52,106 59,110 Q63,99 70,99 Q64,86 63,70 Q62,55 59,43Z", capeRed) +
       `<path d="M45,52 Q38,78 35,106 M55,52 Q59,76 60,100" stroke="#8e0d16" stroke-width="1.6" fill="none"/>`;
@@ -5141,19 +5283,25 @@ function albumParentsWire(pl) {
     const skirt = P("M38.5,63 H61.5 L65,76 Q50,79 35,76Z", red) + P("M38.5,62.4 H61.5 V65.6 H38.5Z", "#ffd600");
     const fig = hero({
       pose: { ba: [[39, 47], [28, 36], [21, 21]], fa: [[61, 46], [68, 56], [63, 64]], bl: [[46, 74], [45, 88], [44, 99]], bb: [44, 104, 88], fl: [[54, 74], [62, 84], [58, 95]], fb: [58.4, 100, 80] },
-      skin, suit: blue, sleeve: blue, legs: skin, boot: red, bootAt: .15, bootShape: 1, torso: "f", hips: skirt, capeBack: cape, behind: hairBack, frontOver: 1,
-      chest: sShield(50, 50, .82) + P("M37,44 Q38,41 43,41 L41,47Z", red) + P("M63,44 Q62,41 57,41 L59,47Z", red),
+      skin, suit: blue, sleeve: blue, legs: skin, boot: red, bootAt: .15, bootShape: 1, torso: "f", hips: skirt, capeBack: k ? an("flutter", cape, "transform-origin:50px 43px;animation-delay:-.5s") : cape,
+      behind: k ? an("hair", hairBack, "transform-origin:50px 22px") : hairBack, frontOver: 1, chest: sShield(50, 50, .82) + P("M37,44 Q38,41 43,41 L41,47Z", red) + P("M63,44 Q62,41 57,41 L59,47Z", red),
       head: `<g transform="rotate(22 50 40)">` + face(skin) + P("M33,26 Q31,6 50,5 Q69,6 67,26 Q64,16 57,13.6 Q50,18 44,14.6 Q38,16 33,26Z", hair) + shine(46, 8) +
         eyes("#3a7bd5", 1) + aBlush() + grin() + `</g>` });
-    const wind = [[66, 96, 30], [80, 110, 26], [58, 120, 22], [90, 84, 20]].map(([x, y, w]) =>
-      `<path d="M${x},${y} l${w * .8},${w * .6}" stroke="#fff" stroke-width="2.2" stroke-linecap="round" opacity=".75"/>`).join("");
-    return [back(g, "#7e57c2", "#ffb3a7") + stars(7, 14, 50) + aC(96, 120, 22, "#ffe082", `opacity=".8"`) + aC(96, 120, 16, "#fff3c4") +
-      cloud(-6, 136, 1.6, "#fff") + cloud(60, 142, 1.8, "#fff") + cloud(82, 40, .8, "#fff", .7) + wind + sparks([[50, 22, 3], [108, 62, 2.6], [12, 112, 2]]),
+    const gust = ([x, y, w]) => `<path d="M${x},${y} l${w * .8},${w * .6}" stroke="#fff" stroke-width="2.2" stroke-linecap="round" opacity=".75"/>`,
+      wind = [[66, 96, 30], [80, 110, 26], [58, 120, 22], [90, 84, 20]].map(gust).join(""), sky = back(g, "#7e57c2", "#ffb3a7") + stars(7, 14, 50) + aC(96, 120, 22, "#ffe082", `opacity=".8"`) + aC(96, 120, 16, "#fff3c4");
+    const clouds = [cloud(-6, 136, 1.6, "#fff"), cloud(60, 142, 1.8, "#fff"), cloud(82, 40, .8, "#fff", .7)];
+    // animated: the three clouds evenly spaced in time, faster gusts spread over the card
+    if (k) return [sky + clouds.map((c, i) => an("stream", c, `animation-delay:-${(i * .87).toFixed(2)}s`)).join("") +
+      [[66, 96, 30], [20, 60, 24], [70, 30, 22], [30, 110, 20]].map(gust).map((c, i) => an("stream", c, `animation-delay:-${i * .4 + .1}s;animation-duration:1.6s`)).join("") +
+      sparks([[50, 22, 3], [108, 62, 2.6], [12, 112, 2]]), an("bob", aEdge(place(fig, 13, 23, 1.08, "-45 50 60")))];
+    return [sky + clouds.join("") + wind + sparks([[50, 22, 3], [108, 62, 2.6], [12, 112, 2]]),
       aEdge(place(fig, 13, 23, 1.08, "-45 50 60"))];
   }
 
   /* ---------- 8 Batgirl ---------- */
-  function batgirl() {
+  // k: the batarang flies off spinning over her head and comes back to her hand like a boomerang (an-dc-boomer carries it
+  // along the loop, an-dc-rangspin turns it 4 times in the air), the ponytail swings, the cape flares
+  function batgirl(k) {
     const g = U("g"), pur = "#6a3fb5", dk = "#241640", lining = "#4a2d80", yel = "#ffd600", hair = "#e2561f", skin = A_SKIN[0];
     // the cape: dark, with scalloped bat-wing edges, flaring down to the left
     const cape = P("M41,42 Q28,52 14,68 Q20,72 17,81 Q26,79 27,88 Q33,83 37,91 Q41,77 46,62Z", dk) +
@@ -5162,14 +5310,14 @@ function albumParentsWire(pl) {
     const hairBack = P("M38,23 Q27,22 21,30 Q16,38 8,42 Q13,45 9,51 Q17,51 21,47 Q19,56 13,63 Q25,62 29,52 Q32,45 40,39Z", hair) +
       `<path d="M35,27 Q26,29 21,37 Q17,43 12,47 M37,33 Q30,37 27,45 Q24,53 18,59" fill="none" stroke="#a83a12" stroke-width="1.1" stroke-linecap="round"/>` +
       `<path d="M34,24.6 Q27,25 23.4,30.4" fill="none" stroke="#ffb08a" stroke-width="1.8" stroke-linecap="round"/>`;
-    const batarang = `<path d="${BAT}" fill="${yel}" stroke="${OL}" stroke-width="1.4" stroke-linejoin="round" transform="translate(88 27) scale(.72) rotate(-20)"/>` +
-      `<path d="M74,30 l6,-3 M76,24 l5,-2.4" stroke="#fff" stroke-width="1.4" stroke-linecap="round" opacity=".8"/>`;
+    const rang = `<path d="${BAT}" fill="${yel}" stroke="${OL}" stroke-width="1.4" stroke-linejoin="round" transform="translate(88 27) scale(.72) rotate(-20)"/>`,
+      whoosh = `<path d="M74,30 l6,-3 M76,24 l5,-2.4" stroke="#fff" stroke-width="1.4" stroke-linecap="round" opacity=".8"/>`, batarang = rang + whoosh;
     const fig = hero({
       pose: { ba: [[39, 47], [30, 55], [24, 63]], fa: [[61, 47], [70, 41], [77, 35]], bl: [[45, 72], [37, 80], [30, 90]], bb: [27, 93, 30, 6.6], fl: [[55, 72], [62, 86], [60, 100]], fb: [63, 104, 0, 6.6] },
-      skin, suit: pur, legs: pur, glove: yel, gloveAt: .3, boot: yel, bootAt: .4, trunks: pur, torso: "f", capeBack: cape + hairBack, belt: yel,
+      skin, suit: pur, legs: pur, glove: yel, gloveAt: .3, boot: yel, bootAt: .4, trunks: pur, torso: "f", capeBack: k ? an("billow", cape, "transform-origin:41px 42px;animation-duration:1.8s") + an("tail", hairBack, "transform-origin:38px 31px") : cape + hairBack, belt: yel,
       chest: bat(50, 51, .8, yel) + `<path d="${BAT}" fill="none" stroke="${OL}" stroke-width="1" transform="translate(50 51) scale(.8)"/>`,
       head: face(skin) + cowl(dk, .6) + P("M33.4,34 Q30,40 27.6,45 Q32.4,44.6 35,40Z", hair) + eyes("#2e8b57", 1, .92, 28.2) + aBlush(35.5) + smile(36.8),
-      top: batarang });
+      top: k ? an("boomer", an("rangspin", rang)) + an("throwfx", whoosh) : batarang });
     return [back(g, "#1a1040", "#5a2d82") + stars(21, 36, 90) + aC(64, 50, 34, "#fff8e1", `opacity=".25"`) + aC(64, 50, 28, "#fff3c4") + aC(54, 40, 4, "#f0e2a8") + aC(76, 62, 5, "#f0e2a8") +
       city(9, "#120a2a", "#b39ddb", 112) + shadow(50, 138, 24) + sparks([[14, 46, 2.6], [108, 92, 2.2]]),
       aEdge(place(fig, 10, 24, 1.1))];
@@ -5190,7 +5338,9 @@ function albumParentsWire(pl) {
       [-17, -8.5, 0, 8.5].map(y => `<path d="M14.6,${y + 2} Q16,${y + 4.25} 14.6,${y + 6.5}" fill="none" stroke="#00a046" stroke-width="1.1" stroke-linecap="round"/>`).join("") +
       `<path d="M-11,-9 Q-11,-13.6 -6,-14 M-11,-4 V7" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" opacity=".75"/><path d="M3,-18.4 H9" stroke="#fff" stroke-width="1.4" stroke-linecap="round" opacity=".8"/>`;
   }
-  function greenLantern() {
+  // k: the fist construct punches out along the beam and draws back (the beam, drawn along +x in a turned frame, stretches
+  // with it: an-dc-beam scales x from the ring), the ring's glow pulses
+  function greenLantern(k) {
     const g = U("g"), grn = "#18b84a", dk = "#141a1c", glow = "#69f0ae";
     const chestFill = `<path d="M30,38 H70 V47 Q60,49 56,52 Q53,47 50,47 Q47,47 44,52 Q40,49 30,47Z" fill="${dk}"/><rect x="30" y="38" width="9" height="34" fill="${dk}"/><rect x="61" y="38" width="9" height="34" fill="${dk}"/>`;
     const fa = [[61, 47], [68, 40], [72, 32]], tx = -4, ty = 15, sc = 1.17;
@@ -5201,26 +5351,30 @@ function albumParentsWire(pl) {
       head: aKidHead({ skin: A_SKIN[1], hair: "#5a3418", hs: "neat", eyes: "#6b3e1f", mouth: "" }).split("<ellipse cx=\"43.3\"")[0] +
         P("M33.4,26 Q37,21.6 44,23.6 Q50,25.2 56,23.6 Q63,21.6 66.6,26 Q66.4,33 59,33.6 Q53,33.2 50,30.8 Q47,33.2 41,33.6 Q33.6,33 33.4,26Z", grn) +
         eyes("#6b3e1f", 0, .82, 28.6) + aBlush(35.6) + grin(36.6),
-      top: aC(fa[2][0] + 1.8, fa[2][1] + 1.4, 7, glow, `opacity=".45"`) + aC(fa[2][0] + 1.8, fa[2][1] + 1.4, 3.6, "#e8fff1", `opacity=".85"`) });
+      top: (k ? s => an("ringglow", s) : s => s)(aC(fa[2][0] + 1.8, fa[2][1] + 1.4, 7, glow, `opacity=".45"`) + aC(fa[2][0] + 1.8, fa[2][1] + 1.4, 3.6, "#e8fff1", `opacity=".85"`)) });
     const ring = [tx + sc * (fa[2][0] + 1.8), ty + sc * (fa[2][1] + 1.4)], fx = 99, fy = 23, ang = -70, fs = .98;
     const wr = [fx + 24 * fs * Math.cos(ang * Math.PI / 180 + Math.PI), fy + 24 * fs * Math.sin(ang * Math.PI / 180 + Math.PI)];   // the fist's wrist end
     const beam = `<path d="M${ring[0].toFixed(1)},${ring[1].toFixed(1)} L${wr[0].toFixed(1)},${wr[1].toFixed(1)}" stroke="${glow}" stroke-width="8" opacity=".35" stroke-linecap="round"/>` +
       `<path d="M${ring[0].toFixed(1)},${ring[1].toFixed(1)} L${wr[0].toFixed(1)},${wr[1].toFixed(1)}" stroke="#e8fff1" stroke-width="2.4" opacity=".9" stroke-linecap="round"/>`;
+    const fist = `<g transform="translate(${fx} ${fy}) rotate(${ang}) scale(${fs})">${lanternFist(U("f"))}</g>`;
+    // animated: the same beam from the ring along +x, in a frame turned to the wrist (its length L = 12.4 at full reach)
+    const L = Math.hypot(wr[0] - ring[0], wr[1] - ring[1]), ray = `<g transform="translate(${ring[0].toFixed(1)} ${ring[1].toFixed(1)}) rotate(${(Math.atan2(wr[1] - ring[1], wr[0] - ring[0]) * 180 / Math.PI).toFixed(1)})">` +
+      an("beam", `<path d="M0,0 H${L.toFixed(1)}" stroke="${glow}" stroke-width="8" opacity=".35" stroke-linecap="round"/><path d="M0,0 H${L.toFixed(1)}" stroke="#e8fff1" stroke-width="2.4" opacity=".9" stroke-linecap="round"/>`, "transform-origin:0 0") + `</g>`;
     return [back(g, "#06121a", "#0d3b2a") + stars(31, 50) + aC(18, 124, 13, "#3949ab", O) + `<path d="M5,122 Q18,116 31,122" stroke="#7986cb" stroke-width="2" fill="none"/>` +
       aC(56, 74, 50, "#00e676", `opacity=".1"`) + sparks([[108, 70, 3, glow], [64, 8, 2.4, glow], [14, 50, 2.4]]),
-      aEdge(place(fig, tx, ty, sc)) + beam + `<g transform="translate(${fx} ${fy}) rotate(${ang}) scale(${fs})">${lanternFist(U("f"))}</g>`];
+      aEdge(place(fig, tx, ty, sc)) + (k ? ray : beam) + (k ? an("punch", fist) : fist)];
   }
 
   FAN.dc = [
-    ["Batman", "Grey suit, black cowl with pointed ears and white lenses, a confident grin, bat cape spread wide; Gotham at night with the bat-signal", batman],
-    ["Superman", "Big and flying up to the right, fist forward, red cape and red boots with cuffs, the S shield, the black curl", superman],
-    ["Wonder Woman", "Tiara with the red star, gold W eagle, starry skirt, silver bracelets, glowing golden lasso", wonderWoman],
-    ["The Flash", "All red with lightning ears, the bolt emblem, running in a burst of lightning", flash],
-    ["Aquaman", "Orange scale shirt, green gloves and legs, long blond hair and beard, golden trident under the sea", aquaman],
-    ["Robin", "Red tunic with the R, green sleeves, yellow cape, domino mask, a cheeky grin, bo staff, on a rooftop at sunset", robin],
-    ["Supergirl", "Flying to the left, fist ahead, cape and long blond hair streaming behind: blue top with the S shield, red skirt and boots", supergirl],
-    ["Batgirl", "Purple suit with the yellow bat, cowl with ears, a long red ponytail flowing over a dark cape, throwing a batarang under the moon", batgirl],
-    ["Green Lantern", "Green and black suit, mask, lantern emblem, the ring beams out a giant glowing green fist", greenLantern],
+    ["Batman", "Grey suit, black cowl with pointed ears and white lenses, a confident grin, bat cape spread wide; Gotham at night with the bat-signal", batman, live(batman)],
+    ["Superman", "Big and flying up to the right, fist forward, red cape and red boots with cuffs, the S shield, the black curl", superman, live(superman)],
+    ["Wonder Woman", "Tiara with the red star, gold W eagle, starry skirt, silver bracelets, glowing golden lasso", wonderWoman, live(wonderWoman)],
+    ["The Flash", "All red with lightning ears, the bolt emblem, running in a burst of lightning", flash, live(flash)],
+    ["Aquaman", "Orange scale shirt, green gloves and legs, long blond hair and beard, golden trident under the sea", aquaman, live(aquaman)],
+    ["Robin", "Red tunic with the R, green sleeves, yellow cape, domino mask, a cheeky grin, bo staff, on a rooftop at sunset", robin, live(robin)],
+    ["Supergirl", "Flying to the left, fist ahead, cape and long blond hair streaming behind: blue top with the S shield, red skirt and boots", supergirl, live(supergirl)],
+    ["Batgirl", "Purple suit with the yellow bat, cowl with ears, a long red ponytail flowing over a dark cape, throwing a batarang under the moon", batgirl, live(batgirl)],
+    ["Green Lantern", "Green and black suit, mask, lantern emblem, the ring beams out a giant glowing green fist", greenLantern, live(greenLantern)],
   ];
 })();
 
@@ -8261,12 +8415,6 @@ function albumParentsWire(pl) {
     g += [[0,-20,16],[-13,-8,13],[13,-8,13],[0,2,14]].map(([dx,dy,r]) => `<circle cx="${dx*s}" cy="${(dy)*s}" r="${r*s}" fill="${col}" ${A_OUT}/>`).join("");
     return `<g transform="translate(${x} ${yBase})">${g}</g>`;
   }
-  // a speckled toadstool mushroom cap+spots, used standalone or as the frog's seat
-  function spotRing(cx, cy, rx, ry, n, r, col) {
-    let s = "";
-    for (let i = 0; i < n; i++) { const a = i * 2 * Math.PI / n; s += `<circle cx="${r1(cx + Math.cos(a)*rx)}" cy="${r1(cy + Math.sin(a)*ry*.6)}" r="${r}" fill="${col}"/>`; }
-    return s;
-  }
 
   /* ---------- backdrops ---------- */
   function forestDay() {
@@ -8398,36 +8546,6 @@ function albumParentsWire(pl) {
     s += blush(-13,-5) + blush(13,-5);
     return s;
   }
-  function woodpeckerChar() {
-    const trunk = "#6b4a2e", red = "#d6392b", black = "#242424", white = "#fff";
-    let s = `<path d="M-14,-50 Q-20,0 -14,50 Q0,56 14,50 Q20,0 14,-50Z" fill="${trunk}" ${A_OUT}/>`;
-    s += [[-6,-20],[8,-4],[-8,14],[6,32]].map(([x,y]) => `<ellipse cx="${x}" cy="${y}" rx="7" ry="3" fill="#5a3b22" opacity=".6"/>`).join("");
-    s += aP("M-10,0 Q-16,22 -4,32 Q2,36 8,32 Q16,22 10,0 Q0,10 -10,0Z", black);
-    s += aP("M-5,8 Q0,14 5,8 L4,22 Q0,26 -4,22Z", white);
-    s += aC(-7,32,3.6,black,A_OUT) + aC(7,32,3.6,black,A_OUT);
-    s += aC(0, -14, 13, black, A_OUT);
-    s += aP("M-10,-20 Q0,-32 10,-20 Q10,-26 0,-30 Q-10,-26 -10,-20Z", red);
-    s += aP("M-6,-8 Q0,-3 6,-8 L5,0 Q0,3 -5,0Z", white);
-    s += aEye(-6, -16, "#fff", .8) + `<circle cx="-6" cy="-16" r="2" fill="#2a1a10"/>` + aEye(6, -16, "#fff", .8) + `<circle cx="6" cy="-16" r="2" fill="#2a1a10"/>`;
-    s += aP("M0,-8 L9,-6 L0,-3Z", "#f0a93a");
-    s += blush(-11,-10) + blush(11,-10);
-    return s;
-  }
-  function frogChar() {
-    const cap = "#d6392b", stem = "#f3ead9", green = "#6cb24a", green2 = "#4e9436";
-    let s = `<path d="M-20,2 Q-22,18 0,20 Q22,18 20,2 Q22,-10 0,-12 Q-22,-10 -20,2Z" fill="${cap}" ${A_OUT}/>`;
-    s += spotRing(0, -4, 15, 9, 7, 2.6, "#fff");
-    s += aR(-9, 2, 18, 30, stem, A_OUT);
-    s += aP("M-18,4 Q-22,24 -8,34 Q0,38 8,34 Q22,24 18,4 Q0,13 -18,4Z", green);
-    s += aP("M-9,16 Q0,21 9,16 L7,30 Q0,34 -7,30Z", green2);
-    s += [[-15,34],[15,34]].map(([x,y]) => `<ellipse cx="${x}" cy="${y}" rx="4.6" ry="3" fill="${green}" ${A_OUT}/>`).join("");
-    s += aC(-10, -8, 8, green, A_OUT) + aC(10, -8, 8, green, A_OUT);
-    s += aEye(-10, -8, "#2a1a10", 1) + aEye(10, -8, "#2a1a10", 1);
-    s += `<path d="M-6,4 Q0,9 6,4" fill="none" stroke="${A_OL}" stroke-width="1.1" stroke-linecap="round"/>`;
-    s += blush(-14,2) + blush(14,2);
-    return s;
-  }
-
   function fox() { return [forestDay(), aEdge(at(60, 100, 1.15, foxChar()))]; }
   function owl() { return [forestNight(), aEdge(at(60, 96, 1.15, owlChar()))]; }
   function fawn() { return [forestDay(), aEdge(at(60, 100, 1.1, fawnChar()))]; }
@@ -8435,8 +8553,50 @@ function albumParentsWire(pl) {
   function hedgehog() { return [mossyFloor(), aEdge(at(60, 112, 1.3, hedgehogChar()))]; }
   function bearCub() { return [forestDay(), aEdge(at(60, 100, 1.15, bearCubChar()))]; }
   function rabbit() { return [forestDay(), aEdge(at(60, 102, 1.1, rabbitChar()))]; }
-  function woodpecker() { return [forestDay(), aEdge(at(60, 96, 1.05, woodpeckerChar()))]; }
-  function frog() { return [mossyFloor(), aEdge(at(60, 100, 1.1, frogChar()))]; }
+  // side view, clinging to a big trunk with its claws and stiff tail, the long beak tapping the bark, chips flying
+  function woodpecker() {
+    const red = "#d6392b", black = "#242424", white = "#fff", cream = "#f6efe2", bark = "#7a5536";
+    let bg = forestDay() + aP("M-2,-2 H40 Q44,60 42,160 H-2Z", bark);
+    bg += ["M10,0 Q14,40 9,80 Q6,120 12,160", "M24,0 Q20,50 26,96 Q29,130 24,160", "M34,10 Q37,40 34,70"].map(d => `<path d="${d}" fill="none" stroke="#5a3b22" stroke-width="1.6" stroke-linecap="round"/>`).join("");
+    bg += aP("M22,98 Q30,90 36,98 Q36,112 29,114 Q22,112 22,98Z", "#2e1d10");
+    let s = aP("M60,110 L50,142 L57,139 L60,145 L64,139 L70,114Z", black);
+    s += aP("M56,62 Q44,82 50,104 Q56,120 70,118 Q84,112 82,88 Q80,66 70,60Z", cream);
+    s += `<ellipse cx="58" cy="112" rx="6" ry="4" fill="${red}"/>`;
+    s += aP("M66,61 Q87,70 84,96 Q81,112 67,117 Q74,94 66,61Z", black);
+    s += [[74, 74], [78, 82], [72, 86], [78, 94], [73, 100], [76, 107]].map(([x, y]) => `<ellipse cx="${x}" cy="${y}" rx="2.2" ry="1.4" fill="${white}"/>`).join("");
+    s += [94, 106].map(y => aP(`M55,${y - 3} Q48,${y - 4} 44,${y - 1} L43,${y + 1} Q48,${y} 49,${y + 1} L44,${y + 3} L44,${y + 5} Q50,${y + 4} 56,${y + 3}Z`, "#6d6d6d")).join("");
+    s += aC(64, 50, 14, white, A_OUT);
+    s += aP("M51,46 Q56,30 72,32 Q86,36 88,46 L80,44 Q76,40 70,40 Q60,40 52,48Z", red);
+    s += aP("M70,40 Q82,40 86,52 Q84,60 76,62 Q78,52 70,40Z", black);
+    s += `<path d="M52,56 Q62,60 74,60" fill="none" stroke="${black}" stroke-width="3" stroke-linecap="round"/>`;
+    s += aEye(59, 48, "#2a1a10", .75) + blush(64, 55, 2.4);
+    s += aP("M52,45 L40,49.5 L52,53Z", "#9a9a9a");
+    const chips = [[36, 40, 20], [30, 58, -30], [34, 34, 60], [28, 46, 10]].map(([x, y, r]) => `<rect x="${x}" y="${y}" width="4" height="2.4" rx=".6" fill="#e0a868" ${A_OUT} transform="rotate(${r} ${x + 2} ${y + 1.2})"/>`).join("");
+    const taps = `<path d="M38,42 l-5,-3 M37,50 l-6,0 M38,57 l-5,3" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>`;
+    return [bg, `<g transform="translate(-5 0)">${aEdge(s) + chips + taps}</g>`];
+  }
+  // a happy frog sitting on top of a red spotted toadstool, a fly buzzing by
+  function frog() {
+    const green = "#6cb24a", green2 = "#4e9436", belly = "#d4ecac";
+    let s = aP("M48,112 Q44,136 46,146 L74,146 Q76,136 72,112Z", "#f3ead9") + aP("M44,124 Q60,132 76,124 L75,129 Q60,136 45,129Z", "#e6d8bd");
+    s += aP("M18,114 Q20,82 60,79 Q100,82 102,114 Q60,122 18,114Z", "#d6392b");
+    s += aP("M20,114 Q60,122 100,114 Q60,130 20,114Z", "#efe0c4");
+    s += [[30, 100, 4], [46, 90, 4.5], [86, 98, 4.2], [96, 108, 2.6], [24, 110, 2.4], [70, 112, 3]].map(([x, y, r]) => `<ellipse cx="${x}" cy="${y}" rx="${r}" ry="${r1(r * .8)}" fill="#fff"/>`).join("");
+    s += aP("M28,86 Q24,72 38,68 Q48,70 48,84 Q40,90 28,86Z", green) + aP("M92,86 Q96,72 82,68 Q72,70 72,84 Q80,90 92,86Z", green);
+    s += [[22, 88], [27, 90], [32, 89], [98, 88], [93, 90], [88, 89]].map(([x, y]) => aC(x, y, 2.4, green2, A_OUT)).join("");
+    s += aP("M40,86 Q34,62 46,52 Q60,46 74,52 Q86,62 80,86 Q60,92 40,86Z", green);
+    s += aP("M48,85 Q46,68 60,64 Q74,68 72,85 Q60,89 48,85Z", belly);
+    s += aP("M47,66 Q44,76 47,86 L52,86 Q51,76 52,68Z", green) + aP("M73,66 Q76,76 73,86 L68,86 Q69,76 68,68Z", green);
+    s += [[45, 88], [49, 89], [53, 88], [67, 88], [71, 89], [75, 88]].map(([x, y]) => aC(x, y, 2, green2, A_OUT)).join("");
+    s += aP("M34,50 Q33,34 60,34 Q87,34 86,50 Q76,62 60,62 Q44,62 34,50Z", green);
+    s += aC(45, 31, 10.5, green, A_OUT) + aC(75, 31, 10.5, green, A_OUT);
+    s += aEye(45, 31, "#7a5a10", 1.25) + aEye(75, 31, "#7a5a10", 1.25);
+    s += aC(56, 44, .9, A_OL) + aC(64, 44, .9, A_OL);
+    s += `<path d="M42,49 Q60,61 78,49" fill="none" stroke="${A_OL}" stroke-width="1.4" stroke-linecap="round"/>` + blush(40, 52) + blush(80, 52);
+    const fly = `<path d="M84,20 q6,-8 10,0 q4,8 10,0" fill="none" stroke="#fff" stroke-width="1" stroke-dasharray="2 2"/>` +
+      `<ellipse cx="102" cy="14" rx="3" ry="4.5" fill="#cfe9ff" opacity=".9" ${A_OUT}/><ellipse cx="108" cy="15" rx="3" ry="4.5" fill="#cfe9ff" opacity=".9" ${A_OUT}/>` + aC(105, 20, 3, "#333", A_OUT);
+    return [mossyFloor(), aEdge(s) + fly];
+  }
 
   FAN.wforest = [
     ["Fox", "A bushy orange tail curled by its paws, big ears listening for friends", fox],
@@ -8856,15 +9016,26 @@ function albumParentsWire(pl) {
       eyes(51.5, 68.5, 42, "#2a6a1a", 1.15) + blush(45, 51, 2.4) + blush(75, 51, 2.4) +
       `<path d="M54,51 Q60,56 66,51" fill="none" stroke="${OL}" stroke-width="1.2" stroke-linecap="round"/>`;
   }
-  function tortoise(o = {}) {
-    const S = o.shell || "#a9793f", SK = o.skin || "#d9b06a";
-    return `<path d="M-14,5 Q-24,9 -29,14 Q-26,5 -18,2Z" fill="${SK}" ${OUT}/>` +
-      `<path d="M10,4 Q20,8 27,18 Q17,19 7,9Z" fill="${SK}" ${OUT}/>` +
-      `<ellipse cx="29" cy="-4" rx="10" ry="9" fill="${SK}" ${OUT}/>` +
-      `<path d="M-22,2 Q-20,-20 0,-20 Q20,-20 22,2Z" fill="${S}" ${OUT}/>` +
-      `<path d="M-6,-8 L0,-13 L6,-8 L4,-1 L-4,-1Z M-6,-8 L-13,-11 M6,-8 L13,-11 M-4,-1 L-10,3 M4,-1 L10,3 M0,-13 L0,-19" fill="${o.shell2 || "#c69450"}" stroke="#7a5324" stroke-width="1" stroke-linejoin="round"/>` +
-      `<path d="M-24,2 Q0,7 24,2 Q24,5 20,6 Q0,11 -20,6 Q-24,5 -24,2Z" fill="#e8d49a" ${OUT}/>` +
-      eyes(26, 33, -5, "#4a2a12", .72) + blush(24, 0, 1.6) + smile(29, 1, 2);
+  // a high-domed tortoise, raised scutes, stubby elephant legs with toenails, its head out on a wrinkly neck (card coords)
+  function tortoise() {
+    const S = "#a9793f", S2 = "#c99a55", SD = "#7a5324", SK = "#c9a463", SKd = "#a8844a";
+    const shell = "M20,116 Q18,66 57,63 Q96,66 94,116Z", id = uid("sh");
+    const hex = (x, y, r) => `<polygon points="${[0, 1, 2, 3, 4, 5].map(i => { const a = Math.PI / 3 * i; return `${f1(x + r * Math.cos(a))},${f1(y + r * .86 * Math.sin(a))}`; }).join(" ")}" fill="${S2}" stroke="${SD}" stroke-width="1.3" stroke-linejoin="round"/>`;
+    const leg = (x, c) => `<path d="M${x - 7},106 Q${x - 8},122 ${x - 9},130 Q${x},134 ${x + 9},130 Q${x + 8},122 ${x + 7},106Z" fill="${c}" ${OUT}/>` +
+      [-5, 0, 5].map(d => `<ellipse cx="${x + d}" cy="130" rx="2" ry="1.4" fill="#f4ead2" ${OUT}/>`).join("");
+    let s = leg(48, SKd) + leg(70, SKd);
+    s += `<path d="M21,112 L12,116 L21,117Z" fill="${SK}" ${OUT}/>`;
+    s += `<path d="M84,108 Q90,96 98,92 L106,98 Q98,104 94,114Z" fill="${SK}" ${OUT}/><path d="M89,102 q4,1 6,-2 M91,107 q4,1 6,-2" fill="none" stroke="${SKd}" stroke-width="1" stroke-linecap="round"/>`;
+    s += leg(30, SK) + leg(84, SK);
+    s += `<defs><clipPath id="${id}"><path d="${shell}"/></clipPath></defs><path d="${shell}" fill="${S}"/>`;
+    s += `<g clip-path="url(#${id})">${hex(57, 80, 12)}${hex(36, 92, 11)}${hex(78, 92, 11)}${hex(57, 103, 11)}${hex(18, 104, 10)}${hex(96, 104, 10)}${hex(40, 70, 9)}${hex(74, 70, 9)}` +
+      [[57, 80, 6], [36, 92, 5], [78, 92, 5], [57, 103, 5]].map(([x, y, r]) => `<ellipse cx="${x}" cy="${y}" rx="${r}" ry="${f1(r * .8)}" fill="#ddb470" opacity=".8"/>`).join("") +
+      `<path d="M14,70 Q40,64 57,66 Q80,64 96,72" fill="none" stroke="#fff" stroke-width="3" opacity=".35" stroke-linecap="round"/>` +
+      `<path d="M18,110 H96 V118 H18Z" fill="${SD}"/>${[24, 34, 44, 54, 64, 74, 84].map(x => `<path d="M${x},110 V117" stroke="#5a3b18" stroke-width="1"/>`).join("")}</g>`;
+    s += `<path d="${shell}" fill="none" ${OUT} stroke-width="1.4"/>`;
+    s += `<path d="M18,115 Q57,123 96,115 L96,119 Q57,127 18,119Z" fill="#e8d49a" ${OUT}/>`;
+    s += `<ellipse cx="103" cy="88" rx="12" ry="11" fill="${SK}" ${OUT}/>` + eyes(99, 108, 86, "#4a2a12", .8) + blush(97, 93, 2) + blush(111, 93, 1.8) + smile(104, 94, 2.4);
+    return s;
   }
   // a sleek crested roadrunner mid-dash: long tail up, long legs, long beak
   function roadrunner() {
@@ -8928,7 +9099,7 @@ function albumParentsWire(pl) {
   const meerkatA = () => [mesas({ sun: [100, 20] }) + rock, aEdge(`<g class="lv-bob">${at(60, 78, 1.75, meerkat())}</g>`)];
   const scorpA = () => [dunes({ top: "#ffd9a0", bot: "#f3b35a", tufts: false, cactus: [106, 148, .8] }), aEdge(at(58, 94, 2, scorpion()))];
   const geckoA = () => [rockWall(), aEdge(gecko())];
-  const tortA = () => [dunes({ cactus: [14, 96, .7] }), aEdge(at(54, 104, 1.6, tortoise()))];
+  const tortA = () => [dunes({ cactus: [104, 84, 1.5] }) + aC(104, 46, 3.6, "#ff7aa8", OUT) + aC(104, 46, 1.5, "#ffe36e"), aEdge(at(-10, -4, 1.08, tortoise()))];
   const roadA = () => [mesas({ road: true }) + speed, aEdge(roadrunner())];
   const cactA = () => [dunes({ sun: [102, 20, 10], c1: "#f6d79a" }), aEdge(at(58, 100, 1.9, cactusFace()))];
   const jerboaA = () => [oasis(), aEdge(jerboa())];
@@ -10773,20 +10944,32 @@ function albumParentsWire(pl) {
     return s;
   }
   function tango(cx, cy, R) {
-    // white circles packed almost touching on a black ball: thin black seams between two circles and chunky curved
-    // triangles where three meet, the Tango "triads"
-    const rc = R * .38, d = R * .72;
-    let s = aC(cx, cy, R, "#1b1b1b") + aC(cx, cy, f1(rc), "#fbfbf8");
-    for (let i = 0; i < 6; i++) {
-      const ang = -90 + i * 60, [x, y] = place(cx, cy, ang, d, 0, 0, 1);
-      s += `<ellipse cx="${f1(x)}" cy="${f1(y)}" rx="${f1(rc * .8)}" ry="${f1(rc * .94)}" fill="#fbfbf8" transform="rotate(${ang} ${f1(x)} ${f1(y)})"/>`;
-    }
-    for (let i = 0; i < 6; i++) {
-      const ang = -60 + i * 60, [x, y] = place(cx, cy, ang, R * 1.04, 0, 0, 1);
-      s += `<ellipse cx="${f1(x)}" cy="${f1(y)}" rx="${f1(rc * .5)}" ry="${f1(rc * .92)}" fill="#fbfbf8" transform="rotate(${ang} ${f1(x)} ${f1(y)})"/>`;
-    }
-    return s;
+    // the real layout, projected from 3D: 12 white circles on the icosahedron's corners and a black triad on each of its
+    // 20 faces (a black disc round the face's centre with the three circles cut out, so its sides curve in and its three
+    // arms nearly meet the neighbours' between two circles); points behind the ball are pushed onto its rim
+    const g = (1 + Math.sqrt(5)) / 2, V = [];
+    for (const a of [-1, 1]) for (const b of [-g, g]) V.push([0, a, b], [a, b, 0], [b, 0, a]);
+    const nrm = v => { const l = Math.hypot(...v); return v.map(x => x / l); };
+    const rot = v => { const [x, y, z] = v, a = -.42, b = .16, c = .3;
+      const y1 = y * Math.cos(a) - z * Math.sin(a), z1 = y * Math.sin(a) + z * Math.cos(a);
+      const x2 = x * Math.cos(b) + z1 * Math.sin(b), z2 = -x * Math.sin(b) + z1 * Math.cos(b);
+      return [x2 * Math.cos(c) - y1 * Math.sin(c), x2 * Math.sin(c) + y1 * Math.cos(c), z2]; };
+    const U = V.map(v => rot(nrm(v)));
+    const F = [];
+    for (let i = 0; i < 12; i++) for (let j = i + 1; j < 12; j++) for (let k = j + 1; k < 12; k++)
+      if ([[i, j], [j, k], [i, k]].every(([p, q]) => Math.abs(Math.hypot(...V[p].map((x, n) => x - V[q][n])) - 2) < 1e-6)) F.push(nrm([0, 1, 2].map(n => U[i][n] + U[j][n] + U[k][n])));
+    // the boundary of a cap of angular radius r round direction c, as an SVG polygon
+    const cap = (c, r, fill) => {
+      const t = Math.abs(c[0]) < .9 ? [1, 0, 0] : [0, 1, 0], e1 = nrm([c[1] * t[2] - c[2] * t[1], c[2] * t[0] - c[0] * t[2], c[0] * t[1] - c[1] * t[0]]);
+      const e2 = [c[1] * e1[2] - c[2] * e1[1], c[2] * e1[0] - c[0] * e1[2], c[0] * e1[1] - c[1] * e1[0]];
+      const P = [...Array(40)].map((_, i) => { const a = i * Math.PI / 20, p = [0, 1, 2].map(n => c[n] * Math.cos(r) + Math.sin(r) * (e1[n] * Math.cos(a) + e2[n] * Math.sin(a)));
+        let [x, y] = p; if (p[2] < 0) { const l = Math.hypot(x, y) || 1; x /= l; y /= l; } return `${f1(cx + R * x)},${f1(cy + R * y)}`; });
+      return `<polygon points="${P.join(" ")}" fill="${fill}"/>`;
+    };
+    const vis = c => c[2] > -.35;
+    return F.filter(vis).map(c => cap(c, .325, "#1b1b1b")).join("") + U.filter(vis).map(c => cap(c, .49, "#fbfbf8")).join("");
   }
+
   function alRihla(cx, cy, R) {
     // white with bold wing-shaped panels in navy, red, sky blue and gold, five-fold like a pinwheel
     const cols = ["#1e3a8a", "#e53935", "#29b6f6", "#f5c400", "#1e3a8a"], acc = ["#29b6f6", "#f5c400", "#1e3a8a", "#e53935", "#e53935"];
@@ -12039,19 +12222,21 @@ function albumParentsWire(pl) {
 
   // Argentina: Magellanic penguins on a Patagonian beach
   function penguin(k = 1, flip = false) {
-    const t = [];
+    const B = "#1d1d24", t = [];
     t.push(E(-8, 30, 7, 3, "#ff9eb0", 1.1) + E(8, 30, 7, 3, "#ff9eb0", 1.1));
-    t.push(P("M-20,-8 Q-28,8 -26,18 Q-22,16 -18,8Z", "#1d1d24", 1.2) + P("M20,-8 Q28,8 26,18 Q22,16 18,8Z", "#1d1d24", 1.2));
-    t.push(E(0, 6, 20, 26, "#1d1d24", 1.4));
-    t.push(E(0, 10, 15, 20, "#fff", 1));
-    // the two black chest bands
-    t.push(Pn("M-15,-3 Q0,7 15,-3 L15,0 Q0,10 -15,0Z", "#1d1d24") + Pn("M-13.5,9 Q0,17 13.5,9 L13,11.6 Q0,19.6 -13,11.6Z", "#1d1d24"));
-    // head: black, with the white C-shaped stripe on each side (above the eye, round behind it, down to the throat)
-    t.push(aC(0, -22, 15, "#1d1d24", st(1.4)));
-    t.push(Pn("M-4,-35 Q-16,-34 -15,-22 Q-14,-12 -5,-8 L-4,-11 Q-11,-14 -11,-22 Q-11,-31 -3,-32Z M4,-35 Q16,-34 15,-22 Q14,-12 5,-8 L4,-11 Q11,-14 11,-22 Q11,-31 3,-32Z", "#fff"));
-    t.push(En(-5.5, -22, 4.4, 4.8, "#ffc0cc") + En(5.5, -22, 4.4, 4.8, "#ffc0cc"));
-    t.push(aEye(-5.5, -22, "#3a2a20", .55) + aEye(5.5, -22, "#3a2a20", .55));
-    t.push(P("M-3.4,-15 L3.4,-15 L0,-9Z", "#444", .9));
+    t.push(P("M-19,-6 Q-30,8 -27,20 Q-22,17 -17,8Z", B, 1.2) + P("M19,-6 Q30,8 27,20 Q22,17 17,8Z", B, 1.2));
+    t.push(E(0, 6, 20, 26, B, 1.4));
+    t.push(E(0, 12, 15, 20, "#fff", 1));
+    // black throat, a white band, then the black horseshoe across the chest and down both flanks, a few belly spots
+    t.push(Pn("M-14,-5 Q0,1 14,-5 L14,-12 H-14Z", B));
+    t.push(Pn("M-14.6,10 Q0,1 14.6,10 L14.6,26 L11.8,26 L11.6,13 Q0,5.4 -11.6,13 L-11.8,26 L-14.6,26Z", B));
+    t.push([[-5, 18], [4, 22], [-2, 27], [5, 15]].map(([x, y]) => En(x, y, 1.2, 1, B)).join(""));
+    // head: black, a thin white stripe from above the eye, round behind it and down to the throat on each side
+    t.push(aC(0, -22, 16, B, st(1.4)));
+    t.push(Pn("M-3,-36 Q-17,-36 -15.6,-22 Q-14.6,-11 -3,-5 L-2,-7.4 Q-12,-13 -12.6,-22 Q-13,-32 -2.4,-33.4Z M3,-36 Q17,-36 15.6,-22 Q14.6,-11 3,-5 L2,-7.4 Q12,-13 12.6,-22 Q13,-32 2.4,-33.4Z", "#fff"));
+    t.push(aEye(-6, -23, "#3a2a20", .6) + aEye(6, -23, "#3a2a20", .6));
+    t.push(En(-2.8, -16, 2, 1.4, "#ff9eb0") + En(2.8, -16, 2, 1.4, "#ff9eb0"));
+    t.push(P("M-3.6,-17 L3.6,-17 L0,-10.5Z", "#555", .9));
     const s = t.join("");
     return `<g transform="scale(${flip ? -k : k} ${k})">${s}</g>`;
   }
