@@ -1670,14 +1670,14 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
 .aladder i.on { opacity: 1; }
 .aladder .l0 { background: #fff; } .aladder .l1 { background: #29b6f6; }
 .aladder .l2 { background: conic-gradient(#ff5e5e, #ffd84d, #5eff8a, #4dd2ff, #b06bff, #ff5e5e); }
-/* the three looks (the owner, 2026-10-03): still until 3 copies (a page's living sticker too: each lv- element's own resting
-   state), 3 copies = a gentle bob (an-gold; a scene filling the card breathes, an-breathe), holo = the sticker's own animation
+/* the three looks (the owner, 2026-10-03): 1 copy still (a page's living sticker too: each lv- element's own resting
+   state), 2–4 copies = a hop with a wiggle (an-gold, big enough to see on a small card; a scene filling the card breathes, an-breathe), holo = the sticker's own animation
    (its lv-/an- classes run only on a holo card). The full page's big picture still moves */
 .stk:not(.t2) [class*="lv-"], .stk:not(.t2) [class*="an-"]:not(.an-gold):not(.an-breathe) { animation: none; }
-.an-gold { animation: angold 2.6s ease-in-out infinite; }
-@keyframes angold { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
-.an-breathe { animation: anbreathe 3s ease-in-out infinite; transform-origin: 60px 79px; }
-@keyframes anbreathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.035); } }
+.an-gold { animation: angold 1.8s ease-in-out infinite; transform-origin: 60px 150px; }
+@keyframes angold { 0%, 50%, 100% { transform: translateY(0) rotate(0); } 25% { transform: translateY(-9px) rotate(-5deg); } 75% { transform: translateY(-9px) rotate(5deg); } }
+.an-breathe { animation: anbreathe 2.4s ease-in-out infinite; transform-origin: 60px 79px; }
+@keyframes anbreathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.09); } }
 .aladder b { font: 700 22px var(--display); color: #333; }
 .kpacks { display: inline-flex; align-items: center; gap: 4px; } .kpacks[hidden] { display: none; }
 .kpacks svg { height: 30px; width: auto; }

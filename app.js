@@ -3617,8 +3617,8 @@ function aParts(st, o = {}) {
 }
 // a shiny figure plays in a golden kit (and its backdrop turns another colour, aShiny)
 const A_GOLD_KIT = { shirt: "#ffd54f", stripes: undefined, trim: "#8d6e00", shorts: "#ffca28", socks: "#ffd54f", numStroke: "none" };
-/* the picture has three looks (the owner, 2026-10-03: "base one, basic animation, own animation"): 1–2 copies still (a
-   page's living sticker too, CSS); o.gold (3–4 copies) = a gentle bob (a scene that fills the card breathes instead);
+/* the picture has three looks (the owner, 2026-10-03: "base one, basic animation, own animation"): 1 copy still (a
+   page's living sticker too, CSS); o.gold (2–4 copies) = a hop with a wiggle (a scene that fills the card breathes instead);
    o.holo (5) = the sticker's own animation (stkAnim) where it's drawn, else the character floats, sparkles twinkle and
    a living sticker plays its motion; o.shiny = 1 card in 50: the backdrop in another palette (a theme page's character
    too; a player gets a golden kit instead) */
@@ -4233,8 +4233,9 @@ function albumOf(pl) {
 }
 // a boss's sticker: owned once that gate is beaten (also for gates beaten before the sticker book existed)
 function stkOwned(pl, st) { const n = albumOf(pl).s[st.id] || 0; return st.boss ? (n || stageStars(pl, st.boss) >= 1 ? 1 : 0) : n; }
-/* tiers = the three looks (the owner, 2026-10-03: "basic -> animated -> better animated"): 0 = 1–2 copies, still, plain
-   frame; 1 = 3–4 copies, the picture moves (a gentle bob), still a plain frame; 2 = HOLO, the holo frame and the sticker's
+/* tiers = the three looks (the owner, 2026-10-03: "basic -> animated -> better animated"): 0 = 1 copy, still, plain
+   frame; 1 = 2–4 copies, the picture moves (a hop with a wiggle: the first duplicate must show it; a 3px bob from the 3rd
+   copy went unnoticed), still a plain frame; 2 = HOLO, the holo frame and the sticker's
    own animation (a FAN row's 4th entry, e.g. Spider-Man swinging on his web; else float + sparkles), then it leaves the
    packs. (The silver (2) and gold (3) frames were dropped then too: he only wants the looks to change.) */
 /* where own animations live: a FAN row's 4th entry (theme, world and subject pages); a team sticker's kind (keeper, player,
@@ -4247,7 +4248,7 @@ function stkAnim(st) {
   const t = st.team || st.mini || st.bd, k = st.cty || st.scene || st.kind || (st.sp && "sp_" + st.sp), f = (A_TOWN[t] && A_TOWN[t][k]) || A_OWN[k];
   return typeof f === "function" ? () => f(t, st) : null;
 }
-function stkTier(st, copies) { return st.boss || copies >= HOLO ? 2 : copies >= 3 ? 1 : 0; }
+function stkTier(st, copies) { return st.boss || copies >= HOLO ? 2 : copies >= 2 ? 1 : 0; }
 // packs of 3 per OLD_EVERY solves up to c0, a pack per solve from c0 to c1, then one per PACK_EVERY
 function packsEarned(a) { const c0 = a.c0 || 0, c1 = Math.max(c0, a.c1 || 0); return Math.floor(c0 / OLD_EVERY) + (c1 - c0) + Math.floor(aSince(a) / PACK_EVERY); }
 function aSince(a) { return Math.max(0, a.c - Math.max(a.c0 || 0, a.c1 || 0)); }      // solves under the current rule
@@ -4484,12 +4485,12 @@ function aOpenPack() {
   tear.t = setTimeout(tear, 2500);
 }
 // pack opening: the "new" badge (a gold burst with a sparkle), and a copy's pips: one per copy up to the next tier's
-// count (3 moving, 5 holo), filled in the tier each copy reached, the empty ones ringed in the next tier's colour
+// count (2 moving, 5 holo), filled in the tier each copy reached, the empty ones ringed in the next tier's colour
 const A_NEW_PTS = [...Array(24)].map((_, i) => { const a = i * Math.PI / 12, r = i % 2 ? 31 : 48; return (r * Math.sin(a)).toFixed(1) + "," + (-r * Math.cos(a)).toFixed(1); }).join(" ");
 const A_NEW = `<svg viewBox="-50 -50 100 100" aria-hidden="true"><polygon points="${A_NEW_PTS}" fill="#ffca28" stroke="#e65100" stroke-width="3" stroke-linejoin="round"/>
   <path d="M0,-27 Q4,-4 27,0 Q4,4 0,27 Q-4,4 -27,0 Q-4,-4 0,-27Z" fill="#fff"/><path d="M19,-29 Q20.5,-22 27,-21 Q20.5,-20 19,-13 Q17.5,-20 11,-21 Q17.5,-22 19,-29Z" fill="#fff"/></svg>`;
 function aPips(c, st = {}) {
-  const next = [3, HOLO].find(x => x > c), n = next || HOLO;
+  const next = [2, HOLO].find(x => x > c), n = next || HOLO;
   return `<span class="apips" aria-label="${c} copies">${[...Array(n)].map((_, k) => k < c ? `<i class="p${stkTier(st, k + 1)}${k === c - 1 ? " nw" : ""}"></i>` : `<i class="e${stkTier(st, n)}"></i>`).join("")}</span>`;
 }
 // a sticker from the tray flies into its slot (turning to its page first)
@@ -4529,7 +4530,7 @@ function albumParents(pl) {
   const a = albumOf(pl), have = STK.filter(st => stkOwned(pl, st)).length, local = location.protocol === "file:";
   return `<figure class="chart wide"><figcaption>Sticker book</figcaption>
     <p class="tiny">A pack of ${PACK_SIZE} stickers for every ${PACK_EVERY > 1 ? PACK_EVERY + " clean solves" : "clean solve"} on the learning path (puzzles, endgames and the review stop; replays of a finished stage don't count), and for each boss beaten ${BOSS_PACKS} packs and its own sticker.
-      Every pack holds at least one sticker missing from the book until it's full. With 3 copies a sticker's picture starts to move, with ${HOLO} it turns holo (it plays its own animation and leaves the packs);
+      Every pack holds at least one sticker missing from the book until it's full. From the 2nd copy a sticker's picture moves, with ${HOLO} it turns holo (it plays its own animation and leaves the packs);
       1 card in ${SHINY_ODDS} is shiny. A world's page opens when the path reaches that world. ${aPool(pl).length ? "" : "<b>Every open sticker is holo: no more packs for now.</b>"}</p>
     <div class="tiles"><div class="tile"><span class="lbl">Stickers</span><b>${have}/${STK.length}</b></div>
       <div class="tile"><span class="lbl">Packs opened</span><b>${a.o}</b></div><div class="tile"><span class="lbl">Packs waiting</span><b>${packsWaiting(pl)}</b></div>
