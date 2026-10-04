@@ -106,10 +106,18 @@ function mergePlayer(a, b) {
     if (x.lp || y.lp) out.album.lp = Math.max(x.lp || 0, y.lp || 0);     // packs for the stickers album v5 removed
     if (x.sh || y.sh) out.album.sh = maxMap(x.sh, y.sh);                 // shiny stickers
   }
-  for (const k of ["real", "poke", "marvel", "dc"]) if (a[k] || b[k]) {      // the photo books (real.js): stickers by union, the larger count of packs opened / given,
-    const x = a[k] || {}, y = b[k] || {}, base = [x.base, y.base].filter(v => v != null);      // the earlier start
-    out[k] = { s: maxMap(x.s, y.s), o: Math.max(x.o || 0, y.o || 0), g: Math.max(x.g || 0, y.g || 0), base: base.length ? Math.min(...base) : 0 };
-    if (x.sh || y.sh) out[k].sh = maxMap(x.sh, y.sh);      // shiny Pokémon
+  if (a.photo || b.photo || PB_KEYS.some(k => a[k] || b[k])) {
+    // the photo books (real.js): both copies on the turns rule first (pbMigrate, on copies), then stickers by union, the larger
+    // count of packs opened / given / dealt, and the turns of the copy that dealt further
+    const cur = p => { const c = { ...p, album: p.album && JSON.parse(JSON.stringify(p.album)) }; for (const k of [...PB_KEYS, "photo"]) if (p[k]) c[k] = JSON.parse(JSON.stringify(p[k])); pbMigrate(c); return c; };
+    const A = cur(a), B = cur(b);
+    for (const k of PB_KEYS) if (A[k] || B[k]) {
+      const x = A[k] || {}, y = B[k] || {};
+      out[k] = { s: maxMap(x.s, y.s), o: Math.max(x.o || 0, y.o || 0), g: Math.max(x.g || 0, y.g || 0), e: Math.max(x.e || 0, y.e || 0) };
+      if (x.sh || y.sh) out[k].sh = maxMap(x.sh, y.sh);      // shiny Pokémon
+    }
+    const P = A.photo.upto >= B.photo.upto ? A.photo : B.photo;
+    out.photo = { upto: P.upto, next: P.next };
   }
   out.school = {};
   for (const pc of new Set([...Object.keys(a.school || {}), ...Object.keys(b.school || {})])) {
@@ -14248,10 +14256,14 @@ const HEROES = {"marvel":[["h",[[620,"Spider-Man","620-spider-man.jpg"],[346,"Ir
    The pages hold only the pictures' addresses: each device downloads a picture the first time it's needed, shrinks it
    (JPEG on the card colour, PNG for crests and Pokémon) and keeps it in IndexedDB (rPhotos), so the pictures never sit
    in our repo or on the public site.
-   Packs (the owner): each book gets one pack for every pack of the drawn book (packs earned, gifts, boss packs alike),
-   REAL_GIFT to start with, the book's `size` stickers each (REAL_PACK unless smaller), only stickers he hasn't got (no duplicates: the last pack can be
-   smaller, then the packs stop). Stored as pl.real / pl.poke / pl.marvel / pl.dc = {s: {id: 1}, o: packs opened, g: packs given, base: drawn
-   packs earned when the book came, sh: {id: 1} shiny (Pokémon)} (merged in mergePlayer). ---- */
+   Packs (the owner, 2026-10-04: "way too many packs"): one photo pack with every pack of the drawn book (packs earned,
+   gifts, boss packs alike), the books taking turns in shelf order (football → Pokémon → Marvel → DC → football…; a book
+   that will be full with the packs it has is skipped), dealt by pbDeal. Until then each book had a pack with every drawn
+   pack. The football book starts with REAL_GIFT packs, the others with none. A pack = the book's `size` stickers (REAL_PACK
+   unless smaller), only ones he hasn't got (no duplicates: the last pack can be smaller, then the packs stop).
+   Stored as pl.real / pl.poke / pl.marvel / pl.dc = {s: {id: 1}, o: packs opened, g: packs given, e: packs dealt, sh: {id: 1}
+   shiny (Pokémon)} and pl.photo = {upto: the drawn packs earned that photo packs were dealt for (or that came before the
+   turns), next: the book whose turn it is} (pbMigrate turns the old per-book `base` into `e`; merged in mergePlayer). ---- */
 const REAL_PACK = 7, REAL_GIFT = 2;
 const R_POS = { gk: "GR", df: "DEF", md: "MED", fw: "AV" };
 // the stickers, team by team: crest, stadium, coach, then the players (keepers first, as zerozero lists them);
@@ -14290,14 +14302,38 @@ let albumBook = "shelf";      // the 📖 tab: "shelf" (every book), "fan" (the 
 
 /* ---- packs ---- */
 function aEarnedAll(a) { return packsEarned(a) + a.b + a.bp + (a.lp || 0); }      // every pack the drawn book has given
+const PB_KEYS = ["real", "poke", "marvel", "dc"];      // shelf order = the order of the turns (PBOOK's keys)
+// once per player (also on both copies in mergePlayer): the packs each book got under the old rule (one per drawn pack
+// since the book came) become its dealt packs `e`, and the turns start now, with the first book he hasn't opened yet
+function pbMigrate(pl) {
+  if (pl.photo) return pl.photo;
+  const earned = aEarnedAll(albumOf(pl));
+  for (const k of PB_KEYS) if (pl[k] && pl[k].base != null) { pl[k].e = Math.max(0, earned - pl[k].base); delete pl[k].base; }
+  return pl.photo = { upto: earned, next: Math.max(0, PB_KEYS.findIndex(k => !pl[k])) };
+}
 function pbOf(pl, b) {
-  if (!pl[b.key]) pl[b.key] = { s: {}, o: 0, g: REAL_GIFT, base: aEarnedAll(albumOf(pl)) };
+  pbMigrate(pl);
+  if (!pl[b.key]) pl[b.key] = { s: {}, o: 0, g: b.key === "real" ? REAL_GIFT : 0, e: 0 };
   return pl[b.key];
 }
 const pbHas = (pl, b, st) => !!pbOf(pl, b).s[st.id];
+const pbLeft = (pl, b) => { const r = pbOf(pl, b); return Math.max(0, r.g + (r.e || 0) - r.o); };      // packs given or dealt, not opened
+// a book gets no more turns once its unopened packs will fill it
+const pbFull = (pl, b) => b.stk.filter(st => !pbOf(pl, b).s[st.id]).length <= pbLeft(pl, b) * b.size;
+// deal the photo packs earned since the last call, one per drawn pack, to the books in turn (skipping full ones)
+function pbDeal(pl) {
+  const ph = pbMigrate(pl), earned = aEarnedAll(albumOf(pl));
+  while (ph.upto < earned) {
+    const k = PB_KEYS.map((_, i) => PB_KEYS[(ph.next + i) % PB_KEYS.length]).find(k => !pbFull(pl, PBOOK[k]));
+    if (!k) { ph.upto = earned; break; }      // every book will be full: nothing to deal
+    pbOf(pl, PBOOK[k]).e = (pbOf(pl, PBOOK[k]).e || 0) + 1;
+    ph.upto++; ph.next = (PB_KEYS.indexOf(k) + 1) % PB_KEYS.length;
+  }
+}
 function pbWaiting(pl, b) {
-  const r = pbOf(pl, b), n = Math.max(0, r.g + aEarnedAll(albumOf(pl)) - r.base - r.o);
-  return n && b.stk.some(st => !r.s[st.id]) ? n : 0;
+  pbDeal(pl);
+  const n = pbLeft(pl, b);
+  return n && b.stk.some(st => !pbOf(pl, b).s[st.id]) ? n : 0;
 }
 const pbWaitingAll = pl => Object.values(PBOOK).reduce((n, b) => n + pbWaiting(pl, b), 0);
 // the next pack: the book's size of stickers he hasn't got (fewer at the end); drawn from the pack's number like the drawn book's
@@ -14432,7 +14468,7 @@ const H_PACK = { marvel: heroPackSvg("#c62828", "#fff", aStar(40, 58, 13, "#fff"
 
 /* ---- the books: stickers, pages, the page tabs (in groups), pictures to fetch; page / tray are the open book's state ---- */
 const PBOOK = {
-  real: { key: "real", stk: RSTK, pages: R_PAGES, seed: 271828, size: REAL_PACK, cls: "rpk", mark: "📸", label: "The photo sticker book",
+  real: { key: "real", stk: RSTK, pages: R_PAGES, seed: 271828, size: REAL_PACK, cls: "rpk", mark: "📸", label: "The photo sticker book", short: "football",
     card: realCard, empty: realEmpty, pack: aPackSvg, mb: 7,
     about: () => `${Object.values(REAL_TEAMS).map(t => esc(t.name)).join(", ")}: crest, stadium, coach and 20 players each.`,
     credit: () => `Players, coaches and crests: photos from <a href="https://www.zerozero.pt" target="_blank" rel="noopener">zerozero.pt</a>, loaded by this device. ` +
@@ -14443,7 +14479,7 @@ const PBOOK = {
     cover: () => Object.values(REAL_TEAMS).map(t => `<span>${rImg(t.logo, 96, true)}</span>`).join(""),
     jobs: pl => [...[...RSTK].sort((a, b) => pbHas(pl, PBOOK.real, b) - pbHas(pl, PBOOK.real, a)).map(st => [st.img, st.kind === "stadium" ? 800 : 360, st.kind === "crest"]),
       ...Object.values(REAL_TEAMS).map(t => [t.logo, 96, true])] },
-  poke: { key: "poke", stk: PSTK, pages: P_PAGES, seed: 161803, size: REAL_PACK, cls: "ppk", mark: `<span class="pball"></span>`, label: "The Pokémon sticker book", shiny: true,
+  poke: { key: "poke", stk: PSTK, pages: P_PAGES, seed: 161803, size: REAL_PACK, cls: "ppk", mark: `<span class="pball"></span>`, label: "The Pokémon sticker book", short: "Pokémon", shiny: true,
     card: pokeCard, empty: pokeEmpty, pack: pokePackSvg, mb: 10,
     about: () => `Pokédex #1–${PSTK.length} (Kanto and Johto), 12 a page; 1 card in ${SHINY_ODDS} comes shiny.`,
     credit: () => `Pokémon artwork © Nintendo / Creatures / GAME FREAK / The Pokémon Company, from the <a href="https://github.com/PokeAPI/sprites" target="_blank" rel="noopener">PokeAPI sprites</a>, loaded by this device; names and types from <a href="https://pokeapi.co" target="_blank" rel="noopener">PokeAPI</a>.`,
@@ -14455,7 +14491,7 @@ const PBOOK = {
     jobs: pl => [...PSTK.filter(st => pbHas(pl, PBOOK.poke, st)).map(st => [pokeShiny(pl, st) ? st.shiny : st.img, P_W, true]),
       ...PSTK.filter(st => !pbHas(pl, PBOOK.poke, st)).map(st => [st.img, P_W, true])] },
   ...Object.fromEntries([["marvel", HM, 314159, 7, "💥", "The Marvel sticker book"], ["dc", HD, 141421, 4, "⚡", "The DC sticker book"]].map(([key, H, seed, size, mark, label]) => [key, {
-    key, stk: H.stk, pages: H.pages, seed, size, cls: "hpk", mark, label, card: heroCard, empty: heroEmpty, pack: H_PACK[key], mb: Math.round(H.stk.length / 60),
+    key, stk: H.stk, pages: H.pages, seed, size, cls: "hpk", mark, label, short: key === "dc" ? "DC" : "Marvel", card: heroCard, empty: heroEmpty, pack: H_PACK[key], mb: Math.round(H.stk.length / 60),
     about: () => `${H.stk.filter(st => st.side === "h").length} heroes and ${H.stk.filter(st => st.side === "v").length} villains, the famous ones first; heroes on blue, villains on dark red.`,
     credit: () => `Pictures (comic art from superherodb) from <a href="https://github.com/akabab/superhero-api" target="_blank" rel="noopener">akabab's superhero-api</a>, loaded by this device. ${key === "dc" ? "DC" : "Marvel"} characters © their owners.`,
     head: pg => heroFace(H.stk.find(st => st.page === pg), "rhlogo"),
@@ -14618,11 +14654,13 @@ function pbZoom(b, st) {
 /* ---- parents: each book's numbers, a pack as a gift, the credits ---- */
 function pbParents(pl) {
   const local = location.protocol === "file:";
-  return Object.values(PBOOK).map(b => {
+  pbDeal(pl);
+  return `<p class="tiny">Photo books: one pack with every pack of the drawn book (one every ${PACK_EVERY} stars), the books taking turns:
+    ${PB_KEYS.map(k => PBOOK[k].short).join(" → ")} (a full book is skipped). Next: ${PBOOK[PB_KEYS[pl.photo.next]].short}.</p>` +
+    Object.values(PBOOK).map(b => {
     const r = pbOf(pl, b), have = b.stk.filter(st => pbHas(pl, b, st)).length;
     return `<figure class="chart wide"><figcaption>${b.label.replace(/^The (.)/, (_, c) => c.toUpperCase())}</figcaption>
-    <p class="tiny">${b.about()} A pack of ${b.size} with every pack of the drawn book (${REAL_GIFT} to start with), only stickers not
-      in the book yet, so it fills up in ${Math.ceil(b.stk.length / b.size)} packs. Pictures are downloaded by this device the first time
+    <p class="tiny">${b.about()} Packs of ${b.size}, only stickers not in the book yet, so it fills up in ${Math.ceil(b.stk.length / b.size)} packs. Pictures are downloaded by this device the first time
       they're needed (about ${b.mb} MB in all) and then work offline.</p>
     <div class="tiles"><div class="tile"><span class="lbl">Stickers</span><b>${have}/${b.stk.length}</b></div>
       ${b.shiny ? `<div class="tile"><span class="lbl">Shiny</span><b>${Object.keys(r.sh || {}).length}</b></div>` : ""}
