@@ -1685,8 +1685,8 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
 .abk-real { background: repeating-linear-gradient(135deg, #111 0 18px, #262626 18px 36px); }
 .abk-pic { position: relative; display: grid; place-items: center; }
 .abk-fan .abk-pic > span { position: absolute; --cw: calc(var(--bw) * .4); transform: translateX(calc(var(--i) * var(--bw) * .22)) rotate(calc(var(--i) * 10deg)); }
-.abk-real .abk-pic { grid-template-columns: 1fr 1fr; gap: calc(var(--bw) * .05); }
-.abk-real .abk-pic > span { width: calc(var(--bw) * .3); height: calc(var(--bw) * .3); border-radius: 50%; background: #fff; display: grid; place-items: center; box-shadow: 0 2px 6px rgba(0,0,0,.5); }
+.abk-real .abk-pic { grid-template-columns: repeat(3, 1fr); gap: calc(var(--bw) * .04); }
+.abk-real .abk-pic > span { width: calc(var(--bw) * .22); height: calc(var(--bw) * .22); border-radius: 50%; background: #fff; display: grid; place-items: center; box-shadow: 0 2px 6px rgba(0,0,0,.5); }
 .abk-real .abk-pic img { width: 76%; height: 76%; object-fit: contain; }
 .abk-prog { display: flex; align-items: center; gap: 6px; font: 700 calc(var(--bw) * .085) var(--display); }
 .abk-prog .abar { flex: 1; width: auto; height: 12px; }
