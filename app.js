@@ -1634,7 +1634,7 @@ function pzFinish(win) {
       <button class="btn primary big" id="pzKidNext" aria-label="Next puzzle">▶</button>`;
     $("pzKidNext").onclick = pzNext;
   }
-  if (win && !pzFailed) { pzBig(true); sfx("right"); stageStar(); }
+  if (win && !pzFailed) { pzBig(true); sfx("right"); stageStar(); pathDoneSolve(); }
   if (albumTake() && kid) $("pzKidNext").insertAdjacentHTML("beforebegin", aPackChip());     // a pack was earned: shown quietly
   kidAfterPuzzle();
   pzDraw();
@@ -1832,6 +1832,7 @@ function sfx(kind) {
     if (actx.state === "suspended") actx.resume();
     if (kind === "move") tone(520, 0, 0.07, "triangle", 0.07);
     else if (kind === "right") { tone(523, 0, 0.18); tone(659, 0.1, 0.18); tone(784, 0.2, 0.32); }
+    else if (kind === "oops") { tone(440, 0, 0.16, "sine", 0.08); tone(330, 0.13, 0.28, "sine", 0.08); }   // soft, for a stalemate
     else if (kind === "wrong") { tone(220, 0, 0.18, "square", 0.05); tone(165, 0.15, 0.3, "square", 0.05); }
     else if (kind === "trophy") { [523, 659, 784, 1047].forEach((f, i) => tone(f, i * 0.13, 0.35, "triangle", 0.16)); tone(1047, 0.55, 0.6, "sine", 0.12); }
     else if (kind === "sticker") { [880, 1175, 1397, 1760].forEach((f, i) => tone(f, i * 0.07, 0.25, "sine", 0.1)); }
@@ -2056,6 +2057,13 @@ function stageStar() {
   const had = stageStars(pl, st.id);
   pl.stages[st.id] = had + 1; stageLost = null; if (had < needOf(st)) albumSolve(pl);      // replays give no packs
   save(); renderStageBar();
+}
+// once the whole path is finished, clean solves in the 🧩 tab pay packs like the path did (the owner, 2026-10-04:
+// otherwise the packs stopped for good at the end of the path)
+function pathDoneSolve() {
+  const pl = pzPlayers();
+  if (pzStage || !pl.kid || pzHinted || stageCur(pl) >= 0) return;
+  albumSolve(pl); save();
 }
 // a miss on the path costs a star of that stage, while it isn't finished (a replay never takes a finished stage back);
 // the star falls off the row of stars (stageLost, until the next puzzle or game: renderStageBar / egDraw)
@@ -2403,7 +2411,9 @@ function egEnd() {
     eg.over = "draw";
     if (!egReplay) stageLose(pzPlayers(), eg.st);
     const my = eg;
-    setTimeout(() => { if (eg !== my) return; $("eDone").innerHTML = `<div class="burst">${res === "loss" ? "↻" : "🤝"}</div>`; $("eDone").hidden = false; }, 700);
+    const stale = g.in_stalemate();   // a stalemate isn't a happy draw: 😮 and a soft sound
+    if (stale) sfx("oops");
+    setTimeout(() => { if (eg !== my) return; $("eDone").innerHTML = `<div class="burst">${res === "loss" ? "↻" : stale ? "😮" : "🤝"}</div>`; $("eDone").hidden = false; }, 700);
     setTimeout(() => { if (eg === my) egStart(my.st); }, 2800);
   } else return false;
   egDraw();
@@ -2838,6 +2848,7 @@ const BOTS = [
 ];
 const BOT_RING = ["#3cb371", "#9acd32", "#f2c230", "#f39c34", "#e8542f", "#b3202a"];   // lvl 1–6: green to red
 const VALUE = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+const BOT_RESIGN = 15;   // a bot this far behind in material gives up: the game ends while the child is winning big
 let bg = null;   // {bot, game (chess.js) | pw (pawn wars state), me: 'w'|'b', sel, last, over, log, rp, gate}
 // gate: the learning-path boss stage this game was started from (a win against the bot clears it)
 // log (chess games): every move as {fen before, from, to, me, piece, captured}; rp: the replay after the game {list, k}
@@ -2858,7 +2869,8 @@ function bestCaptureGain(g) {
   return best;
 }
 function botMove(bot, g) {
-  const ms = shuffle(g.moves({ verbose: true })), me = g.turn();
+  // a pawn that promotes becomes a queen: a surprise knight or rook only puzzles a child
+  const ms = shuffle(g.moves({ verbose: true }).filter(m => !m.promotion || m.promotion === "q")), me = g.turn();
   if (bot.id === "rex") return ms[0];
   // everyone but the Mouse takes a mate in one
   for (const m of ms) { g.move(m); const mate = g.in_checkmate(); g.undo(); if (mate) return m; }
@@ -2871,7 +2883,7 @@ function botMove(bot, g) {
     for (const m of ms) {
       g.move(m);
       const hit = g.moves({ verbose: true }).some(r => r.to === m.to);
-      const s = (m.captured ? VALUE[m.captured] : 0) - (hit ? VALUE[g.get(m.to).type] * 0.9 : 0) + Math.random() * 0.3;
+      const s = (m.captured ? VALUE[m.captured] : 0) + (m.promotion ? 8 : 0) - (hit ? VALUE[g.get(m.to).type] * 0.9 : 0) + Math.random() * 0.3;
       g.undo();
       if (s > bs) { bs = s; best = m; }
     }
@@ -3060,10 +3072,15 @@ function dangerMarks() {   // your pieces that are attacked and not defended (or
   }
   return marks;
 }
+function overMarks() {   // after a stalemate: the king that had no move left
+  if (!bg.stale) return {};
+  const pos = parseFen(bg.game.fen()), k = bg.game.turn() === "w" ? "K" : "k";
+  return { [Object.keys(pos).find(q => pos[q] === k)]: "mk" };
+}
 function botDraw() {
   if (bg.rp) return rpDraw();
   const tg = bg.sel && !bg.over && botTurn() === bg.me ? myTargets(bg.sel) : [];
-  renderBoard(botPos(), { el: $("gboard"), o: bg.me, hl: bg.last, sel: bg.sel, tgts: tg, marks: bg.over ? {} : dangerMarks() });
+  renderBoard(botPos(), { el: $("gboard"), o: bg.me, hl: bg.last, sel: bg.sel, tgts: tg, marks: bg.over ? overMarks() : dangerMarks() });
   $("gboard").classList.toggle("mine", !bg.over && botTurn() === bg.me);
   const mat = bg.pw ? null : material(bg.game, bg.me);
   $("bFace").innerHTML = `<span class="face">${bg.bot.face}</span>${botTurn() !== bg.me && !bg.over ? `<span class="thinking">…</span>` : ""}`
@@ -3075,7 +3092,10 @@ function botAfterMove() {
   const pl = pzPlayers();
   let res = null;
   if (bg.pw) { const w = pwWinner(bg.pw); if (w) res = w === bg.me ? "win" : "loss"; }
-  else if (bg.game.game_over()) res = bg.game.in_checkmate() ? (bg.game.turn() === bg.me ? "loss" : "win") : "draw";
+  else if (bg.game.game_over()) {
+    res = bg.game.in_checkmate() ? (bg.game.turn() === bg.me ? "loss" : "win") : "draw";
+    bg.stale = bg.game.in_stalemate();
+  } else if (material(bg.game, bg.me) >= BOT_RESIGN) { res = "win"; bg.resigned = true; }
   if (!res) return false;
   bg.over = res;
   pl.bots = pl.bots || {}; const r = pl.bots[bg.bot.id] = pl.bots[bg.bot.id] || { w: 0, l: 0, d: 0 };
@@ -3083,7 +3103,7 @@ function botAfterMove() {
   if (res === "win") {
     pl.stars = (pl.stars || 0) + 3; sfx("trophy");
     const gate = gateWin(pl, bg.bot.id, bg.gate); if (gate) { bg.gate = gate; bg.packs = BOSS_PACKS; }  // a boss gate on the learning path is beaten
-  } else if (res === "loss") sfx("wrong"); else sfx("right");
+  } else if (res === "loss") sfx("wrong"); else sfx(bg.stale ? "oops" : "right");
   save();
   botOverShow();
   botDraw();
@@ -3093,8 +3113,9 @@ function botAfterMove() {
 // a boss game from the learning path adds 🗺 back to the map, and ▶ on to the next stage once the boss is beaten
 function botOverShow(clean = false) {
   const res = bg.over, beat = bg.gate && stageStars(pzPlayers(), bg.gate.id) >= needOf(bg.gate);
-  $("bOver").innerHTML = `<div class="burst">${clean ? "⭐" : res === "win" ? "🏆" : res === "loss" ? bg.bot.face : "🤝"}</div>
-    ${res === "win" && !clean ? `<div class="big">⭐ +3</div>` : ""}
+  // a stalemate isn't a happy draw: 😮, and the stuck king stays marked on the board (botDraw)
+  $("bOver").innerHTML = `<div class="burst">${clean ? "⭐" : res === "win" ? "🏆" : res === "loss" ? bg.bot.face : bg.stale ? "😮" : "🤝"}</div>
+    ${res === "win" && !clean ? `<div class="big">${bg.resigned ? bg.bot.face + "🏳️ " : ""}⭐ +3</div>` : ""}
     <div class="row">${bg.packs ? aPackChip().repeat(bg.packs) : ""}${beat ? `<button class="btn primary big" type="button" id="bGateNext" aria-label="Next stage">▶</button>` : ""}
     <button class="btn${beat ? "" : " primary"} big" type="button" id="bAgain" aria-label="Play again">↻</button>
     ${bg.gate ? `<button class="btn big" type="button" id="bGateMap" aria-label="Back to the map">🗺</button>` : `<button class="btn big" type="button" id="bPickAgain" aria-label="Choose a bot">🤖</button>`}
@@ -3149,7 +3170,7 @@ function rpMateNext(g, m) {   // would this move allow a mate in one?
   return bad;
 }
 // your moves that were at least a minor piece worse than the best one, when the bot then took the piece (lost) or
-// the better move takes a free piece (free); at most 5, the biggest, in game order.
+// the better move takes a free piece (free) or mates (mate); at most 5, the biggest, in game order.
 // Moves are tried best-first by what they could at most win, so most of them never need scoring.
 function rpMoments(log) {
   const out = [];
@@ -3174,7 +3195,8 @@ function rpMoments(log) {
       const back = h.moves({ verbose: true }).some(m => m.to === reply.to);
       if (VALUE[reply.captured] - (back ? VALUE[reply.piece] : 0) >= 3) kind = "lost";
     }
-    if (!kind && best[1].captured && best[0] >= 3 && best[0] < 100) kind = "free";
+    if (best[0] >= 100) kind = "mate";                    // a mate in one he didn't see
+    if (!kind && best[1].captured && best[0] >= 3) kind = "free";
     if (!kind) return;
     out.push({ i, kind, fen: x.fen, mine: x.from + x.to, took: kind === "lost" ? reply.from + reply.to : null,
                best: best[1].from + best[1].to, gap: best[0] - act,
@@ -3192,6 +3214,10 @@ function rpStart() {
 function rpDraw() {
   const r = bg.rp, x = r.list[r.k], red = [[x.mine, "red"], ...(x.took ? [[x.took, "red"]] : [])];
   const marks = { [x.at]: x.kind === "lost" ? "dg" : "esc" };
+  if (x.kind === "mate") {   // the king that could have been mated
+    const pos = parseFen(x.fen), k = bg.me === "w" ? "k" : "K";
+    marks[Object.keys(pos).find(q => pos[q] === k)] = "mk";
+  }
   renderBoard(parseFen(x.fen), { el: $("gboard"), o: bg.me, marks, arrows: red });
   const my = x; clearTimeout(rpDraw.t);
   rpDraw.t = setTimeout(() => { if (bg && bg.rp && bg.rp.list[bg.rp.k] === my) renderBoard(parseFen(x.fen), { el: $("gboard"), o: bg.me, marks, arrows: [...red, [x.best, "green"]] }); }, 1100);
@@ -4269,8 +4295,8 @@ function aWorldsOpen(pl) {
 const stkLocked = (pl, st) => st.page.world >= aWorldsOpen(pl);
 // what packs draw from: every sticker not yet holo, on an open page (bosses only come from bosses)
 function aPool(pl) { const a = albumOf(pl), open = aWorldsOpen(pl); return STK.filter(st => !st.boss && (a.s[st.id] || 0) < HOLO && !(st.page.world >= open)); }
-// a clean solve of an unfinished stage on the learning path (stageStar, an endgame win; replays don't count): every
-// PACK_EVERY of them is a pack.
+// a clean solve of an unfinished stage on the learning path (stageStar, an endgame win; replays don't count), or once
+// the path is finished a clean solve in the 🧩 tab (pathDoneSolve): every PACK_EVERY of them is a pack.
 // No pop-up, no sound (the owner: packs must never pull the child away from playing): the counters go up, and a small
 // pack shows beside the ▶ of that puzzle or endgame (albumTake); the packs are opened in the 📖 tab
 let albumJust = false;
