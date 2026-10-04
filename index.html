@@ -556,6 +556,7 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
 .abig { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: calc(var(--cw) * .09); box-shadow: 0 2px 8px rgba(0,0,0,.3); animation: abigin .6s ease-out; cursor: pointer; }
 @keyframes abigin { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
 .agrid.big .aslot { visibility: hidden; }
+.agrid.big .aslot * { animation: none; }     /* the hidden cards under the big picture don't move (the old iPad) */
 .apuz { font-size: 26px; line-height: 1; padding: 2px 8px; border-radius: 10px; border: 2px solid #ffc107; background: #fff8e1; cursor: pointer; }
 .apuz[aria-pressed="true"] { background: #ffc107; }
 /* the living stickers: transform/opacity only (cheap on the old iPad), and on for everyone: the owner's laptop prefers
@@ -1673,9 +1674,9 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
 .aladder { display: flex; align-items: center; gap: 12px; padding: 8px 16px; border-radius: 30px; background: rgba(255,255,255,.92); }
 .aladder i { width: 30px; height: 30px; border-radius: 50%; opacity: .22; box-shadow: inset 0 0 0 2px rgba(0,0,0,.25); }
 .aladder i.on { opacity: 1; }
-/* ---- the shelf (📖 tab: the drawn book and the photo book, js/real.js) ---- */
-.ashelf { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 7vw; padding: 26px 0 10px;
-  --bw: min(36vw, 290px, calc((100dvh - 250px) / 1.32)); }
+/* ---- the shelf (📖 tab: the drawn book and the photo books, js/real.js) ---- */
+.ashelf { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4vw; padding: 26px 0 10px;
+  --bw: min(28vw, 270px, calc((100dvh - 250px) / 1.32)); }
 .abk { appearance: none; border: 0; cursor: pointer; position: relative; width: var(--bw); height: calc(var(--bw) * 1.32); padding: calc(var(--bw) * .09);
   box-sizing: border-box; border-radius: 8px 20px 20px 8px; display: grid; grid-template-rows: 1fr auto; gap: 10px; color: #fff;
   box-shadow: inset 16px 0 16px -10px rgba(0,0,0,.45), 0 10px 24px rgba(0,0,0,.3); }
@@ -1730,7 +1731,28 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
 .rslot .rghost { width: 62%; filter: grayscale(1); opacity: .2; }
 .rpage .ahead .rhlogo { width: 40px; height: 40px; object-fit: contain; }
 .anav .rnlogo { width: 26px; height: 26px; object-fit: contain; }
-#rNav { max-width: 600px; }     /* 14 teams: two even rows of 7, not 13 + 1 */
+#rNav.realnav { max-width: 600px; }     /* 14 teams: two even rows of 7, not 13 + 1 */
+/* the Pokémon book: a red cover with four Pokémon in white circles, a yellow pack with a Poké Ball; a card is its type's
+   colour with a light behind the artwork, a shiny one a rainbow card with ✨; an empty slot shows the number over a dark silhouette */
+.abk-poke { background: radial-gradient(circle at 30% 20%, #ef5350, #c62828 60%, #8e0000); }
+.abk-poke .abk-pic { grid-template-columns: repeat(2, 1fr); gap: calc(var(--bw) * .04); }
+.abk-poke .abk-pic > span { width: calc(var(--bw) * .3); height: calc(var(--bw) * .3); border-radius: 50%; background: #fff; display: grid; place-items: center;
+  box-shadow: inset 0 0 0 calc(var(--bw) * .012) #222, 0 2px 6px rgba(0,0,0,.5); }
+.abk-poke .abk-pic img { width: 86%; height: 86%; object-fit: contain; }
+.rstk.pstk { background: radial-gradient(circle at 50% 38%, rgba(255,255,255,.75), transparent 58%), var(--pc); }
+.rstk.pstk .rph { left: 6%; top: 5%; width: 88%; height: 72%; object-fit: contain; filter: drop-shadow(0 2px 2px rgba(0,0,0,.35)); }
+.rstk.pstk .rno { min-width: calc(var(--cw) * .24); }
+.rstk.pstk .rban small { opacity: 1; letter-spacing: .1em; }
+.rstk.pshiny { background: radial-gradient(circle at 50% 38%, rgba(255,255,255,.8), transparent 58%), linear-gradient(135deg, #ff8a80, #ffd180, #ffff8d, #b9f6ca, #80d8ff, #ea80fc); }
+.rstk.pshiny::after { content: ""; position: absolute; top: 0; bottom: 0; left: -60%; width: 50%; background: linear-gradient(100deg, transparent, rgba(255,255,255,.85), transparent);
+  animation: rsheen 3.2s ease-in-out infinite; }
+.rstk .psh { position: absolute; z-index: 2; top: 3%; right: 5%; font-size: calc(var(--cw) * .17); line-height: 1; }
+.rslot .pghost { position: absolute; left: 10%; top: 10%; width: 80%; height: 80%; object-fit: contain; filter: brightness(0); opacity: .14; }
+.pokenav .rnlogo { width: 30px; height: 30px; }
+#rNav.pokenav { max-width: 460px; }     /* 21 pages: three groups of 7 */
+.ppk.wait svg { filter: grayscale(1); }
+.pball { display: inline-block; width: 1em; height: 1em; vertical-align: -.15em; border-radius: 50%; box-sizing: border-box; border: .09em solid #222;
+  background: radial-gradient(circle, #fff 0 .14em, #222 .15em .23em, transparent .24em), linear-gradient(#e53935 0 44%, #222 44% 56%, #fafafa 56%); }
 .aladder .l0 { background: #fff; } .aladder .l1 { background: #29b6f6; }
 .aladder .l2 { background: conic-gradient(#ff5e5e, #ffd84d, #5eff8a, #4dd2ff, #b06bff, #ff5e5e); }
 /* the three looks (the owner, 2026-10-03): 1 copy still (a page's living sticker too: each lv- element's own resting
