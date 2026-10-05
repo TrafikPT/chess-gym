@@ -1475,7 +1475,8 @@ function sgMates() {
 function pzShowGoal() {
   const pl = pzPlayers(), el = $("pzGoalBadge");
   if (/stopMate/.test(pzCur[4]) && pzIdx === 0) { const th = sgThreat(); pzMarks = th.marks; pzArrows = th.arrows; }   // the task needs it: always shown
-  if (/save(Queen|Piece)/.test(pzCur[4]) && pzIdx === 0 && pzCur[7]) {   // save your piece: it glows red, a red arrow from each attacker
+  const sk = typeof pzSkill === "function" && pzSkill();     // the kids' path's "find it yourself" stage (savepx): no glow
+  if (/save(Queen|Piece)/.test(pzCur[4]) && pzIdx === 0 && pzCur[7] && !(sk && sk.noGlow)) {   // save your piece: it glows red, a red arrow from each attacker
     const them = pzGame.turn() === "w" ? "b" : "w";
     pzMarks = { [pzCur[7]]: "mk" }; pzArrows = attackersOf(parseFen(pzGame.fen()), pzCur[7], them).map(h => [h + pzCur[7], "red"]);
   }
@@ -1894,6 +1895,11 @@ function pinIcon(kind, me = "w", them = "b") {
 }
 const isPin = (p, kind) => !p[5] && p[4].split(" ").includes(kind);
 const hasTag = (p, t) => !p[5] && p[4].split(" ").includes(t);          // a Lichess row tagged by puzzles/themes.py
+// the tags of the later worlds' one-skill sets (themes.py --patterns --mates --discq --pinattack --defender): the
+// older stages leave those rows out, so their puzzles stay what they were
+const PATTERN_TAGS = ["smother", "arabMate", "anastMate", "bishMate"];
+const LATER_TAGS = [...PATTERN_TAGS, "mate2q", "mate3c", "dblCheck", "discQueen", "pinAttack", "takeDef", "trapPc", "deflect"];
+const later = p => !p[5] && LATER_TAGS.some(t => hasTag(p, t));
 const STOP_KINDS = ["stopLuft", "stopCapture", "stopCaptureDef", "stopBlock"];
 const stopKind = (p, k) => /stopMate/.test(p[4]) && p[4].split(" ").includes(k);   // safe_gen.py's one-way stop-the-mate rows
 // a discovered check: the bishop steps off the line and the rook behind it checks the king
@@ -1904,9 +1910,20 @@ function tacticOnly(p, t) {
   const ts = p[4].split(" ");
   return ts.includes(t) && p[3] <= 1100 && p[2].split(" ").length <= 4 && !ts.some(x => x !== t && (TACTIC_THEMES.includes(x) || /^mate/.test(x)));
 }
-// name: for the parent view only (the child sees the pictures). Nine worlds of four stages and a boss each (the last
-// one without a boss), climbing from the sea to space; one skill a stage, then a stage mixing them (the owner,
-// 2026-10-04: worlds 6 and 8 and the single-skill stages came then); WORLDS draws them on the map (renderPath)
+// recap stops (the owner, 2026-10-05: a skill learnt once and never practised again fades): a short stop sprinkled on
+// the path that brings back skills of earlier stages, one at a time in turn (the stars decide whose turn it is, so
+// each comes up before the stop is done), missed puzzles first. Puzzle recaps need 5 stars, endgame recaps 3 (one
+// game of each kind in turn). Never "free": a recap the child has passed when it came still has to be played
+// (stageMigrate). The picture: the skills' own pictures, small, with 🔁
+const recapOf = (...ids) => ({ recap: ids, need: 5, f: p => ids.some(id => STAGE_BY[id].f(p)) });
+const recapEg = (...ids) => ({ recap: ids, need: 3, eg: "recap", f: () => false });
+function recapIcon(st) {
+  return `<span class="goal recap"><span class="rcp n${Math.min(4, st.recap.length)}">${st.recap.slice(0, 4).map(id => `<i>${STAGE_BY[id].icon}</i>`).join("")}</span></span>`;
+}
+// name: for the parent view only (the child sees the pictures). Fourteen worlds of four or more stages and a boss each
+// (the last one without a boss), climbing from the sea to space and on; one skill a stage, then a stage mixing them (the
+// owner, 2026-10-04: worlds 6 and 8 and the single-skill stages came then; 2026-10-05: recap stops, the in-between
+// steps and worlds 10-14); WORLDS draws them on the map (renderPath)
 const STAGES = [
   // 🌊 the sea
   { id: "take", name: "Take a free piece", icon: `<span class="goal take"><span class="pc bQ"></span></span>`, f: p => p[5] && /hangingPiece/.test(p[4]) },
@@ -1916,7 +1933,8 @@ const STAGES = [
   { id: "gate1", name: "Boss: beat Greedy Cat", need: 1, gate: "gus", icon: gateIcon("🐱"), f: () => false },
   // 🌳 the forest
   { id: "savep", name: "Save your pieces", icon: `<span class="goal save"><span class="pc wR"></span></span>`, f: p => /savePiece/.test(p[4]) },
-  { id: "mateq", name: "Mate with the queen", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc wQ mini"></span>`, f: p => p[5] && /mateIn1/.test(p[4]) && !/backRank/.test(p[4]) && /[Qq]/.test(p[1].split(" ")[0]) },
+  { id: "mateq", name: "Mate with the queen", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc wQ mini"></span>`, f: p => p[5] && /mateIn1/.test(p[4]) && !/backRank|mateNoStale/.test(p[4]) && /[Qq]/.test(p[1].split(" ")[0]) },
+  { id: "r1", name: "Recap: take a free piece, save the queen, give check, make a queen", ...recapOf("take", "saveq", "check", "promo") },
   { id: "back", name: "Back-rank mate", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc bP mini"></span>`, f: p => p[5] && /backRankMate/.test(p[4]) },
   { id: "mater", name: "Mate with a rook", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc wR mini"></span>`, f: p => p[5] && /mateIn1/.test(p[4]) && !/backRank/.test(p[4]) && !/[Qq]/.test(p[1].split(" ")[0]) },
   { id: "gate2", name: "Boss: beat Wily Wolf", need: 1, gate: "cat", icon: gateIcon("🐺"), f: () => false },
@@ -1925,26 +1943,33 @@ const STAGES = [
   { id: "egqr", name: "Endgame: mate with queen + rook", need: 3, eg: "QR", icon: egIcon("QR"), f: () => false },
   { id: "egrr", name: "Endgame: mate with two rooks", need: 3, eg: "RR", icon: egIcon("RR"), f: () => false },
   { id: "egq", name: "Endgame: mate with king + queen", need: 3, eg: "KQ", icon: egIcon("KQ"), f: () => false },
-  { id: "hang", name: "Win the free piece (real games)", icon: `<span class="goal take"><span class="pc bR"></span></span><span class="pc wN mini"></span>`, f: p => !p[5] && /hangingPiece/.test(p[4]) && p[3] <= 800 && !/mate/.test(p[4]) },
+  { id: "r2", name: "Recap: save your pieces, mate with the queen, back rank, mate with a rook", ...recapOf("savep", "mateq", "back", "mater") },
+  { id: "hang", name: "Win the free piece (real games)", icon: `<span class="goal take"><span class="pc bR"></span></span><span class="pc wN mini"></span>`, f: p => !p[5] && /hangingPiece/.test(p[4]) && p[3] <= 800 && !/mate/.test(p[4]) && !later(p) },
   { id: "gate4", name: "Boss: beat Pawn Pete (Pawn Wars)", need: 1, gate: "pete", icon: gateIcon("🐣"), f: () => false },
   // 🏜️ the desert: forks, one piece at a time, then any fork (puzzles/themes.py --forks tags forkKnight / forkPawn:
   // the first move forks, the next takes one of the forked pieces with that piece)
   { id: "forkn", name: "Forks with the knight", icon: `<span class="goal win">🍴</span><span class="pc wN mini"></span>`, f: p => hasTag(p, "forkKnight") },
   { id: "forkp", name: "Forks with a pawn", icon: `<span class="goal win">🍴</span><span class="pc wP mini"></span>`, f: p => hasTag(p, "forkPawn") },
-  { id: "fork", name: "Forks (any piece)", icon: `<span class="goal win">🍴</span>`, f: p => hasTag(p, "forkKnight") || hasTag(p, "forkPawn") || (!p[5] && tacticOnly(p, "fork") && p[3] < 850) },
+  { id: "re1", name: "Recap: mate with queen + rook, two rooks, king + queen (one game each)", ...recapEg("egqr", "egrr", "egq") },
+  { id: "fork", name: "Forks (any piece)", icon: `<span class="goal win">🍴</span>`, f: p => hasTag(p, "forkKnight") || hasTag(p, "forkPawn") || (!p[5] && tacticOnly(p, "fork") && p[3] < 850 && !later(p)) },
+  // the save-your-pieces puzzles again without the red glow and arrows: find what the bot attacks yourself (in games he
+  // wins big, then gives pieces away: noticing the threat is the missing skill)
+  { id: "savepx", name: "Save your pieces (find the attacked one yourself)", noGlow: true, icon: `<span class="goal save"><span class="pc wR"></span></span><span class="seek">👀</span>`, f: p => /savePiece/.test(p[4]) },
   // generated by puzzles/safe_gen.py: take only when it wins something (the capture asked about is drawn)
   { id: "safe", name: "Is it safe to take?", icon: `<span class="goal scale">⚖️<span class="pc bN"></span></span>`, f: p => p[4].split(" ").includes("safeTake") },
   { id: "gate3", name: "Boss: beat Tactic Tiger", need: 1, gate: "tiger", icon: gateIcon("🐯"), f: () => false },
   // 🌋 the lava: mates (themes.py --mateqk tags mateQK: the queen mates next to the king, guarded by another piece)
   { id: "egr", name: "Endgame: mate with king + rook", need: 3, eg: "KR", icon: egIcon("KR"), f: () => false },
   { id: "mateqk", name: "Mate with the queen next to the king", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc wQ mini"></span><span class="pc wB mini"></span>`, f: p => hasTag(p, "mateQK") },
-  { id: "mate1", name: "Mate in 1 (real games)", icon: `<span class="goal mate mn" data-n="1"><span class="pc bK"></span></span>`, f: p => !p[5] && /mateIn1/.test(p[4]) && p[3] <= 750 },
-  { id: "mate2", name: "Mate in 2", icon: `<span class="goal mate mn" data-n="2"><span class="pc bK"></span></span>`, f: p => !p[5] && /mateIn2/.test(p[4]) && p[3] < 1000 },
+  { id: "r3", name: "Recap: forks, the free piece, save your pieces (no glow), is it safe to take?", ...recapOf("forkn", "forkp", "hang", "savepx", "safe") },
+  { id: "mate1", name: "Mate in 1 (real games)", icon: `<span class="goal mate mn" data-n="1"><span class="pc bK"></span></span>`, f: p => !p[5] && /mateIn1/.test(p[4]) && p[3] <= 750 && !later(p) },
+  { id: "mate2", name: "Mate in 2", icon: `<span class="goal mate mn" data-n="2"><span class="pc bK"></span></span>`, f: p => !p[5] && /mateIn2/.test(p[4]) && p[3] < 1000 && !later(p) },
   { id: "gate5", name: "Boss: beat T-Rex", need: 1, gate: "dino", icon: gateIcon("🦖"), f: () => false },
   // ⛰️ the mountain top: stop the mate, one way at a time (safe_gen.py: every move that stops it is of that kind):
   // make room for the king, take the piece that would mate, take the piece guarding it, block the line
   { id: "stopl", name: "Stop the mate: make room for the king", icon: `<span class="goal guard"><span class="pc wK"></span></span><span class="pc wP mini"></span>`, f: p => stopKind(p, "stopLuft") },
   { id: "stopc", name: "Stop the mate: take the piece that would mate", icon: `<span class="goal guard"><span class="pc wK"></span></span><span class="pc bQ mini"></span>`, f: p => stopKind(p, "stopCapture") },
+  { id: "re2", name: "Recap: mate with king + queen, king + rook (one game each)", ...recapEg("egq", "egr", "egq") },
   { id: "stopd", name: "Stop the mate: take the piece that guards it", icon: `<span class="goal guard"><span class="pc wK"></span></span><span class="pc bN mini"></span>`, f: p => stopKind(p, "stopCaptureDef") },
   { id: "stopb", name: "Stop the mate: block the line", icon: `<span class="goal guard"><span class="pc wK"></span></span><span class="pc wB mini"></span>`, f: p => stopKind(p, "stopBlock") },
   { id: "gate7", name: "Boss: beat Big Bear", need: 1, gate: "bear", icon: gateIcon("🐻"), f: () => false },
@@ -1952,7 +1977,8 @@ const STAGES = [
   // (puzzles/themes.py --pins: your first move makes the pin, a later one takes the pinned piece): along a file or rank,
   // along a diagonal (both under 1000), then both mixed up to 1100. step: added in front of a stage, so never "free"
   // while that stage is unfinished (stageMigrate): the mixed one alone was too hard (2026-10-03)
-  { id: "stopm", name: "Stop the mate (any way)", icon: `<span class="goal guard"><span class="pc wK"></span></span>`, f: p => /stopMate/.test(p[4]) && !STOP_KINDS.some(k => stopKind(p, k)) },
+  { id: "stopm", name: "Stop the mate (any way)", icon: `<span class="goal guard"><span class="pc wK"></span></span>`, f: p => /stopMate/.test(p[4]) && !/stopOpening/.test(p[4]) && !STOP_KINDS.some(k => stopKind(p, k)) },
+  { id: "r4", name: "Recap: mate in 1, mate in 2, back rank, the queen next to the king", ...recapOf("mate1", "mate2", "back", "mateqk") },
   { id: "pinl", name: "Pins along a file or rank (rook, queen)", step: "pin", icon: pinIcon("pinLine"), f: p => isPin(p, "pinLine") && p[3] < 1000 },
   { id: "pind", name: "Pins along a diagonal (bishop, queen)", step: "pin", icon: pinIcon("pinDiag"), f: p => isPin(p, "pinDiag") && p[3] < 1000 },
   { id: "pin", name: "Pins (both kinds)", icon: `<span class="goal win">📌</span>`, f: p => isPin(p, "pinLine") || isPin(p, "pinDiag") },
@@ -1961,19 +1987,26 @@ const STAGES = [
   // the king), then any skewer
   { id: "skewr", name: "Skewers with the rook", icon: `<span class="goal win">🍢</span><span class="pc wR mini"></span>`, f: p => hasTag(p, "skewerRook") },
   { id: "skewb", name: "Skewers with the bishop", icon: `<span class="goal win">🍢</span><span class="pc wB mini"></span>`, f: p => hasTag(p, "skewerBishop") },
+  { id: "r5", name: "Recap: stop the mate, forks, is it safe to take?, save your pieces (no glow)", ...recapOf("stopm", "fork", "safe", "savepx") },
   { id: "skewq", name: "Skewers with the queen", icon: `<span class="goal win">🍢</span><span class="pc wQ mini"></span>`, f: p => hasTag(p, "skewerQueen") },
-  { id: "skewer", name: "Skewers (any piece)", icon: `<span class="goal win">🍢</span>`, f: p => !p[5] && tacticOnly(p, "skewer") },
+  { id: "skewer", name: "Skewers (any piece)", icon: `<span class="goal win">🍢</span>`, f: p => !p[5] && tacticOnly(p, "skewer") && !later(p) },
   { id: "gate8", name: "Boss: beat the Lion", need: 1, gate: "lion", icon: gateIcon("🦁"), f: () => false },
-  // 🚀 space (no boss): a discovered check first (themes.py --disccheck: the moving piece doesn't check, the one behind
-  // it does), then discovered attacks; the harder ⚖️ (safe_gen.py, safeTakeHard: always a bigger piece taking, count
-  // attackers and defenders, hidden defenders); mixed puzzles
+  // 🚀 space: a discovered check first (themes.py --disccheck: the moving piece doesn't check, the one behind it does),
+  // then any discovered attack; the harder ⚖️
+  // (safe_gen.py, safeTakeHard: always a bigger piece taking), one kind at a time first: one attacker ("single"), count
+  // attackers and defenders ("count"), the hidden defender ("hidden"), then all three; mixed puzzles
   { id: "disck", name: "Discovered check", icon: DISC_CHECK_ICON, f: p => hasTag(p, "discCheck") },
+  { id: "re3", name: "Recap: mate with king + rook, queen + rook, king + queen (one game each)", ...recapEg("egr", "egqr", "egq") },
   { id: "disc", name: "Discovered attacks", icon: DISC_ICON, f: p => !p[5] && tacticOnly(p, "discoveredAttack") },
+  { id: "safe2s", name: "Is it safe to take? (harder): one attacker", step: "safe2", icon: `<span class="goal scale mn" data-n="1">⚖️<span class="pc bR"></span></span>`, f: p => /safeTakeHard/.test(p[4]) && p[4].split(" ").includes("single") },
+  { id: "safe2c", name: "Is it safe to take? (harder): count attackers and defenders", step: "safe2", icon: `<span class="goal scale mn" data-n="2">⚖️<span class="pc bR"></span></span><span class="pc wB mini"></span><span class="pc wN mini"></span>`, f: p => /safeTakeHard/.test(p[4]) && p[4].split(" ").includes("count") },
+  { id: "safe2h", name: "Is it safe to take? (harder): the hidden defender", step: "safe2", icon: `<span class="goal scale mn" data-n="2">⚖️<span class="pc bR"></span></span><span class="seek">👀</span>`, f: p => /safeTakeHard/.test(p[4]) && p[4].split(" ").includes("hidden") },
   { id: "safe2", name: "Is it safe to take? (harder)", icon: `<span class="goal scale mn" data-n="2">⚖️<span class="pc bR"></span></span>`, f: p => /safeTakeHard/.test(p[4]) },
-  { id: "mix", name: "Mixed puzzles", icon: `<span class="goal win">🧩</span>`, f: p => !p[5] && p[3] >= 400 && p[3] < 650 },
+  { id: "mix", name: "Mixed puzzles", icon: `<span class="goal win">🧩</span>`, f: p => !p[5] && p[3] >= 400 && p[3] < 650 && !later(p) },
   // a review stop: puzzles from the stages already finished, missed ones first (reviewPick)
   { id: "review", name: "Review: puzzles from finished stages", review: true, icon: `<span class="goal win">🔁</span>`, f: () => false },
-  // king and pawn (kids' corner, like the endgames above), one skill a stage: first puzzles (puzzle: a start picked
+  { id: "gate9", name: "Boss: beat the Eagle", need: 1, gate: "eagle", icon: gateIcon("🦅"), f: () => false },
+  // 🏝️ the island: king and pawn (kids' corner, like the endgames above), one skill a stage: first puzzles (puzzle: a start picked
   // out of the king-and-pawn table, a few footprints to do it in; a move that gives the win away is a miss at once),
   // then the games: catch a running pawn; make a queen with the king's help. step: never "free" while egkp is
   // unfinished (stageMigrate). The goal pictures on the board: egGoalMarks
@@ -1981,10 +2014,51 @@ const STAGES = [
   { id: "kprun", name: "King + pawn: run, pawn, run (the king is outside the square)", need: 5, eg: "kp", puzzle: "kprun", step: "egkp", icon: `<span class="goal sqzic run"><span class="pc wP"></span></span><span class="egm"><span class="pc bK mini"></span></span>`, f: () => false },
   { id: "kpsq", name: "Catch the pawn: step into its square", need: 5, eg: "catch", puzzle: "kpsq", step: "egkp", icon: `<span class="goal sqzic"><span class="pc bP"></span></span><span class="egm"><span class="pc wK mini"></span></span>`, f: () => false },
   { id: "egcatch", name: "Endgame: catch the pawn with your king", need: 3, eg: "catch", icon: `<span class="goal take"><span class="pc bP"></span></span><span class="egm"><span class="pc wK mini"></span></span>`, f: () => false },
+  { id: "r6", name: "Recap: pins, skewers, discovered check, discovered attacks", ...recapOf("pin", "skewer", "disck", "disc") },
   { id: "kpguard", name: "King + pawn: the king guards the queening square first", need: 5, eg: "kp", puzzle: "kpguard", step: "egkp", icon: `<span class="goal qguard"><span class="pc wK"></span></span><span class="egm"><span class="pc wP mini"></span></span>`, f: () => false },
   { id: "kpstale", name: "King + pawn: don't stalemate", need: 5, eg: "kp", puzzle: "kpstale", step: "egkp", icon: `<span class="goal stale"><span class="pc bK"></span></span><span class="egm"><span class="pc wP mini"></span></span>`, f: () => false },
   { id: "egkp", name: "Endgame: king + pawn, make a queen", need: 3, eg: "kp", icon: `<span class="goal promo"><span class="pc wP"></span><b>→</b><span class="pc wQ"></span></span><span class="egm"><span class="pc wK mini"></span></span>`, f: () => false },
+  { id: "gate10", name: "Boss: beat the Shark", need: 1, gate: "shark", icon: gateIcon("🦈"), f: () => false },
+  // 🌴 the jungle: mate patterns, one a stage (themes.py --patterns: the Lichess theme checked on the board, mate in 1
+  // or 2): smothered mate (a knight, the king boxed in by its own pieces), Arabian (rook next to the king, guarded by a
+  // knight), Anastasia (king on the edge, rook or queen along it, a knight shutting the way out), two bishops
+  { id: "smother", name: "Smothered mate (knight)", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc wN mini"></span>`, f: p => hasTag(p, "smother") },
+  { id: "arab", name: "Arabian mate (rook + knight)", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc wR mini"></span><span class="pc wN mini"></span>`, f: p => hasTag(p, "arabMate") },
+  { id: "re4", name: "Recap: mate with king + rook, catch the pawn, king + pawn (one game each)", ...recapEg("egr", "egcatch", "egkp") },
+  { id: "anast", name: "Anastasia's mate (knight + rook on the edge)", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc wN mini"></span><span class="pc bP mini"></span>`, f: p => hasTag(p, "anastMate") },
+  { id: "bish2", name: "Mate with two bishops", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc wB mini"></span><span class="pc wB mini"></span>`, f: p => hasTag(p, "bishMate") },
+  { id: "r7", name: "Recap: smothered, Arabian, Anastasia, two bishops", ...recapOf("smother", "arab", "anast", "bish2") },
+  { id: "gate11", name: "Boss: beat the Jaguar", need: 1, gate: "jaguar", icon: gateIcon("🐆"), f: () => false },
+  // 🏟️ the arena: longer mates (themes.py --mates): mate in 2 with a quiet first move (no check: every mate in 2
+  // before started with a check), double check, mate in 3 with checks all the way
+  { id: "mate2q", name: "Mate in 2: a quiet move first", icon: `<span class="goal mate mn" data-n="2"><span class="pc bK"></span></span><span class="seek">🤫</span>`, f: p => hasTag(p, "mate2q") },
+  { id: "dblchk", name: "Double check", icon: `<span class="goal check mn" data-n="2"><span class="pc bK"></span></span>`, f: p => hasTag(p, "dblCheck") },
+  { id: "r8", name: "Recap: forks, pins, skewers, discovered attacks", ...recapOf("fork", "pin", "skewer", "disc") },
+  { id: "re5", name: "Recap: mate with king + queen, king + rook, king + pawn (one game each)", ...recapEg("egq", "egr", "egkp") },
+  { id: "mate3c", name: "Mate in 3 (check, check, mate)", icon: `<span class="goal mate mn" data-n="3"><span class="pc bK"></span></span>`, f: p => hasTag(p, "mate3c") },
+  { id: "gate12", name: "Boss: beat the Bull", need: 1, gate: "bull", icon: gateIcon("🐂"), f: () => false },
+  // 🏙️ the city: playing it out. Stop the 4-move mate in the opening (gen_more.py stopOpening, like stopMate: the
+  // threat drawn); mate, don't stalemate (gen_more.py mateNoStale: king + queen, a hasty queen move stalemates); then
+  // finish the game: a queen and a rook up against the Tiger, mate it without giving pieces away (eg "fin")
+  { id: "stopo", name: "Stop the 4-move mate", icon: `<span class="goal guard"><span class="pc wK"></span></span><span class="pc bQ mini"></span><span class="pc bB mini"></span>`, f: p => /stopOpening/.test(p[4]) },
+  { id: "matens", name: "Mate, don't stalemate (king + queen)", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc wQ mini"></span><span class="seek">😮</span>`, f: p => /mateNoStale/.test(p[4]) },
+  { id: "r9", name: "Recap: quiet mate in 2, double check, smothered mate, stop the mate", ...recapOf("mate2q", "dblchk", "smother", "stopm") },
+  { id: "fin", name: "Finish the game: a queen and a rook up, mate without giving pieces away", need: 3, eg: "fin", icon: `<span class="goal win">🏁</span><span class="egm"><span class="pc wQ mini"></span><span class="pc wR mini"></span></span>`, f: () => false },
+  { id: "gate13", name: "Boss: beat the Fox", need: 1, gate: "fox", icon: gateIcon("🦊"), f: () => false },
+  // 🌈 the rainbow (no boss, 🏆 at the top): harder tactics up to 1000 (themes.py --defender --pinattack --discq): take
+  // the defender, then what it guarded; win a trapped piece; attack a pinned piece with a smaller one; a discovered
+  // attack on the queen without check; deflection. Then the last recaps. (The pinned-piece and queen ones were meant as
+  // easier steps before the pins and discovered attacks, but Lichess has them only at 900-1000: they are rare.)
+  { id: "takedef", name: "Take the defender", icon: `<span class="goal take"><span class="pc bR"></span></span><span class="pc bN mini"></span>`, f: p => hasTag(p, "takeDef") },
+  { id: "trap", name: "Trap a piece", icon: `<span class="goal take"><span class="pc bB"></span></span><span class="seek">🕸️</span>`, f: p => hasTag(p, "trapPc") },
+  { id: "pina", name: "Attack the pinned piece", icon: `<span class="goal win">📌</span><span class="pc wP mini"></span>`, f: p => hasTag(p, "pinAttack") },
+  { id: "discq", name: "Discovered attack on the queen (no check)", icon: DISC_ICON.replace("pc wB", "pc wN"), f: p => hasTag(p, "discQueen") },
+  { id: "r10", name: "Recap: stop the 4-move mate, mate don't stalemate, mate in 3, is it safe to take? (harder)", ...recapOf("stopo", "matens", "mate3c", "safe2") },
+  { id: "deflect", name: "Deflection: pull the guard away", icon: `<span class="goal win">↪️</span><span class="pc bQ mini"></span>`, f: p => hasTag(p, "deflect") },
+  { id: "re6", name: "Recap: finish the game, mate with king + rook, king + pawn (one game each)", ...recapEg("fin", "egr", "egkp") },
 ];
+const STAGE_BY = Object.fromEntries(STAGES.map(st => [st.id, st]));
+STAGES.forEach(st => { if (st.recap) st.icon = recapIcon(st); });
 // the map's worlds, one per boss (in STAGES order): a backdrop (CSS .w-<id>) and things scattered beside the road.
 // Emoji up to Unicode 10 only: the iPad's iOS is old
 const WORLDS = [
@@ -1997,6 +2071,11 @@ const WORLDS = [
   { id: "castle", icon: "🏰", deco: ["☁️", "🏰", "🌈", "🦅", "☁️", "🎈"] },
   { id: "night", icon: "🌙", deco: ["🦉", "⭐", "🌠", "✨", "🦇", "🌙"] },
   { id: "space", icon: "🚀", deco: ["🌙", "⭐", "🛸", "🌍", "☄️", "🚀"] },
+  { id: "island", icon: "🏝️", deco: ["🌴", "🐢", "🐚", "🏖️", "🐬", "🦀"] },
+  { id: "jungle", icon: "🌴", deco: ["🐒", "🌿", "🐍", "🍌", "🦎", "🌺"] },
+  { id: "arena", icon: "🏟️", deco: ["⚽", "🎉", "📣", "🏆", "🎈", "🥁"] },
+  { id: "city", icon: "🏙️", deco: ["🚕", "🏢", "🚦", "🚌", "🏢", "🚲"] },
+  { id: "rainbow", icon: "🌈", deco: ["🦄", "☁️", "⭐", "🎈", "🍭", "🌈"] },
 ];
 function worldOf(i) { return STAGES.slice(0, i).filter(st => st.gate).length; }
 const stagePools = {}, stageLadders = {};
@@ -2022,7 +2101,8 @@ function stageFree(pl, st) { return !!(pl.gateFree || {})[st.id]; }
 // only ever came from the path and stay).
 // Then, once per stage the player hasn't seen (pl.gatesSeen; the old order's stages count as seen): a new stage before
 // the first unfinished stage he had is free, so the child keeps his place. Stages added later get the same treatment,
-// except a "step" in front of a stage he hasn't finished (the pin steps): he plays that first.
+// except a "step" in front of a stage he hasn't finished (the pin steps): he plays that first; and a recap stop, never
+// free (the owner, 2026-10-05: they are short, and reminding is their point).
 const OLD_ORDER = "take saveq check promo gate1 savep back mateq mater gate2 egqr egrr egq egr gate3 fork mix safe stopm gate4 mate2 pin skewer disc gate5 safe2 review egcatch egkp".split(" ");
 function stageMigrate(pl) {
   if (!window.GYM || !GYM.puzzles || ((pl.pathV || 0) >= 2 && pl.gatesSeen && STAGES.every(st => pl.gatesSeen[st.id]))) return;
@@ -2042,7 +2122,7 @@ function stageMigrate(pl) {
   STAGES.forEach((st, i) => {
     if (pl.gatesSeen[st.id]) return;
     const stepOn = st.step && !stageDone(pl, STAGES.find(x => x.id === st.step));     // an easier step before a stage still to do
-    if (!stageDone(pl, st) && (first < 0 || i < first) && !stepOn) pl.gateFree[st.id] = 1;
+    if (!stageDone(pl, st) && (first < 0 || i < first) && !stepOn && !st.recap) pl.gateFree[st.id] = 1;   // recaps: always played
     pl.gatesSeen[st.id] = 1;
   });
   save();
@@ -2067,6 +2147,7 @@ function gateNext() {   // ▶ after beating a boss: the next stage to play, or 
 // of a finished stage pick from all of them
 function stagePick(pl) {
   if (pzStage.review) return reviewPick(pl);
+  if (pzStage.recap) return recapPick(pl);
   const again = againPick(pl, pzStage.f); if (again) return again;     // a missed puzzle of this stage comes back
   const pool = stageLadder(pzStage), done = pl.done || {}, n = pool.length;
   const rnd = a => a[Math.floor(Math.random() * a.length)];
@@ -2077,10 +2158,29 @@ function stagePick(pl) {
     if (fresh.length || w >= n) return rnd(fresh.length ? fresh : near);
   }
 }
+// a recap stop: the skill whose turn it is (stars mod skills: a miss keeps the turn, so every skill gets a clean solve),
+// half the time a puzzle of it he missed and hasn't yet solved cleanly twice (pl.again), else one from the easier 60% of
+// its ladder (a reminder, not a test; generated stages: any). recapFrom: that skill's stage (savepx keeps its rule: no glow)
+let recapFrom = null;
+function recapSkill(pl, st) {
+  const sts = st.recap.map(id => STAGE_BY[id]).filter(s => s.eg || stagePool(s).length);
+  return sts[stageStars(pl, st.id) % sts.length];
+}
+function recapPick(pl, r = Math.random()) {
+  const st = recapSkill(pl, pzStage), rnd = a => a[Math.floor(Math.random() * a.length)], done = pl.done || {};
+  recapFrom = st;
+  againDue(pl, null);
+  const missed = Object.entries(pl.again || {}).filter(([id, x]) => x.n < 2 && againRows[id] && st.f(againRows[id])).map(([id]) => againRows[id]);
+  if (missed.length && r < .5) return rnd(missed);
+  const lad = stageLadder(st), pool = lad[0][5] ? lad : lad.slice(0, Math.max(8, Math.ceil(lad.length * .6))), fresh = pool.filter(p => !(p[0] in done));
+  return rnd(fresh.length ? fresh : pool);
+}
+// the stage whose rule the puzzle on the board follows (a recap: the skill whose turn it is)
+const pzSkill = () => pzStage && pzStage.recap ? recapFrom : pzStage;
 // the review stop: puzzles from the puzzle stages the child has finished (all puzzle stages before it if none is),
 // half the time one he missed and hasn't yet solved cleanly twice (pl.again, due or not), else a random finished stage
 function reviewStages(pl) {
-  const upTo = STAGES.findIndex(st => st.review), sts = STAGES.filter((st, k) => !st.eg && !st.gate && !st.review && stagePool(st).length && (upTo < 0 || k < upTo));
+  const upTo = STAGES.findIndex(st => st.review), sts = STAGES.filter((st, k) => !st.eg && !st.gate && !st.review && !st.recap && stagePool(st).length && (upTo < 0 || k < upTo));
   const done = sts.filter(st => stageStars(pl, st.id) >= needOf(st));
   return done.length ? done : sts;
 }
@@ -2349,14 +2449,17 @@ function kidFen(pos, turn) {
 }
 
 /* ---- first endgames on the path: mate the lone king with king + queen or king + rook; the black king runs away ---- */
-const EG_PAR = { QR: [7, 12], RR: [9, 15], KQ: [12, 20], KR: [20, 32] };   // your moves for ⭐⭐⭐ / ⭐⭐ (slower: ⭐)
-let eg = null, egSt = null, egReplay = false;   // eg = {st, g (chess.js), sel, last, moves, over, hist: [fen]}; egSt = the endgame stage to open; egReplay: it was finished already
+const EG_PAR = { QR: [7, 12], RR: [9, 15], KQ: [12, 20], KR: [20, 32], fin: [16, 28] };   // your moves for ⭐⭐⭐ / ⭐⭐ (slower: ⭐)
+// eg = {st, sub (the stage whose game this is: a recap's skill whose turn it is, else st), kind (sub.eg), g (chess.js),
+// sel, last, moves, over, hist: [fen]}; egSt = the endgame stage to open; egReplay: it was finished already
+let eg = null, egSt = null, egReplay = false;
 // a start with the black king in the middle, not in check, none of your pieces next to it; White (you) to move.
 // pcs = your pieces besides the king ("QR", "RR", "KQ" = the queen, "KR" = the rook)
 // puz: a puzzle stage's kind (the king-and-pawn puzzles: STAGES' "puzzle" field)
 function egStartFen(pcs, puz = null) {
   if (pcs === "catch") return puz ? sqStartFen() : cpStartFen();
   if (pcs === "kp") return kpStartFen(puz || "free");
+  if (pcs === "fin") return finStartFen();
   for (;;) {
     const bk = kidSq(3, 6, "cdef"), pos = { [bk]: "k" }, mine = ["K", ...pcs.replace("K", "")];
     for (const p of mine) { const q = kidSq(); if (!pos[q]) pos[q] = p; }
@@ -2391,11 +2494,12 @@ function egBotMove(g) {
 // one); eg.max (free king + pawn): past it a game still won starts over without costing a star
 function egStart(st) {
   egSt = st || egSt || STAGES.find(s => s.eg);
-  let fen = egStartFen(egSt.eg, egSt.puzzle);
-  for (let k = 0; k < 6 && eg && eg.st === egSt && fen === eg.fen0; k++) fen = egStartFen(egSt.eg, egSt.puzzle);   // not the same start twice in a row
-  const d = egSt.eg === "kp" ? kpkDist(fen) : 1;
-  eg = { st: egSt, g: new Chess(fen), fen0: fen, sel: null, last: [], moves: 0, over: null, hist: [], undos: 0, slip: false,
-    budget: egSt.puzzle ? d + (d > 1 ? KP_SLACK : 0) : 0, max: kpMax(d) };
+  const sub = egSt.recap ? recapSkill(pzPlayers(), egSt) : egSt, kind = sub.eg;     // a recap: the game whose turn it is
+  let fen = egStartFen(kind, sub.puzzle);
+  for (let k = 0; k < 6 && eg && eg.st === egSt && fen === eg.fen0; k++) fen = egStartFen(kind, sub.puzzle);   // not the same start twice in a row
+  const d = kind === "kp" ? kpkDist(fen) : 1;
+  eg = { st: egSt, sub, kind, g: new Chess(fen), fen0: fen, sel: null, last: [], moves: 0, over: null, hist: [], undos: 0, slip: false,
+    budget: sub.puzzle ? d + (d > 1 ? KP_SLACK : 0) : 0, max: kpMax(d), lead0: finLead(fen) };
   stageLost = null;
   $("eDone").hidden = true; egDraw();
 }
@@ -2404,7 +2508,7 @@ const egSq = s => [FILES.indexOf(s[0]), +s[1]], egDist = (a, b) => { const [x, y
 // (kprun: the black king must stay outside it; kpsq: where your king has to step), the queening square ringed
 // (kpguard), the black king's free squares as dots (kpstale)
 function egGoalMarks(pos, add) {
-  const puz = eg.st.puzzle, at = pc => Object.keys(pos).find(q => pos[q] === pc);
+  const puz = eg.sub.puzzle, at = pc => Object.keys(pos).find(q => pos[q] === pc);
   const half = (pf, k, inZone) => {                // the zone's squares on the king's side of the pawn's file
     const side = Math.sign(egSq(k)[0] - pf);
     for (const f of FILES) for (let r = 1; r <= 8; r++) { const s = f + r; if ((FILES.indexOf(f) - pf) * side >= 0 && inZone(s)) add(s, "sqz"); }
@@ -2438,24 +2542,24 @@ function egDraw() {
   const g = eg.g, pos = parseFen(g.fen()), mine = !eg.over && g.turn() === "w", marks = {};
   const add = (q, c) => { marks[q] = marks[q] ? marks[q] + " " + c : c; };
   if (g.in_check()) marks[Object.keys(pos).find(q => pos[q] === "k")] = "mk";
-  if (mine) for (const q of Object.keys(pos)) {      // your queen/rook (or the pawn you escort) next to the king with no guard
+  if (mine && eg.kind !== "fin") for (const q of Object.keys(pos)) {      // your queen/rook (or the pawn you escort) next to the king with no guard (finish the game: no warning, as in bot games)
     if ("QRP".includes(pos[q]) && attackersOf(pos, q, "b").length && !attackersOf(pos, q, "w").length) marks[q] = "dg";
   }
-  const pawnGoal = eg.st.eg === "catch" ? "p" : eg.st.eg === "kp" ? "P" : null;   // the square the pawn runs to
+  const pawnGoal = eg.kind === "catch" ? "p" : eg.kind === "kp" ? "P" : null;   // the square the pawn runs to
   if (pawnGoal && !eg.over) {
     const at = Object.keys(pos).find(q => pos[q] === pawnGoal);
     if (at) { const goal = at[0] + (pawnGoal === "p" ? 1 : 8); if (!marks[goal]) marks[goal] = pawnGoal === "p" ? "dg" : "star"; }
   }
-  if (eg.st.puzzle && (mine || eg.over)) egGoalMarks(pos, add);
+  if (eg.sub.puzzle && (mine || eg.over)) egGoalMarks(pos, add);
   const tgts = eg.sel && mine ? g.moves({ square: eg.sel, verbose: true }).map(m => m.to) : [];
   renderBoard(pos, { el: $("eboard"), o: "w", hl: eg.last, sel: eg.sel, tgts, marks });
   $("eboard").classList.toggle("mine", mine);
   $("eBar").innerHTML = `<button class="btn big" type="button" id="eMap" aria-label="Back to the map">🗺</button>
-    <span class="stageicon">${eg.st.icon}</span>${stageDots(pzPlayers(), eg.st)}`;
+    <span class="stageicon">${eg.sub.icon}</span>${stageDots(pzPlayers(), eg.st)}`;
   $("eMap").onclick = () => { kidTab = "path"; openKids(); };
   // a puzzle: one footprint per move you have (used ones fade); a game: the moves so far
-  $("eMoves").innerHTML = eg.st.puzzle ? Array.from({ length: eg.budget }, (_, i) => `<span class="efoot${i < eg.moves ? " used" : ""}">👣</span>`).join("") : `👣 <b>${eg.moves}</b>`;
-  $("eUndo").hidden = !!eg.st.puzzle;                // a puzzle has no take-back: a miss starts a new one
+  $("eMoves").innerHTML = eg.sub.puzzle ? Array.from({ length: eg.budget }, (_, i) => `<span class="efoot${i < eg.moves ? " used" : ""}">👣</span>`).join("") : `👣 <b>${eg.moves}</b>`;
+  $("eUndo").hidden = !!eg.sub.puzzle || eg.kind === "fin";   // a puzzle has no take-back: a miss starts a new one; nor has finishing a game (as bot games)
   $("eUndo").disabled = !eg.hist.length || !mine;
   $("eUndo").classList.toggle("nudge", !!eg.slip && mine && !!eg.hist.length);   // the win slipped away: ↶ glows
 }
@@ -2469,7 +2573,7 @@ function egUserMove(from, to) {
 }
 function egReply() {
   if (eg.over || eg.g.turn() !== "b") return;
-  const kind = eg.st.eg, m = egBot(kind)(eg.g);
+  const kind = eg.kind, m = egBot(kind)(eg.g);
   eg.g.move(m); eg.last = [m.from, m.to]; sfx("move");
   if (egEnd()) return;
   if (kind === "catch") eg.slip = !cpCatchable(eg.g.fen());
@@ -2480,13 +2584,13 @@ function egUndo() {   // takes back your last move and the king's reply
   if (!eg || !eg.hist.length || eg.over || eg.g.turn() !== "w") return;
   eg.g.load(eg.hist.pop()); eg.moves--; eg.last = []; eg.sel = null; eg.undos++; eg.slip = false; egDraw();
 }
-function egBot(kind) { return kind === "catch" ? cpBotMove : kind === "kp" ? kpBotMove : egBotMove; }
+function egBot(kind) { return kind === "catch" ? cpBotMove : kind === "kp" ? kpBotMove : kind === "fin" ? finBotMove : egBotMove; }
 // a king-and-pawn puzzle, right after your move: done, a miss ("draw": the table says the win is gone or the new queen
 // hangs; "stale"; "slow": still won but not within the footprints left; "loss": the running pawn can't be caught now),
 // or null (go on)
 function egPuzzleJudge(g) {
   const b = g.fen().split(" ")[0];
-  if (eg.st.eg === "catch") {                       // step into the square: the pawn can still be caught after its push
+  if (eg.kind === "catch") {                       // step into the square: the pawn can still be caught after its push
     if (cpCaught(g)) return "win";
     const g2 = new Chess(g.fen()); g2.move(cpBotMove(g2));
     return !/q/.test(g2.fen().split(" ")[0]) && cpCatchable(g2.fen()) ? "win" : "loss";
@@ -2502,8 +2606,8 @@ function egPuzzleJudge(g) {
 // a star of the stage lost (stageLose), then a new position by itself. A puzzle miss first shows the bot's answer (the
 // king takes the pawn, the pawn runs on). "again" (a game past its move limit that is still won): ↻, no star lost
 function egEnd() {
-  const g = eg.g, kind = eg.st.eg;
-  const res = eg.st.puzzle && g.turn() === "b" ? egPuzzleJudge(g) : kind === "catch" ? cpResult(g) : kind === "kp" ? kpResult(g)
+  const g = eg.g, kind = eg.kind;
+  const res = eg.sub.puzzle && g.turn() === "b" ? egPuzzleJudge(g) : kind === "catch" ? cpResult(g) : kind === "kp" ? kpResult(g) : kind === "fin" ? finResult(g)
     : g.in_checkmate() ? "win" : g.in_stalemate() || g.insufficient_material() ? "draw" : null;
   if (res === "win") {
     eg.over = "win";
@@ -2525,9 +2629,9 @@ function egEnd() {
     const my = eg;
     const stale = res === "stale" || g.in_stalemate();   // a stalemate isn't a happy draw: 😮 and a soft sound
     if (stale) sfx("oops");
-    const show = !!eg.st.puzzle && !stale && g.turn() === "b" && g.moves().length > 0, t = show ? 1200 : 700;
+    const show = !!eg.sub.puzzle && !stale && g.turn() === "b" && g.moves().length > 0, t = show ? 1200 : 700;
     if (show) setTimeout(() => { if (eg !== my) return; const m = egBot(kind)(g); g.move(m); eg.last = [m.from, m.to]; sfx("move"); egDraw(); }, 500);
-    const pic = res === "loss" || res === "again" ? "↻" : stale ? "😮" : res === "slow" ? "🐢" : "🤝";
+    const pic = res === "loss" || res === "again" ? "↻" : stale ? "😮" : res === "slow" ? "🐢" : res === "gave" ? "💔" : "🤝";
     setTimeout(() => { if (eg !== my) return; $("eDone").innerHTML = `<div class="burst">${pic}</div>`; $("eDone").hidden = false; }, t);
     setTimeout(() => { if (eg === my) egStart(my.st); }, t + 2100);
   } else return false;
@@ -2540,6 +2644,43 @@ function egNext() {
   if (egReplay || stageStars(pl, eg.st.id) < needOf(eg.st) || i < 0) return egStart(eg.st);
   if (STAGES[i].eg) return egStart(STAGES[i]);
   stageGo(STAGES[i]);
+}
+
+/* ---- finish the game: a queen and a rook (and a few pawns) up against the Tiger's king, a few pawns and maybe a
+   knight or bishop. Mate it without giving material away: a net loss of more than 2 points (a piece, not a pawn or
+   two; judged after your move, so a piece taken and taken back is fine) is a miss (💔), so is a stalemate or another
+   draw; past FIN_MAX moves a new start (no star lost). No take-backs and no danger marks, as in bot games: noticing
+   what the bot attacks is the point (the owner: he wins big, then gives pieces away). */
+const FIN_MAX = 60;
+function finLead(fen) {
+  let n = 0;
+  for (const c of fen.split(" ")[0]) { const v = VALUE[c.toLowerCase()]; if (v) n += c === c.toUpperCase() ? v : -v; }
+  return n;
+}
+function finStartFen() {
+  for (;;) {
+    const pos = {}, put = (pc, ranks, files = FILES) => {
+      for (let k = 0; k < 40; k++) { const q = files[Math.floor(Math.random() * files.length)] + ranks[Math.floor(Math.random() * ranks.length)]; if (!pos[q]) return (pos[q] = pc, q); }
+      return null;
+    };
+    put("K", "12", "bcdefg"); put("Q", "12"); put("R", "1");
+    for (let i = 2 + Math.floor(Math.random() * 3); i > 0; i--) put("P", "23");
+    put("k", "78", "bcdefg");
+    for (let i = 2 + Math.floor(Math.random() * 2); i > 0; i--) put("p", "67");
+    if (Math.random() < .6) put(Math.random() < .5 ? "n" : "b", "78");
+    const fen = kidFen(pos, "w"), g = new Chess(), gb = new Chess();
+    if (!g.load(fen) || !gb.load(fen.replace(" w ", " b ")) || g.in_check() || gb.in_check() || g.game_over() || gb.game_over()) continue;
+    if (g.moves({ verbose: true }).some(m => m.captured) || gb.moves({ verbose: true }).some(m => m.captured)) continue;   // nothing hangs at the start
+    return fen;
+  }
+}
+function finBotMove(g) { return botMove(BOTS.find(b => b.id === "tiger"), g); }
+function finResult(g) {
+  if (g.in_checkmate()) return g.turn() === "b" ? "win" : "loss";
+  if (g.in_draw() || g.in_stalemate()) return "draw";
+  if (g.turn() === "b" && finLead(g.fen()) < eg.lead0 - 2) return "gave";
+  if (eg.moves >= FIN_MAX && g.turn() === "w") return "again";
+  return null;
 }
 
 /* ---- catch the pawn: your king against a black pawn running to promote (its king stays far away) ----
@@ -3060,6 +3201,13 @@ const BOTS = [
   { id: "bear", face: "🐻", name: "Big Bear", elo: "~700", think: 250, lvl: 5, slip: 0.45, depth: 1, ms: 900 },
   { id: "dragon", face: "🐉", name: "Dragon", elo: "~800", think: 200, lvl: 6, slip: 0.45, depth: 2, ms: 1800 },
   { id: "lion", face: "🦁", name: "Lion", elo: "~800", think: 200, lvl: 6, slip: 0.45, depth: 2, ms: 1800 },
+  // the bosses of the five worlds added on 2026-10-05 (space, the island, the jungle, the arena, the city): new animals
+  // as strong as the Dragon (the owner: no stronger bots)
+  { id: "eagle", face: "🦅", name: "Eagle", elo: "~800", think: 200, lvl: 6, slip: 0.45, depth: 2, ms: 1800 },
+  { id: "shark", face: "🦈", name: "Shark", elo: "~800", think: 200, lvl: 6, slip: 0.45, depth: 2, ms: 1800 },
+  { id: "jaguar", face: "🐆", name: "Jaguar", elo: "~800", think: 200, lvl: 6, slip: 0.45, depth: 2, ms: 1800 },
+  { id: "bull", face: "🐂", name: "Bull", elo: "~800", think: 200, lvl: 6, slip: 0.45, depth: 2, ms: 1800 },
+  { id: "fox", face: "🦊", name: "Fox", elo: "~800", think: 200, lvl: 6, slip: 0.45, depth: 2, ms: 1800 },
   { id: "pete", face: "🐣", name: "Pawn Pete", elo: "Pawn Wars", think: 500, pawns: true },
 ];
 const BOT_RING = ["#3cb371", "#9acd32", "#f2c230", "#f39c34", "#e8542f", "#b3202a"];   // lvl 1–6: green to red
@@ -4370,7 +4518,7 @@ const A_PAGES = [
   ...A_SECTIONS.flatMap(ts => ts.map(t => ({ id: t, team: t, sec: ts[0], big: 1 }))),
   ...A_THEMES.map(([id, fan, icon]) => ({ id, fan, icon, sec: "theme" })),
   ...A_FAN.map(([id, fan, icon, sec]) => ({ id, fan, icon, sec })),
-  { id: "boss", icon: "👑", sec: "boss" },
+  { id: "boss", icon: "👑", sec: "boss", big: 1 },   // 13 bosses since 2026-10-05: the 12-slot layout
 ];
 /* album v4's friends pages: 5 basketball players "b pose lookSlot number" (look slots 3 and 5 are the women) and 4 animal
    friends "a animal pose number"; ":old" = the sticker's id before album v2. A team page keeps the first basketball player
@@ -4397,7 +4545,8 @@ const A_FRIENDS = {
 const A_BB_HAIR = ["spiky", "neat", "buzz", "pony", "spiky", "pony", "curly"];      // by look slot, as on the football page
 // the bosses of the learning path: a crown, the bot's ring colour on a black kit; only beating that boss gives it
 const A_BOSSES = [["gate1", "cat", "kick", 2], ["gate2", "wolf", "header", 3], ["gate4", "chick", "cheer", 0], ["gate3", "tiger", "keeper", 4], ["gate5", "trex", "lift", 5], ["gate6", "dragon", "kick", 6],
-  ["gate7", "bear", "header", 5], ["gate8", "lion", "keeper", 6]];      // the two bosses added on 2026-10-04: after the others, so the old ids stay
+  ["gate7", "bear", "header", 5], ["gate8", "lion", "keeper", 6],      // the two bosses added on 2026-10-04: after the others, so the old ids stay
+  ["gate9", "eagle", "kick", 6], ["gate10", "shark", "header", 6], ["gate11", "jaguar", "keeper", 6], ["gate12", "bull", "lift", 6], ["gate13", "fox", "cheer", 6]];   // 2026-10-05
 /* a team page (album v5, the owner 2026-10-03: "goalkeeper, bicycle kick, field player … are enough"): 12 stickers in grid
    order, [kind, where the sticker was in v4: slot n of the football page, x = the friends page, yn = slot n of the
    picture page]; the stickers of v4 not kept went (albumMigrate pays a pack per 5 of their copies) */

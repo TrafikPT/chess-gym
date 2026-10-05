@@ -428,6 +428,18 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
 .w-castle::before { background: radial-gradient(ellipse 60px 22px at 30% 50%, rgba(255, 255, 255, .85), transparent 70%) 0 0 / 260px 150px, radial-gradient(ellipse 44px 16px at 75% 20%, rgba(255, 255, 255, .7), transparent 70%) 0 0 / 200px 120px; animation: clouds 30s linear infinite; }
 .w-space { background: linear-gradient(to top, #2c1b63, #120f3d 50%, #05071c); }
 .w-space::before { background: radial-gradient(circle 1.5px at 20px 30px, #fff, transparent 100%) 0 0 / 120px 110px, radial-gradient(circle 1px at 70px 80px, #fff, transparent 100%) 0 0 / 90px 100px, radial-gradient(circle 2px at 40px 60px, #ffe9a8, transparent 100%) 0 0 / 170px 150px; animation: twinkle 2.4s ease-in-out infinite alternate; }
+/* the worlds added on 2026-10-05: an island (sand, sea, gentle waves), the jungle (leafy shadows), the arena (a pitch with
+   stripes), the city at dusk (lit windows), the rainbow sky (drifting clouds) */
+.w-island { background: linear-gradient(to top, #f6e3a8, #f2d58a 22%, #6fd3d6 40%, #2fa6c9); }
+.w-island::before { background: radial-gradient(ellipse 22px 7px at 50% 100%, rgba(255, 255, 255, .35) 60%, transparent 64%) 0 0 / 70px 36px; animation: waves 8s linear infinite; }
+.w-jungle { background: linear-gradient(to top, #2f6b22, #1f5a2a 50%, #134520); }
+.w-jungle::before { background: radial-gradient(ellipse 40px 18px at 30% 40%, rgba(150, 220, 90, .25), transparent 70%) 0 0 / 130px 100px, radial-gradient(circle 14px at 70% 70%, rgba(255, 230, 120, .16), transparent 70%) 0 0 / 90px 80px; animation: lava 4s ease-in-out infinite alternate; }
+.w-arena { background: repeating-linear-gradient(to top, #4caf50 0 60px, #43a047 60px 120px); }
+.w-arena::before { background: radial-gradient(circle 2px at 30px 20px, rgba(255, 255, 255, .7), transparent 100%) 0 0 / 90px 70px, radial-gradient(circle 2px at 60px 50px, rgba(255, 235, 59, .7), transparent 100%) 0 0 / 120px 90px; animation: twinkle 1.6s ease-in-out infinite alternate; }
+.w-city { background: linear-gradient(to top, #37304f, #5a4a7a 50%, #f08a5d); }
+.w-city::before { background: linear-gradient(rgba(255, 224, 130, .55), rgba(255, 224, 130, .55)) 0 0 / 8px 10px no-repeat, radial-gradient(circle 3px at 50% 50%, rgba(255, 224, 130, .5), transparent 70%) 0 0 / 34px 30px; animation: twinkle 2.8s ease-in-out infinite alternate; }
+.w-rainbow { background: linear-gradient(to top, #ffd1dc, #ffe9a8 25%, #c8f0c0 50%, #b9dcff 75%, #d9c8ff); }
+.w-rainbow::before { background: radial-gradient(ellipse 60px 22px at 30% 50%, rgba(255, 255, 255, .85), transparent 70%) 0 0 / 260px 150px, radial-gradient(ellipse 44px 16px at 75% 20%, rgba(255, 255, 255, .7), transparent 70%) 0 0 / 200px 120px; animation: clouds 30s linear infinite; }
 @keyframes waves { to { background-position: 64px 0; } }
 @keyframes snow { to { background-position: 0 70px, 0 60px; } }
 @keyframes lava { from { opacity: .55; } to { opacity: 1; } }
@@ -1938,6 +1950,15 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
 .gate { position: relative; display: inline-block; line-height: 1; }   /* a boss gate on the path: the bot's face with crossed swords */
 .gate::after { content: "⚔"; position: absolute; right: -.3em; top: -.25em; font-size: .42em; color: #b8961c; }
 .goal.win { font-size: .8em; color: #b8961c; }
+/* a recap stop: the pictures of the skills it brings back, small (two by two), with 🔁 in the corner; 👀 🤫 😮 🕸️ beside a
+   goal picture: find it yourself / quiet move / no stalemate / trapped */
+.goal.recap { flex-direction: column; gap: .04em; line-height: 1; }
+.goal.recap::before { content: "🔁"; font-size: .62em; }
+.rcp { display: inline-flex; gap: .08em; font-size: .3em; line-height: 1; align-items: center; }
+.rcp > i { font-style: normal; display: inline-flex; align-items: center; }
+.rcp .pc.mini { width: .5em; height: .5em; display: inline-block; }
+.stagebar .rcp, .ustages .rcp { font-size: .42em; }
+.seek { font-size: .55em; align-self: flex-end; }
 .kidgoal { font-size: 110px; line-height: 1; display: grid; place-items: center; padding: 8px 0; }
 .kidgoal.small { font-size: 44px; justify-items: start; padding: 0 0 4px; }
 .goalbadge { font-size: 48px; line-height: 1; display: flex; justify-content: center; padding: 4px 0; }
