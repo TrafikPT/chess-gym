@@ -101,7 +101,8 @@ function mergePlayer(a, b) {
     const cur = al => albumMigrate(JSON.parse(JSON.stringify(al || {}))), x = cur(a.album), y = cur(b.album);
     out.album = { c: Math.max(x.c || 0, y.c || 0), b: Math.max(x.b || 0, y.b || 0), o: Math.max(x.o || 0, y.o || 0), s: maxMap(x.s, y.s), v: A_VER,
       c0: Math.max(x.c0 || 0, y.c0 || 0), p3: Math.max(x.p3 || 0, y.p3 || 0),      // the larger c0: never creates packs
-      c1: Math.max(x.c1 || 0, y.c1 || 0) };     // the copy that switched later had paid a pack for each of its solves until then
+      c1: Math.max(x.c1 || 0, y.c1 || 0),      // the copy that switched later had paid a pack for each of its solves until then
+      c2: Math.max(x.c2 || 0, y.c2 || 0) };    // likewise a pack per 5 (album v6)
     if (x.bp != null || y.bp != null) out.album.bp = Math.max(x.bp || 0, y.bp || 0);   // neither yet: albumOf derives it from the bosses
     if (x.lp || y.lp) out.album.lp = Math.max(x.lp || 0, y.lp || 0);     // packs for the stickers album v5 removed
     if (x.sh || y.sh) out.album.sh = maxMap(x.sh, y.sh);                 // shiny stickers
@@ -3651,7 +3652,7 @@ function openBots() {
 }
 
 
-/* ================= sticker book: anime-style athletes drawn in SVG, a pack of 7 for every 5 clean path solves ================= */
+/* ================= sticker book: anime-style athletes drawn in SVG, a pack of 7 for every 10 clean path solves ================= */
 
 /* ---- drawing: one chibi athlete (pose, kit, head) on a team backdrop; a sticker is a line of settings ----
    Figure coordinates: viewBox 0 -16 100 136 (head around 50,25, feet at y 107); the card is 120 x 158. */
@@ -4582,13 +4583,15 @@ const STK = (() => {
 const A_MOVED = Object.fromEntries(Object.entries(A_FRIENDS).flatMap(([t, rows]) => rows.split("|").map((r, i) => [r.split(":")[1], t + "x" + (i + 1)]).filter(([o]) => o)));
 // album v4 id → v5 id of the team stickers that stayed ({ "pt3": "pt2", … })
 const A_V5 = Object.fromEntries(Object.keys(A_TEAMS).flatMap(t => A_TEAM12.map(([, was], i) => was && [t + (was === "x" ? "x" + (aBbRow(t) + 1) : was), t + (i + 1)]).filter(Boolean)));
-const A_VER = 5;
+const A_VER = 6;
 /* bring an album up to A_VER (in place, once: guarded by a.v; running it again changes nothing). v2: a moved sticker keeps
    its copies. v3 (2026-10-03, packs of 5 for every solve): c0 = the solves the old rule (a pack of 3 per 5) already paid
    for, p3 = the packs earned until then (incl. gifts), which stay packs of 3: the switch gives no packs for past solves.
    v4 (2026-10-03, a pack per PACK_EVERY solves again): c1 = the solves already paid a pack each, so nothing earned is lost.
    v5 (2026-10-03, a page of 12 per team): the kept team stickers move to their new ids, and the copies of the ones that
-   went pay lp = a pack per LOST_PER_PACK (the owner: "one pack for each 5 stickers he lost", copies count) */
+   went pay lp = a pack per LOST_PER_PACK (the owner: "one pack for each 5 stickers he lost", copies count).
+   v6 (2026-10-05, a pack per 10 solves instead of 5): c2 = the solves already paid a pack per V5_EVERY; the solves towards
+   the next pack at the switch (fewer than V5_EVERY) carry over to the new rule, so nothing earned is lost or handed out */
 function albumMigrate(a) {
   if (!a || (a.v || 1) >= A_VER) return a;
   const s = a.s || (a.s = {}), v = a.v || 1;
@@ -4605,6 +4608,7 @@ function albumMigrate(a) {
     }
     a.s = ns; a.lp = (a.lp || 0) + Math.floor(lost / LOST_PER_PACK);
   }
+  if (v < 6) { const c1 = Math.max(a.c0 || 0, a.c1 || 0); a.c2 = c1 + V5_EVERY * Math.floor(Math.max(0, (a.c || 0) - c1) / V5_EVERY); }
   a.v = A_VER;
   return a;
 }
@@ -4616,14 +4620,15 @@ function albumMigrate(a) {
 // the owner (2026-10-03): "5 stickers per solve" = a pack of 5 for every clean solve after the switch (before: 3 per 5 solves);
 // later that day, a pack every solve was too much (the queen + rook mate replayed for packs): "no packs on replays and one pack
 // on average per 5 stars" = a pack of 5 for every PACK_EVERY clean solves of unfinished stages (puzzles and endgames alike)
+// the owner (2026-10-05): a pack every 10 stars instead of 5 (PACK_EVERY; V5_EVERY = the old rate, albumMigrate v6)
 // the owner (2026-10-03, later): 7 stickers per pack (PACK_SIZE; packs already waiting open as packs of 7 too)
 // the owner (2026-10-03): "each boss should be like two packs guaranteed": BOSS_PACKS for every boss game won on the path
 // the owner (2026-10-03): a holo sticker (HOLO copies) leaves the packs, so every sticker ends up holo; then the packs stop.
 // 1 card in SHINY_ODDS comes shiny (another palette, kept for good)
-const PACK_EVERY = 5, PACK_SIZE = 7, OLD_EVERY = 5, OLD_SIZE = 3, OLD_PACKS_MAX = 10, BOSS_PACKS = 2, LOST_PER_PACK = 5, HOLO = 3, SHINY_ODDS = 50;
+const PACK_EVERY = 10, V5_EVERY = 5, PACK_SIZE = 7, OLD_EVERY = 5, OLD_SIZE = 3, OLD_PACKS_MAX = 10, BOSS_PACKS = 2, LOST_PER_PACK = 5, HOLO = 3, SHINY_ODDS = 50;
 function albumOf(pl) {
   // first time: one pack per sticker of the old "a sticker every 10 stars" row, at most OLD_PACKS_MAX
-  if (!pl.album) pl.album = { c: 0, b: Math.min(OLD_PACKS_MAX, Math.floor((pl.stars || 0) / 10)), o: 0, s: {}, v: A_VER, c0: 0, p3: 0, c1: 0 };
+  if (!pl.album) pl.album = { c: 0, b: Math.min(OLD_PACKS_MAX, Math.floor((pl.stars || 0) / 10)), o: 0, s: {}, v: A_VER, c0: 0, p3: 0, c1: 0, c2: 0 };
   const a = albumMigrate(pl.album);
   // bp came after the bosses: the ones already beaten (not just "free") pay their packs once
   if (a.bp == null) a.bp = BOSS_PACKS * STAGES.filter(st => st.gate && stageDone(pl, st)).length;
@@ -4648,9 +4653,12 @@ function stkAnim(st) {
   return typeof f === "function" ? () => f(t, st) : null;
 }
 function stkTier(st, copies) { return st.boss || copies >= HOLO ? 2 : copies >= 2 ? 1 : 0; }
-// packs of 3 per OLD_EVERY solves up to c0, a pack per solve from c0 to c1, then one per PACK_EVERY
-function packsEarned(a) { const c0 = a.c0 || 0, c1 = Math.max(c0, a.c1 || 0); return Math.floor(c0 / OLD_EVERY) + (c1 - c0) + Math.floor(aSince(a) / PACK_EVERY); }
-function aSince(a) { return Math.max(0, a.c - Math.max(a.c0 || 0, a.c1 || 0)); }      // solves under the current rule
+// packs of 3 per OLD_EVERY solves up to c0, a pack per solve from c0 to c1, one per V5_EVERY from c1 to c2, then one per PACK_EVERY
+function packsEarned(a) {
+  const c0 = a.c0 || 0, c1 = Math.max(c0, a.c1 || 0), c2 = Math.max(c1, a.c2 || 0);
+  return Math.floor(c0 / OLD_EVERY) + (c1 - c0) + Math.floor((c2 - c1) / V5_EVERY) + Math.floor(aSince(a) / PACK_EVERY);
+}
+function aSince(a) { return Math.max(0, a.c - Math.max(a.c0 || 0, a.c1 || 0, a.c2 || 0)); }      // solves under the current rule
 // packs to open: none while the packs have nothing left to give (every open sticker holo)
 function packsWaiting(pl) { const a = albumOf(pl), n = Math.max(0, packsEarned(a) + a.b + a.bp + (a.lp || 0) - a.o); return n && aPool(pl).length ? n : 0; }
 // the worlds reached on the learning path (the one being played and those before it): their pages are open
@@ -4963,7 +4971,7 @@ function albumParentsWire(pl) {
   if ($("aTest10")) $("aTest10").onclick = () => { albumOf(pl).b += 10; back(); };
   if ($("aTestEmpty")) $("aTestEmpty").onclick = () => {
     if (!confirm("Empty the sticker book in this browser?")) return;
-    pl.album = { c: 0, b: 0, o: 0, s: {}, v: A_VER, c0: 0, p3: 0, c1: 0 }; albumTray = []; albumHold = {}; back();
+    pl.album = { c: 0, b: 0, o: 0, s: {}, v: A_VER, c0: 0, p3: 0, c1: 0, c2: 0 }; albumTray = []; albumHold = {}; back();
   };
 }
 
