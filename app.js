@@ -1872,7 +1872,7 @@ function advanceStage() {
   if (!pzStage || pzReplay) return;
   const pl = pzPlayers();
   if (stageStars(pl, pzStage.id) < needOf(pzStage)) return;
-  const i = stageCur(pl);
+  const i = stageAfter(pl, pzStage);
   if (i < 0 || STAGES[i] === pzStage) return;
   if (STAGES[i].eg || STAGES[i].gate) { stageGo(STAGES[i]); return true; }     // next up is an endgame or a boss: pzNext stops here
   pzStage = STAGES[i];
@@ -2093,6 +2093,13 @@ function stageOpen(pl, i) {
 }
 // the stage to play next: the first open unfinished one (a free stage behind the child doesn't count)
 function stageCur(pl) { return STAGES.findIndex((st, k) => stageOpen(pl, k) && !stageDone(pl, st) && !stageFree(pl, st)); }
+// after finishing st: the next open unfinished stage after it (free ones too), else stageCur. With unfinished stages
+// spread between finished ones (recaps and steps added behind the child), stageCur alone jumped back or ahead past
+// them (the owner, 2026-10-05: "he beats a level and instead of going to the next he goes to the end")
+function stageAfter(pl, st) {
+  const j = STAGES.indexOf(st), i = j < 0 ? -1 : STAGES.findIndex((s, k) => k > j && !stageDone(pl, s) && stageOpen(pl, k));
+  return i >= 0 ? i : stageCur(pl);
+}
 // pl.gateFree / pl.gatesSeen: named when only boss gates had them; now they hold every stage
 function stageFree(pl, st) { return !!(pl.gateFree || {})[st.id]; }
 // The path before the strict order (pl.pathV < 2) let any star open the stages up to it, and solves in the 🧩 / Puzzles
@@ -2137,8 +2144,8 @@ function gateWin(pl, botId, from = null) {
   albumBoss(pl, from.id);
   return from;
 }
-function gateNext() {   // ▶ after beating a boss: the next stage to play, or the map
-  const pl = pzPlayers(), i = stageCur(pl);
+function gateNext(gate) {   // ▶ after beating a boss: the next stage to play, or the map
+  const pl = pzPlayers(), i = stageAfter(pl, gate);
   if (i < 0) { kidTab = "path"; return openKids(); }
   stageGo(STAGES[i]);
 }
@@ -2641,7 +2648,7 @@ function egEnd() {
 }
 // after a win: the same stage again, or the next unfinished stage once this one is done (a replay stays put)
 function egNext() {
-  const pl = pzPlayers(), i = stageCur(pl);
+  const pl = pzPlayers(), i = stageAfter(pl, eg.st);
   if (egReplay || stageStars(pl, eg.st.id) < needOf(eg.st) || i < 0) return egStart(eg.st);
   if (STAGES[i].eg) return egStart(STAGES[i]);
   stageGo(STAGES[i]);
@@ -3487,7 +3494,7 @@ function botOverShow(clean = false) {
     ${bg.game && !clean ? `<button class="btn big" type="button" id="bReview" aria-label="What did I miss?">🔍</button>` : ""}</div>`;
   $("bOver").hidden = false;
   $("bAgain").onclick = () => botStart(bg.bot.id, bg.gate);
-  if ($("bGateNext")) $("bGateNext").onclick = () => { bg = null; gateNext(); };
+  if ($("bGateNext")) $("bGateNext").onclick = () => { const g = bg.gate; bg = null; gateNext(g); };
   if ($("bGateMap")) $("bGateMap").onclick = () => { bg = null; kidTab = "path"; openKids(); };
   if ($("bPickAgain")) $("bPickAgain").onclick = () => { bg = null; renderBots(); };
   if ($("bReview")) $("bReview").onclick = rpStart;
