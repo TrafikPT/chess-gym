@@ -2005,7 +2005,7 @@ const STAGES = [
   { id: "savep", name: "Save your pieces", icon: `<span class="goal save"><span class="pc wR"></span></span>`, f: p => /savePiece/.test(p[4]) },
   { id: "mateq", name: "Mate with the queen", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc wQ mini"></span>`, f: p => p[5] && /mateIn1/.test(p[4]) && !/backRank|mateNoStale/.test(p[4]) && /[Qq]/.test(p[1].split(" ")[0]) },
   // piece against pawns (Steps-Method mini-games, eg kinds ppQ / ppR / ppN): take every pawn before one gets through
-  { id: "qp8", name: "Queen against 8 pawns: take them all", need: 3, eg: "ppQ", icon: ppIcon("Q", 4), f: () => false },
+  { id: "qp8", name: "Queen against 6 pawns: take them all", need: 3, eg: "ppQ", icon: ppIcon("Q", 4), f: () => false },
   { id: "r1", name: "Recap: take a free piece, save the queen, give check, make a queen, find every capture", ...recapOf("take", "saveq", "check", "promo", "allcap") },
   { id: "play2", name: "Play a game: beat Greedy Cat", ...playStop("gus", "🐱") },
   { id: "back", name: "Back-rank mate", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc bP mini"></span>`, f: p => p[5] && /backRankMate/.test(p[4]) },
@@ -2028,7 +2028,7 @@ const STAGES = [
   { id: "forkn", name: "Forks with the knight", icon: `<span class="goal win">🍴</span><span class="pc wN mini"></span>`, f: p => hasTag(p, "forkKnight") },
   { id: "npaw", name: "Knight against pawns: take them all", need: 3, eg: "ppN", icon: ppIcon("N", 2), f: () => false },
   { id: "forkp", name: "Forks with a pawn", icon: `<span class="goal win">🍴</span><span class="pc wP mini"></span>`, f: p => hasTag(p, "forkPawn") },
-  { id: "re1", name: "Recap: mate with two rooks, queen against 8 pawns, rook against pawns (one game each)", ...recapEg("egrr", "qp8", "rpaw") },
+  { id: "re1", name: "Recap: mate with two rooks, queen against 6 pawns, rook against pawns (one game each)", ...recapEg("egrr", "qp8", "rpaw") },
   { id: "fork", name: "Forks (any piece)", icon: `<span class="goal win">🍴</span>`, f: p => hasTag(p, "forkKnight") || hasTag(p, "forkPawn") || (!p[5] && tacticOnly(p, "fork") && p[3] < 850 && !later(p)) },
   { id: "play4", name: "Play a game: beat Wily Wolf", ...playStop("cat", "🐺") },
   // the save-your-pieces puzzles again without the red glow and arrows: find what the bot attacks yourself (in games he
@@ -2083,7 +2083,7 @@ const STAGES = [
   // (safe_gen.py, safeTakeHard: always a bigger piece taking), one kind at a time first: one attacker ("single"), count
   // attackers and defenders ("count"), the hidden defender ("hidden"), then all three; mixed puzzles
   { id: "disck", name: "Discovered check", icon: DISC_CHECK_ICON, f: p => hasTag(p, "discCheck") },
-  { id: "re3", name: "Recap: queen against 8 pawns, knight against pawns, mate with king + queen (one game each)", ...recapEg("qp8", "npaw", "egq") },
+  { id: "re3", name: "Recap: queen against 6 pawns, knight against pawns, mate with king + queen (one game each)", ...recapEg("qp8", "npaw", "egq") },
   { id: "disc", name: "Discovered attacks", icon: DISC_ICON, f: p => !p[5] && tacticOnly(p, "discoveredAttack") && p[3] < 950 },
   { id: "safe2s", name: "Is it safe to take? (harder): one attacker", step: "safe2", icon: `<span class="goal scale mn" data-n="1">⚖️<span class="pc bR"></span></span>`, f: p => /safeTakeHard/.test(p[4]) && p[4].split(" ").includes("single") },
   { id: "safe2c", name: "Is it safe to take? (harder): count attackers and defenders", step: "safe2", icon: `<span class="goal scale mn" data-n="2">⚖️<span class="pc bR"></span></span><span class="pc wB mini"></span><span class="pc wN mini"></span>`, f: p => /safeTakeHard/.test(p[4]) && p[4].split(" ").includes("count") },
@@ -2794,7 +2794,7 @@ function finResult(g) {
    square in front of a pawn whose queen would be safe, and a new queen. */
 const PP_PIECE = { ppQ: "Q", ppR: "R", ppN: "N" };
 const isPP = kind => Object.prototype.hasOwnProperty.call(PP_PIECE, kind);
-const PP_STARTS = {"ppR":[["a1",["a7","b7","g7","h7"]],["h1",["a7","b7","g7","h7"]],["d1",["a7","b7","g7","h7"]],["e1",["a7","b7","g7","h7"]],["a1",["b7","c7","f7","g7"]],["h1",["b7","c7","f7","g7"]],["d1",["b7","c7","f7","g7"]],["e1",["b7","c7","f7","g7"]],["a1",["a7","b7","c7","h7"]],["h1",["a7","b7","c7","h7"]],["d1",["a7","b7","c7","h7"]],["e1",["a7","b7","c7","h7"]],["a1",["a7","f7","g7","h7"]],["h1",["a7","f7","g7","h7"]],["d1",["a7","f7","g7","h7"]],["e1",["a7","f7","g7","h7"]],["a1",["c7","d7","e7","f7"]],["h1",["c7","d7","e7","f7"]],["d1",["c7","d7","e7","f7"]],["e1",["c7","d7","e7","f7"]],["a1",["a7","b7","f7","g7"]],["h1",["a7","b7","f7","g7"]],["d1",["a7","b7","f7","g7"]],["e1",["a7","b7","f7","g7"]]],"ppN":[["b1",["a7","b7"]],["g1",["a7","b7"]],["b1",["a7","c7"]],["g1",["a7","c7"]],["b1",["b7","c7"]],["g1",["b7","c7"]],["b1",["b7","d7"]],["g1",["b7","d7"]],["b1",["c7","d7"]],["g1",["c7","d7"]],["b1",["c7","e7"]],["g1",["c7","e7"]],["b1",["d7","e7"]],["g1",["d7","e7"]],["b1",["d7","f7"]],["g1",["d7","f7"]],["b1",["e7","f7"]],["g1",["e7","f7"]],["b1",["e7","g7"]],["g1",["e7","g7"]],["b1",["f7","g7"]],["g1",["f7","g7"]],["b1",["f7","h7"]],["g1",["f7","h7"]],["b1",["g7","h7"]],["g1",["g7","h7"]]],"ppQ":[["d1",["a7","b7","c7","d7","e7","f7","g7","h7"]],["e1",["a7","b7","c7","d7","e7","f7","g7","h7"]]]};
+const PP_STARTS = {"ppR":[["a1",["a7","b7","g7","h7"]],["h1",["a7","b7","g7","h7"]],["d1",["a7","b7","g7","h7"]],["e1",["a7","b7","g7","h7"]],["a1",["b7","c7","f7","g7"]],["h1",["b7","c7","f7","g7"]],["d1",["b7","c7","f7","g7"]],["e1",["b7","c7","f7","g7"]],["a1",["a7","b7","c7","h7"]],["h1",["a7","b7","c7","h7"]],["d1",["a7","b7","c7","h7"]],["e1",["a7","b7","c7","h7"]],["a1",["a7","f7","g7","h7"]],["h1",["a7","f7","g7","h7"]],["d1",["a7","f7","g7","h7"]],["e1",["a7","f7","g7","h7"]],["a1",["c7","d7","e7","f7"]],["h1",["c7","d7","e7","f7"]],["d1",["c7","d7","e7","f7"]],["e1",["c7","d7","e7","f7"]],["a1",["a7","b7","f7","g7"]],["h1",["a7","b7","f7","g7"]],["d1",["a7","b7","f7","g7"]],["e1",["a7","b7","f7","g7"]]],"ppN":[["b1",["a7","b7"]],["g1",["a7","b7"]],["b1",["a7","c7"]],["g1",["a7","c7"]],["b1",["b7","c7"]],["g1",["b7","c7"]],["b1",["b7","d7"]],["g1",["b7","d7"]],["b1",["c7","d7"]],["g1",["c7","d7"]],["b1",["c7","e7"]],["g1",["c7","e7"]],["b1",["d7","e7"]],["g1",["d7","e7"]],["b1",["d7","f7"]],["g1",["d7","f7"]],["b1",["e7","f7"]],["g1",["e7","f7"]],["b1",["e7","g7"]],["g1",["e7","g7"]],["b1",["f7","g7"]],["g1",["f7","g7"]],["b1",["f7","h7"]],["g1",["f7","h7"]],["b1",["g7","h7"]],["g1",["g7","h7"]]],"ppQ":[["d1",["b7","c7","d7","e7","f7","g7"]],["e1",["b7","c7","d7","e7","f7","g7"]],["d1",["a7","b7","c7","f7","g7","h7"]],["e1",["a7","b7","c7","f7","g7","h7"]],["d1",["a7","b7","c7","d7","e7","f7"]],["e1",["a7","b7","c7","d7","e7","f7"]]]};
 function ppIcon(pc, n) {
   return `<span class="goal take"><span class="pc w${pc}"></span></span><span class="egm pp">${'<span class="pc bP mini"></span>'.repeat(n)}</span>`;
 }
