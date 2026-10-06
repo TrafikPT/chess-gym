@@ -2640,9 +2640,13 @@ function egDraw() {
     const at = Object.keys(pos).find(q => pos[q] === pawnGoal);
     if (at) { const goal = at[0] + (pawnGoal === "p" ? 1 : 8); if (!marks[goal]) marks[goal] = pawnGoal === "p" ? "dg" : "star"; }
   }
-  if (isPP(eg.kind)) for (const q of Object.keys(pos)) {     // piece against pawns: your piece attacked, a pawn about to queen (or queened)
-    if (pos[q] !== "p") { if (mine && attackersOf(pos, q, "b").length) add(q, "dg"); }
-    else if (q[1] === "1" || (q[1] === "2" && !pos[q[0] + 1] && !eg.over)) add(q[0] + 1, "dg");
+  if (isPP(eg.kind)) for (const q of Object.keys(pos)) {     // piece against pawns: your piece attacked, a pawn about to make a safe queen, a new queen
+    if (pos[q] === "q") add(q, "dg");
+    else if (pos[q] !== "p") { if (mine && attackersOf(pos, q, "b").some(s => pos[s] === "p")) add(q, "dg"); }
+    else if (q[1] === "2" && !pos[q[0] + 1] && !eg.over) {
+      const p2 = { ...pos }; delete p2[q]; p2[q[0] + 1] = "p";
+      if (ppQueenSafe(p2, q[0] + 1)) add(q[0] + 1, "dg");
+    }
   }
   if (eg.sub.puzzle && (mine || eg.over)) egGoalMarks(pos, add);
   const tgts = eg.sel && mine ? g.moves({ square: eg.sel, verbose: true }).map(m => m.to) : [];
@@ -2778,16 +2782,19 @@ function finResult(g) {
 }
 
 /* ---- piece against pawns (Steps-Method mini-games): your queen, rook or knight against black pawns, no kings. Take
-   every pawn to win; a pawn reaching your first rank or taking your piece loses it (↻ / 💔). The pawns never block
+   every pawn to win; a pawn taking your piece loses it (💔), so does a new queen on your first rank (↻) that your piece
+   can't take at once, or that a pawn guards (the owner, 2026-10-06: a queen you just eat was a bad promotion; you must
+   take it with your next move, else ↻). The pawns never block
    each other, so a side with no move has one pawn left, blocked by the piece: it passes. Every start is a forced win
    for the piece (PP_STARTS = puzzles/minigame_check.py's minigames.json, each solved exhaustively; a start may be
    mirrored, which keeps it won). chess.js needs kings, so ppGame is a small board with the chess.js calls the endgame
    view uses. The bot (ppBot, as bot_move in the script): takes the piece, makes a queen, else the push that leaves the
    fewest pawns the piece can take for free, then a safe square for the pushed pawn, then the most advanced; ties at
-   random. Your piece glows when a pawn attacks it, so does the square in front of a pawn about to queen. */
+   random (a queen your piece takes for free is such a pawn). Your piece glows when a pawn attacks it, so does the
+   square in front of a pawn whose queen would be safe, and a new queen. */
 const PP_PIECE = { ppQ: "Q", ppR: "R", ppN: "N" };
 const isPP = kind => Object.prototype.hasOwnProperty.call(PP_PIECE, kind);
-const PP_STARTS = {"ppR":[["a1",["a7","b7","g7","h7"]],["h1",["a7","b7","g7","h7"]],["d1",["a7","b7","g7","h7"]],["e1",["a7","b7","g7","h7"]],["d1",["b7","c7","f7","g7"]],["e1",["b7","c7","f7","g7"]],["a1",["a7","b7","c7","h7"]],["h1",["a7","b7","c7","h7"]],["d1",["a7","b7","c7","h7"]],["e1",["a7","b7","c7","h7"]],["a1",["a7","f7","g7","h7"]],["h1",["a7","f7","g7","h7"]],["d1",["a7","f7","g7","h7"]],["e1",["a7","f7","g7","h7"]],["d1",["c7","d7","e7","f7"]],["e1",["c7","d7","e7","f7"]],["a1",["a7","b7","f7","g7"]],["d1",["a7","b7","f7","g7"]],["e1",["a7","b7","f7","g7"]]],"ppN":[["b1",["a7","b7"]],["g1",["a7","b7"]],["b1",["a7","c7"]],["g1",["a7","c7"]],["b1",["b7","c7"]],["g1",["b7","c7"]],["b1",["b7","d7"]],["g1",["b7","d7"]],["b1",["c7","d7"]],["g1",["c7","d7"]],["b1",["c7","e7"]],["g1",["c7","e7"]],["b1",["d7","e7"]],["g1",["d7","e7"]],["b1",["d7","f7"]],["g1",["d7","f7"]],["b1",["e7","f7"]],["g1",["e7","f7"]],["b1",["e7","g7"]],["g1",["e7","g7"]],["b1",["f7","g7"]],["g1",["f7","g7"]],["b1",["f7","h7"]],["g1",["f7","h7"]],["b1",["g7","h7"]],["g1",["g7","h7"]]],"ppQ":[["d1",["a7","b7","c7","d7","e7","f7","g7","h7"]],["e1",["a7","b7","c7","d7","e7","f7","g7","h7"]]]};
+const PP_STARTS = {"ppR":[["a1",["a7","b7","g7","h7"]],["h1",["a7","b7","g7","h7"]],["d1",["a7","b7","g7","h7"]],["e1",["a7","b7","g7","h7"]],["a1",["b7","c7","f7","g7"]],["h1",["b7","c7","f7","g7"]],["d1",["b7","c7","f7","g7"]],["e1",["b7","c7","f7","g7"]],["a1",["a7","b7","c7","h7"]],["h1",["a7","b7","c7","h7"]],["d1",["a7","b7","c7","h7"]],["e1",["a7","b7","c7","h7"]],["a1",["a7","f7","g7","h7"]],["h1",["a7","f7","g7","h7"]],["d1",["a7","f7","g7","h7"]],["e1",["a7","f7","g7","h7"]],["a1",["c7","d7","e7","f7"]],["h1",["c7","d7","e7","f7"]],["d1",["c7","d7","e7","f7"]],["e1",["c7","d7","e7","f7"]],["a1",["a7","b7","f7","g7"]],["h1",["a7","b7","f7","g7"]],["d1",["a7","b7","f7","g7"]],["e1",["a7","b7","f7","g7"]]],"ppN":[["b1",["a7","b7"]],["g1",["a7","b7"]],["b1",["a7","c7"]],["g1",["a7","c7"]],["b1",["b7","c7"]],["g1",["b7","c7"]],["b1",["b7","d7"]],["g1",["b7","d7"]],["b1",["c7","d7"]],["g1",["c7","d7"]],["b1",["c7","e7"]],["g1",["c7","e7"]],["b1",["d7","e7"]],["g1",["d7","e7"]],["b1",["d7","f7"]],["g1",["d7","f7"]],["b1",["e7","f7"]],["g1",["e7","f7"]],["b1",["e7","g7"]],["g1",["e7","g7"]],["b1",["f7","g7"]],["g1",["f7","g7"]],["b1",["f7","h7"]],["g1",["f7","h7"]],["b1",["g7","h7"]],["g1",["g7","h7"]]],"ppQ":[["d1",["a7","b7","c7","d7","e7","f7","g7","h7"]],["e1",["a7","b7","c7","d7","e7","f7","g7","h7"]]]};
 function ppIcon(pc, n) {
   return `<span class="goal take"><span class="pc w${pc}"></span></span><span class="egm pp">${'<span class="pc bP mini"></span>'.repeat(n)}</span>`;
 }
@@ -2800,11 +2807,11 @@ function ppStartFen(kind) {
 function ppMoves(pos, turn) {
   const out = [];
   for (const [s, p] of Object.entries(pos)) {
-    if (turn === "w" && p !== "p") {
-      for (const f of FILES) for (let r = 1; r <= 8; r++) { const t = f + r; if (attacksSq(pos, s, t)) out.push(pos[t] ? { from: s, to: t, captured: "p" } : { from: s, to: t }); }
+    if (turn === "w" && p !== p.toLowerCase()) {
+      for (const f of FILES) for (let r = 1; r <= 8; r++) { const t = f + r; if (attacksSq(pos, s, t)) out.push(pos[t] ? { from: s, to: t, captured: pos[t] } : { from: s, to: t }); }
     } else if (turn === "b" && p === "p") {
       const x = FILES.indexOf(s[0]), y = +s[1], one = s[0] + (y - 1), two = s[0] + (y - 2);
-      for (const dx of [-1, 1]) { const f = FILES[x + dx], t = f && f + (y - 1); if (t && pos[t] && pos[t] !== "p") out.push({ from: s, to: t, captured: pos[t].toLowerCase() }); }
+      for (const dx of [-1, 1]) { const f = FILES[x + dx], t = f && f + (y - 1); if (t && pos[t] && pos[t] !== pos[t].toLowerCase()) out.push({ from: s, to: t, captured: pos[t].toLowerCase() }); }
       if (!pos[one]) { out.push({ from: s, to: one }); if (y === 7 && !pos[two]) out.push({ from: s, to: two }); }
     }
   }
@@ -2819,7 +2826,7 @@ function ppGame(fen) {
     moves: ({ square = null, verbose = false } = {}) => { const ms = ppMoves(g.pos, g.t).filter(m => !square || m.from === square); return verbose ? ms : ms.map(m => m.to); },
     move: m => {         // null: the blocked pawns pass
       g.h.push([g.pos, g.t]);
-      if (m) { const pos = { ...g.pos }; pos[m.to] = pos[m.from]; delete pos[m.from]; g.pos = pos; }
+      if (m) { const pos = { ...g.pos }; pos[m.to] = pos[m.from] === "p" && m.to[1] === "1" ? "q" : pos[m.from]; delete pos[m.from]; g.pos = pos; }
       g.t = g.t === "w" ? "b" : "w";
       return m;
     },
@@ -2828,26 +2835,33 @@ function ppGame(fen) {
     game_over: () => !!ppResult(g),
   });
 }
-// "gave" (💔): a pawn took your piece; "loss" (↻): a pawn reached your first rank; "win": no pawn left
+// "gave" (💔): a pawn took your piece; "loss" (↻): a new queen your piece can't take (or a pawn guards), or that you
+// didn't take; "win": no pawn left
 function ppResult(g) {
-  const pcs = Object.entries(g.pos);
-  if (!pcs.some(([, p]) => p !== "p")) return "gave";
-  if (pcs.some(([s, p]) => p === "p" && s[1] === "1")) return "loss";
+  const pcs = Object.entries(g.pos), q = pcs.find(([, p]) => p === "q");
+  if (!pcs.some(([, p]) => p !== p.toLowerCase())) return "gave";
+  if (q && (g.t === "b" || ppQueenSafe(g.pos, q[0]))) return "loss";
   return pcs.length === 1 ? "win" : null;
+}
+// a new black queen (or a pawn) on your first rank at sq that your piece can't take, or that a pawn guards
+function ppQueenSafe(pos, sq) {
+  const pc = Object.keys(pos).find(s => pos[s] !== pos[s].toLowerCase());
+  return !pc || !attacksSq(pos, pc, sq) || Object.keys(pos).some(s => pos[s] === "p" && attacksSq(pos, s, sq));
 }
 // the pawns your piece attacks that no pawn guards
 function ppHanging(pos) {
-  const pc = Object.keys(pos).find(s => pos[s] !== "p");
+  const pc = Object.keys(pos).find(s => pos[s] !== pos[s].toLowerCase());
   return pc ? Object.keys(pos).filter(s => pos[s] === "p" && attacksSq(pos, pc, s) && !attackersOf(pos, s, "b").length) : [];
 }
 function ppBot(g) {
   const ms = g.moves({ verbose: true });
   if (!ms.length) return null;
-  const now = ms.find(m => m.captured) || ms.find(m => m.to[1] === "1");
+  const after = m => { const pos = { ...g.pos }; delete pos[m.from]; pos[m.to] = "p"; return pos; };
+  const now = ms.find(m => m.captured) || ms.find(m => m.to[1] === "1" && ppQueenSafe(after(m), m.to));
   if (now) return now;
   let best = [], bs = null;
   for (const m of ms) {
-    const pos = { ...g.pos }; delete pos[m.from]; pos[m.to] = "p";
+    const pos = after(m);
     const hang = ppHanging(pos), safe = !hang.includes(m.to), s = [-hang.length, safe ? 1 : 0, safe ? 8 - +m.to[1] : 0];
     const d = bs ? s.map((v, i) => v - bs[i]).find(v => v) || 0 : 1;
     if (d > 0) { best = [m]; bs = s; } else if (d === 0) best.push(m);
@@ -3384,7 +3398,7 @@ const BOTS = [
 ];
 const BOT_RING = ["#3cb371", "#9acd32", "#f2c230", "#f39c34", "#e8542f", "#b3202a"];   // lvl 1–6: green to red
 const VALUE = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
-const BOT_RESIGN = 15;   // a bot this far behind in material gives up: the game ends while the child is winning big
+const BOT_RESIGN = 15;   // a bot this far behind in material after its own move gives up: the game ends while the child is winning big
 let bg = null;   // {bot, game (chess.js) | pw (pawn wars state), me: 'w'|'b', sel, last, over, log, rp, gate}
 // gate: the learning-path boss stage this game was started from (a win against the bot clears it)
 // log (chess games): every move as {fen before, from, to, me, piece, captured}; rp: the replay after the game {list, k}
@@ -3633,7 +3647,7 @@ function botAfterMove() {
   else if (bg.game.game_over()) {
     res = bg.game.in_checkmate() ? (bg.game.turn() === bg.me ? "loss" : "win") : "draw";
     bg.stale = bg.game.in_stalemate();
-  } else if (material(bg.game, bg.me) >= BOT_RESIGN) { res = "win"; bg.resigned = true; }
+  } else if (bg.game.turn() === bg.me && material(bg.game, bg.me) >= BOT_RESIGN) { res = "win"; bg.resigned = true; }   // only after the bot's move: not in the middle of a trade (the owner, 2026-10-06)
   if (!res) return false;
   bg.over = res;
   pl.bots = pl.bots || {}; const r = pl.bots[bg.bot.id] = pl.bots[bg.bot.id] || { w: 0, l: 0, d: 0 };
