@@ -132,6 +132,7 @@ function mergePlayer(a, b) {
     const y = out.again[id];
     if (!y || x.due > y.due || (x.due === y.due && x.n > y.n)) out.again[id] = x;
   }
+  if (a.moments || b.moments) out.moments = moMerge(a.moments, b.moments);   // puzzles from his bot games (moments.js)
   out.gateFree = maxMap(a.gateFree, b.gateFree);         // stages the child was already past when they came (kids.js stageMigrate)
   out.pathV = Math.max(a.pathV || 0, b.pathV || 0);
   // stages either copy has seen (stageMigrate decided whether each was free; a blank copy brings nothing)
@@ -1190,7 +1191,7 @@ const THEME = {
   discoveredAttack: "Discovered attack", doubleCheck: "Double check", deflection: "Deflection", attraction: "Attraction",
   clearance: "Clearance", interference: "Interference", sacrifice: "Sacrifice", promotion: "Promotion", underPromotion: "Under-promotion",
   advancedPawn: "Advanced pawn", exposedKing: "Exposed king", kingsideAttack: "Kingside attack", quietMove: "Quiet move",
-  defensiveMove: "Defensive move", giveCheck: "Give check", saveQueen: "Save the queen", savePiece: "Save your piece", safeTake: "Is it safe to take?", safeTakeHard: "Is it safe to take? (harder)", stopMate: "Stop the mate", xRayAttack: "X-ray", zugzwang: "Zugzwang", capturingDefender: "Remove the defender",
+  defensiveMove: "Defensive move", giveCheck: "Give check", saveQueen: "Save the queen", savePiece: "Save your piece", safeTake: "Is it safe to take?", safeTakeHard: "Is it safe to take? (harder)", allCaptures: "Find every capture", allChecks: "Find every check", stopMate: "Stop the mate", xRayAttack: "X-ray", zugzwang: "Zugzwang", capturingDefender: "Remove the defender",
   intermezzo: "In-between move", enPassant: "En passant", castling: "Castling",
   endgame: "Endgame", rookEndgame: "Rook endgame", pawnEndgame: "Pawn endgame", queenEndgame: "Queen endgame",
   opening: "Opening", middlegame: "Middlegame", crushing: "Winning", advantage: "Advantage", equality: "Saving the game",
@@ -1401,6 +1402,8 @@ function pzGoalText(p) {
   }
   if (t.some(x => /^safeTake/.test(x))) return "Is the capture on the blue arrow safe? 👍 if it wins something, 👎 if your piece would be taken back for more.";
   if (t.includes("stopMate")) return "Your opponent threatens checkmate in one (red arrow). Stop it: every move that stops the mate counts.";
+  if (t.includes("allCaptures")) return "Find every capture: every move that takes a piece. Each one you find stays as a green arrow and the piece goes back.";
+  if (t.includes("allChecks")) return "Find every check: every move that attacks the king. Each one you find stays as a green arrow and the piece goes back.";
   if (t.includes("develop")) return "Wake up a sleeping piece: move a knight or bishop that hasn't moved yet (💤) to a square where it is safe.";
   if (t.includes("castle")) return "Castle: move your king two squares towards a rook, and the rook jumps over it.";
   if (n) return `Find mate in ${n.slice(-1)}.`;
@@ -1430,6 +1433,8 @@ function pzGoalHtml() {
     return { kind: "safe", html: `<span class="goal scale" title="Is it safe to take?">⚖️${tp ? `<span class="pc ${tp.color}${tp.type.toUpperCase()}"></span>` : ""}</span>` };
   }
   if (t.includes("stopMate")) return { kind: "guard", html: `<span class="goal guard" title="Stop the mate"><span class="pc ${me}K"></span></span>` };
+  if (t.includes("allCaptures")) return { kind: "allcap", html: `<span class="goal take all" title="Find every capture"><span class="pc ${them}R"></span><span class="pc ${them}N"></span></span>` };
+  if (t.includes("allChecks")) return { kind: "allchk", html: `<span class="goal check all" title="Find every check"><span class="pc ${them}K"></span></span>` };
   if (t.includes("develop")) return { kind: "develop", html: `<span class="goal" title="Wake up a sleeping piece"><span class="pc ${me}N"></span></span><span class="seek">💤</span>` };
   if (t.includes("castle")) return { kind: "castle", html: `<span class="goal castle" title="Castle"><span class="pc ${me}K"></span><b>⇄</b><span class="pc ${me}R"></span></span>` };
   if (t.includes("giveCheck")) return { kind: "check", html: `<span class="goal check" title="Give check"><span class="pc ${them}K"></span></span>` };
@@ -1496,19 +1501,21 @@ function pzShowGoal() {
     pzMarks = { [pzCur[7]]: "mk" }; pzArrows = attackersOf(parseFen(pzGame.fen()), pzCur[7], them).map(h => [h + pzCur[7], "red"]);
   }
   if (/\b(develop|castle)\b/.test(pzCur[4]) && pzIdx === 0) { pzMarks = openingMarks(); pzArrows = []; }
-  if (!pl.goal) { el.hidden = true; return; }
+  if (pzMulti()) { pzMarks = {}; pzArrows = pzFound.map(u => [u, "green"]); }
+  if (!pl.goal) { el.hidden = true; if (pzMulti()) pzFoundDraw(); return; }
   const g = pzGoalHtml();
   el.innerHTML = g.html; el.hidden = pzKid();          // pictures only: the goal is in the big panel instead
   const t = pzCur[4].split(" ");
   if (t.includes("mateIn1") && (pzCur[5] || pzCur[3] <= 1000)) { const pc = preCover(); pzMarks = pc.marks; pzArrows = pc.arrows; }
   if (pzKid()) { $("pzKGoal").innerHTML = g.html; $("pzCard").innerHTML = ""; }
   else $("pzCard").insertAdjacentHTML("afterbegin", `<div class="kidgoal small">${g.html}</div>`);
+  if (pzMulti()) pzFoundDraw();
 }
 function pzNext() {
   clearTimeout(pzTimer);
   if (advanceStage()) return;
   $("pzGoalBadge").hidden = true;
-  pzCur = pzPick(); pzIdx = 0; pzHinted = pzFailed = pzScored = pzEscape = false; stageLost = null; pzSel = null; pzArrows = []; pzLast = []; pzMarks = {};
+  pzCur = pzPick(); pzIdx = 0; pzHinted = pzFailed = pzScored = pzEscape = pzSlipped = false; pzFound = []; pzWrong = 0; stageLost = null; pzSel = null; pzArrows = []; pzLast = []; pzMarks = {};
   pzGame = new Chess(pzCur[1]);
   const direct = !!pzCur[5];                             // generated beginner puzzles start with the solver's move
   pzOrient = direct ? pzGame.turn() : (pzGame.turn() === "w" ? "b" : "w");   // Lichess puzzles: the opponent moves first
@@ -1595,6 +1602,43 @@ function sgTally(won, lost) {
   const pcs = a => a.map(c => `<span class="pc ${c}"></span>`).join("");
   return `<div class="swap" aria-label="Pieces won and lost">${won.length ? `<span class="won">+${pcs(won)}</span>` : ""}${lost.length ? `<span class="lost">−${pcs(lost)}</span>` : ""}</div>`;
 }
+/* ---- find every capture / check (gen_vision.py rows, tags allCaptures / allChecks): all the answers, in any order.
+   A right one: the piece goes there and back, the move stays as a green arrow and a circle fills (one per answer).
+   A wrong one: a short red flash and the piece goes back. Forgiving: the first wrong move costs nothing but the star
+   (all found after it = solved, no star, no rating change, no miss: pzSlipped); the second ends it as missed, the
+   answers left shown as blue arrows. Clean = all found without a wrong move ---- */
+let pzFound = [], pzWrong = 0, pzSlipped = false;
+function pzMulti() { return !!pzCur && /\ball(Captures|Checks)\b/.test(pzCur[4]); }
+function pzFoundDraw(fresh = false) {
+  let el = $("pzFound");
+  if (!el) { $("pzCard").insertAdjacentHTML("afterbegin", `<div class="mfound" id="pzFound" aria-label="Moves found"></div>`); el = $("pzFound"); }
+  el.className = "mfound" + (/allChecks/.test(pzCur[4]) ? " chk" : "");
+  el.innerHTML = pzCur[6].map((u, i) => `<i class="${i < pzFound.length ? "on" : pzState === "done" ? "miss" : ""}${fresh && i === pzFound.length - 1 ? " new" : ""}"></i>`).join("");
+}
+function pzMultiMove(from, to) {
+  const uci = from + to, ok = pzCur[6].includes(uci), fresh = ok && !pzFound.includes(uci);
+  pzSel = null; pzLast = []; pzMarks = {};
+  pzGame.move({ from, to, promotion: "q" });            // shown on the board for a moment (no promotions in these rows)
+  if (fresh) pzFound.push(uci);
+  if (!ok) { pzWrong++; pzSlipped = true; pzMarks = { [to]: "mk" }; }
+  sfx(fresh ? "star" : ok ? "move" : pzWrong < 2 ? "oops" : "wrong");
+  pzArrows = [...pzFound.map(u => [u, "green"]), ...(ok ? [] : [[uci, "red"]])];
+  pzState = "wait"; pzDraw(); if (fresh) pzFoundDraw(true);
+  pzTimer = setTimeout(() => {
+    pzGame.undo(); pzMarks = {}; pzArrows = pzFound.map(u => [u, "green"]);
+    if (pzFound.length === pzCur[6].length) return pzFinish(true);
+    if (pzWrong >= 2) { pzBig(false); return pzMultiReveal(); }
+    pzState = "solve"; pzDraw();
+  }, ok ? 450 : 650);
+  return true;
+}
+function pzMultiReveal() {   // a miss (two wrong moves, or Show solution): the answers not found as blue arrows
+  clearTimeout(pzTimer);
+  pzGame = new Chess(pzCur[1]); pzSel = null; pzMarks = {};
+  pzFailed = true; pzScore(false);
+  pzArrows = [...pzFound.map(u => [u, "green"]), ...pzCur[6].filter(u => !pzFound.includes(u)).map(u => [u, "blue"])];
+  pzFinish(false);
+}
 function pzPlay(uci) {
   const m = pzGame.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || "q" });
   pzLast = m ? [uci.slice(0, 2), uci.slice(2, 4)] : pzLast;
@@ -1606,16 +1650,16 @@ function pzScore(win) {
   pzScored = true;
   const pl = pzPlayers(), pr = pzCur[3];
   pl.done = pl.done || {}; pl.done[pzCur[0]] = win ? 1 : 0;
-  againNote(pl, pzCur[0], win && !pzHinted);
+  againNote(pl, pzCur[0], win && !pzHinted && !pzSlipped);
   if (isMyPuzzle(pzCur)) {           // your own positions: estimated ratings, so they don't move yours
     $("pzDelta").textContent = "from your game: no rating change"; $("pzDelta").className = "delta"; save(); pzRenderBar(); return;
   }
   kidReward(pl, win);
   if (!win) stageMissPuzzle();
   pl.hist = (pl.hist || []).slice(-(HIST_MAX - 1)); pl.hist.push({ id: pzCur[0], pr, r: win ? 1 : 0, t: Date.now() });
-  if (pzHinted) {
-    pl.hist[pl.hist.length - 1].h = 1;      // hinted: no rating change (the parent chart skips it)
-    $("pzDelta").textContent = "hint used: no rating change"; $("pzDelta").className = "delta"; save(); pzRenderBar(); return;
+  if (pzHinted || (pzSlipped && win)) {
+    pl.hist[pl.hist.length - 1].h = 1;      // hinted (or all found after one wrong move): no rating change (the parent chart skips it)
+    $("pzDelta").textContent = pzHinted ? "hint used: no rating change" : "one wrong move: no rating change"; $("pzDelta").className = "delta"; save(); pzRenderBar(); return;
   }
   const n = pl.n || 0, was = pl.rating;
   pl.rating = eloStep(was, n, pr, win ? 1 : 0); pl.n = n + 1;
@@ -1660,7 +1704,8 @@ function pzFinish(win) {
       <button class="btn primary big" id="pzKidNext" aria-label="Next puzzle">▶</button>`;
     $("pzKidNext").onclick = pzNext;
   }
-  if (win && !pzFailed) { pzBig(true); sfx("right"); stageStar(); pathDoneSolve(); }
+  if (pzMulti()) pzFoundDraw();
+  if (win && !pzFailed) { pzBig(true); sfx("right"); if (!pzSlipped) { stageStar(); pathDoneSolve(); } }
   if (albumTake() && kid) $("pzKidNext").insertAdjacentHTML("beforebegin", aPackChip());     // a pack was earned: shown quietly
   kidAfterPuzzle();
   pzDraw();
@@ -1670,6 +1715,7 @@ function pzUserMove(from, to) {
   const want = pzMoves()[pzIdx];
   const legal = pzGame.moves({ square: from, verbose: true }).filter(m => m.to === to);
   if (!legal.length) return false;
+  if (pzMulti()) return pzMultiMove(from, to);
   pzMarks = {}; pzArrows = [];
   const promo = legal[0].promotion ? (want && want.slice(0, 4) === from + to && want[4] ? want[4] : "q") : undefined;
   const m = pzGame.move({ from, to, promotion: promo });
@@ -1735,7 +1781,7 @@ function pzRetry() {
 // the same puzzle again from its first position (after "Show solution" or a finish): already scored, so no rating change
 function pzRestart() {
   clearTimeout(pzTimer);
-  pzGame = new Chess(pzCur[1]); pzIdx = 0; pzSel = null; pzArrows = []; pzLast = []; pzMarks = {}; pzEscape = false;
+  pzGame = new Chess(pzCur[1]); pzIdx = 0; pzSel = null; pzArrows = []; pzLast = []; pzMarks = {}; pzEscape = false; pzFound = []; pzWrong = 0;
   $("pzGoalBadge").hidden = true; $("pzCard").className = "card";
   $("pzCard").innerHTML = pzKid() ? "" : `<p class="text">Same puzzle again. It already counts, so try it (or watch the solution) as often as you like.</p>`;
   if (pzCur[5]) { pzState = "solve"; pzShowGoal(); sgAsk(); pzDraw(); return; }
@@ -1745,6 +1791,7 @@ function pzRestart() {
 function pzSolution() {
   if (!pzCur || pzState === "done" || pzState === "intro" || pzState === "show") return;
   if (pzState === "ask") return sgAnswer(/ take /.test(pzCur[4]), true);
+  if (pzMulti()) return pzMultiReveal();
   clearTimeout(pzTimer);
   if (pzState === "wrong") { pzGame.undo(); pzMarks = {}; }
   pzFailed = true; pzScore(false);
@@ -1761,7 +1808,7 @@ function pzSolution() {
 function pzHint() {
   if (pzState !== "solve") return;
   pzHinted = true;
-  const want = pzEscape ? (m => m.from + m.to)(smEscapes()[0]) : pzMoves()[pzIdx];
+  const want = pzEscape ? (m => m.from + m.to)(smEscapes()[0]) : pzMulti() ? pzCur[6].find(u => !pzFound.includes(u)) : pzMoves()[pzIdx];
   pzSel = want.slice(0, 2);
   $("pzCard").innerHTML = `<p class="text">Move the highlighted piece. ${esc(pzGoalText(pzCur))}</p><p class="sub">With a hint this puzzle won't change your rating.</p>`;
   pzDraw();
@@ -1947,17 +1994,23 @@ function recapIcon(st) {
 const STAGES = [
   // 🌊 the sea
   { id: "take", name: "Take a free piece", icon: `<span class="goal take"><span class="pc bQ"></span></span>`, f: p => p[5] && /hangingPiece/.test(p[4]) },
+  // board vision (gen_vision.py, 2026-10-06): every capture / every check in the position, each found one a green arrow
+  { id: "allcap", name: "Find every capture", need: 5, icon: `<span class="goal take all"><span class="pc bR"></span><span class="pc bN"></span></span>`, f: p => p[5] && p[4].split(" ").includes("allCaptures") },
   { id: "saveq", name: "Save the queen", icon: `<span class="goal save"><span class="pc wQ"></span></span>`, f: p => /saveQueen/.test(p[4]) },
   { id: "check", name: "Give check", icon: `<span class="goal check"><span class="pc bK"></span></span>`, f: p => /giveCheck/.test(p[4]) },
+  { id: "allchk", name: "Find every check", need: 5, icon: `<span class="goal check all"><span class="pc bK"></span></span>`, f: p => p[5] && p[4].split(" ").includes("allChecks") },
   { id: "promo", name: "Make a queen", need: 5, icon: `<span class="goal promo"><span class="pc wP"></span><b>→</b><span class="pc wQ"></span></span>`, f: p => p[5] && /promotion/.test(p[4]) },
   { id: "gate1", name: "Boss: beat Greedy Cat", need: 1, gate: "gus", icon: gateIcon("🐱"), f: () => false },
   // 🌳 the forest
   { id: "savep", name: "Save your pieces", icon: `<span class="goal save"><span class="pc wR"></span></span>`, f: p => /savePiece/.test(p[4]) },
   { id: "mateq", name: "Mate with the queen", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc wQ mini"></span>`, f: p => p[5] && /mateIn1/.test(p[4]) && !/backRank|mateNoStale/.test(p[4]) && /[Qq]/.test(p[1].split(" ")[0]) },
-  { id: "r1", name: "Recap: take a free piece, save the queen, give check, make a queen", ...recapOf("take", "saveq", "check", "promo") },
+  // piece against pawns (Steps-Method mini-games, eg kinds ppQ / ppR / ppN): take every pawn before one gets through
+  { id: "qp8", name: "Queen against 8 pawns: take them all", need: 3, eg: "ppQ", icon: ppIcon("Q", 4), f: () => false },
+  { id: "r1", name: "Recap: take a free piece, save the queen, give check, make a queen, find every capture", ...recapOf("take", "saveq", "check", "promo", "allcap") },
   { id: "play2", name: "Play a game: beat Greedy Cat", ...playStop("gus", "🐱") },
   { id: "back", name: "Back-rank mate", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc bP mini"></span>`, f: p => p[5] && /backRankMate/.test(p[4]) },
   { id: "mater", name: "Mate with a rook", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc wR mini"></span>`, f: p => p[5] && /mateIn1/.test(p[4]) && !/backRank/.test(p[4]) && !/[Qq]/.test(p[1].split(" ")[0]) },
+  { id: "rpaw", name: "Rook against pawns: take them all", need: 3, eg: "ppR", icon: ppIcon("R", 3), f: () => false },
   { id: "gate2", name: "Boss: beat Wily Wolf", need: 1, gate: "cat", icon: gateIcon("🐺"), f: () => false },
   // ❄️ the snow: endgames (played in the kids' corner, not puzzles): mate the lone king; the picture shows the pieces
   // you mate with (king + rook, the hardest, comes after the Tiger). Then the first puzzles from real games (Lichess)
@@ -1966,15 +2019,16 @@ const STAGES = [
   // mate, don't stalemate before the king + queen endgame, where a stalemate is a miss (2026-10-06: it came 10 worlds later)
   { id: "matens", name: "Mate, don't stalemate (king + queen)", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc wQ mini"></span><span class="seek">😮</span>`, f: p => /mateNoStale/.test(p[4]) },
   { id: "egq", name: "Endgame: mate with king + queen", need: 3, eg: "KQ", icon: egIcon("KQ"), f: () => false },
-  { id: "r2", name: "Recap: save your pieces, mate with the queen, back rank, mate with a rook", ...recapOf("savep", "mateq", "back", "mater") },
+  { id: "r2", name: "Recap: save your pieces, mate with the queen, back rank, mate with a rook, find every check", ...recapOf("savep", "mateq", "back", "mater", "allchk") },
   { id: "hang", name: "Win the free piece (real games)", icon: `<span class="goal take"><span class="pc bR"></span></span><span class="pc wN mini"></span>`, f: p => !p[5] && /hangingPiece/.test(p[4]) && p[3] <= 800 && !/mate/.test(p[4]) && !later(p) },
   { id: "play3", name: "Play a game: beat Wily Wolf", ...playStop("cat", "🐺") },
   { id: "gate4", name: "Boss: beat Pawn Pete (Pawn Wars)", need: 1, gate: "pete", icon: gateIcon("🐣"), f: () => false },
   // 🏜️ the desert: forks, one piece at a time, then any fork (puzzles/themes.py --forks tags forkKnight / forkPawn:
   // the first move forks, the next takes one of the forked pieces with that piece)
   { id: "forkn", name: "Forks with the knight", icon: `<span class="goal win">🍴</span><span class="pc wN mini"></span>`, f: p => hasTag(p, "forkKnight") },
+  { id: "npaw", name: "Knight against pawns: take them all", need: 3, eg: "ppN", icon: ppIcon("N", 2), f: () => false },
   { id: "forkp", name: "Forks with a pawn", icon: `<span class="goal win">🍴</span><span class="pc wP mini"></span>`, f: p => hasTag(p, "forkPawn") },
-  { id: "re1", name: "Recap: mate with queen + rook, two rooks, king + queen (one game each)", ...recapEg("egqr", "egrr", "egq") },
+  { id: "re1", name: "Recap: mate with two rooks, queen against 8 pawns, rook against pawns (one game each)", ...recapEg("egrr", "qp8", "rpaw") },
   { id: "fork", name: "Forks (any piece)", icon: `<span class="goal win">🍴</span>`, f: p => hasTag(p, "forkKnight") || hasTag(p, "forkPawn") || (!p[5] && tacticOnly(p, "fork") && p[3] < 850 && !later(p)) },
   { id: "play4", name: "Play a game: beat Wily Wolf", ...playStop("cat", "🐺") },
   // the save-your-pieces puzzles again without the red glow and arrows: find what the bot attacks yourself (in games he
@@ -1997,7 +2051,7 @@ const STAGES = [
   // make room for the king, take the piece that would mate, take the piece guarding it, block the line
   { id: "stopl", name: "Stop the mate: make room for the king", icon: `<span class="goal guard"><span class="pc wK"></span></span><span class="pc wP mini"></span>`, f: p => stopKind(p, "stopLuft") },
   { id: "stopc", name: "Stop the mate: take the piece that would mate", icon: `<span class="goal guard"><span class="pc wK"></span></span><span class="pc bQ mini"></span>`, f: p => stopKind(p, "stopCapture") },
-  { id: "re2", name: "Recap: mate with king + queen, king + rook (one game each)", ...recapEg("egq", "egr", "egq") },
+  { id: "re2", name: "Recap: mate with king + queen, king + rook, queen + rook (one game each)", ...recapEg("egq", "egr", "egqr") },
   { id: "stopd", name: "Stop the mate: take the piece that guards it", icon: `<span class="goal guard"><span class="pc wK"></span></span><span class="pc bN mini"></span>`, f: p => stopKind(p, "stopCaptureDef") },
   { id: "stopb", name: "Stop the mate: block the line", icon: `<span class="goal guard"><span class="pc wK"></span></span><span class="pc wB mini"></span>`, f: p => stopKind(p, "stopBlock") },
   { id: "play6", name: "Play a game: beat T-Rex", ...playStop("dino", "🦖") },
@@ -2029,7 +2083,7 @@ const STAGES = [
   // (safe_gen.py, safeTakeHard: always a bigger piece taking), one kind at a time first: one attacker ("single"), count
   // attackers and defenders ("count"), the hidden defender ("hidden"), then all three; mixed puzzles
   { id: "disck", name: "Discovered check", icon: DISC_CHECK_ICON, f: p => hasTag(p, "discCheck") },
-  { id: "re3", name: "Recap: mate with king + rook, queen + rook, king + queen (one game each)", ...recapEg("egr", "egqr", "egq") },
+  { id: "re3", name: "Recap: queen against 8 pawns, knight against pawns, mate with king + queen (one game each)", ...recapEg("qp8", "npaw", "egq") },
   { id: "disc", name: "Discovered attacks", icon: DISC_ICON, f: p => !p[5] && tacticOnly(p, "discoveredAttack") && p[3] < 950 },
   { id: "safe2s", name: "Is it safe to take? (harder): one attacker", step: "safe2", icon: `<span class="goal scale mn" data-n="1">⚖️<span class="pc bR"></span></span>`, f: p => /safeTakeHard/.test(p[4]) && p[4].split(" ").includes("single") },
   { id: "safe2c", name: "Is it safe to take? (harder): count attackers and defenders", step: "safe2", icon: `<span class="goal scale mn" data-n="2">⚖️<span class="pc bR"></span></span><span class="pc wB mini"></span><span class="pc wN mini"></span>`, f: p => /safeTakeHard/.test(p[4]) && p[4].split(" ").includes("count") },
@@ -2069,7 +2123,7 @@ const STAGES = [
   { id: "mate2q", name: "Mate in 2: a quiet move first", icon: `<span class="goal mate mn" data-n="2"><span class="pc bK"></span></span><span class="seek">🤫</span>`, f: p => hasTag(p, "mate2q") },
   { id: "dblchk", name: "Double check", icon: `<span class="goal check mn" data-n="2"><span class="pc bK"></span></span>`, f: p => hasTag(p, "dblCheck") },
   { id: "r8", name: "Recap: forks, pins, skewers, discovered attacks", ...recapOf("fork", "pin", "skewer", "disc") },
-  { id: "re5", name: "Recap: mate with king + queen, king + rook, king + pawn (one game each)", ...recapEg("egq", "egr", "egkp") },
+  { id: "re5", name: "Recap: rook against pawns, mate with king + rook, king + pawn (one game each)", ...recapEg("rpaw", "egr", "egkp") },
   { id: "play12", name: "Play a game: beat the Jaguar", ...playStop("jaguar", "🐆") },
   { id: "mate3c", name: "Mate in 3 (check, check, mate)", icon: `<span class="goal mate mn" data-n="3"><span class="pc bK"></span></span>`, f: p => hasTag(p, "mate3c") },
   { id: "gate12", name: "Boss: beat the Bull", need: 1, gate: "bull", icon: gateIcon("🐂"), f: () => false },
@@ -2091,7 +2145,7 @@ const STAGES = [
   { id: "r10", name: "Recap: stop the 4-move mate, mate don't stalemate, mate in 3, is it safe to take? (harder)", ...recapOf("stopo", "matens", "mate3c", "safe2") },
   { id: "play14", name: "Play a game: beat the Fox", ...playStop("fox", "🦊") },
   { id: "deflect", name: "Deflection: pull the guard away", icon: `<span class="goal win">↪️</span><span class="pc bQ mini"></span>`, f: p => hasTag(p, "deflect") },
-  { id: "re6", name: "Recap: finish the game, mate with king + rook, king + pawn (one game each)", ...recapEg("fin", "egr", "egkp") },
+  { id: "re6", name: "Recap: finish the game, knight against pawns, king + pawn (one game each)", ...recapEg("fin", "npaw", "egkp") },
 ];
 const STAGE_BY = Object.fromEntries(STAGES.map(st => [st.id, st]));
 STAGES.forEach(st => { if (st.recap) st.icon = recapIcon(st); });
@@ -2267,7 +2321,7 @@ function stageDots(pl, st) {   // ★ per star (and the one just lost, falling o
 // open a stage: puzzle stages in the puzzle view, endgame stages as a game in the kids' corner, a gate as a bot game
 function stageGo(st) {
   if (st.gate || st.play) {
-    kidTab = "play"; botStart(st.gate || st.play, st);
+    kidTab = "play"; if (!moWarm(st)) botStart(st.gate || st.play, st);     // due moments from his games first (moments.js)
     return window.SECTION === "kids" ? openKids() : go("kids", "play");
   }
   if (!st.eg) return go("puzzles", { stage: st });
@@ -2495,6 +2549,7 @@ function egStartFen(pcs, puz = null) {
   if (pcs === "catch") return puz ? sqStartFen() : cpStartFen();
   if (pcs === "kp") return kpStartFen(puz || "free");
   if (pcs === "fin") return finStartFen();
+  if (isPP(pcs)) return ppStartFen(pcs);
   for (;;) {
     const bk = kidSq(3, 6, "cdef"), pos = { [bk]: "k" }, mine = ["K", ...pcs.replace("K", "")];
     for (const p of mine) { const q = kidSq(); if (!pos[q]) pos[q] = p; }
@@ -2533,7 +2588,7 @@ function egStart(st) {
   let fen = egStartFen(kind, sub.puzzle);
   for (let k = 0; k < 6 && eg && eg.st === egSt && fen === eg.fen0; k++) fen = egStartFen(kind, sub.puzzle);   // not the same start twice in a row
   const d = kind === "kp" ? kpkDist(fen) : 1;
-  eg = { st: egSt, sub, kind, g: new Chess(fen), fen0: fen, sel: null, last: [], moves: 0, over: null, hist: [], undos: 0, slip: false,
+  eg = { st: egSt, sub, kind, g: isPP(kind) ? ppGame(fen) : new Chess(fen), fen0: fen, sel: null, last: [], moves: 0, over: null, hist: [], undos: 0, slip: false,
     budget: sub.puzzle ? d + (d > 1 ? KP_SLACK : 0) : 0, max: kpMax(d), lead0: finLead(fen) };
   stageLost = null;
   $("eDone").hidden = true; egDraw();
@@ -2577,13 +2632,17 @@ function egDraw() {
   const g = eg.g, pos = parseFen(g.fen()), mine = !eg.over && g.turn() === "w", marks = {};
   const add = (q, c) => { marks[q] = marks[q] ? marks[q] + " " + c : c; };
   if (g.in_check()) marks[Object.keys(pos).find(q => pos[q] === "k")] = "mk";
-  if (mine && eg.kind !== "fin") for (const q of Object.keys(pos)) {      // your queen/rook (or the pawn you escort) next to the king with no guard (finish the game: no warning, as in bot games)
+  if (mine && eg.kind !== "fin" && !isPP(eg.kind)) for (const q of Object.keys(pos)) {      // your queen/rook (or the pawn you escort) next to the king with no guard (finish the game: no warning, as in bot games)
     if ("QRP".includes(pos[q]) && attackersOf(pos, q, "b").length && !attackersOf(pos, q, "w").length) marks[q] = "dg";
   }
   const pawnGoal = eg.kind === "catch" ? "p" : eg.kind === "kp" ? "P" : null;   // the square the pawn runs to
   if (pawnGoal && !eg.over) {
     const at = Object.keys(pos).find(q => pos[q] === pawnGoal);
     if (at) { const goal = at[0] + (pawnGoal === "p" ? 1 : 8); if (!marks[goal]) marks[goal] = pawnGoal === "p" ? "dg" : "star"; }
+  }
+  if (isPP(eg.kind)) for (const q of Object.keys(pos)) {     // piece against pawns: your piece attacked, a pawn about to queen (or queened)
+    if (pos[q] !== "p") { if (mine && attackersOf(pos, q, "b").length) add(q, "dg"); }
+    else if (q[1] === "1" || (q[1] === "2" && !pos[q[0] + 1] && !eg.over)) add(q[0] + 1, "dg");
   }
   if (eg.sub.puzzle && (mine || eg.over)) egGoalMarks(pos, add);
   const tgts = eg.sel && mine ? g.moves({ square: eg.sel, verbose: true }).map(m => m.to) : [];
@@ -2594,7 +2653,7 @@ function egDraw() {
   $("eMap").onclick = () => { kidTab = "path"; openKids(); };
   // a puzzle: one footprint per move you have (used ones fade); a game: the moves so far
   $("eMoves").innerHTML = eg.sub.puzzle ? Array.from({ length: eg.budget }, (_, i) => `<span class="efoot${i < eg.moves ? " used" : ""}">👣</span>`).join("") : `👣 <b>${eg.moves}</b>`;
-  $("eUndo").hidden = !!eg.sub.puzzle || eg.kind === "fin";   // a puzzle has no take-back: a miss starts a new one; nor has finishing a game (as bot games)
+  $("eUndo").hidden = !!eg.sub.puzzle || eg.kind === "fin" || isPP(eg.kind);   // a puzzle has no take-back: a miss starts a new one; nor has finishing a game (as bot games)
   $("eUndo").disabled = !eg.hist.length || !mine;
   $("eUndo").classList.toggle("nudge", !!eg.slip && mine && !!eg.hist.length);   // the win slipped away: ↶ glows
 }
@@ -2609,7 +2668,7 @@ function egUserMove(from, to) {
 function egReply() {
   if (eg.over || eg.g.turn() !== "b") return;
   const kind = eg.kind, m = egBot(kind)(eg.g);
-  eg.g.move(m); eg.last = [m.from, m.to]; sfx("move");
+  eg.g.move(m); eg.last = m ? [m.from, m.to] : []; sfx("move");     // m null: the pawns pass (piece against pawns)
   if (egEnd()) return;
   if (kind === "catch") eg.slip = !cpCatchable(eg.g.fen());
   else if (kind === "kp") eg.slip = kpkProbe(eg.g.fen()) !== KPK_WIN;
@@ -2619,7 +2678,7 @@ function egUndo() {   // takes back your last move and the king's reply
   if (!eg || !eg.hist.length || eg.over || eg.g.turn() !== "w") return;
   eg.g.load(eg.hist.pop()); eg.moves--; eg.last = []; eg.sel = null; eg.undos++; eg.slip = false; egDraw();
 }
-function egBot(kind) { return kind === "catch" ? cpBotMove : kind === "kp" ? kpBotMove : kind === "fin" ? finBotMove : egBotMove; }
+function egBot(kind) { return isPP(kind) ? ppBot : kind === "catch" ? cpBotMove : kind === "kp" ? kpBotMove : kind === "fin" ? finBotMove : egBotMove; }
 // a king-and-pawn puzzle, right after your move: done, a miss ("draw": the table says the win is gone or the new queen
 // hangs; "stale"; "slow": still won but not within the footprints left; "loss": the running pawn can't be caught now),
 // or null (go on)
@@ -2643,7 +2702,7 @@ function egPuzzleJudge(g) {
 function egEnd() {
   const g = eg.g, kind = eg.kind;
   const res = eg.sub.puzzle && g.turn() === "b" ? egPuzzleJudge(g) : kind === "catch" ? cpResult(g) : kind === "kp" ? kpResult(g) : kind === "fin" ? finResult(g)
-    : g.in_checkmate() ? "win" : g.in_stalemate() || g.insufficient_material() ? "draw" : null;
+    : isPP(kind) ? ppResult(g) : g.in_checkmate() ? "win" : g.in_stalemate() || g.insufficient_material() ? "draw" : null;
   if (res === "win") {
     eg.over = "win";
     const par = EG_PAR[kind], pl = pzPlayers();
@@ -2716,6 +2775,84 @@ function finResult(g) {
   if (g.turn() === "b" && finLead(g.fen()) < eg.lead0 - 2) return "gave";
   if (eg.moves >= FIN_MAX && g.turn() === "w") return "again";
   return null;
+}
+
+/* ---- piece against pawns (Steps-Method mini-games): your queen, rook or knight against black pawns, no kings. Take
+   every pawn to win; a pawn reaching your first rank or taking your piece loses it (↻ / 💔). The pawns never block
+   each other, so a side with no move has one pawn left, blocked by the piece: it passes. Every start is a forced win
+   for the piece (PP_STARTS = puzzles/minigame_check.py's minigames.json, each solved exhaustively; a start may be
+   mirrored, which keeps it won). chess.js needs kings, so ppGame is a small board with the chess.js calls the endgame
+   view uses. The bot (ppBot, as bot_move in the script): takes the piece, makes a queen, else the push that leaves the
+   fewest pawns the piece can take for free, then a safe square for the pushed pawn, then the most advanced; ties at
+   random. Your piece glows when a pawn attacks it, so does the square in front of a pawn about to queen. */
+const PP_PIECE = { ppQ: "Q", ppR: "R", ppN: "N" };
+const isPP = kind => Object.prototype.hasOwnProperty.call(PP_PIECE, kind);
+const PP_STARTS = {"ppR":[["a1",["a7","b7","g7","h7"]],["h1",["a7","b7","g7","h7"]],["d1",["a7","b7","g7","h7"]],["e1",["a7","b7","g7","h7"]],["d1",["b7","c7","f7","g7"]],["e1",["b7","c7","f7","g7"]],["a1",["a7","b7","c7","h7"]],["h1",["a7","b7","c7","h7"]],["d1",["a7","b7","c7","h7"]],["e1",["a7","b7","c7","h7"]],["a1",["a7","f7","g7","h7"]],["h1",["a7","f7","g7","h7"]],["d1",["a7","f7","g7","h7"]],["e1",["a7","f7","g7","h7"]],["d1",["c7","d7","e7","f7"]],["e1",["c7","d7","e7","f7"]],["a1",["a7","b7","f7","g7"]],["d1",["a7","b7","f7","g7"]],["e1",["a7","b7","f7","g7"]]],"ppN":[["b1",["a7","b7"]],["g1",["a7","b7"]],["b1",["a7","c7"]],["g1",["a7","c7"]],["b1",["b7","c7"]],["g1",["b7","c7"]],["b1",["b7","d7"]],["g1",["b7","d7"]],["b1",["c7","d7"]],["g1",["c7","d7"]],["b1",["c7","e7"]],["g1",["c7","e7"]],["b1",["d7","e7"]],["g1",["d7","e7"]],["b1",["d7","f7"]],["g1",["d7","f7"]],["b1",["e7","f7"]],["g1",["e7","f7"]],["b1",["e7","g7"]],["g1",["e7","g7"]],["b1",["f7","g7"]],["g1",["f7","g7"]],["b1",["f7","h7"]],["g1",["f7","h7"]],["b1",["g7","h7"]],["g1",["g7","h7"]]],"ppQ":[["d1",["a7","b7","c7","d7","e7","f7","g7","h7"]],["e1",["a7","b7","c7","d7","e7","f7","g7","h7"]]]};
+function ppIcon(pc, n) {
+  return `<span class="goal take"><span class="pc w${pc}"></span></span><span class="egm pp">${'<span class="pc bP mini"></span>'.repeat(n)}</span>`;
+}
+function ppStartFen(kind) {
+  const list = PP_STARTS[kind], [pc, pawns] = list[Math.floor(Math.random() * list.length)], flip = Math.random() < .5;
+  const m = s => (flip ? FILES[7 - FILES.indexOf(s[0])] : s[0]) + s[1], pos = { [m(pc)]: PP_PIECE[kind] };
+  for (const s of pawns) pos[m(s)] = "p";
+  return kidFen(pos, "w");
+}
+function ppMoves(pos, turn) {
+  const out = [];
+  for (const [s, p] of Object.entries(pos)) {
+    if (turn === "w" && p !== "p") {
+      for (const f of FILES) for (let r = 1; r <= 8; r++) { const t = f + r; if (attacksSq(pos, s, t)) out.push(pos[t] ? { from: s, to: t, captured: "p" } : { from: s, to: t }); }
+    } else if (turn === "b" && p === "p") {
+      const x = FILES.indexOf(s[0]), y = +s[1], one = s[0] + (y - 1), two = s[0] + (y - 2);
+      for (const dx of [-1, 1]) { const f = FILES[x + dx], t = f && f + (y - 1); if (t && pos[t] && pos[t] !== "p") out.push({ from: s, to: t, captured: pos[t].toLowerCase() }); }
+      if (!pos[one]) { out.push({ from: s, to: one }); if (y === 7 && !pos[two]) out.push({ from: s, to: two }); }
+    }
+  }
+  return out;
+}
+function ppGame(fen) {
+  const g = { pos: parseFen(fen), t: fen.split(" ")[1] || "w", h: [] }, no = () => false;
+  return Object.assign(g, {
+    fen: () => kidFen(g.pos, g.t), turn: () => g.t,
+    load: f => { g.pos = parseFen(f); g.t = f.split(" ")[1] || "w"; g.h = []; return true; },
+    get: q => g.pos[q] ? { type: g.pos[q].toLowerCase(), color: colorOf(g.pos[q]) } : null,
+    moves: ({ square = null, verbose = false } = {}) => { const ms = ppMoves(g.pos, g.t).filter(m => !square || m.from === square); return verbose ? ms : ms.map(m => m.to); },
+    move: m => {         // null: the blocked pawns pass
+      g.h.push([g.pos, g.t]);
+      if (m) { const pos = { ...g.pos }; pos[m.to] = pos[m.from]; delete pos[m.from]; g.pos = pos; }
+      g.t = g.t === "w" ? "b" : "w";
+      return m;
+    },
+    undo: () => { if (g.h.length) [g.pos, g.t] = g.h.pop(); },
+    in_check: no, in_checkmate: no, in_stalemate: no, in_draw: no, insufficient_material: no,
+    game_over: () => !!ppResult(g),
+  });
+}
+// "gave" (💔): a pawn took your piece; "loss" (↻): a pawn reached your first rank; "win": no pawn left
+function ppResult(g) {
+  const pcs = Object.entries(g.pos);
+  if (!pcs.some(([, p]) => p !== "p")) return "gave";
+  if (pcs.some(([s, p]) => p === "p" && s[1] === "1")) return "loss";
+  return pcs.length === 1 ? "win" : null;
+}
+// the pawns your piece attacks that no pawn guards
+function ppHanging(pos) {
+  const pc = Object.keys(pos).find(s => pos[s] !== "p");
+  return pc ? Object.keys(pos).filter(s => pos[s] === "p" && attacksSq(pos, pc, s) && !attackersOf(pos, s, "b").length) : [];
+}
+function ppBot(g) {
+  const ms = g.moves({ verbose: true });
+  if (!ms.length) return null;
+  const now = ms.find(m => m.captured) || ms.find(m => m.to[1] === "1");
+  if (now) return now;
+  let best = [], bs = null;
+  for (const m of ms) {
+    const pos = { ...g.pos }; delete pos[m.from]; pos[m.to] = "p";
+    const hang = ppHanging(pos), safe = !hang.includes(m.to), s = [-hang.length, safe ? 1 : 0, safe ? 8 - +m.to[1] : 0];
+    const d = bs ? s.map((v, i) => v - bs[i]).find(v => v) || 0 : 1;
+    if (d > 0) { best = [m]; bs = s; } else if (d === 0) best.push(m);
+  }
+  return best[Math.floor(Math.random() * best.length)];
 }
 
 /* ---- catch the pawn: your king against a black pawn running to promote (its king stays far away) ----
@@ -3477,6 +3614,8 @@ function overMarks() {   // after a stalemate: the king that had no move left
   return { [Object.keys(pos).find(q => pos[q] === k)]: "mk" };
 }
 function botDraw() {
+  $("bMoBot").hidden = !bg.mo;
+  if (bg.mo) return moDraw();     // puzzles from this game (moments.js)
   if (bg.rp) return rpDraw();
   const tg = bg.sel && !bg.over && botTurn() === bg.me ? myTargets(bg.sel) : [];
   renderBoard(botPos(), { el: $("gboard"), o: bg.me, hl: bg.last, sel: bg.sel, tgts: tg, marks: bg.over ? overMarks() : dangerMarks() });
@@ -3503,7 +3642,10 @@ function botAfterMove() {
     pl.stars = (pl.stars || 0) + 3; sfx("trophy");
     const gate = gateWin(pl, bg.bot.id, bg.gate); if (gate) { bg.gate = gate; if (gate.gate) bg.packs = BOSS_PACKS; }  // a boss gate (or a play stop) on the learning path is beaten
   } else if (res === "loss") sfx("wrong"); else sfx(bg.stale ? "oops" : "right");
+  // its moments (moments.js) go to the pile; after a path win they're played now, and the panel (with ▶) comes after them
+  const mo = moEnd(pl, res), g0 = bg;
   save();
+  if (mo) { botDraw(); setTimeout(() => { if (bg === g0 && !bg.rp) moRun(mo, false); }, 1200); return true; }
   botOverShow();
   botDraw();
   return true;
@@ -3515,6 +3657,7 @@ function botOverShow(clean = false) {
   // a stalemate isn't a happy draw: 😮, and the stuck king stays marked on the board (botDraw)
   $("bOver").innerHTML = `<div class="burst">${clean ? "⭐" : res === "win" ? "🏆" : res === "loss" ? bg.bot.face : bg.stale ? "😮" : "🤝"}</div>
     ${res === "win" && !clean ? `<div class="big">${bg.resigned ? bg.bot.face + "🏳️ " : ""}⭐ +3</div>` : ""}
+    ${bg.clean && !clean ? `<div class="xstar" aria-label="A clean game: an extra star">⭐</div>` : ""}
     <div class="row">${bg.packs ? aPackChip().repeat(bg.packs) : ""}${beat ? `<button class="btn primary big" type="button" id="bGateNext" aria-label="Next stage">▶</button>` : ""}
     <button class="btn${beat ? "" : " primary"} big" type="button" id="bAgain" aria-label="Play again">↻</button>
     ${bg.gate ? `<button class="btn big" type="button" id="bGateMap" aria-label="Back to the map">🗺</button>` : `<button class="btn big" type="button" id="bPickAgain" aria-label="Choose a bot">🤖</button>`}
@@ -3543,8 +3686,11 @@ function botUserMove(from, to) {
 }
 // ↻ during a game: start over against the same bot (same gate, colour and no-queen setting); no take-backs in bot
 // games, and no question first (no pop-ups)
-function botRestart() { if (bg && !bg.rp) botStart(bg.bot.id, bg.gate, bg.me); }
-function botLog(m, me, fen = bg.game.fen()) { bg.log.push({ fen, from: m.from, to: m.to, me, piece: m.piece, captured: m.captured }); }
+function botRestart() { if (bg && !bg.rp && !bg.mo) botStart(bg.bot.id, bg.gate, bg.me); }
+function botLog(m, me, fen = bg.game.fen()) {
+  bg.log.push({ fen, from: m.from, to: m.to, me, piece: m.piece, captured: m.captured });
+  if (me) moKick();        // his move is analysed in idle time (moments.js)
+}
 
 /* ---- after a game, "what did you miss?": pieces you left hanging that the bot took, free pieces you didn't take ---- */
 // a move's material result for its player: what it takes (or a new queen), minus the most the other side can then win
@@ -3668,6 +3814,7 @@ function openBots() {
     botsWired = true;
     const bd = $("gboard");
     bd.addEventListener("pointerdown", ev => {
+      if (bg && bg.mo) return moTap(ev);
       if (!bg || bg.over || botTurn() !== bg.me) return;
       const sq = squareAt(ev, bd, bg.me); if (!sq) return;
       const p = botPos()[sq];
@@ -3677,12 +3824,576 @@ function openBots() {
     $("bRestart").onclick = botRestart;
     $("bColors").onclick = ev => {
       const b = ev.target.closest("[data-color]");
-      if (!b || !bg || bg.over || bg.moved || bg.rp) return;
+      if (!b || !bg || bg.over || bg.moved || bg.rp || bg.mo) return;
       pzPlayers().botColor = b.dataset.color; save(); botStart(bg.bot.id, bg.gate);
     };
     $("bQuit").onclick = () => { bg = null; renderBots(); };
   }
   if (bg) { $("bPick").hidden = true; $("bGame").hidden = false; botDraw(); } else renderBots();
+}
+
+
+/* ================= moments: puzzles from his own bot games (2026-10-06) =================
+   After a game the child's mistakes become puzzles: a free piece or a win in two he missed (find the move), a missed
+   mate in 1 or 2, a move onto a square where the bot took the piece (👍/👎 "is this move safe?", mixed with some of
+   his captures that won a piece: 👍). Only clear cases (checked with Stockfish: lab/moments_qa.*). A path win plays the biggest
+   3 at once; every missed one goes to the pile (pl.moments) and comes back as a warm-up before the next boss / play stop.
+   chess.js lists the moves of ~2,000 positions a second (this engine ~80,000), too slow to search on the old iPad, so the analysis has its own small engine
+   (mx…: a 0x88 board, material only, legal moves, captures followed to the end). */
+
+/* ---- the engine: P = {b: 0x88 board (white +1..+6 = P N B R Q K, black negative), s: 1 | -1 side to move, c: castling
+   bits (K Q k q = 1 2 4 8), ep, kw / kb king squares, m: material white minus black, h: undo stack} ---- */
+const MX_V = [0, 1, 3, 3, 5, 9, 0], MX_MATE = 1000;
+const MX_N = [-33, -31, -18, -14, 14, 18, 31, 33], MX_K = [-17, -16, -15, -1, 1, 15, 16, 17], MX_B = [-17, -15, 15, 17], MX_R = [-16, -1, 1, 16];
+const MX_CR = (() => { const a = new Array(128).fill(15); a[4] = 12; a[7] = 14; a[0] = 13; a[116] = 3; a[119] = 11; a[112] = 7; return a; })();
+const mxSq = s => (s.charCodeAt(1) - 49) * 16 + s.charCodeAt(0) - 97;
+const mxName = q => "abcdefgh"[q & 7] + ((q >> 4) + 1);
+const mxUci = m => mxName(m.f) + mxName(m.t) + (m.pr ? "q" : "");
+function mxFen(fen) {
+  const [rows, side, cas = "-", ep = "-"] = fen.split(" "), b = new Int8Array(128);
+  let r = 7, f = 0, m = 0, kw = -1, kb = -1;
+  for (const ch of rows) {
+    if (ch === "/") { r--; f = 0; continue; }
+    if (ch >= "1" && ch <= "8") { f += +ch; continue; }
+    const t = "pnbrqk".indexOf(ch.toLowerCase()) + 1, w = ch !== ch.toLowerCase(), q = r * 16 + f++;
+    b[q] = w ? t : -t; m += (w ? 1 : -1) * MX_V[t];
+    if (t === 6) { if (w) kw = q; else kb = q; }
+  }
+  const c = (cas.includes("K") ? 1 : 0) | (cas.includes("Q") ? 2 : 0) | (cas.includes("k") ? 4 : 0) | (cas.includes("q") ? 8 : 0);
+  return { b, s: side === "b" ? -1 : 1, c, ep: ep !== "-" ? mxSq(ep) : -1, kw, kb, m, h: [] };
+}
+function mxAtt(P, q, by) {     // is square q attacked by side `by`?
+  const b = P.b;
+  for (const d of [-16 * by - 1, -16 * by + 1]) { const u = q + d; if (!(u & 0x88) && b[u] === by) return true; }
+  for (const d of MX_N) { const u = q + d; if (!(u & 0x88) && b[u] === 2 * by) return true; }
+  for (const d of MX_K) { const u = q + d; if (!(u & 0x88) && b[u] === 6 * by) return true; }
+  for (const d of MX_B) for (let u = q + d; !(u & 0x88); u += d) { const p = b[u]; if (p) { if (p === 3 * by || p === 5 * by) return true; break; } }
+  for (const d of MX_R) for (let u = q + d; !(u & 0x88); u += d) { const p = b[u]; if (p) { if (p === 4 * by || p === 5 * by) return true; break; } }
+  return false;
+}
+const mxCheck = P => mxAtt(P, P.s > 0 ? P.kw : P.kb, -P.s);
+function mxGen(P, caps) {      // pseudo-legal moves (caps: captures and promotions only); pawns promote to a queen
+  const b = P.b, s = P.s, out = [];
+  for (let q = 0; q < 120; q++) {
+    if (q & 8) { q += 7; continue; }
+    const p = b[q]; if (!p || (p > 0) !== (s > 0)) continue;
+    const t = p * s;
+    if (t === 1) {
+      const d = 16 * s, last = (q >> 4) === (s > 0 ? 6 : 1);
+      for (const u of [q + d - 1, q + d + 1]) {
+        if (u & 0x88) continue;
+        if (b[u] * s < 0) out.push({ f: q, t: u, p, x: b[u], pr: last });
+        else if (u === P.ep) out.push({ f: q, t: u, p, x: -s, e: 1 });
+      }
+      const u = q + d;
+      if (!b[u] && (last || !caps)) {
+        out.push({ f: q, t: u, p, x: 0, pr: last });
+        if (!caps && (q >> 4) === (s > 0 ? 1 : 6) && !b[u + d]) out.push({ f: q, t: u + d, p, x: 0, dbl: 1 });
+      }
+      continue;
+    }
+    const dirs = t === 2 ? MX_N : t === 3 ? MX_B : t === 4 ? MX_R : MX_K, slide = t > 2 && t < 6;
+    for (const d of dirs) for (let u = q + d; !(u & 0x88); u += d) {
+      const c = b[u];
+      if (c * s > 0) break;
+      if (c || !caps) out.push({ f: q, t: u, p, x: c });
+      if (c || !slide) break;
+    }
+    if (t === 6 && !caps && q === (s > 0 ? 4 : 116)) {
+      const o = q - 4, K = s > 0 ? 1 : 4, Q = s > 0 ? 2 : 8, safe = (...qs) => qs.every(x => !mxAtt(P, x, -s));
+      if (P.c & K && !b[o + 5] && !b[o + 6] && b[o + 7] === 4 * s && safe(o + 4, o + 5, o + 6)) out.push({ f: q, t: o + 6, p, x: 0, cs: [o + 7, o + 5] });
+      if (P.c & Q && !b[o + 1] && !b[o + 2] && !b[o + 3] && b[o] === 4 * s && safe(o + 4, o + 3, o + 2)) out.push({ f: q, t: o + 2, p, x: 0, cs: [o, o + 3] });
+    }
+  }
+  return out;
+}
+function mxDo(P, m) {
+  const b = P.b, s = P.s;
+  P.h.push([m, P.c, P.ep, P.m]);
+  b[m.t] = m.pr ? 5 * s : m.p; b[m.f] = 0;
+  if (m.e) b[m.t - 16 * s] = 0;
+  if (m.cs) { b[m.cs[1]] = b[m.cs[0]]; b[m.cs[0]] = 0; }
+  if (m.p === 6) P.kw = m.t; else if (m.p === -6) P.kb = m.t;
+  P.m += s * ((m.x ? MX_V[Math.abs(m.x)] : 0) + (m.pr ? 8 : 0));
+  P.ep = m.dbl ? m.f + 16 * s : -1;
+  P.c &= MX_CR[m.f] & MX_CR[m.t];
+  P.s = -s;
+}
+function mxUndo(P) {
+  const [m, c, ep, mat] = P.h.pop(), b = P.b, s = -P.s;
+  b[m.f] = m.p; b[m.t] = m.e ? 0 : m.x;
+  if (m.e) b[m.t - 16 * s] = m.x;
+  if (m.cs) { b[m.cs[0]] = b[m.cs[1]]; b[m.cs[1]] = 0; }
+  if (m.p === 6) P.kw = m.f; else if (m.p === -6) P.kb = m.f;
+  P.c = c; P.ep = ep; P.m = mat; P.s = s;
+}
+function mxLegal(P, caps) {
+  const s = P.s, out = [];
+  for (const m of mxGen(P, caps)) { mxDo(P, m); if (!mxAtt(P, s > 0 ? P.kw : P.kb, -s)) out.push(m); mxUndo(P); }
+  return out;
+}
+function mxOrder(ms) {         // the biggest victim by the smallest attacker first, promotions too
+  const k = m => (m.x ? 10 * MX_V[Math.abs(m.x)] - MX_V[Math.abs(m.p)] + 100 : 0) + (m.pr ? 90 : 0);
+  return ms.sort((a, b) => k(b) - k(a));
+}
+// values are material from the side to move (pawn 1 … queen 9), a mate 1000 - plies; a stalemate counts as the material
+// the child had at the start (X.r0 from his side, X.rs): neither a win nor a loss. X.n counts the nodes.
+// Two bounds, so only clear cases count (a quiet move a material search can't see shouldn't make one): X.pess = at his
+// next move (ply 2) "standing pat" costs what the bot could take on its second-best target square (with two of his
+// pieces hanging he saves one, not both); otherwise optimistic: at his next move his checks are tried too (a check
+// that forks)
+const mxDraw = (P, X) => (P.s === X.rs ? 1 : -1) * X.r0;
+function mxQ(P, a, bt, ply, X, d) {     // captures followed to the end (in check: every way out)
+  X.n++;
+  if (mxCheck(P)) {
+    const ms = mxLegal(P, false);
+    if (!ms.length) return -(MX_MATE - ply);
+    if (d <= -3) return P.m * P.s;
+    let best = -1e9;
+    for (const m of mxOrder(ms)) {
+      mxDo(P, m); const v = -mxQ(P, -bt, -a, ply + 1, X, d - 1); mxUndo(P);
+      if (v > best) best = v;
+      if (v >= bt) return v;
+      if (v > a) a = v;
+    }
+    return best;
+  }
+  const child = P.s === X.rs;
+  let best = P.m * P.s;
+  if (X.pess && child && ply === 2) {   // his next move: what the bot threatens, if he can save only one piece
+    const ep = P.ep; P.s = -P.s; P.ep = -1;
+    const base = P.m * P.s, gain = {};
+    for (const m of mxLegal(P, true)) {
+      if (!m.x) continue;
+      mxDo(P, m); const v = -mxQ(P, -1e9, 1e9, ply + 2, X, d - 1) - base; mxUndo(P);
+      if (v > (gain[m.t] || 0)) gain[m.t] = v;
+    }
+    P.s = -P.s; P.ep = ep;
+    best -= Object.values(gain).sort((x, y) => y - x)[1] || 0;
+  }
+  if (best >= bt || d <= 0) return best;
+  if (best > a) a = best;
+  let ms = mxLegal(P, !(child && !X.pess && ply === 2));
+  if (child && !X.pess && ply === 2) ms = ms.filter(m => { if (m.x || m.pr) return true; mxDo(P, m); const c = mxCheck(P); mxUndo(P); return c; });
+  for (const m of mxOrder(ms)) {
+    mxDo(P, m); const v = -mxQ(P, -bt, -a, ply + 1, X, d - 1); mxUndo(P);
+    if (v > best) best = v;
+    if (v >= bt) return v;
+    if (v > a) a = v;
+  }
+  return best;
+}
+function mxMates(P) {          // the side to move's mates in one
+  return mxLegal(P, false).filter(m => { mxDo(P, m); const x = mxCheck(P) && !mxLegal(P, false).length; mxUndo(P); return x; });
+}
+function mxQ3(P, a, bt, ply, X) {   // the child's second move: a mate in one, else captures (or nothing)
+  if (!mxCheck(P)) for (const m of mxLegal(P, false)) {
+    mxDo(P, m); const mate = mxCheck(P) && !mxLegal(P, false).length; mxUndo(P);
+    if (mate) return MX_MATE - ply - 1;
+  }
+  return mxQ(P, a, bt, ply, X, 8);
+}
+function mxOpp(P, a, bt, ply, X) {  // the bot's reply: every move, then the child's next move (mxQ3)
+  X.n++;
+  const ms = mxLegal(P, false);
+  if (!ms.length) return mxCheck(P) ? -(MX_MATE - ply) : mxDraw(P, X);
+  let best = -1e9;
+  for (const m of mxOrder(ms)) {
+    mxDo(P, m); const v = -mxQ3(P, -bt, -a, ply + 1, X); mxUndo(P);
+    if (v > best) best = v;
+    if (v >= bt) return v;
+    if (v > a) a = v;
+  }
+  return best;
+}
+// the child's move m, from his side: deep = within two moves (the bot's every reply, then his capture or mate: layer 3),
+// else what the captures after it settle (layer 1). Exact above `a`; at or below it, some value ≤ a
+function mxVal(P, m, deep, a, X) {
+  mxDo(P, m);
+  let v;
+  if (!mxLegal(P, false).length) v = mxCheck(P) ? MX_MATE - 1 : -mxDraw(P, X);
+  else v = deep ? -mxOpp(P, -1e9, -a, 1, X) : -mxQ(P, -1e9, -a, 1, X, 8);
+  mxUndo(P);
+  return v;
+}
+// does the move just made (the bot to move in P) force mate within its next move? every reply runs into a mate in one
+function mxForced2(P) {
+  const rs = mxLegal(P, false);
+  if (!rs.length) return mxCheck(P);
+  return rs.every(r => { mxDo(P, r); const x = mxMates(P).length > 0; mxUndo(P); return x; });
+}
+
+/* ---- analysing one of his moves: an = {fen, M0 material, h his move, mate1, mate2 (checks that force mate in 2), hm (his
+   move mated or forced mate in 2), chk (he was in check), l1o / l1p: layer 1 values {uci: v} (optimistic / pessimistic),
+   d: layer 3 {o, p values, ph phase, q moves left in it} or null (out of time), ms: time spent on it} ---- */
+const MO_PIECE = 3;            // a clear case: a piece (or more) or mate
+const MO_BUDGET = 150;         // ms of layer-3 search per position, in idle time during the game
+const MO_LOW = -1e9;           // "not above the window" (layer 3 searches the other moves only as far as needed)
+function moScan(fen, mine) {
+  const P = mxFen(fen), ms = mxLegal(P, false), an = { fen, M0: P.m * P.s, l1o: {}, l1p: {}, mate1: [], mate2: [], hm: false, ms: 0 };
+  const hm = ms.find(m => mxUci(m) === mine || mxUci(m) === mine + "q");
+  if (!hm) return null;
+  an.h = mxUci(hm);
+  const Xo = { n: 0, rs: P.s, r0: an.M0 }, Xp = { ...Xo, pess: true };
+  for (const m of ms) {
+    const u = mxUci(m);
+    mxDo(P, m);
+    const chk = mxCheck(P), rs = mxLegal(P, false);
+    if (chk && !rs.length) an.mate1.push(u);
+    else if (chk && rs.every(r => { mxDo(P, r); const x = mxMates(P).length > 0; mxUndo(P); return x; })) an.mate2.push(u);
+    mxUndo(P);
+    an.l1o[u] = mxVal(P, m, false, -1e9, Xo); an.l1p[u] = mxVal(P, m, false, -1e9, Xp);
+  }
+  mxDo(P, hm); an.hm = an.mate1.includes(an.h) || mxForced2(P); mxUndo(P);
+  an.chk = mxCheck(P);
+  an.risky = moRisky(P, hm);
+  an.d = { o: {}, p: {}, ph: 0, q: [an.h] };
+  return an;
+}
+// layer 3, a few root moves at a time (ms per call, nodes for tests): phase 0 his move (both bounds, exact); 1 the others'
+// pessimistic values, exact where they could be accepted answers (more than 1.5 above his move's optimistic value);
+// 2 only when it was no mistake and his move looks risky (a 👍 candidate): is there a move whose optimistic value beats
+// his move's pessimistic one by more than a point? (D.better: then it wasn't safe). Returns true when done or out of
+// budget (an.d = null: layers 1-2 only)
+function moDeep(an, ms = 30, nodes = 1e9) {
+  if (!an || !an.d || an.d.ph > 2) return true;
+  const D = an.d, t0 = Date.now(), P = mxFen(an.fen), X = { n: 0, rs: P.s, r0: an.M0 }, Xp = { ...X, pess: true }, byU = Object.fromEntries(mxLegal(P, false).map(m => [mxUci(m), m]));
+  const others = () => Object.keys(byU).filter(u => u !== an.h).sort((a, b) => an.l1p[b] - an.l1p[a]);
+  for (;;) {
+    if (!D.q.length) {
+      D.ph++;
+      if (D.ph > 2) break;
+      D.q = others();
+      if (D.ph === 2) {
+        const vb = Math.max(...Object.values(D.p));
+        D.a = D.p[an.h] + 1;
+        if (vb - D.o[an.h] >= MO_PIECE || !(an.risky && !an.chk && D.p[an.h] >= an.M0)) { D.ph = 3; break; }   // no 👍 to check
+        D.ch = 1;
+      }
+      continue;
+    }
+    const u = D.q.shift();
+    if (D.ph === 0) { D.o[u] = mxVal(P, byU[u], true, -1e9, X); D.p[u] = mxVal(P, byU[u], true, -1e9, Xp); }
+    else if (D.ph === 1) { const a = D.o[an.h] + 1.5, v = mxVal(P, byU[u], true, a, Xp); D.p[u] = v > a ? v : MO_LOW; }
+    else if (mxVal(P, byU[u], true, D.a, X) > D.a) { D.q = []; D.better = 1; }   // a better move: not a 👍 one
+    const dt = Date.now() - t0;
+    if ((D.q.length || D.ph < 2) && (dt >= ms || X.n + Xp.n >= nodes)) { an.ms += dt; if (an.ms > MO_BUDGET) an.d = null; return !an.d; }
+  }
+  an.ms += Date.now() - t0;
+  return true;
+}
+const moDone = an => !!(an && an.d && an.d.ph > 2);
+// the opponent's best capture if it were his turn (a "null move"): {v: what it wins, at: the square of the piece it takes}
+function moThreat(fen) {
+  const P = mxFen(fen); P.s = -P.s; P.ep = -1;
+  const X = { n: 0, rs: P.s, r0: P.m * P.s }, base = P.m * P.s;
+  let best = { v: 0, at: null };
+  for (const m of mxLegal(P, true)) {
+    if (!m.x) continue;
+    mxDo(P, m); const v = -mxQ(P, -1e9, 1e9, 1, X, 8) - base; mxUndo(P);
+    if (v > best.v) best = { v, at: mxName(m.t) };
+  }
+  return best;
+}
+const moMate = v => v >= MX_MATE / 2;
+// one of his moves as a moment, or null. x = the log entry, nx = the bot's reply after it (the next entry). A mistake
+// needs the best move's pessimistic value a piece above his move's optimistic one; the accepted answers are every move
+// whose pessimistic value is within a point of the best (a counter-attack the bot can ignore isn't one). Material
+// moments need the finished layer-3 search (layers 1-2 alone gave ~30% false alarms: only their mates count), and
+// a position no further than MO_EVEN from level material (a piece more or less hardly matters when a rook up)
+const MO_EVEN = 4;
+function moClassify(an, x, nx) {
+  if (!an || an.hm) return null;
+  if (an.mate1.length) return { k: "mate", n: 1, ok: an.mate1, gap: 100 };
+  const deep = moDone(an), Pv = deep ? an.d.p : {};
+  const forced = Object.keys(Pv).filter(u => Pv[u] >= MX_MATE - 3);      // mate on his second move
+  if (an.mate2.length || forced.length) return { k: "mate", n: 2, ok: [...new Set([...an.mate2, ...forced])], gap: 90 };
+  if (!deep || Math.abs(an.M0) > MO_EVEN || Object.values(Pv).some(moMate)) return null;   // a longer mate: not a clear case
+  const vh = an.d.o[an.h], M0 = an.M0, best = Object.keys(Pv).sort((a, b) => Pv[b] - Pv[a])[0], vb = Pv[best];
+  if (moMate(vh) || vb - vh < MO_PIECE) return null;
+  const ok = Object.keys(Pv).filter(u => Pv[u] >= vb - 1).sort((a, b) => Pv[b] - Pv[a]);
+  if (vb - M0 >= MO_PIECE) {      // a piece (or a queen) to win: find the move
+    const P = mxFen(an.fen), q = mxSq(best.slice(2, 4)), x0 = P.b[q], same = ok.every(u => u.slice(2, 4) === best.slice(2, 4));
+    // not a pawn push, nor a promotion (a pawn racing to queen: Stockfish found every move winning there, 60% false alarms)
+    if (Math.abs(P.b[mxSq(best.slice(0, 2))]) === 1 && !x0) return null;
+    // QA round 2 (12-15% of these were wrong on fresh games; shared by the wrong ones): a win in two moves (a check
+    // that forks, then an exchange) worth less than a rook was often only a small edge to Stockfish: a rook or more,
+    // or one capture that takes it; not when he was already 3+ ahead (Stockfish hardly tells +4 from +7); not when
+    // his own move won 2+ too; and not when the same win is still there on his next turn (moGame)
+    if (vb - M0 < 5 && !(x0 && ok.length === 1)) return null;
+    if (M0 > 2 || vh - M0 >= 2) return null;
+    const v = x0 && same && MX_V[Math.abs(x0)] >= MO_PIECE ? (x0 > 0 ? "w" : "b") + "PNBRQK"[Math.abs(x0) - 1] : best[4] && ok.every(u => u[4]) ? "promo" : null;
+    return { k: "win", ok, v, gap: vb - vh };
+  }
+  // he lost a piece (the bot took it on its reply) where a safe move kept everything
+  if (an.chk || vh - M0 > -MO_PIECE || vb - M0 < -1 || !nx || nx.me || !nx.captured || VALUE[nx.captured] < MO_PIECE) return null;
+  // (a piece already attacked that he left was a "save your piece" puzzle until the QA: Stockfish disliked 60% of the
+  // answers a material search accepts, and 16% as a 👎 question: such positions are usually lost anyway. Not used.)
+  const th = moThreat(an.fen), took = nx.to;
+  if (th.v <= 1 && took === x.to) return { k: "unsafe", u: an.h, r: nx.from + nx.to, gap: vb - vh };
+  return null;
+}
+// one of his moves that looks risky but was fine (a capture that wins, or a piece put where a bigger piece attacks it
+// and his piece guards it), for a 👍 answer. Only from a finished layer-3 search: no move beats its pessimistic value
+// by more than a point, even optimistically
+function moSafe(an) {
+  if (!moDone(an) || an.d.better || an.chk || an.mate1.length || an.mate2.length || Math.abs(an.M0) > MO_EVEN) return null;
+  const vh = an.d.p[an.h], M0 = an.M0;
+  if (!an.risky || !an.d.ch || moMate(an.d.o[an.h]) || vh < M0 + MO_PIECE) return null;
+  return { k: "safe", u: an.h, gap: 0 };
+}
+// does his move m look risky? "x": it takes a piece (a knight or more; with a piece won, moSafe, a 👍 "it was safe to
+// take"). Moves to a square a bigger piece attacks and his guards were tried too: 24% false alarms, dropped
+function moRisky(P, m) {
+  return m.p * P.s !== 6 && MX_V[Math.abs(m.x)] >= MO_PIECE ? "x" : null;
+}
+// every moment of a game: {list: his mistakes (biggest first), safes: his 👍 moves}. Positions not analysed during the
+// game get layers 1-2 now; layer 3 counts only where it finished
+function moGame(log, botId) {
+  const list = [], safes = [];
+  for (const x of log) if (x.me && x.an === undefined) x.an = moScan(x.fen, x.from + x.to);
+  log.forEach((x, i) => {
+    if (!x.me) return;
+    const nx = log[i + 1], c = moClassify(x.an, x, nx), base = { i, f: x.fen, b: botId };
+    if (c && c.k === "win") {
+      // his next turn: is the same win still there (a trapped piece, or the bot left it hanging)? then it cost nothing
+      const nn = log[i + 2], an2 = nn && nn.me && nn.an, V = an2 && (moDone(an2) ? an2.d.p : an2.l1p);
+      c.nb = V ? Math.max(...Object.values(V)) - x.an.M0 - (c.gap + x.an.d.o[x.an.h] - x.an.M0) : null;   // its best gain then, minus the gain missed
+      if (c.nb !== null && c.nb >= -1) return;
+    }
+    if (c) list.push({ ...base, ...c });
+    else { const s = moSafe(x.an); if (s && !(nx && nx.captured && nx.to === x.to && VALUE[nx.captured] >= MO_PIECE)) safes.push({ ...base, ...s }); }
+  });
+  list.sort((a, b) => b.gap - a.gap);
+  return { list, safes };
+}
+
+/* ---- during a game: his moves are analysed in idle time (while the bot "thinks" and while he does), ≤ 25 ms a slice,
+   so no reply waits longer than that; MO_BUDGET per position, then that one keeps layers 1-2 ---- */
+function moKick() {
+  if (moKick.t || !bg || !bg.game) return;
+  const g0 = bg;
+  moKick.t = setTimeout(function step() {
+    moKick.t = null;
+    if (bg !== g0 || bg.over || bg.mo) return;
+    const x = bg.log.find(y => y.me && (y.an === undefined || (y.an && y.an.d && y.an.d.ph <= 2)));
+    if (!x) return;
+    if (x.an === undefined) x.an = moScan(x.fen, x.from + x.to); else moDeep(x.an, 25);
+    moKick.t = setTimeout(step, 0);
+  }, 0);
+}
+
+/* ---- the pile: pl.moments = {id: {k kind, f fen, ok accepted moves | u his move (👍/👎) + r the bot's capture,
+   n mate in n, v the goal's piece, b bot id, t created, due, c clean solves}}; done at c = 2 (two clean
+   solves on different days: a solve or a miss makes it due the next day); at most MO_MAX, the oldest finished go first */
+// MO_NOW: how many moments are played after a path win (and in a warm-up)
+const MO_MAX = 60, MO_NOW = 3;
+const moDay = (t = Date.now()) => { const d = new Date(t); d.setHours(24, 0, 0, 0); return +d; };   // the next day, 0:00
+function moId(x) {
+  const s = x.f.split(" ").slice(0, 4).join(" ") + "|" + x.k + "|" + (x.u || "");
+  let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return "m" + (h >>> 0).toString(36);
+}
+function moPileAdd(pl, xs, now = Date.now()) {
+  const P = pl.moments = pl.moments || {};
+  for (const x of xs) {
+    const id = x.id = x.id || moId(x);
+    if (P[id]) { P[id].due = moDay(now); P[id].c = 0; continue; }       // the same mistake again: back it comes
+    const y = P[id] = { k: x.k, f: x.f, b: x.b, t: now, due: moDay(now), c: 0 };
+    for (const k of ["ok", "u", "r", "n", "v"]) if (x[k] != null) y[k] = x[k];
+  }
+  const ids = Object.keys(P);
+  if (ids.length > MO_MAX) ids.sort((a, b) => (P[b].c >= 2) - (P[a].c >= 2) || P[a].t - P[b].t).slice(0, ids.length - MO_MAX).forEach(id => delete P[id]);
+}
+// about one 👍 question in the pile for every two 👎 ones, so the answer isn't always "no"
+function moTopUp(pl, safes, now = Date.now()) {
+  const open = Object.values(pl.moments || {}).filter(y => y.c < 2), u = open.filter(y => y.k === "unsafe").length;
+  let s = open.filter(y => y.k === "safe").length;
+  for (const x of shuffle(safes.slice())) { if (s >= Math.round(u / 2)) break; moPileAdd(pl, [x], now); s++; }
+}
+function moMerge(a = {}, b = {}) {     // mergePlayer: union by id, the larger count and the later due date
+  const out = {};
+  for (const [id, y] of [...Object.entries(a), ...Object.entries(b)]) {
+    const z = out[id];
+    out[id] = z ? { ...z, ...y, c: Math.max(z.c || 0, y.c || 0), due: Math.max(z.due || 0, y.due || 0), t: Math.min(z.t || 0, y.t || 0) } : { ...y };
+  }
+  return out;
+}
+function moDue(pl, now = Date.now()) {
+  return Object.entries(pl.moments || {}).filter(([, y]) => y.c < 2 && y.due <= now).sort((a, b) => a[1].due - b[1].due).slice(0, MO_NOW).map(([id, y]) => ({ ...y, id }));
+}
+// the moments of the game just over: up to MO_NOW mistakes (the biggest), plus a 👍 question beside a 👎 one when there's room
+function moPick(log, botId) {
+  const { list, safes } = moGame(log, botId), pick = list.slice(0, MO_NOW);
+  if (pick.some(x => x.k === "unsafe") && safes.length && pick.length < MO_NOW) pick.push(safes[Math.floor(Math.random() * safes.length)]);
+  return { pick: pick.sort((a, b) => a.i - b.i), clean: !list.length, safes };
+}
+// botAfterMove: a chess game is over. Its moments go to the pile; a path win returns them to play now (they stay in the
+// pile until solved, so closing the app loses nothing) and a clean path win gets an extra ⭐ (bg.clean)
+function moEnd(pl, res) {
+  if (!bg.game || !bg.log.length) return null;
+  clearTimeout(moKick.t); moKick.t = null;
+  const { pick, clean, safes } = moPick(bg.log, bg.bot.id), now = Date.now(), path = res === "win" && !!bg.gate;
+  if (path && clean) { pl.stars = (pl.stars || 0) + 1; bg.clean = true; }
+  if (!pick.length) return null;
+  moPileAdd(pl, pick, now);
+  if (path) return pick;
+  moTopUp(pl, safes, now);
+  return null;
+}
+// stageGo: a boss or play stop not finished yet plays the due moments first (up to MO_NOW), then its game starts by itself
+function moWarm(st) {
+  const pl = pzPlayers();
+  if (stageDone(pl, st)) return false;
+  const due = moDue(pl);
+  if (!due.length) return false;
+  botStart(st.gate || st.play, st); clearTimeout(botReply.t);
+  moRun(due, true);
+  return true;
+}
+
+/* ---- playing moments on the game board: like the kids' puzzles, pictures only. The goal picture, a ★ per moment and
+   the bot's face in the board's corner ("from your game against 🐯"); find the move (every accepted move counts), or
+   👍 / 👎 about his move drawn as a blue arrow, then the answer is played out. A miss shows the answer and moves on. ---- */
+function moRun(list, warm) { bg.mo = { list, k: 0, warm }; moLoad(); botDraw(); }
+function moLoad() {
+  const r = bg.mo, x = r.list[r.k];
+  clearTimeout(r.t);
+  r.g = new Chess(x.f); r.side = r.g.turn(); r.sel = null; r.hl = []; r.step = 0; r.res = null; r.scored = false; r.marks = {}; r.arrows = [];
+  if (x.k === "unsafe" || x.k === "safe") { r.st = "ask"; r.arrows = [[x.u, "blue"]]; return; }
+  r.st = "solve";
+}
+function moPc(fen, sq) { const p = parseFen(fen)[sq]; return p ? (p === p.toUpperCase() ? "w" : "b") + p.toUpperCase() : null; }
+function moGoal(x, side) {
+  const them = side === "w" ? "b" : "w";
+  if (x.k === "mate") return `<span class="goal mate${x.n > 1 ? " mn" : ""}"${x.n > 1 ? ` data-n="${x.n}"` : ""} title="Checkmate"><span class="pc ${them}K"></span></span>`;
+  if (x.k === "safe" || x.k === "unsafe") return `<span class="goal scale" title="Is this move safe?">⚖️<span class="pc ${moPc(x.f, x.u.slice(0, 2))}"></span></span>`;
+  if (x.v === "promo") return `<span class="goal promo" title="Make a queen"><span class="pc ${side}P"></span><b>→</b><span class="pc ${side}Q"></span></span>`;
+  if (x.v) return `<span class="goal take" title="Win this piece"><span class="pc ${x.v}"></span></span>`;
+  return `<span class="goal win" title="Win something">⚔</span>`;
+}
+function moDraw() {
+  const r = bg.mo, x = r.list[r.k], g = r.g, bot = BOTS.find(b => b.id === x.b) || bg.bot;
+  const tg = r.sel && r.st === "solve" ? g.moves({ square: r.sel, verbose: true }).map(m => m.to) : [];
+  renderBoard(parseFen(g.fen()), { el: $("gboard"), o: r.side, hl: r.hl, sel: r.sel, tgts: tg, arrows: r.arrows, marks: r.marks });
+  $("gboard").classList.toggle("mine", r.st === "solve");
+  const mb = $("bMoBot");
+  mb.hidden = false; mb.textContent = bot.face; mb.style.setProperty("--ring", bot.lvl ? BOT_RING[bot.lvl - 1] : "var(--line)");
+  const dots = `<span class="dots">${r.list.map((_, i) => `<i class="${i < r.k || (i === r.k && r.res) ? "on" : ""}">★</i>`).join("")}</span>`;
+  const mark = r.res ? `<span class="mores ${r.res}">${r.res === "ok" ? "✓" : "✗"}</span>` : "";
+  const tail = r.st === "ask" ? `<span class="yesno"><button class="btn big yes" type="button" id="moYes" aria-label="Yes, it's safe">👍</button><button class="btn big no" type="button" id="moNo" aria-label="No, it isn't safe">👎</button></span>`
+    : r.st === "next" ? `<button class="btn primary big" type="button" id="moNext" aria-label="Next">▶</button>` : "";
+  $("bFace").innerHTML = `<span class="mogoal">${moGoal(x, r.side)}</span>${dots}${mark}${tail}`;
+  if ($("moYes")) { $("moYes").onclick = () => moAnswer(true); $("moNo").onclick = () => moAnswer(false); }
+  if ($("moNext")) $("moNext").onclick = moNext;
+  $("bRestart").hidden = true; $("bColors").hidden = true; $("bOver").hidden = true;
+}
+function moTap(ev) {
+  const r = bg.mo;
+  if (r.st !== "solve") return;
+  const sq = squareAt(ev, $("gboard"), r.side); if (!sq) return;
+  if (r.sel && r.sel !== sq && r.g.moves({ square: r.sel, verbose: true }).some(m => m.to === sq)) return moMove(r.sel, sq);
+  const p = r.g.get(sq); r.sel = p && p.color === r.side ? sq : null; moDraw();
+}
+const moUciOf = m => m.from + m.to + (m.promotion || "");
+function moKingMark(g) { const pos = parseFen(g.fen()), k = g.turn() === "w" ? "K" : "k"; return { [Object.keys(pos).find(q => pos[q] === k)]: "mk" }; }
+function moMove(from, to) {
+  const r = bg.mo, x = r.list[r.k], g = r.g, m = g.move({ from, to, promotion: "q" });
+  if (!m) return;
+  const u = moUciOf(m), me = bg.mo;
+  sfx("move"); r.sel = null; r.hl = [from, to]; r.marks = {}; r.arrows = [];
+  const good = x.k === "mate" ? g.in_checkmate() || (x.n === 2 && r.step === 0 && (x.ok.includes(u) || mxForced2(mxFen(g.fen())))) : x.ok.includes(u);
+  if (!good) return moMiss(u);
+  if (x.k === "mate" && !g.in_checkmate()) {      // mate in 2, first move right: the bot replies, then he mates
+    r.step = 1; r.st = "wait"; r.arrows = [[u, "green"]]; moDraw();
+    r.t = setTimeout(() => {
+      if (!bg || bg.mo !== me) return;
+      const rs = g.moves({ verbose: true }), rep = rs[Math.floor(Math.random() * rs.length)];
+      g.move(rep); sfx("move"); r.hl = [rep.from, rep.to]; r.arrows = [[moUciOf(rep), "red"]]; r.st = "solve"; moDraw();
+    }, 700);
+    return;
+  }
+  r.res = "ok"; r.arrows = [[u, "green"]]; sfx("right"); moScore(true);
+  if (g.in_checkmate()) r.marks = moKingMark(g);
+  if (x.k !== "win" || m.captured || m.promotion) { r.st = "next"; return moDraw(); }
+  // a win in two: the bot's best reply, then his capture
+  r.st = "show"; moDraw();
+  const line = moFollow(g.fen());
+  let k = 0;
+  const step = () => {
+    if (!bg || bg.mo !== me) return;
+    if (k >= line.length) { r.st = "next"; return moDraw(); }
+    const mv = g.move({ from: line[k].slice(0, 2), to: line[k].slice(2, 4), promotion: "q" });
+    sfx("move"); r.hl = [mv.from, mv.to]; r.arrows = [[line[k], k % 2 ? "green" : "red"]]; k++; moDraw();
+    r.t = setTimeout(step, 900);
+  };
+  r.t = setTimeout(step, 900);
+}
+// after his right first move of a win in two (the bot to move): the bot's best reply by the same measure, then his best capture
+function moFollow(fen) {
+  const P = mxFen(fen), X = { n: 0, rs: -P.s, r0: -P.m * P.s, pess: true };
+  let rep = null, rv = 1e9;
+  for (const m of mxLegal(P, false)) { mxDo(P, m); const v = mxQ3(P, -1e9, 1e9, 2, X); mxUndo(P); if (v < rv) { rv = v; rep = m; } }
+  if (!rep) return [];
+  mxDo(P, rep);
+  let best = null, bv = P.m * P.s;
+  for (const m of mxLegal(P, false)) {
+    mxDo(P, m);
+    const v = mxCheck(P) && !mxLegal(P, false).length ? MX_MATE : m.x || m.pr ? -mxQ(P, -1e9, 1e9, 3, X, 8) : -1e9;
+    mxUndo(P);
+    if (v > bv) { bv = v; best = m; }
+  }
+  return best ? [mxUci(rep), mxUci(best)] : [mxUci(rep)];
+}
+function moMiss(u) {
+  const r = bg.mo, x = r.list[r.k], me = r;
+  r.res = "bad"; r.st = "show"; r.arrows = [[u, "red"]]; sfx("wrong"); moScore(false); moDraw();
+  r.t = setTimeout(() => {               // take it back and show the answer
+    if (!bg || bg.mo !== me) return;
+    r.g.undo();
+    const ans = x.k === "mate" && r.step === 1 ? moUciOf(r.g.moves({ verbose: true }).find(m => { r.g.move(m); const z = r.g.in_checkmate(); r.g.undo(); return z; })) : x.ok[0];
+    r.g.move({ from: ans.slice(0, 2), to: ans.slice(2, 4), promotion: "q" });
+    r.hl = [ans.slice(0, 2), ans.slice(2, 4)]; r.arrows = [[ans, "green"]]; r.marks = r.g.in_checkmate() ? moKingMark(r.g) : {};
+    r.st = "next"; moDraw();
+  }, 1000);
+}
+function moAnswer(yes) {
+  const r = bg.mo, x = r.list[r.k], me = r;
+  if (r.st !== "ask") return;
+  const safe = x.k === "safe", right = yes === safe, to = x.u.slice(2, 4);
+  r.res = right ? "ok" : "bad"; r.st = "show"; sfx(right ? "right" : "wrong"); moScore(right);
+  r.g.move({ from: x.u.slice(0, 2), to, promotion: "q" }); r.hl = [x.u.slice(0, 2), to];
+  if (safe) {         // fine: his pieces guarding it, in green
+    r.arrows = [[x.u, "green"], ...attackersOf(parseFen(r.g.fen()), to, r.side).map(q => [q + to, "green"])]; r.marks = { [to]: "esc" };
+    r.st = "next"; return moDraw();
+  }
+  r.arrows = [[x.u, "red"]]; moDraw();
+  r.t = setTimeout(() => {               // the bot takes it, as in the game
+    if (!bg || bg.mo !== me) return;
+    r.g.move({ from: x.r.slice(0, 2), to: x.r.slice(2, 4), promotion: "q" }); sfx("move");
+    r.hl = [x.r.slice(0, 2), x.r.slice(2, 4)]; r.arrows = [[x.r, "red"]]; r.marks = { [x.r.slice(2, 4)]: "mk" };
+    r.st = "next"; moDraw();
+  }, 900);
+}
+// a moment answered: right at once after the game = done; in a warm-up a clean solve counts (due again the next day);
+// a miss makes it due the next day. No stars are lost either way
+function moScore(clean) {
+  const r = bg.mo, x = r.list[r.k], y = (pzPlayers().moments || {})[x.id];
+  if (r.scored) return;
+  r.scored = true;
+  if (y) {
+    if (clean && !r.warm) y.c = 2;
+    else { if (clean) y.c = (y.c || 0) + 1; y.due = moDay(); }
+  }
+  save();
+}
+function moNext() {
+  const r = bg.mo;
+  clearTimeout(r.t);
+  if (++r.k < r.list.length) { moLoad(); return moDraw(); }
+  bg.mo = null;
+  if (r.warm) return botStart(bg.bot.id, bg.gate);       // the warm-up is over: the game starts
+  botOverShow(); botDraw();
 }
 
 
