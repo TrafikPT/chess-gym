@@ -2085,14 +2085,15 @@ function stageLadder(st) { return stageLadders[st.id] || (stageLadders[st.id] = 
 function stageStars(pl, id) { return (pl.stages || {})[id] || 0; }
 function needOf(st) { return st.need || STAGE_NEED; }
 function stageDone(pl, st) { return stageStars(pl, st.id) >= needOf(st); }
-// strict order: a stage opens when every stage before it is finished or "free" (left unfinished behind a finished
-// stage when the path changed, see stageMigrate: it doesn't block, but stays on the map to play)
+// strict order: a stage opens when every stage before it is finished. Stages added behind the child are played first
+// (the owner, 2026-10-06: "free" stages left behind him had him scrolling the map for what to play; he skipped 15
+// stages and 3 bosses that way). Finished stages after the one to play stay on the map with their stars, not tappable
 function stageOpen(pl, i) {
   stageMigrate(pl);
-  return STAGES.slice(0, i).every(st => stageDone(pl, st) || stageFree(pl, st));
+  return STAGES.slice(0, i).every(st => stageDone(pl, st));
 }
-// the stage to play next: the first open unfinished one (a free stage behind the child doesn't count)
-function stageCur(pl) { return STAGES.findIndex((st, k) => stageOpen(pl, k) && !stageDone(pl, st) && !stageFree(pl, st)); }
+// the stage to play next: the first unfinished one
+function stageCur(pl) { stageMigrate(pl); return STAGES.findIndex(st => !stageDone(pl, st)); }
 // after finishing st: the next open unfinished stage after it (free ones too), else stageCur. With unfinished stages
 // spread between finished ones (recaps and steps added behind the child), stageCur alone jumped back or ahead past
 // them (the owner, 2026-10-05: "he beats a level and instead of going to the next he goes to the end")
@@ -2100,17 +2101,14 @@ function stageAfter(pl, st) {
   const j = STAGES.indexOf(st), i = j < 0 ? -1 : STAGES.findIndex((s, k) => k > j && !stageDone(pl, s) && stageOpen(pl, k));
   return i >= 0 ? i : stageCur(pl);
 }
-// pl.gateFree / pl.gatesSeen: named when only boss gates had them; now they hold every stage
-function stageFree(pl, st) { return !!(pl.gateFree || {})[st.id]; }
+// pl.gatesSeen: stages the player's path has been checked against (named when only boss gates had it). pl.gateFree:
+// stages that didn't block until 2026-10-06; only the pathV 1 → 2 migration below still reads it
 // The path before the strict order (pl.pathV < 2) let any star open the stages up to it, and solves in the 🧩 / Puzzles
 // tabs and wins in the 🤖 tab counted too. Once per player: find the stage the child was on then (the first one
 // unfinished and not free, in the old order; a gate not yet seen there was free if everything before it was finished),
 // and drop the stars of puzzle stages and gates after it (they came from outside the path; endgame and review stars
 // only ever came from the path and stay).
-// Then, once per stage the player hasn't seen (pl.gatesSeen; the old order's stages count as seen): a new stage before
-// the first unfinished stage he had is free, so the child keeps his place. Stages added later get the same treatment,
-// except a "step" in front of a stage he hasn't finished (the pin steps): he plays that first; and a recap stop, never
-// free (the owner, 2026-10-05: they are short, and reminding is their point).
+// (Until 2026-10-06 a stage added before the child's place was "free" from then on: see stageOpen.)
 const OLD_ORDER = "take saveq check promo gate1 savep back mateq mater gate2 egqr egrr egq egr gate3 fork mix safe stopm gate4 mate2 pin skewer disc gate5 safe2 review egcatch egkp".split(" ");
 function stageMigrate(pl) {
   if (!window.GYM || !GYM.puzzles || ((pl.pathV || 0) >= 2 && pl.gatesSeen && STAGES.every(st => pl.gatesSeen[st.id]))) return;
@@ -2126,13 +2124,7 @@ function stageMigrate(pl) {
     OLD_ORDER.forEach(id => { pl.gatesSeen[id] = 1; });
     pl.pathV = 2;
   }
-  const first = STAGES.findIndex(st => pl.gatesSeen[st.id] && !stageDone(pl, st) && !stageFree(pl, st));
-  STAGES.forEach((st, i) => {
-    if (pl.gatesSeen[st.id]) return;
-    const stepOn = st.step && !stageDone(pl, STAGES.find(x => x.id === st.step));     // an easier step before a stage still to do
-    if (!stageDone(pl, st) && (first < 0 || i < first) && !stepOn && !st.recap) pl.gateFree[st.id] = 1;   // recaps: always played
-    pl.gatesSeen[st.id] = 1;
-  });
+  STAGES.forEach(st => { pl.gatesSeen[st.id] = 1; });
   save();
 }
 // a win in a game started from a boss gate clears that gate (games from the 🤖 tab don't count) and puts the boss's
@@ -2290,11 +2282,11 @@ function renderPath() {
       ${deco.join("")}<span class="wsign${allDone ? " done" : ""}">${w.icon}</span></div>`;
   }).join("");
   const nodes = STAGES.map((st, i) => {
-    const need = needOf(st), open = stageOpen(pl, i), n = Math.min(stageStars(pl, st.id), need), done = n >= need, cur = i === curI;
+    const need = needOf(st), open = stageOpen(pl, i), n = Math.min(stageStars(pl, st.id), need), done = n >= need, cur = i === curI, seen = open || done;
     const bot = st.gate && typeof BOTS !== "undefined" && BOTS.find(b => b.id === st.gate), ring = bot && bot.lvl ? BOT_RING[bot.lvl - 1] : "#8a7fd0";
-    return `<button class="node${st.gate ? " boss" : ""}${open ? "" : " locked"}${done ? " done" : ""}${cur ? " cur" : ""}" type="button" data-st="${i}" ${open ? "" : "disabled"}
+    return `<button class="node${st.gate ? " boss" : ""}${open ? "" : done ? " ahead" : " locked"}${done ? " done" : ""}${cur ? " cur" : ""}" type="button" data-st="${i}" ${open ? "" : "disabled"}
       style="left:${pts[i][0].toFixed(0)}px;top:${pts[i][1].toFixed(0)}px;--p:${Math.round(100 * n / need)};--ring:${ring}" aria-label="Stage ${i + 1}: ${esc(st.name)}${open ? "" : ", locked"}">
-      <span class="ic">${open || st.gate ? st.icon : "🔒"}</span>${open && !st.gate ? stageDots(pl, st) : ""}</button>`;
+      <span class="ic">${seen || st.gate ? st.icon : "🔒"}</span>${seen && !st.gate ? stageDots(pl, st) : ""}</button>`;
   }).join("");
   const me = curI >= 0 ? `<span class="me pc wK" style="left:${pts[curI][0].toFixed(0)}px;top:${(pts[curI][1] - (STAGES[curI].gate ? 82 : 70)).toFixed(0)}px" aria-hidden="true"></span>` : "";
   const goal = pts[pts.length - 1];
@@ -3023,7 +3015,7 @@ function renderParents() {
       <p class="tiny">To continue where ${esc(pl.name)} is on another device. Tap a learning-path stage to open it: every stage before it counts as finished.</p>
       <div class="ustages">${STAGES.map((st, i) => `<button class="btn" type="button" data-ul="${i}" ${stageOpen(pl, i) ? "disabled" : ""}
         title="${esc(st.name)}" aria-label="Open stage ${i + 1}: ${esc(st.name)}"><span class="stageicon">${st.icon}</span><small>${i + 1}</small></button>`).join("")}</div>
-      <p class="tiny">${STAGES.map((st, i) => `${i + 1} ${esc(st.name)}${stageStars(pl, st.id) >= needOf(st) ? " ✓" : stageFree(pl, st) ? " (skipped: was already past it)" : ""}`).join(" · ")}</p>
+      <p class="tiny">${STAGES.map((st, i) => `${i + 1} ${esc(st.name)}${stageStars(pl, st.id) >= needOf(st) ? " ✓" : ""}`).join(" · ")}</p>
       <label class="tiny"><input type="checkbox" id="uSchool" ${pl.schoolAll ? "checked" : ""}> Open every piece-school level</label>
       <div class="controls"><button class="btn" type="button" id="uRestart">Start the path over</button></div>
     </figure>
@@ -4668,11 +4660,12 @@ function packsEarned(a) {
 function aSince(a) { return Math.max(0, a.c - Math.max(a.c0 || 0, a.c1 || 0, a.c2 || 0)); }      // solves under the current rule
 // packs to open: none while the packs have nothing left to give (every open sticker holo)
 function packsWaiting(pl) { const a = albumOf(pl), n = Math.max(0, packsEarned(a) + a.b + a.bp + (a.lp || 0) - a.o); return n && aPool(pl).length ? n : 0; }
-// the worlds reached on the learning path (the one being played and those before it): their pages are open
+// the worlds reached on the learning path (the one being played, those before it, and any with a finished stage: a
+// stage added behind the child sends him back down the path, his pages stay open): their pages are open
 function aWorldsOpen(pl) {
   if (albumPreview || typeof stageCur !== "function") return 99;
   const i = stageCur(pl);
-  return i < 0 ? 99 : worldOf(i) + 1;
+  return i < 0 ? 99 : worldOf(Math.max(i, ...STAGES.map((st, k) => stageDone(pl, st) ? k : -1))) + 1;
 }
 const stkLocked = (pl, st) => st.page.world >= aWorldsOpen(pl);
 // what packs draw from: every sticker not yet holo, on an open page (bosses only come from bosses)

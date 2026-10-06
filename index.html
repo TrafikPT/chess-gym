@@ -465,6 +465,8 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
 .map .node .dots { position: absolute; top: calc(100% + 4px); left: 50%; transform: translateX(-50%); font-size: 11px; gap: 1px; padding: 2px 6px; border-radius: 10px; background: rgba(255, 255, 255, .92); box-shadow: 0 2px 4px rgba(0, 0, 0, .2); }
 .map .node.done { background: radial-gradient(closest-side, #fff4c8 80%, transparent 82%), conic-gradient(#f0b400 0 100%); }
 .map .node.locked { cursor: default; font-size: 30px; background: radial-gradient(closest-side, #dcdcdc 80%, transparent 82%), conic-gradient(rgba(0, 0, 0, .22) 0 100%); box-shadow: 0 4px 0 rgba(0, 0, 0, .2); }
+/* finished, but a stage before it isn't (added behind the child): stars kept, not tappable until he gets there */
+.map .node.ahead { cursor: default; opacity: .55; }
 .map .node.boss { --d: 118px; font-size: 56px; background: radial-gradient(closest-side, #fff 76%, transparent 78%), conic-gradient(var(--ring) 0 100%); }
 .map .node.boss.done { background: radial-gradient(closest-side, #fff4c8 76%, transparent 78%), conic-gradient(#f0b400 0 100%); }
 .map .node.boss.locked .ic { filter: grayscale(1); opacity: .6; }
