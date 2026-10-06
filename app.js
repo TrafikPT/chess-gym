@@ -1401,6 +1401,8 @@ function pzGoalText(p) {
   }
   if (t.some(x => /^safeTake/.test(x))) return "Is the capture on the blue arrow safe? 👍 if it wins something, 👎 if your piece would be taken back for more.";
   if (t.includes("stopMate")) return "Your opponent threatens checkmate in one (red arrow). Stop it: every move that stops the mate counts.";
+  if (t.includes("develop")) return "Wake up a sleeping piece: move a knight or bishop that hasn't moved yet (💤) to a square where it is safe.";
+  if (t.includes("castle")) return "Castle: move your king two squares towards a rook, and the rook jumps over it.";
   if (n) return `Find mate in ${n.slice(-1)}.`;
   if (t.includes("hangingPiece") && p[5]) return "Take the piece you can win for free.";
   if (t.includes("giveCheck")) return "Give check: attack the king with a piece that stays safe.";
@@ -1428,6 +1430,8 @@ function pzGoalHtml() {
     return { kind: "safe", html: `<span class="goal scale" title="Is it safe to take?">⚖️${tp ? `<span class="pc ${tp.color}${tp.type.toUpperCase()}"></span>` : ""}</span>` };
   }
   if (t.includes("stopMate")) return { kind: "guard", html: `<span class="goal guard" title="Stop the mate"><span class="pc ${me}K"></span></span>` };
+  if (t.includes("develop")) return { kind: "develop", html: `<span class="goal" title="Wake up a sleeping piece"><span class="pc ${me}N"></span></span><span class="seek">💤</span>` };
+  if (t.includes("castle")) return { kind: "castle", html: `<span class="goal castle" title="Castle"><span class="pc ${me}K"></span><b>⇄</b><span class="pc ${me}R"></span></span>` };
   if (t.includes("giveCheck")) return { kind: "check", html: `<span class="goal check" title="Give check"><span class="pc ${them}K"></span></span>` };
   if (t.includes("saveQueen") || t.includes("savePiece")) {
     const tp = pzCur[7] ? pzGame.get(pzCur[7]) : null, kind = tp ? tp.type.toUpperCase() : "Q";
@@ -1473,6 +1477,16 @@ function sgThreat() {
 function sgMates() {
   return pzGame.moves({ verbose: true }).filter(m => { pzGame.move(m); const x = pzGame.in_checkmate(); pzGame.undo(); return x; });
 }
+// the opening habits (gen_opening.py): 💤 on each knight and bishop still on its first square; for castling the king and
+// the rook(s) it may castle with
+const HOME_MINORS = { w: { b1: "N", g1: "N", c1: "B", f1: "B" }, b: { b8: "N", g8: "N", c8: "B", f8: "B" } };
+function openingMarks() {
+  const me = pzGame.turn(), marks = {};
+  if (/\bdevelop\b/.test(pzCur[4])) {
+    for (const [q, t] of Object.entries(HOME_MINORS[me])) { const pc = pzGame.get(q); if (pc && pc.color === me && pc.type === t.toLowerCase()) marks[q] = "zz"; }
+  } else for (const u of pzCur[6]) { marks[u.slice(0, 2)] = "ck"; marks[(u[2] === "g" ? "h" : "a") + u[1]] = "ck"; }
+  return marks;
+}
 function pzShowGoal() {
   const pl = pzPlayers(), el = $("pzGoalBadge");
   if (/stopMate/.test(pzCur[4]) && pzIdx === 0) { const th = sgThreat(); pzMarks = th.marks; pzArrows = th.arrows; }   // the task needs it: always shown
@@ -1481,6 +1495,7 @@ function pzShowGoal() {
     const them = pzGame.turn() === "w" ? "b" : "w";
     pzMarks = { [pzCur[7]]: "mk" }; pzArrows = attackersOf(parseFen(pzGame.fen()), pzCur[7], them).map(h => [h + pzCur[7], "red"]);
   }
+  if (/\b(develop|castle)\b/.test(pzCur[4]) && pzIdx === 0) { pzMarks = openingMarks(); pzArrows = []; }
   if (!pl.goal) { el.hidden = true; return; }
   const g = pzGoalHtml();
   el.innerHTML = g.html; el.hidden = pzKid();          // pictures only: the goal is in the big panel instead
@@ -1874,7 +1889,7 @@ function advanceStage() {
   if (stageStars(pl, pzStage.id) < needOf(pzStage)) return;
   const i = stageAfter(pl, pzStage);
   if (i < 0 || STAGES[i] === pzStage) return;
-  if (STAGES[i].eg || STAGES[i].gate) { stageGo(STAGES[i]); return true; }     // next up is an endgame or a boss: pzNext stops here
+  if (STAGES[i].eg || STAGES[i].gate || STAGES[i].play) { stageGo(STAGES[i]); return true; }     // next up is an endgame or a game: pzNext stops here
   pzStage = STAGES[i];
 }
 
@@ -1918,6 +1933,10 @@ function tacticOnly(p, t) {
 // (stageMigrate). The picture: the skills' own pictures, small, with 🔁
 const recapOf = (...ids) => ({ recap: ids, need: 5, f: p => ids.some(id => STAGE_BY[id].f(p)) });
 const recapEg = (...ids) => ({ recap: ids, need: 3, eg: "recap", f: () => false });
+// a "play a game" stop (2026-10-06: the only games on the path were the bosses, 5-8 stops apart, and he plays no other
+// bot games): one win against a bot already beaten (the previous world's boss) after the world's first skills. Started
+// like a gate (botStart(bot, stage), gateWin); a win counts like a stage star for the sticker packs, no boss sticker
+const playStop = (bot, face) => ({ play: bot, need: 1, icon: `<span class="goal win">${face}</span><span class="pc wK mini"></span>`, f: () => false });
 function recapIcon(st) {
   return `<span class="goal recap"><span class="rcp n${Math.min(4, st.recap.length)}">${st.recap.slice(0, 4).map(id => `<i>${STAGE_BY[id].icon}</i>`).join("")}</span></span>`;
 }
@@ -1936,6 +1955,7 @@ const STAGES = [
   { id: "savep", name: "Save your pieces", icon: `<span class="goal save"><span class="pc wR"></span></span>`, f: p => /savePiece/.test(p[4]) },
   { id: "mateq", name: "Mate with the queen", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc wQ mini"></span>`, f: p => p[5] && /mateIn1/.test(p[4]) && !/backRank|mateNoStale/.test(p[4]) && /[Qq]/.test(p[1].split(" ")[0]) },
   { id: "r1", name: "Recap: take a free piece, save the queen, give check, make a queen", ...recapOf("take", "saveq", "check", "promo") },
+  { id: "play2", name: "Play a game: beat Greedy Cat", ...playStop("gus", "🐱") },
   { id: "back", name: "Back-rank mate", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc bP mini"></span>`, f: p => p[5] && /backRankMate/.test(p[4]) },
   { id: "mater", name: "Mate with a rook", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc wR mini"></span>`, f: p => p[5] && /mateIn1/.test(p[4]) && !/backRank/.test(p[4]) && !/[Qq]/.test(p[1].split(" ")[0]) },
   { id: "gate2", name: "Boss: beat Wily Wolf", need: 1, gate: "cat", icon: gateIcon("🐺"), f: () => false },
@@ -1943,9 +1963,12 @@ const STAGES = [
   // you mate with (king + rook, the hardest, comes after the Tiger). Then the first puzzles from real games (Lichess)
   { id: "egqr", name: "Endgame: mate with queen + rook", need: 3, eg: "QR", icon: egIcon("QR"), f: () => false },
   { id: "egrr", name: "Endgame: mate with two rooks", need: 3, eg: "RR", icon: egIcon("RR"), f: () => false },
+  // mate, don't stalemate before the king + queen endgame, where a stalemate is a miss (2026-10-06: it came 10 worlds later)
+  { id: "matens", name: "Mate, don't stalemate (king + queen)", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc wQ mini"></span><span class="seek">😮</span>`, f: p => /mateNoStale/.test(p[4]) },
   { id: "egq", name: "Endgame: mate with king + queen", need: 3, eg: "KQ", icon: egIcon("KQ"), f: () => false },
   { id: "r2", name: "Recap: save your pieces, mate with the queen, back rank, mate with a rook", ...recapOf("savep", "mateq", "back", "mater") },
   { id: "hang", name: "Win the free piece (real games)", icon: `<span class="goal take"><span class="pc bR"></span></span><span class="pc wN mini"></span>`, f: p => !p[5] && /hangingPiece/.test(p[4]) && p[3] <= 800 && !/mate/.test(p[4]) && !later(p) },
+  { id: "play3", name: "Play a game: beat Wily Wolf", ...playStop("cat", "🐺") },
   { id: "gate4", name: "Boss: beat Pawn Pete (Pawn Wars)", need: 1, gate: "pete", icon: gateIcon("🐣"), f: () => false },
   // 🏜️ the desert: forks, one piece at a time, then any fork (puzzles/themes.py --forks tags forkKnight / forkPawn:
   // the first move forks, the next takes one of the forked pieces with that piece)
@@ -1953,9 +1976,12 @@ const STAGES = [
   { id: "forkp", name: "Forks with a pawn", icon: `<span class="goal win">🍴</span><span class="pc wP mini"></span>`, f: p => hasTag(p, "forkPawn") },
   { id: "re1", name: "Recap: mate with queen + rook, two rooks, king + queen (one game each)", ...recapEg("egqr", "egrr", "egq") },
   { id: "fork", name: "Forks (any piece)", icon: `<span class="goal win">🍴</span>`, f: p => hasTag(p, "forkKnight") || hasTag(p, "forkPawn") || (!p[5] && tacticOnly(p, "fork") && p[3] < 850 && !later(p)) },
+  { id: "play4", name: "Play a game: beat Wily Wolf", ...playStop("cat", "🐺") },
   // the save-your-pieces puzzles again without the red glow and arrows: find what the bot attacks yourself (in games he
   // wins big, then gives pieces away: noticing the threat is the missing skill)
   { id: "savepx", name: "Save your pieces (find the attacked one yourself)", noGlow: true, icon: `<span class="goal save"><span class="pc wR"></span></span><span class="seek">👀</span>`, f: p => /savePiece/.test(p[4]) },
+  // finish the game: a queen and a rook up, mate without giving pieces away, right after noticing attacked pieces
+  { id: "fin", name: "Finish the game: a queen and a rook up, mate without giving pieces away", need: 3, eg: "fin", icon: `<span class="goal win">🏁</span><span class="egm"><span class="pc wQ mini"></span><span class="pc wR mini"></span></span>`, f: () => false },
   // generated by puzzles/safe_gen.py: take only when it wins something (the capture asked about is drawn)
   { id: "safe", name: "Is it safe to take?", icon: `<span class="goal scale">⚖️<span class="pc bN"></span></span>`, f: p => p[4].split(" ").includes("safeTake") },
   { id: "gate3", name: "Boss: beat Tactic Tiger", need: 1, gate: "tiger", icon: gateIcon("🐯"), f: () => false },
@@ -1963,6 +1989,7 @@ const STAGES = [
   { id: "egr", name: "Endgame: mate with king + rook", need: 3, eg: "KR", icon: egIcon("KR"), f: () => false },
   { id: "mateqk", name: "Mate with the queen next to the king", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc wQ mini"></span><span class="pc wB mini"></span>`, f: p => hasTag(p, "mateQK") },
   { id: "r3", name: "Recap: forks, the free piece, save your pieces (no glow), is it safe to take?", ...recapOf("forkn", "forkp", "hang", "savepx", "safe") },
+  { id: "play5", name: "Play a game: beat Tactic Tiger", ...playStop("tiger", "🐯") },
   { id: "mate1", name: "Mate in 1 (real games)", icon: `<span class="goal mate mn" data-n="1"><span class="pc bK"></span></span>`, f: p => !p[5] && /mateIn1/.test(p[4]) && p[3] <= 750 && !later(p) },
   { id: "mate2", name: "Mate in 2", icon: `<span class="goal mate mn" data-n="2"><span class="pc bK"></span></span>`, f: p => !p[5] && /mateIn2/.test(p[4]) && p[3] < 1000 && !later(p) },
   { id: "gate5", name: "Boss: beat T-Rex", need: 1, gate: "dino", icon: gateIcon("🦖"), f: () => false },
@@ -1973,13 +2000,17 @@ const STAGES = [
   { id: "re2", name: "Recap: mate with king + queen, king + rook (one game each)", ...recapEg("egq", "egr", "egq") },
   { id: "stopd", name: "Stop the mate: take the piece that guards it", icon: `<span class="goal guard"><span class="pc wK"></span></span><span class="pc bN mini"></span>`, f: p => stopKind(p, "stopCaptureDef") },
   { id: "stopb", name: "Stop the mate: block the line", icon: `<span class="goal guard"><span class="pc wK"></span></span><span class="pc wB mini"></span>`, f: p => stopKind(p, "stopBlock") },
+  { id: "play6", name: "Play a game: beat T-Rex", ...playStop("dino", "🦖") },
   { id: "gate7", name: "Boss: beat Big Bear", need: 1, gate: "bear", icon: gateIcon("🐻"), f: () => false },
   // 🏰 the castle in the clouds: stop the mate, any way (the threat is drawn); then pins in three steps
   // (puzzles/themes.py --pins: your first move makes the pin, a later one takes the pinned piece): along a file or rank,
-  // along a diagonal (both under 1000), then both mixed up to 1100. step: added in front of a stage, so never "free"
-  // while that stage is unfinished (stageMigrate): the mixed one alone was too hard (2026-10-03)
+  // along a diagonal (both under 1000), then both mixed up to 1100 (step: an easier step in front of that stage; the
+  // mixed one alone was too hard, 2026-10-03)
   { id: "stopm", name: "Stop the mate (any way)", icon: `<span class="goal guard"><span class="pc wK"></span></span>`, f: p => /stopMate/.test(p[4]) && !/stopOpening/.test(p[4]) && !STOP_KINDS.some(k => stopKind(p, k)) },
+  // the 4-move mate (Scholar's) right after stopping mates: the commonest way one beginner beats another (2026-10-06: was in 🏙️)
+  { id: "stopo", name: "Stop the 4-move mate", icon: `<span class="goal guard"><span class="pc wK"></span></span><span class="pc bQ mini"></span><span class="pc bB mini"></span>`, f: p => /stopOpening/.test(p[4]) },
   { id: "r4", name: "Recap: mate in 1, mate in 2, back rank, the queen next to the king", ...recapOf("mate1", "mate2", "back", "mateqk") },
+  { id: "play7", name: "Play a game: beat Big Bear", ...playStop("bear", "🐻") },
   { id: "pinl", name: "Pins along a file or rank (rook, queen)", step: "pin", icon: pinIcon("pinLine"), f: p => isPin(p, "pinLine") && p[3] < 1000 },
   { id: "pind", name: "Pins along a diagonal (bishop, queen)", step: "pin", icon: pinIcon("pinDiag"), f: p => isPin(p, "pinDiag") && p[3] < 1000 },
   { id: "pin", name: "Pins (both kinds)", icon: `<span class="goal win">📌</span>`, f: p => isPin(p, "pinLine") || isPin(p, "pinDiag") },
@@ -1989,28 +2020,29 @@ const STAGES = [
   { id: "skewr", name: "Skewers with the rook", icon: `<span class="goal win">🍢</span><span class="pc wR mini"></span>`, f: p => hasTag(p, "skewerRook") },
   { id: "skewb", name: "Skewers with the bishop", icon: `<span class="goal win">🍢</span><span class="pc wB mini"></span>`, f: p => hasTag(p, "skewerBishop") },
   { id: "r5", name: "Recap: stop the mate, forks, is it safe to take?, save your pieces (no glow)", ...recapOf("stopm", "fork", "safe", "savepx") },
+  { id: "play8", name: "Play a game: beat the Dragon", ...playStop("dragon", "🐉") },
   { id: "skewq", name: "Skewers with the queen", icon: `<span class="goal win">🍢</span><span class="pc wQ mini"></span>`, f: p => hasTag(p, "skewerQueen") },
   { id: "skewer", name: "Skewers (any piece)", icon: `<span class="goal win">🍢</span>`, f: p => !p[5] && tacticOnly(p, "skewer") && !later(p) },
   { id: "gate8", name: "Boss: beat the Lion", need: 1, gate: "lion", icon: gateIcon("🦁"), f: () => false },
   // 🚀 space: a discovered check first (themes.py --disccheck: the moving piece doesn't check, the one behind it does),
-  // then any discovered attack; the harder ⚖️
+  // then any discovered attack (under 950: 25% solved on 2026-10-06 when the stage ran up to 1100); the harder ⚖️
   // (safe_gen.py, safeTakeHard: always a bigger piece taking), one kind at a time first: one attacker ("single"), count
   // attackers and defenders ("count"), the hidden defender ("hidden"), then all three; mixed puzzles
   { id: "disck", name: "Discovered check", icon: DISC_CHECK_ICON, f: p => hasTag(p, "discCheck") },
   { id: "re3", name: "Recap: mate with king + rook, queen + rook, king + queen (one game each)", ...recapEg("egr", "egqr", "egq") },
-  { id: "disc", name: "Discovered attacks", icon: DISC_ICON, f: p => !p[5] && tacticOnly(p, "discoveredAttack") },
+  { id: "disc", name: "Discovered attacks", icon: DISC_ICON, f: p => !p[5] && tacticOnly(p, "discoveredAttack") && p[3] < 950 },
   { id: "safe2s", name: "Is it safe to take? (harder): one attacker", step: "safe2", icon: `<span class="goal scale mn" data-n="1">⚖️<span class="pc bR"></span></span>`, f: p => /safeTakeHard/.test(p[4]) && p[4].split(" ").includes("single") },
   { id: "safe2c", name: "Is it safe to take? (harder): count attackers and defenders", step: "safe2", icon: `<span class="goal scale mn" data-n="2">⚖️<span class="pc bR"></span></span><span class="pc wB mini"></span><span class="pc wN mini"></span>`, f: p => /safeTakeHard/.test(p[4]) && p[4].split(" ").includes("count") },
   { id: "safe2h", name: "Is it safe to take? (harder): the hidden defender", step: "safe2", icon: `<span class="goal scale mn" data-n="2">⚖️<span class="pc bR"></span></span><span class="seek">👀</span>`, f: p => /safeTakeHard/.test(p[4]) && p[4].split(" ").includes("hidden") },
   { id: "safe2", name: "Is it safe to take? (harder)", icon: `<span class="goal scale mn" data-n="2">⚖️<span class="pc bR"></span></span>`, f: p => /safeTakeHard/.test(p[4]) },
+  { id: "play9", name: "Play a game: beat the Lion", ...playStop("lion", "🦁") },
   { id: "mix", name: "Mixed puzzles", icon: `<span class="goal win">🧩</span>`, f: p => !p[5] && p[3] >= 400 && p[3] < 650 && !later(p) },
   // a review stop: puzzles from the stages already finished, missed ones first (reviewPick)
   { id: "review", name: "Review: puzzles from finished stages", review: true, icon: `<span class="goal win">🔁</span>`, f: () => false },
   { id: "gate9", name: "Boss: beat the Eagle", need: 1, gate: "eagle", icon: gateIcon("🦅"), f: () => false },
   // 🏝️ the island: king and pawn (kids' corner, like the endgames above), one skill a stage: first puzzles (puzzle: a start picked
   // out of the king-and-pawn table, a few footprints to do it in; a move that gives the win away is a miss at once),
-  // then the games: catch a running pawn; make a queen with the king's help. step: never "free" while egkp is
-  // unfinished (stageMigrate). The goal pictures on the board: egGoalMarks
+  // then the games: catch a running pawn; make a queen with the king's help. The goal pictures on the board: egGoalMarks
   { id: "kpq", name: "King + pawn: make the queen (1 move)", need: 5, eg: "kp", puzzle: "kpq", step: "egkp", icon: `<span class="goal promo mn" data-n="1"><span class="pc wP"></span><b>→</b><span class="pc wQ"></span></span>`, f: () => false },
   { id: "kprun", name: "King + pawn: run, pawn, run (the king is outside the square)", need: 5, eg: "kp", puzzle: "kprun", step: "egkp", icon: `<span class="goal sqzic run"><span class="pc wP"></span></span><span class="egm"><span class="pc bK mini"></span></span>`, f: () => false },
   { id: "kpsq", name: "Catch the pawn: step into its square", need: 5, eg: "catch", puzzle: "kpsq", step: "egkp", icon: `<span class="goal sqzic"><span class="pc bP"></span></span><span class="egm"><span class="pc wK mini"></span></span>`, f: () => false },
@@ -2019,6 +2051,7 @@ const STAGES = [
   { id: "kpguard", name: "King + pawn: the king guards the queening square first", need: 5, eg: "kp", puzzle: "kpguard", step: "egkp", icon: `<span class="goal qguard"><span class="pc wK"></span></span><span class="egm"><span class="pc wP mini"></span></span>`, f: () => false },
   { id: "kpstale", name: "King + pawn: don't stalemate", need: 5, eg: "kp", puzzle: "kpstale", step: "egkp", icon: `<span class="goal stale"><span class="pc bK"></span></span><span class="egm"><span class="pc wP mini"></span></span>`, f: () => false },
   { id: "egkp", name: "Endgame: king + pawn, make a queen", need: 3, eg: "kp", icon: `<span class="goal promo"><span class="pc wP"></span><b>→</b><span class="pc wQ"></span></span><span class="egm"><span class="pc wK mini"></span></span>`, f: () => false },
+  { id: "play10", name: "Play a game: beat the Eagle", ...playStop("eagle", "🦅") },
   { id: "gate10", name: "Boss: beat the Shark", need: 1, gate: "shark", icon: gateIcon("🦈"), f: () => false },
   // 🌴 the jungle: mate patterns, one a stage (themes.py --patterns: the Lichess theme checked on the board, mate in 1
   // or 2): smothered mate (a knight, the king boxed in by its own pieces), Arabian (rook next to the king, guarded by a
@@ -2026,6 +2059,7 @@ const STAGES = [
   { id: "smother", name: "Smothered mate (knight)", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc wN mini"></span>`, f: p => hasTag(p, "smother") },
   { id: "arab", name: "Arabian mate (rook + knight)", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc wR mini"></span><span class="pc wN mini"></span>`, f: p => hasTag(p, "arabMate") },
   { id: "re4", name: "Recap: mate with king + rook, catch the pawn, king + pawn (one game each)", ...recapEg("egr", "egcatch", "egkp") },
+  { id: "play11", name: "Play a game: beat the Shark", ...playStop("shark", "🦈") },
   { id: "anast", name: "Anastasia's mate (knight + rook on the edge)", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc wN mini"></span><span class="pc bP mini"></span>`, f: p => hasTag(p, "anastMate") },
   { id: "bish2", name: "Mate with two bishops", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc wB mini"></span><span class="pc wB mini"></span>`, f: p => hasTag(p, "bishMate") },
   { id: "r7", name: "Recap: smothered, Arabian, Anastasia, two bishops", ...recapOf("smother", "arab", "anast", "bish2") },
@@ -2036,15 +2070,15 @@ const STAGES = [
   { id: "dblchk", name: "Double check", icon: `<span class="goal check mn" data-n="2"><span class="pc bK"></span></span>`, f: p => hasTag(p, "dblCheck") },
   { id: "r8", name: "Recap: forks, pins, skewers, discovered attacks", ...recapOf("fork", "pin", "skewer", "disc") },
   { id: "re5", name: "Recap: mate with king + queen, king + rook, king + pawn (one game each)", ...recapEg("egq", "egr", "egkp") },
+  { id: "play12", name: "Play a game: beat the Jaguar", ...playStop("jaguar", "🐆") },
   { id: "mate3c", name: "Mate in 3 (check, check, mate)", icon: `<span class="goal mate mn" data-n="3"><span class="pc bK"></span></span>`, f: p => hasTag(p, "mate3c") },
   { id: "gate12", name: "Boss: beat the Bull", need: 1, gate: "bull", icon: gateIcon("🐂"), f: () => false },
-  // 🏙️ the city: playing it out. Stop the 4-move mate in the opening (gen_more.py stopOpening, like stopMate: the
-  // threat drawn); mate, don't stalemate (gen_more.py mateNoStale: king + queen, a hasty queen move stalemates); then
-  // finish the game: a queen and a rook up against the Tiger, mate it without giving pieces away (eg "fin")
-  { id: "stopo", name: "Stop the 4-move mate", icon: `<span class="goal guard"><span class="pc wK"></span></span><span class="pc bQ mini"></span><span class="pc bB mini"></span>`, f: p => /stopOpening/.test(p[4]) },
-  { id: "matens", name: "Mate, don't stalemate (king + queen)", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc wQ mini"></span><span class="seek">😮</span>`, f: p => /mateNoStale/.test(p[4]) },
+  // 🏙️ the city: opening habits (puzzles/gen_opening.py): wake up a sleeping knight or bishop (every developing move
+  // that keeps the piece safe counts; 💤 on the sleeping pieces), castle (king and rooks marked); then a game
+  { id: "develop", name: "Wake up a sleeping piece (knight or bishop)", icon: `<span class="goal"><span class="pc wN"></span></span><span class="seek">💤</span>`, f: p => p[5] && p[4].split(" ").includes("develop") },
+  { id: "castle", name: "Castle your king", icon: `<span class="goal castle"><span class="pc wK"></span><b>⇄</b><span class="pc wR"></span></span>`, f: p => p[5] && p[4].split(" ").includes("castle") },
   { id: "r9", name: "Recap: quiet mate in 2, double check, smothered mate, stop the mate", ...recapOf("mate2q", "dblchk", "smother", "stopm") },
-  { id: "fin", name: "Finish the game: a queen and a rook up, mate without giving pieces away", need: 3, eg: "fin", icon: `<span class="goal win">🏁</span><span class="egm"><span class="pc wQ mini"></span><span class="pc wR mini"></span></span>`, f: () => false },
+  { id: "play13", name: "Play a game: beat the Bull", ...playStop("bull", "🐂") },
   { id: "gate13", name: "Boss: beat the Fox", need: 1, gate: "fox", icon: gateIcon("🦊"), f: () => false },
   // 🌈 the rainbow (no boss, 🏆 at the top): harder tactics up to 1000 (themes.py --defender --pinattack --discq): take
   // the defender, then what it guarded; win a trapped piece; attack a pinned piece with a smaller one; a discovered
@@ -2055,6 +2089,7 @@ const STAGES = [
   { id: "pina", name: "Attack the pinned piece", icon: `<span class="goal win">📌</span><span class="pc wP mini"></span>`, f: p => hasTag(p, "pinAttack") },
   { id: "discq", name: "Discovered attack on the queen (no check)", icon: DISC_ICON.replace("pc wB", "pc wN"), f: p => hasTag(p, "discQueen") },
   { id: "r10", name: "Recap: stop the 4-move mate, mate don't stalemate, mate in 3, is it safe to take? (harder)", ...recapOf("stopo", "matens", "mate3c", "safe2") },
+  { id: "play14", name: "Play a game: beat the Fox", ...playStop("fox", "🦊") },
   { id: "deflect", name: "Deflection: pull the guard away", icon: `<span class="goal win">↪️</span><span class="pc bQ mini"></span>`, f: p => hasTag(p, "deflect") },
   { id: "re6", name: "Recap: finish the game, mate with king + rook, king + pawn (one game each)", ...recapEg("fin", "egr", "egkp") },
 ];
@@ -2127,13 +2162,13 @@ function stageMigrate(pl) {
   STAGES.forEach(st => { pl.gatesSeen[st.id] = 1; });
   save();
 }
-// a win in a game started from a boss gate clears that gate (games from the 🤖 tab don't count) and puts the boss's
-// sticker in the book (no pop-up)
+// a win in a game started from a boss gate or a play stop clears it (games from the 🤖 tab don't count); a boss's sticker
+// goes in the book (no pop-up)
 function gateWin(pl, botId, from = null) {
   const i = STAGES.indexOf(from);
-  if (i < 0 || from.gate !== botId || stageDone(pl, from) || !stageOpen(pl, i)) return null;
+  if (i < 0 || (from.gate || from.play) !== botId || stageDone(pl, from) || !stageOpen(pl, i)) return null;
   pl.stages = pl.stages || {}; pl.stages[from.id] = needOf(from);
-  albumBoss(pl, from.id);
+  if (from.gate) albumBoss(pl, from.id); else albumSolve(pl);      // a play stop: a star's worth towards a pack
   return from;
 }
 function gateNext(gate) {   // ▶ after beating a boss: the next stage to play, or the map
@@ -2231,8 +2266,8 @@ function stageDots(pl, st) {   // ★ per star (and the one just lost, falling o
 }
 // open a stage: puzzle stages in the puzzle view, endgame stages as a game in the kids' corner, a gate as a bot game
 function stageGo(st) {
-  if (st.gate) {
-    kidTab = "play"; botStart(st.gate, st);
+  if (st.gate || st.play) {
+    kidTab = "play"; botStart(st.gate || st.play, st);
     return window.SECTION === "kids" ? openKids() : go("kids", "play");
   }
   if (!st.eg) return go("puzzles", { stage: st });
@@ -3466,7 +3501,7 @@ function botAfterMove() {
   r[res === "win" ? "w" : res === "loss" ? "l" : "d"]++;
   if (res === "win") {
     pl.stars = (pl.stars || 0) + 3; sfx("trophy");
-    const gate = gateWin(pl, bg.bot.id, bg.gate); if (gate) { bg.gate = gate; bg.packs = BOSS_PACKS; }  // a boss gate on the learning path is beaten
+    const gate = gateWin(pl, bg.bot.id, bg.gate); if (gate) { bg.gate = gate; if (gate.gate) bg.packs = BOSS_PACKS; }  // a boss gate (or a play stop) on the learning path is beaten
   } else if (res === "loss") sfx("wrong"); else sfx(bg.stale ? "oops" : "right");
   save();
   botOverShow();

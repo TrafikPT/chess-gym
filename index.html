@@ -1952,6 +1952,7 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
 .gate { position: relative; display: inline-block; line-height: 1; }   /* a boss gate on the path: the bot's face with crossed swords */
 .gate::after { content: "⚔"; position: absolute; right: -.3em; top: -.25em; font-size: .42em; color: #b8961c; }
 .goal.win { font-size: .8em; color: #b8961c; }
+.goal.castle b { font-size: .45em; color: var(--muted); }     /* castle: king ⇄ rook */
 /* a recap stop: the pictures of the skills it brings back, small (two by two), with 🔁 in the corner; 👀 🤫 😮 🕸️ beside a
    goal picture: find it yourself / quiet move / no stalemate / trapped */
 .goal.recap { flex-direction: column; gap: .04em; line-height: 1; }
@@ -1965,6 +1966,9 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
 .kidgoal.small { font-size: 44px; justify-items: start; padding: 0 0 4px; }
 .goalbadge { font-size: 48px; line-height: 1; display: flex; justify-content: center; padding: 4px 0; }
 /* why-it's-mate marks */
+/* opening habits: a sleeping knight or bishop (💤), the king and rook that may castle (blue ring) */
+.sq.zz::after { content: "💤"; position: absolute; right: 2%; top: 0; font-size: 4.2cqw; line-height: 1; pointer-events: none; }
+.sq.ck::before { content: ""; position: absolute; inset: 0; box-shadow: inset 0 0 0 .6cqw rgba(42, 125, 225, .9); background: rgba(42, 125, 225, .15); pointer-events: none; }
 .sq.mk::before { content: ""; position: absolute; inset: 0; background: radial-gradient(circle, rgba(226, 38, 38, .95) 0%, rgba(226, 38, 38, .55) 45%, rgba(226, 38, 38, 0) 75%); animation: glow 1.6s ease-in-out infinite alternate; }
 .sq.mx::before { content: ""; position: absolute; inset: 0; background: rgba(214, 60, 40, .32); animation: fadein .5s ease both; animation-delay: var(--d, 0s); }
 .sq.mx::after { content: "×"; position: absolute; font-family: var(--body); font-weight: 700; font-size: 7cqw; line-height: 1; color: rgba(170, 25, 15, .85); animation: fadein .5s ease both; animation-delay: var(--d, 0s); }
