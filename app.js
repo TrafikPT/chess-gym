@@ -132,7 +132,12 @@ function mergePlayer(a, b) {
     const y = out.again[id];
     if (!y || x.due > y.due || (x.due === y.due && x.n > y.n)) out.again[id] = x;
   }
-  if (a.moments || b.moments) out.moments = moMerge(a.moments, b.moments);   // puzzles from his bot games (moments.js)
+  if (a.moments || b.moments) out.moments = moMerge(a.moments, b.moments);
+  // growth.js: skill scores (per skill the later solve), the chances in his games (the larger counts), his games (union)
+  if (a.sk || b.sk) out.sk = skMerge(a.sk, b.sk);
+  if (a.skV || b.skV) out.skV = Math.max(a.skV || 0, b.skV || 0);
+  if (a.tr || b.tr) { out.tr = {}; for (const k of new Set([...Object.keys(a.tr || {}), ...Object.keys(b.tr || {})])) out.tr[k] = maxMap((a.tr || {})[k], (b.tr || {})[k]); }
+  if (a.games || b.games) out.games = grGamesMerge(a.games, b.games);   // puzzles from his bot games (moments.js)
   out.gateFree = maxMap(a.gateFree, b.gateFree);         // stages the child was already past when they came (kids.js stageMigrate)
   out.pathV = Math.max(a.pathV || 0, b.pathV || 0);
   // stages either copy has seen (stageMigrate decided whether each was free; a blank copy brings nothing)
@@ -1208,6 +1213,7 @@ function pzMoves() {
   const mv = pzCur[2].split(" "), hang = (pzKid() || pzStage) && typeof STAGES !== "undefined" && STAGES.find(st => st.id === "hang");
   return hang && hang.f(pzCur) ? mv.slice(0, 2) : mv;
 }
+let pzPlayed = null, pzT0 = 0;   // the wrong move he played (uci, or "yes"/"no" for 👍/👎) and when the puzzle started: kept in hist (w, d)
 let pzHinted = false, pzFailed = false, pzScored = false, pzDrag = null, pzTimer = null, pzMarks = {};
 
 /* ---- "why is it mate?": which pieces take away each square around the mated king ---- */
@@ -1331,7 +1337,7 @@ function pzRenderBar() {
   $("pzKid").checked = !!pl.kid;
   $("puzzleView").classList.toggle("kid", pzKid());
   $("pzSound").textContent = soundOn() ? "🔊" : "🔇";
-  $("pzStars").hidden = !pzKid(); $("pzStars").innerHTML = `⭐ <b>${pl.stars || 0}</b>`; aBadge();
+  $("pzStars").hidden = !pzKid(); $("pzStars").innerHTML = `⭐ <b>${pl.stars || 0}</b>`; aBadge(); helpShow();
   renderStageBar();
   $("pzName").textContent = pl.name + (mode === "mine" ? ` · ${myPuzzles().length} puzzles from your own games (no rating change)` : mode === "fixed" ? ` · fixed level ${PZ_BANDS[pl.level][0]}–${PZ_BANDS[pl.level][1]}, not matched to the rating` : " · puzzles matched to this rating");
   $("pzRating").textContent = Math.round(pl.rating);
@@ -1515,7 +1521,7 @@ function pzNext() {
   clearTimeout(pzTimer);
   if (advanceStage()) return;
   $("pzGoalBadge").hidden = true;
-  pzCur = pzPick(); pzIdx = 0; pzHinted = pzFailed = pzScored = pzEscape = pzSlipped = false; pzFound = []; pzWrong = 0; stageLost = null; pzSel = null; pzArrows = []; pzLast = []; pzMarks = {};
+  pzCur = pzPick(); pzIdx = 0; pzT0 = Date.now(); pzPlayed = null; pzHinted = pzFailed = pzScored = pzEscape = pzSlipped = false; pzFound = []; pzWrong = 0; stageLost = null; pzSel = null; pzArrows = []; pzLast = []; pzMarks = {};
   pzGame = new Chess(pzCur[1]);
   const direct = !!pzCur[5];                             // generated beginner puzzles start with the solver's move
   pzOrient = direct ? pzGame.turn() : (pzGame.turn() === "w" ? "b" : "w");   // Lichess puzzles: the opponent moves first
@@ -1571,7 +1577,7 @@ function sgAnswer(yes, shown = false) {
   clearTimeout(pzTimer);
   const safe = / take /.test(pzCur[4]), right = yes === safe, u = pzAsk, to = u.slice(2, 4), me = pzGame.turn();
   pzState = "show";
-  if (!right || shown) { pzFailed = true; pzScore(false); if (!shown) { sfx("wrong"); pzBig(false); } }
+  if (!right || shown) { if (!shown) pzPlayed = yes ? "yes" : "no"; pzFailed = true; pzScore(false); if (!shown) { sfx("wrong"); pzBig(false); } }
   $("pzCard").innerHTML = pzKid() ? `<div class="kidcard ${right ? "ok" : "bad"}">${right ? "✓" : "✗"}</div>` : `<p class="text">${right ? "Right" : "Not quite"}: ${safe ? "the capture wins material." : "your piece would be taken back."}</p>`;
   // the capture, then the exchange on that square (the harder level stores Stockfish's line; the first level: on a trap
   // the cheapest piece takes back), then what each side won, as pictures
@@ -1620,7 +1626,7 @@ function pzMultiMove(from, to) {
   pzSel = null; pzLast = []; pzMarks = {};
   pzGame.move({ from, to, promotion: "q" });            // shown on the board for a moment (no promotions in these rows)
   if (fresh) pzFound.push(uci);
-  if (!ok) { pzWrong++; pzSlipped = true; pzMarks = { [to]: "mk" }; }
+  if (!ok) { pzWrong++; pzSlipped = true; pzMarks = { [to]: "mk" }; pzPlayed = uci; }
   sfx(fresh ? "star" : ok ? "move" : pzWrong < 2 ? "oops" : "wrong");
   pzArrows = [...pzFound.map(u => [u, "green"]), ...(ok ? [] : [[uci, "red"]])];
   pzState = "wait"; pzDraw(); if (fresh) pzFoundDraw(true);
@@ -1650,16 +1656,22 @@ function pzScore(win) {
   pzScored = true;
   const pl = pzPlayers(), pr = pzCur[3];
   pl.done = pl.done || {}; pl.done[pzCur[0]] = win ? 1 : 0;
-  againNote(pl, pzCur[0], win && !pzHinted && !pzSlipped);
+  againNote(pl, pzCur[0], win && !pzHinted && !pzSlipped && !helpOn);     // a solve with 🤝 help doesn't clear a missed puzzle
   if (isMyPuzzle(pzCur)) {           // your own positions: estimated ratings, so they don't move yours
     $("pzDelta").textContent = "from your game: no rating change"; $("pzDelta").className = "delta"; save(); pzRenderBar(); return;
   }
   kidReward(pl, win);
   if (!win) stageMissPuzzle();
-  pl.hist = (pl.hist || []).slice(-(HIST_MAX - 1)); pl.hist.push({ id: pzCur[0], pr, r: win ? 1 : 0, t: Date.now() });
-  if (pzHinted || (pzSlipped && win)) {
-    pl.hist[pl.hist.length - 1].h = 1;      // hinted (or all found after one wrong move): no rating change (the parent chart skips it)
-    $("pzDelta").textContent = pzHinted ? "hint used: no rating change" : "one wrong move: no rating change"; $("pzDelta").className = "delta"; save(); pzRenderBar(); return;
+  const hx = { id: pzCur[0], pr, r: win ? 1 : 0, t: Date.now() };
+  if (pzT0) hx.d = hx.t - pzT0;               // ms from the start (with the opening move's 650 ms)
+  if (pzPlayed && !win) hx.w = pzPlayed;
+  if (helpOn) hx.hp = 1;
+  pzPlayed = null;
+  pl.hist = (pl.hist || []).slice(-(HIST_MAX - 1)); pl.hist.push(hx);
+  if (!pzHinted && !(pzSlipped && win)) skPuzzle(pl, pzCur, win);     // skill scores (growth.js; not with 🤝)
+  if (pzHinted || (pzSlipped && win) || helpOn) {
+    hx.h = 1;      // hinted (or all found after one wrong move, or with 🤝 help): no rating change (the parent chart skips it)
+    $("pzDelta").textContent = helpOn ? "with help: no rating change" : pzHinted ? "hint used: no rating change" : "one wrong move: no rating change"; $("pzDelta").className = "delta"; save(); pzRenderBar(); return;
   }
   const n = pl.n || 0, was = pl.rating;
   pl.rating = eloStep(was, n, pr, win ? 1 : 0); pl.n = n + 1;
@@ -1734,7 +1746,7 @@ function pzUserMove(from, to) {
     return true;
   }
   // wrong: show it, then offer another go (rating already counts it as a miss)
-  pzFailed = true; pzScore(false); sfx("wrong");
+  pzPlayed = uci; pzFailed = true; pzScore(false); sfx("wrong");
   pzState = "wrong"; pzArrows = [[uci, "red"]];
   const mateGoal = /mate/i.test(pzCur[4]) && !/stopMate/.test(pzCur[4]) && last;
   const ex = mateGoal ? escapes() : null;
@@ -2247,13 +2259,13 @@ function stagePick(pl) {
     if (fresh.length || w >= n) return rnd(fresh.length ? fresh : near);
   }
 }
-// a recap stop: the skill whose turn it is (stars mod skills: a miss keeps the turn, so every skill gets a clean solve),
+// a recap stop: the most faded of its skills (skill scores, growth.js; never-solved ones in turn by the stop's stars),
 // half the time a puzzle of it he missed and hasn't yet solved cleanly twice (pl.again), else one from the easier 60% of
 // its ladder (a reminder, not a test; generated stages: any). recapFrom: that skill's stage (savepx keeps its rule: no glow)
 let recapFrom = null;
 function recapSkill(pl, st) {
   const sts = st.recap.map(id => STAGE_BY[id]).filter(s => s.eg || stagePool(s).length);
-  return sts[stageStars(pl, st.id) % sts.length];
+  return skWeakest(pl, sts, stageStars(pl, st.id));
 }
 function recapPick(pl, r = Math.random()) {
   const st = recapSkill(pl, pzStage), rnd = a => a[Math.floor(Math.random() * a.length)], done = pl.done || {};
@@ -2713,6 +2725,7 @@ function egEnd() {
     const stars = par ? (eg.moves <= par[0] ? 3 : eg.moves <= par[1] ? 2 : 1) : eg.undos ? 2 : 3;   // pawn games: ⭐⭐⭐ without take-backs
     pl.stages = pl.stages || {};
     const had = stageStars(pl, eg.st.id); pl.stages[eg.st.id] = had + 1; stageMiss = null;
+    skNote(pl, eg.sub.id, true);      // skill scores (growth.js)
     if (had < needOf(eg.st)) albumSolve(pl);      // replays give no packs
     kidAddStars(stars); sfx("right");
     $("eDone").innerHTML = `<div class="big">${"⭐".repeat(stars)}</div>
@@ -2724,6 +2737,7 @@ function egEnd() {
   } else if (res) {
     eg.over = "draw"; eg.miss = res;
     if (res !== "again" && !egReplay) stageLose(pzPlayers(), eg.st);
+    if (res !== "again") skNote(pzPlayers(), eg.sub.id, false);
     const my = eg;
     const stale = res === "stale" || g.in_stalemate();   // a stalemate isn't a happy draw: 😮 and a soft sound
     if (stale) sfx("oops");
@@ -3197,6 +3211,7 @@ function renderParents() {
         <div class="hbars">${BOTS.map(b => { const r = (pl.bots || {})[b.id] || { w: 0, l: 0, d: 0 }, n = r.w + r.l + r.d;
           return `<div class="hb" data-tip="${esc(b.name)}: ${r.w} won, ${r.l} lost, ${r.d} drawn"><span class="nm">${b.face} ${esc(b.name)}</span>
             <span class="track"><i style="width:${n ? 100 * r.w / n : 0}%"></i></span><span class="v">${r.w} · ${r.l} · ${r.d}</span></div>`; }).join("")}</div></figure>
+    ${grParents(pl)}
     <figure class="chart wide unlock"><figcaption>Unlock levels</figcaption>
       <p class="tiny">To continue where ${esc(pl.name)} is on another device. Tap a learning-path stage to open it: every stage before it counts as finished.</p>
       <div class="ustages">${STAGES.map((st, i) => `<button class="btn" type="button" data-ul="${i}" ${stageOpen(pl, i) ? "disabled" : ""}
@@ -3424,7 +3439,7 @@ function botMove(bot, g) {
   if (bot.id === "rex") return ms[0];
   // everyone but the Mouse takes a mate in one
   for (const m of ms) { g.move(m); const mate = g.in_checkmate(); g.undo(); if (mate) return m; }
-  if (bot.id === "gus" || Math.random() < (bot.slip || 0)) return catMove(ms);   // the Cat, or a slip
+  if (bot.id === "gus" || Math.random() < (bot.slip || 0)) return grPractice(g, ms) || catMove(ms);   // the Cat, or a slip (some leave a fork or mate he has learnt: growth.js)
   if (bot.depth) return botSearch(bot, g);
   if (bot.id === "cat") {        // takes what's safe to take and doesn't leave the moved piece hanging
     // only the moved piece: an attack on any of its other pieces goes unnoticed (guarding them all, it never hung
@@ -3590,7 +3605,7 @@ function botStart(id, gate = null, keepColor = null) {
   const bot = BOTS.find(b => b.id === id), pl = pzPlayers(), c = pl.botColor || "w";
   const me = keepColor || (c === "r" ? (Math.random() < 0.5 ? "w" : "b") : c);
   clearTimeout(botReply.t);   // a restart while the bot was thinking: that reply belongs to the old game
-  bg = { bot, me, sel: null, last: [], over: null, log: [], rp: null, gate };
+  bg = { bot, me, sel: null, last: [], over: null, log: [], rp: null, gate, t0: Date.now() };
   if (bot.pawns) bg.pw = pwNew();
   else {
     bg.game = new Chess();
@@ -3652,6 +3667,7 @@ function botAfterMove() {
   bg.over = res;
   pl.bots = pl.bots || {}; const r = pl.bots[bg.bot.id] = pl.bots[bg.bot.id] || { w: 0, l: 0, d: 0 };
   r[res === "win" ? "w" : res === "loss" ? "l" : "d"]++;
+  grGameSave(pl, res);      // the moves, for his record (growth.js)
   if (res === "win") {
     pl.stars = (pl.stars || 0) + 3; sfx("trophy");
     const gate = gateWin(pl, bg.bot.id, bg.gate); if (gate) { bg.gate = gate; if (gate.gate) bg.packs = BOSS_PACKS; }  // a boss gate (or a play stop) on the learning path is beaten
@@ -3702,8 +3718,8 @@ function botUserMove(from, to) {
 // games, and no question first (no pop-ups)
 function botRestart() { if (bg && !bg.rp && !bg.mo) botStart(bg.bot.id, bg.gate, bg.me); }
 function botLog(m, me, fen = bg.game.fen()) {
-  bg.log.push({ fen, from: m.from, to: m.to, me, piece: m.piece, captured: m.captured });
-  if (me) moKick();        // his move is analysed in idle time (moments.js)
+  bg.log.push({ fen, from: m.from, to: m.to, me, piece: m.piece, captured: m.captured, ...(me && helpOn ? { hp: 1 } : {}) });
+  if (me) { grMine(bg.log[bg.log.length - 1]); moKick(); }        // his move is analysed in idle time (moments.js)
 }
 
 /* ---- after a game, "what did you miss?": pieces you left hanging that the bot took, free pieces you didn't take ---- */
@@ -4165,9 +4181,9 @@ function moRisky(P, m) {
 // game get layers 1-2 now; layer 3 counts only where it finished
 function moGame(log, botId) {
   const list = [], safes = [];
-  for (const x of log) if (x.me && x.an === undefined) x.an = moScan(x.fen, x.from + x.to);
+  for (const x of log) if (x.me && !x.hp && x.an === undefined) x.an = moScan(x.fen, x.from + x.to);
   log.forEach((x, i) => {
-    if (!x.me) return;
+    if (!x.me || x.hp) return;      // a move played with 🤝 help (growth.js) isn't his
     const nx = log[i + 1], c = moClassify(x.an, x, nx), base = { i, f: x.fen, b: botId };
     if (c && c.k === "win") {
       // his next turn: is the same win still there (a trapped piece, or the bot left it hanging)? then it cost nothing
@@ -4190,7 +4206,7 @@ function moKick() {
   moKick.t = setTimeout(function step() {
     moKick.t = null;
     if (bg !== g0 || bg.over || bg.mo) return;
-    const x = bg.log.find(y => y.me && (y.an === undefined || (y.an && y.an.d && y.an.d.ph <= 2)));
+    const x = bg.log.find(y => y.me && !y.hp && (y.an === undefined || (y.an && y.an.d && y.an.d.ph <= 2)));
     if (!x) return;
     if (x.an === undefined) x.an = moScan(x.fen, x.from + x.to); else moDeep(x.an, 25);
     moKick.t = setTimeout(step, 0);
@@ -4409,6 +4425,182 @@ function moNext() {
   if (r.warm) return botStart(bg.bot.id, bg.gate);       // the warm-up is over: the game starts
   botOverShow(); botDraw();
 }
+
+
+/* ================= growth: what the page learns about the child as he plays (2026-10-07) =================
+   - 🤝 help mode: a parent holds the 🤝 in the top bar (HELP_HOLD) before helping and holds it again after; everything
+     played meanwhile is marked (puzzle hist `hp`, bot-game moves `hp`) and kept out of his skill scores, the missed-puzzle
+     re-solves, moments and the chances in games; a puzzle with help moves no rating. Stars and packs as usual. A tap
+     does nothing (the child taps everything); the page forgets it on reload.
+   - skill scores (pl.sk): a memory per path skill with a half-life; a recap stop brings back the most faded of its
+     skills (recapSkill), not the next in turn.
+   - his bot games (pl.games) and the chances in them: a fork or mate in 1 he had (found or not, pl.tr), and practice
+     blunders: some of a bot's slips leave him a fork or mate in 1 once he has learnt it on the path (grPractice). */
+
+/* ---- 🤝 help mode ---- */
+const HELP_HOLD = 800;      // ms to hold the 🤝
+let helpOn = false;
+function helpWire() {
+  for (const id of ["kHelp", "pzHelp"]) {
+    const el = $(id); if (!el || el.dataset.w) continue;
+    el.dataset.w = 1;
+    let t = null;
+    const up = () => { clearTimeout(t); t = null; el.classList.remove("holding"); };
+    el.addEventListener("pointerdown", ev => {
+      ev.preventDefault(); up(); el.classList.add("holding");
+      t = setTimeout(() => { up(); helpOn = !helpOn; helpShow(); }, HELP_HOLD);
+    });
+    for (const ev of ["pointerup", "pointerleave", "pointercancel"]) el.addEventListener(ev, up);
+    el.addEventListener("contextmenu", ev => ev.preventDefault());
+  }
+  helpShow();
+}
+function helpShow() {
+  for (const id of ["kHelp", "pzHelp"]) {
+    const el = $(id); if (!el) continue;
+    el.classList.toggle("on", helpOn); el.setAttribute("aria-pressed", helpOn);
+  }
+  if ($("pzHelp")) $("pzHelp").hidden = !(typeof pzKid === "function" && pzKid());
+}
+
+/* ---- skill scores: pl.sk = {stage id: {h half-life in days, t last clean solve (ms), n clean solves, m misses}} ----
+   A clean solve sets t; it doubles h when the last one was SK_SPACE or more ago (practice on another day counts, eight
+   solves in a row don't), a miss halves h. Strength now = 2^(-days since t / h): 1 just solved, ½ after a half-life,
+   0 never solved. Puzzles count for every recap skill whose filter they match (also in 🧩); endgames for their game. */
+const SK_H0 = 2, SK_MIN = 0.5, SK_MAX = 60, SK_SPACE = 16 * 36e5, SK_DAY = 864e5;
+let skIds = null;
+function skSkills() { return skIds || (skIds = [...new Set(STAGES.filter(st => st.recap).flatMap(st => st.recap))]); }
+function skNote(pl, id, ok, t = Date.now()) {
+  if (helpOn || !id) return;
+  const sk = pl.sk = pl.sk || {}, r = sk[id] = sk[id] || { h: SK_H0, t: 0, n: 0, m: 0 };
+  if (ok) { if (r.t && t - r.t >= SK_SPACE) r.h = Math.min(SK_MAX, r.h * 2); r.t = Math.max(r.t, t); r.n++; }
+  else { r.h = Math.max(SK_MIN, r.h / 2); r.m++; }
+}
+const skPuzzleSkills = p => skSkills().filter(id => !STAGE_BY[id].eg && STAGE_BY[id].f(p));
+function skPuzzle(pl, p, ok) { for (const id of skPuzzleSkills(p)) skNote(pl, id, ok); }
+function skStrength(pl, id, now = Date.now()) {
+  const r = (pl.sk || {})[id];
+  return r && r.t ? 2 ** (-(now - r.t) / (r.h * SK_DAY)) : 0;
+}
+// once per player: the puzzle history there is (the last HIST_MAX, without hinted ones) as a start
+function skSeed(pl) {
+  if (pl.skV) return;
+  pl.skV = 1;
+  againDue(pl, null);      // builds againRows (every puzzle by id)
+  for (const x of pl.hist || []) { const p = !x.h && againRows[x.id]; if (p) for (const id of skPuzzleSkills(p)) { const h = helpOn; helpOn = false; skNote(pl, id, !!x.r, x.t); helpOn = h; } }
+}
+// the most faded of a recap's skills; equal ones (never solved) in turn by the stop's stars
+function skWeakest(pl, sts, k) {
+  skSeed(pl);
+  const now = Date.now(), n = sts.length;
+  return sts.map((s, i) => ({ s, v: skStrength(pl, s.id, now), o: (i - k % n + n) % n })).sort((a, b) => a.v - b.v || a.o - b.o)[0].s;
+}
+function skMerge(a, b) {
+  const out = { ...(a || {}) };
+  for (const [id, y] of Object.entries(b || {})) {
+    const x = out[id];
+    out[id] = !x ? y : { ...(y.t > x.t ? y : x), n: Math.max(x.n || 0, y.n || 0), m: Math.max(x.m || 0, y.m || 0) };
+  }
+  return out;
+}
+
+/* ---- chances in his games: a mate in 1, or a fork that wins GR_WIN (the exchange or more) whatever the bot replies (mxVal
+   layer 3, pessimistic), where no plain capture wins as much. fork = his moved piece (not the king) then attacks two
+   targets: the king, a bigger piece, or an unguarded knight or more ---- */
+const GR_WIN = 2;
+function grForkMove(P, m) {
+  if (Math.abs(m.p) === 6) return false;
+  mxDo(P, m);
+  const b = P.b, s = -P.s, q = m.t, t = Math.abs(b[q]), mine = MX_V[t], hits = [];
+  const look = u => { const x = b[u]; if (x && x * s < 0) hits.push(u); };
+  if (t === 1) { for (const u of [q + 16 * s - 1, q + 16 * s + 1]) if (!(u & 0x88)) look(u); }
+  else {
+    const dirs = t === 2 ? MX_N : t === 3 ? MX_B : t === 4 ? MX_R : [...MX_B, ...MX_R], slide = t > 2;
+    for (const d of dirs) for (let u = q + d; !(u & 0x88); u += d) { if (b[u]) { look(u); break; } if (!slide) break; }
+  }
+  const n = hits.filter(u => { const v = Math.abs(b[u]); return v === 6 || MX_V[v] > mine || (MX_V[v] >= MO_PIECE && !mxAtt(P, u, -s)); }).length;
+  mxUndo(P);
+  return n >= 2;
+}
+function grChance(fen) {
+  const P = mxFen(fen), mates = mxMates(P);
+  if (mates.length) return { k: "mate", ok: mates.map(mxUci) };
+  const M0 = P.m * P.s, Xp = { n: 0, rs: P.s, r0: M0, pess: true }, a = M0 + GR_WIN - 1, ms = mxLegal(P, false);
+  if (ms.some(m => m.x && mxVal(P, m, false, a, Xp) > a)) return null;   // a plain capture does it: not a fork chance
+  let v = -1e9; const ok = [];
+  for (const m of ms) { if (!grForkMove(P, m)) continue; const x = mxVal(P, m, true, a, Xp); if (x > a) { ok.push(mxUci(m)); v = Math.max(v, x); } }
+  return ok.length ? { k: "fork", ok, v } : null;
+}
+// another move as good as the fork (pessimistically within a point, as moments' accepted answers) counts as found:
+// Stockfish found other moves within 1.5 pawns of the fork in half the chances (lab/growth_check.mjs, 2026-10-07)
+function grAsGood(fen, uci, c) {
+  if (c.k !== "fork") return false;
+  const P = mxFen(fen), m = mxLegal(P, false).find(x => mxUci(x).slice(0, 4) === uci);
+  return !!m && mxVal(P, m, true, c.v - 2, { n: 0, rs: P.s, r0: P.m * P.s, pess: true }) > c.v - 2;
+}
+const GR_THEMES = { fork: "forkn", mate: "mateq" };     // a chance counts as a test once its path stage is finished
+function grLearnt(pl) { return Object.keys(GR_THEMES).filter(k => stageDone(pl, STAGE_BY[GR_THEMES[k]])); }
+// his move in a bot game (botLog): was there a chance, did he take it? (pl.tr = {fork|mate: {n, f, pn, pf}}: chances, found,
+// and the same for those a practice blunder made)
+function grMine(x) {
+  const pr = bg.pr; bg.pr = null;
+  if (x.hp || !bg.game) return;
+  const c = grChance(x.fen);
+  if (!c) return;
+  const uci = x.from + x.to, f = c.ok.some(u => u.slice(0, 4) === uci) || grAsGood(x.fen, uci, c) ? 1 : 0, pl = pzPlayers();
+  (bg.ch = bg.ch || []).push({ k: c.k, i: bg.log.length - 1, f, ...(pr ? { x: 1 } : {}) });
+  const tr = pl.tr = pl.tr || {}, r = tr[c.k] = tr[c.k] || { n: 0, f: 0, pn: 0, pf: 0 };
+  r.n++; r.f += f; if (pr) { r.pn++; r.pf += f; }
+}
+/* practice blunders: a share of a bot's slips (PR_SHARE) looks for a move that leaves him a fork or mate in 1 he has
+   learnt, at most one per PR_GAP of its moves and PR_MS of search (the old iPad: maybe 5x slower; nothing found = the
+   usual slip). It replaces a random slip, so the bot gets hardly weaker */
+const PR_SHARE = 1, PR_GAP = 4, PR_MS = 150;
+function grPractice(g, ms) {
+  if (!bg || bg.game !== g || bg.pw || g.turn() === bg.me) return null;
+  const th = grLearnt(pzPlayers()), n = g.history().length;
+  if (!th.length || Math.random() >= PR_SHARE || (bg.prAt != null && n - bg.prAt < 2 * PR_GAP)) return null;
+  const t0 = Date.now();
+  for (const m of ms) {
+    if (Date.now() - t0 > PR_MS) break;
+    g.move(m); const c = !g.game_over() && grChance(g.fen()); g.undo();
+    if (c && th.includes(c.k)) { bg.pr = c.k; bg.prAt = n; return m; }
+  }
+  return null;
+}
+
+/* ---- his bot games: pl.games = [{t, b bot, c his colour, r w/l/d, m moves (uci, space-separated), g gate, hp the
+   helped plies, ch the chances}], the last GAMES_MAX ---- */
+const GAMES_MAX = 30;
+function grGameSave(pl, res) {
+  if (!bg || !bg.game) return;
+  const hp = bg.log.map((x, i) => x.hp ? i : -1).filter(i => i >= 0);
+  const m = bg.log.map(x => x.from + x.to + (x.piece === "p" && /[18]$/.test(x.to) ? "q" : "")).join(" ");
+  pl.games = [...(pl.games || []), { t: bg.t0 || Date.now(), b: bg.bot.id, c: bg.me, r: res[0], m, ...(bg.gate ? { g: bg.gate.id } : {}), ...(hp.length ? { hp } : {}), ...(bg.ch ? { ch: bg.ch } : {}) }].slice(-GAMES_MAX);
+}
+function grGamesMerge(a, b) {
+  const seen = new Set();
+  return [...(a || []), ...(b || [])].sort((x, y) => x.t - y.t).filter(x => !seen.has(x.t) && seen.add(x.t)).slice(-GAMES_MAX);
+}
+
+/* ---- the parents' tab: the skills by strength (what the recaps bring back first) and the chances in his games ---- */
+function grParents(pl) {
+  skSeed(pl);
+  const now = Date.now(), sks = skSkills().filter(id => (pl.sk || {})[id]).map(id => ({ st: STAGE_BY[id], v: skStrength(pl, id, now), r: pl.sk[id] }))
+    .sort((a, b) => a.v - b.v);
+  const tr = pl.tr || {}, games = pl.games || [], helped = games.filter(g => g.hp).length;
+  const pct = (f, n) => n ? `${f}/${n} (${Math.round(100 * f / n)}%)` : "none yet";
+  return `<figure class="chart wide"><figcaption>Skills: the most faded first (recap stops bring these back)</figcaption>
+      <div class="hbars">${sks.map(({ st, v, r }) => `<div class="hb" data-tip="${esc(st.name)}: ${r.n} clean, ${r.m} missed; half-life ${r.h < 1 ? "½" : Math.round(r.h)} day${r.h === 1 ? "" : "s"}">
+        <span class="nm"><span class="stageicon">${st.icon}</span> ${esc(st.name)}</span><span class="track"><i style="width:${Math.round(100 * v)}%"></i></span><span class="v">${Math.round(100 * v)}%</span></div>`).join("") || `<p class="tiny">Nothing yet.</p>`}</div>
+      <p class="tiny">A clean solve on another day doubles how long a skill holds, a miss halves it. Puzzles and games played with 🤝 (hold it in the top bar while you help) don't count.</p></figure>
+    <figure class="chart wide"><figcaption>In his bot games</figcaption>
+      <p class="text">Forks found: <b>${pct((tr.fork || {}).f || 0, (tr.fork || {}).n || 0)}</b>, of those the bot left on purpose: ${pct((tr.fork || {}).pf || 0, (tr.fork || {}).pn || 0)}<br>
+      Mates in 1 found: <b>${pct((tr.mate || {}).f || 0, (tr.mate || {}).n || 0)}</b>, left on purpose: ${pct((tr.mate || {}).pf || 0, (tr.mate || {}).pn || 0)}</p>
+      <p class="tiny">${games.length} game${games.length === 1 ? "" : "s"} kept${helped ? `, ${helped} with your help` : ""}. Once he has done the knight forks / queen mate stages, the bots sometimes slip into a fork or a mate in 1 on purpose.</p></figure>`;
+}
+
+if (typeof document !== "undefined") helpWire();     // (not in the node checks: lab/growth_check.mjs)
 
 
 /* ================= sticker book: anime-style athletes drawn in SVG, a pack of 7 for every 10 clean path solves ================= */

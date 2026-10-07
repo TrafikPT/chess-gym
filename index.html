@@ -1793,6 +1793,12 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
 .kpacks svg { height: 30px; width: auto; }
 .apchip { appearance: none; border: 0; background: none; padding: 0; cursor: pointer; display: inline-flex; align-items: center; vertical-align: middle; animation: apop .5s .8s ease both; }
 .kpacks { cursor: pointer; }
+/* 🤝 help mode (growth.js): dim until a parent holds it; on = bright with a ring, while the board is played with help */
+.khelp { font-size: 22px; background: none; border: 2px solid transparent; border-radius: 50%; width: 40px; height: 40px; padding: 0;
+  opacity: .28; filter: grayscale(1); cursor: default; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; touch-action: none; }
+.khelp[hidden] { display: none; }
+.khelp.holding { opacity: .6; transform: scale(1.12); transition: transform .8s, opacity .8s; }
+.khelp.on { opacity: 1; filter: none; border-color: #f2c230; background: #fff6d6; box-shadow: 0 0 0 3px rgba(242,194,48,.35); }
 .apchip svg { height: 46px; width: auto; filter: drop-shadow(0 2px 3px rgba(0,0,0,.3)); }
 @keyframes apop { from { transform: scale(.3); opacity: 0; } }
 #puzzleView.kid #pzCard { position: relative; }
@@ -1821,7 +1827,7 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
 .kidsonly, .kidsonly body { touch-action: pan-x pan-y; }          /* no pinch or double-tap zoom on the iPad */
 .kidsonly header, .kidsonly .topnav, .kidsonly #kPlayers { display: none !important; }   /* the child's profile only */
 .kidsonly .wrap { gap: 10px; }
-.kidsonly #puzzleView.kid .pzbar > :not(#pzSound):not(#pzStars):not(#pzPacks) { display: none; }   /* no player/level settings for the child */
+.kidsonly #puzzleView.kid .pzbar > :not(#pzSound):not(#pzStars):not(#pzPacks):not(#pzHelp) { display: none; }   /* no player/level settings for the child */
 .kidsonly #puzzleView.kid { position: relative; }
 .kidsonly #puzzleView.kid .pzbar { position: absolute; top: 0; right: 0; }                 /* sound + stars beside the stage bar */
 .kidsonly #puzzleView.kid .boardcol { max-width: min(100%, calc(100dvh - 420px)); }
@@ -2036,6 +2042,7 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
       <div class="seg players" id="kPlayers" role="group" aria-label="Who's playing"></div>
       <span class="kstars" id="kStarsTop"></span>
       <span class="kstars kpacks" id="kPacksTop" hidden></span>
+      <button class="khelp" type="button" id="kHelp" aria-label="Parent helping: hold to turn on or off">🤝</button>
       <button class="btn" type="button" id="kSound" aria-label="Sound on or off"></button>
     </div>
     <section id="kPath" aria-label="Learning path"></section>
@@ -2095,6 +2102,7 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
       <button class="btn" type="button" id="pzSound" aria-label="Sound on or off"></button>
       <span class="kstars" id="pzStars" hidden></span>
       <span class="kstars kpacks" id="pzPacks" hidden></span>
+      <button class="khelp" type="button" id="pzHelp" aria-label="Parent helping: hold to turn on or off" hidden>🤝</button>
     </div>
     <form class="pzform" id="pzRenameForm" hidden>
       <label for="pzRenameName">New name</label><input type="text" id="pzRenameName" autocomplete="off">
