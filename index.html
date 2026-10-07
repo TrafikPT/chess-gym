@@ -1812,12 +1812,17 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
   box-shadow: 0 0 0 6px var(--accent), 0 0 22px 6px color-mix(in srgb, var(--accent) 45%, transparent); }
 .youplay .pc { width: 88px; height: 88px; }
 .kidpanel .kidgoal { font-size: 96px; min-height: 1.2em; padding: 0; }
+/* the puzzle kind in words, small, for the parent to read out (pzWhat) */
+.kidwhat { margin: 0; max-width: 220px; font-size: 14px; line-height: 1.3; color: var(--muted); text-align: center; }
+.kidwhat:empty { display: none; }
+.kidwhat.ewhat { max-width: 520px; margin: 6px auto 0; }
 #puzzleView.kid #pzCard:empty { display: none; }
 #puzzleView.kid .keys, #puzzleView.kid .rating .lbl, #puzzleView.kid #pzState, #puzzleView.kid #pzTally, #puzzleView.kid #pzHint { display: none; }
 @media (max-width: 900px) {
   #puzzleView.kid .trainer { grid-template-columns: 1fr; gap: 14px; }
   #puzzleView.kid .side { order: -1; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 14px 28px; }
-  #puzzleView.kid .kidpanel { flex-direction: row; gap: 36px; }
+  #puzzleView.kid .kidpanel { flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 4px 36px; }
+  #puzzleView.kid .kidwhat { flex-basis: 100%; max-width: none; }
   #puzzleView.kid .kidpanel .kidgoal { font-size: 84px; }
   .youplay { width: 96px; height: 96px; } .youplay .pc { width: 72px; height: 72px; }
 }
@@ -1963,6 +1968,8 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
    per answer that fills as each is found (green captures, gold checks; blue = shown after a miss) */
 .goal.all { margin-bottom: .3em; }
 .goal.take.all .pc + .pc { margin-left: -.3em; }
+/* save two pieces with one move (saveBoth): both pieces side by side under the shield */
+.goal.save.two .pc + .pc { margin-left: -.3em; }
 .goal.all::before { content: "\25CB\25CB\25CB"; position: absolute; left: 0; right: 0; bottom: -1.35em; text-align: center; font: 700 .26em/1 var(--body); letter-spacing: .08em; color: var(--allc, #1f9d55); }
 .goal.check.all { --allc: #e0a800; }
 .mfound { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; padding: 6px 0 10px; }
@@ -2078,6 +2085,7 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
       </div>
       <div class="eturn"><span class="smoves" id="eMoves"></span>
         <button class="btn big" type="button" id="eUndo" aria-label="Take back">↶</button></div>
+      <p class="kidwhat ewhat" id="eWhat"></p>
     </section>
     <section id="kStickers" aria-label="Stickers" hidden></section>
     <section id="kParents" aria-label="For parents" hidden></section>
@@ -2126,7 +2134,7 @@ select, input[type="text"] { font: inherit; font-size: 14.5px; color: var(--ink)
         <span class="keys"><kbd>→</kbd> next puzzle · <kbd>←</kbd> try again · <kbd>H</kbd> hint · click or drag to move</span>
       </div>
       <div class="side">
-        <div class="kidpanel" id="pzKidPanel" hidden><span class="youplay" id="pzYou" aria-label="You play this colour"></span><span class="kidgoal" id="pzKGoal"></span></div>
+        <div class="kidpanel" id="pzKidPanel" hidden><span class="youplay" id="pzYou" aria-label="You play this colour"></span><span class="kidgoal" id="pzKGoal"></span><p class="kidwhat" id="pzKWhat"></p></div>
         <div class="rating"><span class="big" id="pzRating"></span><span class="delta" id="pzDelta"></span><span class="lbl">puzzle rating · <span id="pzName"></span></span></div>
         <div class="status"><span class="state" id="pzState"></span><span class="tally" id="pzTally"></span></div>
         <div class="card" id="pzCard" aria-live="polite"></div>

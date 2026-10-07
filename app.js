@@ -1196,7 +1196,7 @@ const THEME = {
   discoveredAttack: "Discovered attack", doubleCheck: "Double check", deflection: "Deflection", attraction: "Attraction",
   clearance: "Clearance", interference: "Interference", sacrifice: "Sacrifice", promotion: "Promotion", underPromotion: "Under-promotion",
   advancedPawn: "Advanced pawn", exposedKing: "Exposed king", kingsideAttack: "Kingside attack", quietMove: "Quiet move",
-  defensiveMove: "Defensive move", giveCheck: "Give check", saveQueen: "Save the queen", savePiece: "Save your piece", safeTake: "Is it safe to take?", safeTakeHard: "Is it safe to take? (harder)", allCaptures: "Find every capture", allChecks: "Find every check", stopMate: "Stop the mate", xRayAttack: "X-ray", zugzwang: "Zugzwang", capturingDefender: "Remove the defender",
+  defensiveMove: "Defensive move", giveCheck: "Give check", saveQueen: "Save the queen", savePiece: "Save your piece", saveBoth: "Save two pieces", safeTake: "Is it safe to take?", safeTakeHard: "Is it safe to take? (harder)", allCaptures: "Find every capture", allChecks: "Find every check", stopMate: "Stop the mate", xRayAttack: "X-ray", zugzwang: "Zugzwang", capturingDefender: "Remove the defender",
   intermezzo: "In-between move", enPassant: "En passant", castling: "Castling",
   endgame: "Endgame", rookEndgame: "Rook endgame", pawnEndgame: "Pawn endgame", queenEndgame: "Queen endgame",
   opening: "Opening", middlegame: "Middlegame", crushing: "Winning", advantage: "Advantage", equality: "Saving the game",
@@ -1417,6 +1417,7 @@ function pzGoalText(p) {
   if (t.includes("giveCheck")) return "Give check: attack the king with a piece that stays safe.";
   if (t.includes("saveQueen")) return "Your queen is attacked: get it to safety.";
   if (t.includes("savePiece")) return "One of your pieces is attacked: keep it safe.";
+  if (t.includes("saveBoth")) return "Two of your pieces are attacked: find the one move that keeps both safe.";
   if (t.includes("promotion") && p[5]) return "Push your pawn to the end and make a new queen.";
   if (t.includes("equality")) return "Find the move that saves the game.";
   if (t.includes("pinLine")) return "Pin along a line: put your rook or queen on the file or rank of the king, with one piece in between. That piece can't move: win it.";
@@ -1425,6 +1426,72 @@ function pzGoalText(p) {
   if (t.includes("skewer")) return "Skewer: attack a big piece; when it moves away, take what stood behind it.";
   if (t.includes("discoveredAttack")) return "Discovered attack: move one piece out of the way so the piece behind it attacks.";
   return "Find the best move: it wins material or more.";
+}
+// pictures only: one short line under the goal for the parent to read out (what kind of puzzle it is and what to do),
+// from the row's tags, the most specific first; never the answer (safeTake's take/trap tags stay unread)
+const PZ_WHAT = [
+  ["stopLuft", "Stop the mate: make room for your king (move a piece next to it)"],
+  ["stopCaptureDef", "Stop the mate: take the piece that guards the mating square"],
+  ["stopCapture", "Stop the mate: take the piece that would give mate"],
+  ["stopBlock", "Stop the mate: put a piece in the way"],
+  ["stopOpening", "Stop the 4-move mate: the queen and bishop aim at f7/f2"],
+  ["stopMate", "Stop the mate (red arrow): any move that stops it"],
+  ["count", "Safe to take? Count attackers and defenders"],
+  ["hidden", "Safe to take? Look for a far-away defender"],
+  ["safeTakeHard", "Safe to take? Would the piece be taken back for more?"],
+  ["safeTake", "Safe to take? Would the piece be taken back?"],
+  ["allCaptures", "Find every capture"],
+  ["allChecks", "Find every check"],
+  ["develop", "Opening: bring out a sleeping knight or bishop"],
+  ["castle", "Opening: castle (king two squares towards the rook)"],
+  ["mateNoStale", "Checkmate, but don't stalemate (the king must be in check)"],
+  ["saveBoth", "Two pieces attacked: one move keeps both safe (one guards the other)"],
+  ["saveQueen", "Your queen is attacked: move it to a safe square"],
+  ["savePiece", "A piece is attacked: keep it safe"],
+  ["giveCheck", "Give check with a piece that stays safe"],
+  ["smother", "Smothered mate: the knight mates a king boxed in by its own pieces"],
+  ["smotheredMate", "Smothered mate: the knight mates a king boxed in by its own pieces"],
+  ["arabMate", "Arabian mate: rook next to the king, guarded by the knight"],
+  ["arabianMate", "Arabian mate: rook next to the king, guarded by the knight"],
+  ["anastMate", "Anastasia's mate: king on the edge, a knight closes the escape, rook or queen mates"],
+  ["anastasiaMate", "Anastasia's mate: king on the edge, a knight closes the escape, rook or queen mates"],
+  ["bishMate", "Two-bishop mate: the bishops cover the king's squares together"],
+  ["doubleBishopMate", "Two-bishop mate: the bishops cover the king's squares together"],
+  ["mateQK", "Queen mate next to the king, guarded by another piece"],
+  ["backRankMate", "Back-rank mate: the king is stuck behind its own pawns"],
+  ["mate2q", "Mate in 2: first a quiet move (no check), then mate"],
+  ["mate3c", "Mate in 3: check, check, mate"],
+  ["dblCheck", "Double check: check with two pieces at once, the king must move"],
+  ["doubleCheck", "Double check: check with two pieces at once, the king must move"],
+  ["discCheck", "Discovered check: move a piece out of the way, the one behind gives check"],
+  ["discQueen", "Discovered attack on the queen: move a piece away, the one behind attacks"],
+  ["takeDef", "Take the defender, then win the piece it guarded"],
+  ["capturingDefender", "Take the defender, then win the piece it guarded"],
+  ["trapPc", "Trap a piece: it has no safe square left, then win it"],
+  ["trappedPiece", "Trap a piece: it has no safe square left, then win it"],
+  ["pinAttack", "Attack the pinned piece: it can't run away"],
+  ["deflect", "Deflection: pull the guard away, then win what it guarded"],
+  ["deflection", "Deflection: pull the guard away, then win what it guarded"],
+  ["pinLine", "Pin on a line: rook or queen, one piece in front of the king, it can't move"],
+  ["pinDiag", "Pin on a diagonal: bishop or queen, one piece in front of the king, it can't move"],
+  ["forkKnight", "Knight fork: the knight attacks two pieces at once"],
+  ["forkPawn", "Pawn fork: the pawn attacks two pieces at once"],
+  ["skewerRook", "Skewer with the rook: attack the big piece, take the one behind"],
+  ["skewerBishop", "Skewer with the bishop: attack the big piece, take the one behind"],
+  ["skewerQueen", "Skewer with the queen: attack the big piece, take the one behind"],
+  ["fork", "Fork: one piece attacks two at once"],
+  ["skewer", "Skewer: attack the big piece, take the one behind"],
+  ["pin", "Pin: the piece in front of a bigger one can't move"],
+  ["discoveredAttack", "Discovered attack: move a piece away, the one behind attacks"],
+  ["hangingPiece", "Free piece: take what nobody guards"],
+  ["promotion", "Make a queen: push the pawn to the last row"],
+];
+function pzWhat(p) {
+  const t = p[4].split(" "), n = (t.find(x => /^mateIn\d$/.test(x)) || "").slice(-1);
+  const hit = PZ_WHAT.find(([tag]) => t.includes(tag));
+  if (hit) return hit[1] + (n && !/^(stop|mate[23]|mateNo)/.test(hit[0]) ? ` · mate in ${n}` : "");
+  if (n) return n === "1" ? "Mate in 1: one move that gives checkmate" : `Mate in ${n}: ${n} moves to checkmate`;
+  return "Find the move that wins something";
 }
 // the goal as a picture, from the solver's side (targets in the opponent's colour, own pieces in the solver's):
 // mate (king in a target, with the number of moves from 2 on), check, save (shield), promote (pawn → queen), fork (🍴),
@@ -1444,6 +1511,10 @@ function pzGoalHtml() {
   if (t.includes("develop")) return { kind: "develop", html: `<span class="goal" title="Wake up a sleeping piece"><span class="pc ${me}N"></span></span><span class="seek">💤</span>` };
   if (t.includes("castle")) return { kind: "castle", html: `<span class="goal castle" title="Castle"><span class="pc ${me}K"></span><b>⇄</b><span class="pc ${me}R"></span></span>` };
   if (t.includes("giveCheck")) return { kind: "check", html: `<span class="goal check" title="Give check"><span class="pc ${them}K"></span></span>` };
+  if (t.includes("saveBoth")) {   // save_gen.py saveBoth: [7] = the two attacked squares
+    const pcs = pzCur[7].map(q => pzGame.get(q)).filter(Boolean).map(tp => `<span class="pc ${me}${tp.type.toUpperCase()}"></span>`).join("");
+    return { kind: "save", html: `<span class="goal save two" title="Keep both pieces safe">${pcs}</span>` };
+  }
   if (t.includes("saveQueen") || t.includes("savePiece")) {
     const tp = pzCur[7] ? pzGame.get(pzCur[7]) : null, kind = tp ? tp.type.toUpperCase() : "Q";
     return { kind: "save", html: `<span class="goal save" title="Keep this piece safe"><span class="pc ${me}${kind}"></span></span>` };
@@ -1502,9 +1573,9 @@ function pzShowGoal() {
   const pl = pzPlayers(), el = $("pzGoalBadge");
   if (/stopMate/.test(pzCur[4]) && pzIdx === 0) { const th = sgThreat(); pzMarks = th.marks; pzArrows = th.arrows; }   // the task needs it: always shown
   const sk = typeof pzSkill === "function" && pzSkill();     // the kids' path's "find it yourself" stage (savepx): no glow
-  if (/save(Queen|Piece)/.test(pzCur[4]) && pzIdx === 0 && pzCur[7] && !(sk && sk.noGlow)) {   // save your piece: it glows red, a red arrow from each attacker
-    const them = pzGame.turn() === "w" ? "b" : "w";
-    pzMarks = { [pzCur[7]]: "mk" }; pzArrows = attackersOf(parseFen(pzGame.fen()), pzCur[7], them).map(h => [h + pzCur[7], "red"]);
+  if (/save(Queen|Piece|Both)/.test(pzCur[4]) && pzIdx === 0 && pzCur[7] && !(sk && sk.noGlow)) {   // save your piece(s): each glows red, a red arrow from each attacker
+    const them = pzGame.turn() === "w" ? "b" : "w", pos = parseFen(pzGame.fen()), tg = [].concat(pzCur[7]);
+    pzMarks = Object.fromEntries(tg.map(q => [q, "mk"])); pzArrows = tg.flatMap(q => attackersOf(pos, q, them).map(h => [h + q, "red"]));
   }
   if (/\b(develop|castle)\b/.test(pzCur[4]) && pzIdx === 0) { pzMarks = openingMarks(); pzArrows = []; }
   if (pzMulti()) { pzMarks = {}; pzArrows = pzFound.map(u => [u, "green"]); }
@@ -1513,7 +1584,7 @@ function pzShowGoal() {
   el.innerHTML = g.html; el.hidden = pzKid();          // pictures only: the goal is in the big panel instead
   const t = pzCur[4].split(" ");
   if (t.includes("mateIn1") && (pzCur[5] || pzCur[3] <= 1000)) { const pc = preCover(); pzMarks = pc.marks; pzArrows = pc.arrows; }
-  if (pzKid()) { $("pzKGoal").innerHTML = g.html; $("pzCard").innerHTML = ""; }
+  if (pzKid()) { $("pzKGoal").innerHTML = g.html; $("pzKWhat").textContent = pzWhat(pzCur); $("pzCard").innerHTML = ""; }
   else $("pzCard").insertAdjacentHTML("afterbegin", `<div class="kidgoal small">${g.html}</div>`);
   if (pzMulti()) pzFoundDraw();
 }
@@ -1534,7 +1605,7 @@ function pzNext() {
     <p class="sub">Puzzle rating is shown when you finish.</p>`;
   // pictures only: a big panel beside the board with "you play" (your king in a ring) and the goal (after the first move)
   $("pzKidPanel").hidden = !pzKid();
-  if (pzKid()) { $("pzYou").innerHTML = `<span class="pc ${pzOrient}K"></span>`; $("pzKGoal").innerHTML = ""; $("pzCard").innerHTML = ""; }
+  if (pzKid()) { $("pzYou").innerHTML = `<span class="pc ${pzOrient}K"></span>`; $("pzKGoal").innerHTML = ""; $("pzKWhat").textContent = ""; $("pzCard").innerHTML = ""; }
   renderStageBar();
   pzDraw();
   if (direct) { pzIdx = 0; pzState = "solve"; pzShowGoal(); sgAsk(); pzDraw(); return; }
@@ -1751,10 +1822,16 @@ function pzUserMove(from, to) {
   const mateGoal = /mate/i.test(pzCur[4]) && !/stopMate/.test(pzCur[4]) && last;
   const ex = mateGoal ? escapes() : null;
   if (ex) { pzMarks = ex.marks; pzArrows = [...pzArrows, ...ex.arrows]; }
-  if (/save(Queen|Piece)/.test(pzCur[4])) {   // show who can take the piece where it now stands
-    const pos = parseFen(pzGame.fen()), them = pzGame.turn(), at = from === pzCur[7] ? to : pzCur[7];
-    const hunters = attackersOf(pos, at, them);
-    if (hunters.length) { pzMarks = { [at]: "mk" }; pzArrows = hunters.map(h => [h + at, "red"]); }
+  if (/save(Queen|Piece|Both)/.test(pzCur[4])) {   // show who can take the piece(s) where they now stand
+    const pos = parseFen(pzGame.fen()), them = pzGame.turn(), mine = them === "w" ? "b" : "w";
+    const both = Array.isArray(pzCur[7]), marks = {}, arrows = [];
+    for (const q of [].concat(pzCur[7])) {
+      const at = from === q ? to : q, hunters = attackersOf(pos, at, them);
+      // saveBoth: a piece is fine when protected and only bigger (or equal) pieces or the king can take it
+      if (!hunters.length || (both && attackersOf(pos, at, mine).length && hunters.every(h => (pos[h].toLowerCase() === "k" ? 99 : VALUE[pos[h].toLowerCase()]) >= VALUE[pos[at].toLowerCase()]))) continue;
+      marks[at] = "mk"; arrows.push(...hunters.map(h => [h + at, "red"]));
+    }
+    if (arrows.length) { pzMarks = marks; pzArrows = arrows; }
   }
   if (/safeTake|stopMate/.test(pzCur[4])) {   // the piece you moved can now be taken (for less, or unguarded): who takes it
     const pos = parseFen(pzGame.fen()), them = pzGame.turn(), mine = them === "w" ? "b" : "w", hunters = attackersOf(pos, to, them);
@@ -2046,6 +2123,9 @@ const STAGES = [
   // the save-your-pieces puzzles again without the red glow and arrows: find what the bot attacks yourself (in games he
   // wins big, then gives pieces away: noticing the threat is the missing skill)
   { id: "savepx", name: "Save your pieces (find the attacked one yourself)", noGlow: true, icon: `<span class="goal save"><span class="pc wR"></span></span><span class="seek">👀</span>`, f: p => /savePiece/.test(p[4]) },
+  // save_gen.py saveBoth (the owner, 2026-10-07): two unprotected pieces attacked (often by a fork), one move keeps both
+  // safe: one of them goes to a safe square where it protects the other. Both glow red, like savep
+  { id: "saveb", name: "Save two pieces with one move", icon: `<span class="goal save two"><span class="pc wR"></span><span class="pc wN"></span></span>`, f: p => /saveBoth/.test(p[4]) },
   // finish the game: a queen and a rook up, mate without giving pieces away, right after noticing attacked pieces
   { id: "fin", name: "Finish the game: a queen and a rook up, mate without giving pieces away", need: 3, eg: "fin", icon: `<span class="goal win">🏁</span><span class="egm"><span class="pc wQ mini"></span><span class="pc wR mini"></span></span>`, f: () => false },
   // generated by puzzles/safe_gen.py: take only when it wins something (the capture asked about is drawn)
@@ -2054,7 +2134,7 @@ const STAGES = [
   // 🌋 the lava: mates (themes.py --mateqk tags mateQK: the queen mates next to the king, guarded by another piece)
   { id: "egr", name: "Endgame: mate with king + rook", need: 3, eg: "KR", icon: egIcon("KR"), f: () => false },
   { id: "mateqk", name: "Mate with the queen next to the king", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc wQ mini"></span><span class="pc wB mini"></span>`, f: p => hasTag(p, "mateQK") },
-  { id: "r3", name: "Recap: forks, the free piece, save your pieces (no glow), is it safe to take?", ...recapOf("forkn", "forkp", "hang", "savepx", "safe") },
+  { id: "r3", name: "Recap: forks, the free piece, save your pieces (no glow), save two pieces, is it safe to take?", ...recapOf("forkn", "forkp", "hang", "savepx", "saveb", "safe") },
   { id: "play5", name: "Play a game: beat Tactic Tiger", ...playStop("tiger", "🐯") },
   { id: "mate1", name: "Mate in 1 (real games)", icon: `<span class="goal mate mn" data-n="1"><span class="pc bK"></span></span>`, f: p => !p[5] && /mateIn1/.test(p[4]) && p[3] <= 750 && !later(p) },
   { id: "mate2", name: "Mate in 2", icon: `<span class="goal mate mn" data-n="2"><span class="pc bK"></span></span>`, f: p => !p[5] && /mateIn2/.test(p[4]) && p[3] < 1000 && !later(p) },
@@ -2085,7 +2165,7 @@ const STAGES = [
   // the king), then any skewer
   { id: "skewr", name: "Skewers with the rook", icon: `<span class="goal win">🍢</span><span class="pc wR mini"></span>`, f: p => hasTag(p, "skewerRook") },
   { id: "skewb", name: "Skewers with the bishop", icon: `<span class="goal win">🍢</span><span class="pc wB mini"></span>`, f: p => hasTag(p, "skewerBishop") },
-  { id: "r5", name: "Recap: stop the mate, forks, is it safe to take?, save your pieces (no glow)", ...recapOf("stopm", "fork", "safe", "savepx") },
+  { id: "r5", name: "Recap: stop the mate, forks, is it safe to take?, save your pieces (no glow), save two pieces", ...recapOf("stopm", "fork", "safe", "savepx", "saveb") },
   { id: "play8", name: "Play a game: beat the Dragon", ...playStop("dragon", "🐉") },
   { id: "skewq", name: "Skewers with the queen", icon: `<span class="goal win">🍢</span><span class="pc wQ mini"></span>`, f: p => hasTag(p, "skewerQueen") },
   { id: "skewer", name: "Skewers (any piece)", icon: `<span class="goal win">🍢</span>`, f: p => !p[5] && tacticOnly(p, "skewer") && !later(p) },
@@ -2595,13 +2675,14 @@ function egBotMove(g) {
 // eg.budget (puzzle stages): your moves to do it in (the exact distance from the table, one spare when it's more than
 // one); eg.max (free king + pawn): past it a game still won starts over without costing a star
 function egStart(st) {
+  const why = eg && eg.st === (st || egSt) ? eg.why : null;     // the last miss's reason stays readable on the next try
   egSt = st || egSt || STAGES.find(s => s.eg);
   const sub = egSt.recap ? recapSkill(pzPlayers(), egSt) : egSt, kind = sub.eg;     // a recap: the game whose turn it is
   let fen = egStartFen(kind, sub.puzzle);
   for (let k = 0; k < 6 && eg && eg.st === egSt && fen === eg.fen0; k++) fen = egStartFen(kind, sub.puzzle);   // not the same start twice in a row
   const d = kind === "kp" ? kpkDist(fen) : 1;
   eg = { st: egSt, sub, kind, g: isPP(kind) ? ppGame(fen) : new Chess(fen), fen0: fen, sel: null, last: [], moves: 0, over: null, hist: [], undos: 0, slip: false,
-    budget: sub.puzzle ? d + (d > 1 ? KP_SLACK : 0) : 0, max: kpMax(d), lead0: finLead(fen) };
+    budget: sub.puzzle ? d + (d > 1 ? KP_SLACK : 0) : 0, max: kpMax(d), lead0: finLead(fen), why };
   stageLost = null;
   $("eDone").hidden = true; egDraw();
 }
@@ -2667,6 +2748,7 @@ function egDraw() {
   $("eBar").innerHTML = `<button class="btn big" type="button" id="eMap" aria-label="Back to the map">🗺</button>
     <span class="stageicon">${eg.sub.icon}</span>${stageDots(pzPlayers(), eg.st)}`;
   $("eMap").onclick = () => { kidTab = "path"; openKids(); };
+  $("eWhat").innerHTML = esc(eg.sub.name) + (eg.why ? `<br>Last try: ${esc(eg.why)}` : "");
   // a puzzle: one footprint per move you have (used ones fade); a game: the moves so far
   $("eMoves").innerHTML = eg.sub.puzzle ? Array.from({ length: eg.budget }, (_, i) => `<span class="efoot${i < eg.moves ? " used" : ""}">👣</span>`).join("") : `👣 <b>${eg.moves}</b>`;
   $("eUndo").hidden = !!eg.sub.puzzle || eg.kind === "fin" || isPP(eg.kind);   // a puzzle has no take-back: a miss starts a new one; nor has finishing a game (as bot games)
@@ -2720,7 +2802,7 @@ function egEnd() {
   const res = eg.sub.puzzle && g.turn() === "b" ? egPuzzleJudge(g) : kind === "catch" ? cpResult(g) : kind === "kp" ? kpResult(g) : kind === "fin" ? finResult(g)
     : isPP(kind) ? ppResult(g) : g.in_checkmate() ? "win" : g.in_stalemate() || g.insufficient_material() ? "draw" : null;
   if (res === "win") {
-    eg.over = "win";
+    eg.over = "win"; eg.why = null;
     const par = EG_PAR[kind], pl = pzPlayers();
     const stars = par ? (eg.moves <= par[0] ? 3 : eg.moves <= par[1] ? 2 : 1) : eg.undos ? 2 : 3;   // pawn games: ⭐⭐⭐ without take-backs
     pl.stages = pl.stages || {};
@@ -2735,7 +2817,7 @@ function egEnd() {
     $("eAgain").onclick = () => egStart(eg.st);
     $("eNext").onclick = egNext;
   } else if (res) {
-    eg.over = "draw"; eg.miss = res;
+    eg.over = "draw"; eg.miss = res; eg.why = egWhy(res, g);
     if (res !== "again" && !egReplay) stageLose(pzPlayers(), eg.st);
     if (res !== "again") skNote(pzPlayers(), eg.sub.id, false);
     const my = eg;
@@ -2749,6 +2831,26 @@ function egEnd() {
   } else return false;
   egDraw();
   return true;
+}
+// the words for the parent under the board (the child sees only 💔 😮 🤝 ↻ 🐢 before the next start): why that try missed
+function egWhy(res, g) {
+  const k = eg.kind;
+  if (res === "stale" || g.in_stalemate()) return "😮 Stalemate: the king had no move and wasn't in check, so it's a draw";
+  if (res === "again") return "↻ Too many moves without finishing: a new start, no star lost";
+  if (res === "slow") return "🐢 Too slow: it took more moves than the footprints";
+  if (k === "fin" && res === "gave") {
+    const cnt = fen => [...fen.split(" ")[0]].reduce((o, c) => ("QRBNP".includes(c) && (o[c] = (o[c] || 0) + 1), o), {});
+    const a = cnt(eg.fen0), b = cnt(g.fen()), NAME = { Q: "queen", R: "rook", B: "bishop", N: "knight", P: "pawn" };
+    const lost = "QRBNP".split("").filter(c => (a[c] || 0) > (b[c] || 0)).map(c => a[c] - (b[c] || 0) > 1 ? `${a[c] - (b[c] || 0)} ${NAME[c]}s` : `your ${NAME[c]}`);
+    return `💔 The Tiger took ${lost.join(" and ") || "material"} and you didn't win as much back (${finLead(g.fen()) - eg.lead0} points): more than 2 lost is a miss`;
+  }
+  if (isPP(k)) return res === "gave" ? "💔 A pawn took your piece" : "↻ A pawn made a queen your piece couldn't take at once";
+  if (k === "catch") return res === "loss" ? "↻ The pawn got through: the king came too late" : "🤝 The pawn can't be caught any more";
+  if (g.in_threefold_repetition()) return "🤝 Draw: the same position three times";
+  if (g.insufficient_material()) return "🤝 Draw: not enough pieces left to mate (a piece was taken)";
+  if (g.in_draw()) return "🤝 Draw: 50 moves without a capture or a pawn move";
+  if (k === "kp") return "🤝 The win slipped away: it's a draw now";
+  return "🤝 A draw";
 }
 // after a win: the same stage again, or the next unfinished stage once this one is done (a replay stays put)
 function egNext() {
@@ -3164,7 +3266,7 @@ function kpResult(g) {
 
 /* ---- parent view ---- */
 const THEME_GROUPS = [
-  ["Take a free piece", t => /hangingPiece/.test(t)], ["Save the queen", t => /saveQueen/.test(t)], ["Save a piece", t => /savePiece/.test(t)], ["Give check", t => /giveCheck/.test(t)],
+  ["Take a free piece", t => /hangingPiece/.test(t)], ["Save the queen", t => /saveQueen/.test(t)], ["Save a piece", t => /savePiece/.test(t)], ["Save two pieces", t => /saveBoth/.test(t)], ["Give check", t => /giveCheck/.test(t)],
   ["Is it safe to take? (harder)", t => /safeTakeHard/.test(t)], ["Is it safe to take?", t => /safeTake/.test(t)], ["Stop the mate", t => /stopMate/.test(t)],
   ["Promote a pawn", t => /promotion/.test(t)], ["Back-rank mate", t => /backRankMate/.test(t)], ["Mate in 1", t => /mateIn1/.test(t)],
   ["Mate in 2+", t => /mateIn[2-9]/.test(t)], ["Forks", t => /fork/.test(t)], ["Pins & skewers", t => /\bpin\b|skewer/.test(t)],
