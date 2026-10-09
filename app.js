@@ -2071,7 +2071,8 @@ const recapOf = (...ids) => ({ recap: ids, need: 5, f: p => ids.some(id => STAGE
 const recapEg = (...ids) => ({ recap: ids, need: 3, eg: "recap", f: () => false });
 // a "play a game" stop (2026-10-06: the only games on the path were the bosses, 5-8 stops apart, and he plays no other
 // bot games): one win against a bot already beaten (the previous world's boss) after the world's first skills. Started
-// like a gate (botStart(bot, stage), gateWin); a win counts like a stage star for the sticker packs, no boss sticker
+// like a gate (botStart(bot, stage), gateWin), but from a game where he is already 7-10 points ahead (PLAY_STARTS in
+// bots.js, the owner 2026-10-09: two 20-minute games a world was too much); a win counts like a stage star for the sticker packs, no boss sticker
 const playStop = (bot, face) => ({ play: bot, need: 1, icon: `<span class="goal win">${face}</span><span class="pc wK mini"></span>`, f: () => false });
 function recapIcon(st) {
   return `<span class="goal recap"><span class="rcp n${Math.min(4, st.recap.length)}">${st.recap.slice(0, 4).map(id => `<i>${STAGE_BY[id].icon}</i>`).join("")}</span></span>`;
@@ -2096,7 +2097,7 @@ const STAGES = [
   // piece against pawns (Steps-Method mini-games, eg kinds ppQ / ppR / ppN): take every pawn before one gets through
   { id: "qp8", name: "Queen against 6 pawns: take them all", need: 3, eg: "ppQ", icon: ppIcon("Q", 4), f: () => false },
   { id: "r1", name: "Recap: take a free piece, save the queen, give check, make a queen, find every capture", ...recapOf("take", "saveq", "check", "promo", "allcap") },
-  { id: "play2", name: "Play a game: beat Greedy Cat", ...playStop("gus", "🐱") },
+  { id: "play2", name: "Play a game, already ahead: beat Greedy Cat", ...playStop("gus", "🐱") },
   { id: "back", name: "Back-rank mate", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc bP mini"></span>`, f: p => p[5] && /backRankMate/.test(p[4]) },
   { id: "mater", name: "Mate with a rook", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc wR mini"></span>`, f: p => p[5] && /mateIn1/.test(p[4]) && !/backRank/.test(p[4]) && !/[Qq]/.test(p[1].split(" ")[0]) },
   { id: "rpaw", name: "Rook against pawns: take them all", need: 3, eg: "ppR", icon: ppIcon("R", 3), f: () => false },
@@ -2110,7 +2111,7 @@ const STAGES = [
   { id: "egq", name: "Endgame: mate with king + queen", need: 3, eg: "KQ", icon: egIcon("KQ"), f: () => false },
   { id: "r2", name: "Recap: save your pieces, mate with the queen, back rank, mate with a rook, find every check", ...recapOf("savep", "mateq", "back", "mater", "allchk") },
   { id: "hang", name: "Win the free piece (real games)", icon: `<span class="goal take"><span class="pc bR"></span></span><span class="pc wN mini"></span>`, f: p => !p[5] && /hangingPiece/.test(p[4]) && p[3] <= 800 && !/mate/.test(p[4]) && !later(p) },
-  { id: "play3", name: "Play a game: beat Wily Wolf", ...playStop("cat", "🐺") },
+  { id: "play3", name: "Play a game, already ahead: beat Wily Wolf", ...playStop("cat", "🐺") },
   { id: "gate4", name: "Boss: beat Pawn Pete (Pawn Wars)", need: 1, gate: "pete", icon: gateIcon("🐣"), f: () => false },
   // 🏜️ the desert: forks, one piece at a time, then any fork (puzzles/themes.py --forks tags forkKnight / forkPawn:
   // the first move forks, the next takes one of the forked pieces with that piece)
@@ -2119,7 +2120,7 @@ const STAGES = [
   { id: "forkp", name: "Forks with a pawn", icon: `<span class="goal win">🍴</span><span class="pc wP mini"></span>`, f: p => hasTag(p, "forkPawn") },
   { id: "re1", name: "Recap: mate with two rooks, queen against 6 pawns, rook against pawns (one game each)", ...recapEg("egrr", "qp8", "rpaw") },
   { id: "fork", name: "Forks (any piece)", icon: `<span class="goal win">🍴</span>`, f: p => hasTag(p, "forkKnight") || hasTag(p, "forkPawn") || (!p[5] && tacticOnly(p, "fork") && p[3] < 850 && !later(p)) },
-  { id: "play4", name: "Play a game: beat Wily Wolf", ...playStop("cat", "🐺") },
+  { id: "play4", name: "Play a game, already ahead: beat Wily Wolf", ...playStop("cat", "🐺") },
   // the save-your-pieces puzzles again without the red glow and arrows: find what the bot attacks yourself (in games he
   // wins big, then gives pieces away: noticing the threat is the missing skill)
   { id: "savepx", name: "Save your pieces (find the attacked one yourself)", noGlow: true, icon: `<span class="goal save"><span class="pc wR"></span></span><span class="seek">👀</span>`, f: p => /savePiece/.test(p[4]) },
@@ -2135,7 +2136,7 @@ const STAGES = [
   { id: "egr", name: "Endgame: mate with king + rook", need: 3, eg: "KR", icon: egIcon("KR"), f: () => false },
   { id: "mateqk", name: "Mate with the queen next to the king", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc wQ mini"></span><span class="pc wB mini"></span>`, f: p => hasTag(p, "mateQK") },
   { id: "r3", name: "Recap: forks, the free piece, save your pieces (no glow), save two pieces, is it safe to take?", ...recapOf("forkn", "forkp", "hang", "savepx", "saveb", "safe") },
-  { id: "play5", name: "Play a game: beat Tactic Tiger", ...playStop("tiger", "🐯") },
+  { id: "play5", name: "Play a game, already ahead: beat Tactic Tiger", ...playStop("tiger", "🐯") },
   { id: "mate1", name: "Mate in 1 (real games)", icon: `<span class="goal mate mn" data-n="1"><span class="pc bK"></span></span>`, f: p => !p[5] && /mateIn1/.test(p[4]) && p[3] <= 750 && !later(p) },
   { id: "mate2", name: "Mate in 2", icon: `<span class="goal mate mn" data-n="2"><span class="pc bK"></span></span>`, f: p => !p[5] && /mateIn2/.test(p[4]) && p[3] < 1000 && !later(p) },
   { id: "gate5", name: "Boss: beat T-Rex", need: 1, gate: "dino", icon: gateIcon("🦖"), f: () => false },
@@ -2146,7 +2147,7 @@ const STAGES = [
   { id: "re2", name: "Recap: mate with king + queen, king + rook, queen + rook (one game each)", ...recapEg("egq", "egr", "egqr") },
   { id: "stopd", name: "Stop the mate: take the piece that guards it", icon: `<span class="goal guard"><span class="pc wK"></span></span><span class="pc bN mini"></span>`, f: p => stopKind(p, "stopCaptureDef") },
   { id: "stopb", name: "Stop the mate: block the line", icon: `<span class="goal guard"><span class="pc wK"></span></span><span class="pc wB mini"></span>`, f: p => stopKind(p, "stopBlock") },
-  { id: "play6", name: "Play a game: beat T-Rex", ...playStop("dino", "🦖") },
+  { id: "play6", name: "Play a game, already ahead: beat T-Rex", ...playStop("dino", "🦖") },
   { id: "gate7", name: "Boss: beat Big Bear", need: 1, gate: "bear", icon: gateIcon("🐻"), f: () => false },
   // 🏰 the castle in the clouds: stop the mate, any way (the threat is drawn); then pins in three steps
   // (puzzles/themes.py --pins: your first move makes the pin, a later one takes the pinned piece): along a file or rank,
@@ -2156,7 +2157,7 @@ const STAGES = [
   // the 4-move mate (Scholar's) right after stopping mates: the commonest way one beginner beats another (2026-10-06: was in 🏙️)
   { id: "stopo", name: "Stop the 4-move mate", icon: `<span class="goal guard"><span class="pc wK"></span></span><span class="pc bQ mini"></span><span class="pc bB mini"></span>`, f: p => /stopOpening/.test(p[4]) },
   { id: "r4", name: "Recap: mate in 1, mate in 2, back rank, the queen next to the king", ...recapOf("mate1", "mate2", "back", "mateqk") },
-  { id: "play7", name: "Play a game: beat Big Bear", ...playStop("bear", "🐻") },
+  { id: "play7", name: "Play a game, already ahead: beat Big Bear", ...playStop("bear", "🐻") },
   { id: "pinl", name: "Pins along a file or rank (rook, queen)", step: "pin", icon: pinIcon("pinLine"), f: p => isPin(p, "pinLine") && p[3] < 1000 },
   { id: "pind", name: "Pins along a diagonal (bishop, queen)", step: "pin", icon: pinIcon("pinDiag"), f: p => isPin(p, "pinDiag") && p[3] < 1000 },
   { id: "pin", name: "Pins (both kinds)", icon: `<span class="goal win">📌</span>`, f: p => isPin(p, "pinLine") || isPin(p, "pinDiag") },
@@ -2166,7 +2167,7 @@ const STAGES = [
   { id: "skewr", name: "Skewers with the rook", icon: `<span class="goal win">🍢</span><span class="pc wR mini"></span>`, f: p => hasTag(p, "skewerRook") },
   { id: "skewb", name: "Skewers with the bishop", icon: `<span class="goal win">🍢</span><span class="pc wB mini"></span>`, f: p => hasTag(p, "skewerBishop") },
   { id: "r5", name: "Recap: stop the mate, forks, is it safe to take?, save your pieces (no glow), save two pieces", ...recapOf("stopm", "fork", "safe", "savepx", "saveb") },
-  { id: "play8", name: "Play a game: beat the Dragon", ...playStop("dragon", "🐉") },
+  { id: "play8", name: "Play a game, already ahead: beat the Dragon", ...playStop("dragon", "🐉") },
   { id: "skewq", name: "Skewers with the queen", icon: `<span class="goal win">🍢</span><span class="pc wQ mini"></span>`, f: p => hasTag(p, "skewerQueen") },
   { id: "skewer", name: "Skewers (any piece)", icon: `<span class="goal win">🍢</span>`, f: p => !p[5] && tacticOnly(p, "skewer") && !later(p) },
   { id: "gate8", name: "Boss: beat the Lion", need: 1, gate: "lion", icon: gateIcon("🦁"), f: () => false },
@@ -2181,7 +2182,7 @@ const STAGES = [
   { id: "safe2c", name: "Is it safe to take? (harder): count attackers and defenders", step: "safe2", icon: `<span class="goal scale mn" data-n="2">⚖️<span class="pc bR"></span></span><span class="pc wB mini"></span><span class="pc wN mini"></span>`, f: p => /safeTakeHard/.test(p[4]) && p[4].split(" ").includes("count") },
   { id: "safe2h", name: "Is it safe to take? (harder): the hidden defender", step: "safe2", icon: `<span class="goal scale mn" data-n="2">⚖️<span class="pc bR"></span></span><span class="seek">👀</span>`, f: p => /safeTakeHard/.test(p[4]) && p[4].split(" ").includes("hidden") },
   { id: "safe2", name: "Is it safe to take? (harder)", icon: `<span class="goal scale mn" data-n="2">⚖️<span class="pc bR"></span></span>`, f: p => /safeTakeHard/.test(p[4]) },
-  { id: "play9", name: "Play a game: beat the Lion", ...playStop("lion", "🦁") },
+  { id: "play9", name: "Play a game, already ahead: beat the Lion", ...playStop("lion", "🦁") },
   { id: "mix", name: "Mixed puzzles", icon: `<span class="goal win">🧩</span>`, f: p => !p[5] && p[3] >= 400 && p[3] < 650 && !later(p) },
   // a review stop: puzzles from the stages already finished, missed ones first (reviewPick)
   { id: "review", name: "Review: puzzles from finished stages", review: true, icon: `<span class="goal win">🔁</span>`, f: () => false },
@@ -2197,7 +2198,7 @@ const STAGES = [
   { id: "kpguard", name: "King + pawn: the king guards the queening square first", need: 5, eg: "kp", puzzle: "kpguard", step: "egkp", icon: `<span class="goal qguard"><span class="pc wK"></span></span><span class="egm"><span class="pc wP mini"></span></span>`, f: () => false },
   { id: "kpstale", name: "King + pawn: don't stalemate", need: 5, eg: "kp", puzzle: "kpstale", step: "egkp", icon: `<span class="goal stale"><span class="pc bK"></span></span><span class="egm"><span class="pc wP mini"></span></span>`, f: () => false },
   { id: "egkp", name: "Endgame: king + pawn, make a queen", need: 3, eg: "kp", icon: `<span class="goal promo"><span class="pc wP"></span><b>→</b><span class="pc wQ"></span></span><span class="egm"><span class="pc wK mini"></span></span>`, f: () => false },
-  { id: "play10", name: "Play a game: beat the Eagle", ...playStop("eagle", "🦅") },
+  { id: "play10", name: "Play a game, already ahead: beat the Eagle", ...playStop("eagle", "🦅") },
   { id: "gate10", name: "Boss: beat the Shark", need: 1, gate: "shark", icon: gateIcon("🦈"), f: () => false },
   // 🌴 the jungle: mate patterns, one a stage (themes.py --patterns: the Lichess theme checked on the board, mate in 1
   // or 2): smothered mate (a knight, the king boxed in by its own pieces), Arabian (rook next to the king, guarded by a
@@ -2205,7 +2206,7 @@ const STAGES = [
   { id: "smother", name: "Smothered mate (knight)", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc wN mini"></span>`, f: p => hasTag(p, "smother") },
   { id: "arab", name: "Arabian mate (rook + knight)", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc wR mini"></span><span class="pc wN mini"></span>`, f: p => hasTag(p, "arabMate") },
   { id: "re4", name: "Recap: mate with king + rook, catch the pawn, king + pawn (one game each)", ...recapEg("egr", "egcatch", "egkp") },
-  { id: "play11", name: "Play a game: beat the Shark", ...playStop("shark", "🦈") },
+  { id: "play11", name: "Play a game, already ahead: beat the Shark", ...playStop("shark", "🦈") },
   { id: "anast", name: "Anastasia's mate (knight + rook on the edge)", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc wN mini"></span><span class="pc bP mini"></span>`, f: p => hasTag(p, "anastMate") },
   { id: "bish2", name: "Mate with two bishops", icon: `<span class="goal mate"><span class="pc bK"></span></span><span class="pc wB mini"></span><span class="pc wB mini"></span>`, f: p => hasTag(p, "bishMate") },
   { id: "r7", name: "Recap: smothered, Arabian, Anastasia, two bishops", ...recapOf("smother", "arab", "anast", "bish2") },
@@ -2216,7 +2217,7 @@ const STAGES = [
   { id: "dblchk", name: "Double check", icon: `<span class="goal check mn" data-n="2"><span class="pc bK"></span></span>`, f: p => hasTag(p, "dblCheck") },
   { id: "r8", name: "Recap: forks, pins, skewers, discovered attacks", ...recapOf("fork", "pin", "skewer", "disc") },
   { id: "re5", name: "Recap: rook against pawns, mate with king + rook, king + pawn (one game each)", ...recapEg("rpaw", "egr", "egkp") },
-  { id: "play12", name: "Play a game: beat the Jaguar", ...playStop("jaguar", "🐆") },
+  { id: "play12", name: "Play a game, already ahead: beat the Jaguar", ...playStop("jaguar", "🐆") },
   { id: "mate3c", name: "Mate in 3 (check, check, mate)", icon: `<span class="goal mate mn" data-n="3"><span class="pc bK"></span></span>`, f: p => hasTag(p, "mate3c") },
   { id: "gate12", name: "Boss: beat the Bull", need: 1, gate: "bull", icon: gateIcon("🐂"), f: () => false },
   // 🏙️ the city: opening habits (puzzles/gen_opening.py): wake up a sleeping knight or bishop (every developing move
@@ -2224,7 +2225,7 @@ const STAGES = [
   { id: "develop", name: "Wake up a sleeping piece (knight or bishop)", icon: `<span class="goal"><span class="pc wN"></span></span><span class="seek">💤</span>`, f: p => p[5] && p[4].split(" ").includes("develop") },
   { id: "castle", name: "Castle your king", icon: `<span class="goal castle"><span class="pc wK"></span><b>⇄</b><span class="pc wR"></span></span>`, f: p => p[5] && p[4].split(" ").includes("castle") },
   { id: "r9", name: "Recap: quiet mate in 2, double check, smothered mate, stop the mate", ...recapOf("mate2q", "dblchk", "smother", "stopm") },
-  { id: "play13", name: "Play a game: beat the Bull", ...playStop("bull", "🐂") },
+  { id: "play13", name: "Play a game, already ahead: beat the Bull", ...playStop("bull", "🐂") },
   { id: "gate13", name: "Boss: beat the Fox", need: 1, gate: "fox", icon: gateIcon("🦊"), f: () => false },
   // 🌈 the rainbow (no boss, 🏆 at the top): harder tactics up to 1000 (themes.py --defender --pinattack --discq): take
   // the defender, then what it guarded; win a trapped piece; attack a pinned piece with a smaller one; a discovered
@@ -2235,7 +2236,7 @@ const STAGES = [
   { id: "pina", name: "Attack the pinned piece", icon: `<span class="goal win">📌</span><span class="pc wP mini"></span>`, f: p => hasTag(p, "pinAttack") },
   { id: "discq", name: "Discovered attack on the queen (no check)", icon: DISC_ICON.replace("pc wB", "pc wN"), f: p => hasTag(p, "discQueen") },
   { id: "r10", name: "Recap: stop the 4-move mate, mate don't stalemate, mate in 3, is it safe to take? (harder)", ...recapOf("stopo", "matens", "mate3c", "safe2") },
-  { id: "play14", name: "Play a game: beat the Fox", ...playStop("fox", "🦊") },
+  { id: "play14", name: "Play a game, already ahead: beat the Fox", ...playStop("fox", "🦊") },
   { id: "deflect", name: "Deflection: pull the guard away", icon: `<span class="goal win">↪️</span><span class="pc bQ mini"></span>`, f: p => hasTag(p, "deflect") },
   { id: "re6", name: "Recap: finish the game, knight against pawns, king + pawn (one game each)", ...recapEg("fin", "npaw", "egkp") },
 ];
@@ -3516,7 +3517,12 @@ const BOTS = [
 const BOT_RING = ["#3cb371", "#9acd32", "#f2c230", "#f39c34", "#e8542f", "#b3202a"];   // lvl 1–6: green to red
 const VALUE = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
 const BOT_RESIGN = 15;   // a bot this far behind in material after its own move gives up: the game ends while the child is winning big
-let bg = null;   // {bot, game (chess.js) | pw (pawn wars state), me: 'w'|'b', sel, last, over, log, rp, gate}
+const PLAY_RESIGN = 12;   // in a play stop (below) sooner: 2-5 points more than at the start (median 15 of his moves in lab/play_starts_sim.mjs, 39 at 15)
+// the path's "play a game" stops start from a game where he is already 7-10 points ahead, his move (the owner,
+// 2026-10-09: a game from move one took 20 minutes, and the later worlds have two games each); by his colour.
+// Written by puzzles/gen_ahead.py (Stockfish-checked: 5-16 pawns up, quiet, nothing hanging)
+const PLAY_STARTS = {"w":["r7/3kp1q1/p3r3/1pp1P3/5QPp/2N2R2/PPP1BPP1/R3K3 w Q - 3 20","2b2b1r/rp1pkpp1/p4q2/2P1p3/4PP2/P1NQ2Pp/1PP2B1P/2KR1BNR w - - 3 15","rnb2knr/p2p1ppp/1pp1p3/4P3/3P2Q1/2P3PN/P1P2PP1/R1B1KB1R w KQ - 0 9","r1b5/3kP2r/2pp2pb/p4pBp/BnP5/2Q2NP1/PP3P1P/RN4K1 w - - 0 24","NBb1kb1r/p3q1pp/3p1p2/1p1B2n1/3pP3/8/PPPN1PPP/R2QK2R w KQ - 0 14","r1k2bnr/4ppp1/1p5p/p1pPp3/P7/1P6/2P2PPP/RNBQK2R w KQ - 0 13","1rq2k1r/p1p1p2p/5pp1/1p6/3PN2P/1P6/P1PQBPP1/R2K2NR w - - 0 15","r2q1b1r/1p2p3/2p1kpQp/p7/8/2NB1N2/PPP3PP/R1B1K2R w KQ - 0 16","q3kb2/4pppr/p1p2n2/3p3p/4P3/5P2/PPP1BP1P/RNBQKR2 w Q - 1 11","2rqkb1r/p5pp/2pppp2/8/3PP3/5N2/PPP2PPP/RNBQ1RK1 w k - 0 10","rnb2bnr/1p3kpp/p1pp4/4P3/4P3/2N2N2/PBP2PPP/R2QK2R w KQ - 0 9","r1b2b1N/pp2k1pp/3p4/q1p5/1nB1N3/7P/PPPP1PP1/R1BQK2R w KQ - 1 10","r1bqkb1B/1p1p1p1p/2pPp1pn/8/p3P3/P7/1PP2PPP/RN1QKBNR w KQq - 0 9","r1b1kb1r/pp1n1ppn/3p4/P2Pp1Bp/4P3/2NB1N2/2P2PPP/R2QK2R w KQkq - 1 13","rnbqk3/1p1p3p/2p2pr1/p1P1p3/4P3/4BN2/PPP2PPP/RN1QKBR1 w Qq - 0 10","r1b1k2r/2pp1p1p/np2pn2/p6p/3PP3/2N2N2/PPPKQPP1/R4B1R w kq - 0 13","r1bqk2r/1p1p3p/6p1/p1p1P3/4PB1b/P1N4N/1PP1BPPP/R2Q1RK1 w kq - 1 14","r2q1k1r/pppnb2p/5pp1/3P4/2B3P1/3Q1N2/PPP2PP1/RNB2RK1 w - - 1 14","r1b2b1N/2pkq1pp/2p5/3pp3/p7/P4N2/1PPQ1PPP/R1B1KB1R w KQ - 1 13","rnbqkb1B/4pp2/1ppp4/p3P2p/3P4/2NB1N2/PPP1QPPP/R3K2R w KQq - 1 11","r3kr2/2p5/2pq4/p3p2p/4PPb1/P5P1/1PPBQP2/R2NK1NR w KQq - 1 21","r1b1kbr1/p1pp1ppp/np6/4P3/4P3/2N5/PPPB1PPP/R2QKB1R w KQq - 3 9","1r1q3r/2ppkp2/4pn1p/P7/3P2P1/2N3N1/1PP4P/R1BQRBK1 w - - 1 20","r1b1kb1r/1p3p1p/p2p2p1/2p1p1Q1/4P1n1/1NN5/PPP2PPP/R3KB1R w KQkq - 0 11","rn1qk1n1/p2p1pBp/b1p3p1/1p6/2PPP3/2N5/PP3PPP/R2QKBNR w KQq - 0 9","1r2kbnr/p5pp/3p1p2/qNp1p3/3PP1P1/2P5/PP4PP/R1BQKBNR w KQk - 1 11","r1b3k1/1pq1bp2/p1p1pBp1/4P2p/8/5NPP/PPP1QP2/1NKR3R w - - 3 20","1r1qk3/p2p1pb1/1p1p1p2/2p4p/7P/2P1BP2/P1Q2P2/RN2KB1R w KQ - 0 18","r1bk1bnr/p4pp1/np1pp2p/2p2B2/3PP3/2N2N2/PPP2PPP/R1BQK2R w KQ - 0 9","r1b3nr/p1pp1k2/1p4pb/8/3PP1B1/1P6/1PP2PPP/RN1QK2R w KQ - 2 14","r1b1kb1r/pp2p2p/n4pp1/3Q1n2/2B1P3/2N5/PPP2PPP/R1B1K1NR w KQkq - 3 9","r2k1bn1/p2n1ppr/1p5p/4p3/8/8/PPPP1PPP/RNBQK1NR w KQ - 2 10","3qkb1r/p1pp1p1p/5pp1/3b3P/BP1P4/5N2/1P1B1PP1/RN1QK2R w KQk - 0 14","r5n1/1bkpb2p/p1nq4/1pp5/4P3/2Q1B3/PPPNBPPP/R3K1NR w KQ - 2 14","rnbq1b1Q/1p1kpp2/3p2pB/p1pP4/2P1P3/3B4/PP3PPP/RN2K1NR w KQ - 1 10","1rb1kb1r/1p1p1p2/p3pPp1/q1P5/7p/2N1B2P/PPP1BPP1/R2QK1NR w KQk - 1 11","rnk2b1r/2q3pp/1p2pp2/p7/3P4/P2BBN2/1PP2PPP/RN1QK2R w KQ - 3 12","rn1k1b1r/2pp1p1p/bp4pn/p2NP1N1/4P3/8/PPP2PPP/R2QKB1R w KQ - 3 9","r2q1k2/1p2pB2/n1p1Pn1b/p2p2p1/3P4/8/PPP2PPP/RNBQR1K1 w - - 1 16","rn3bnr/1p1k1pp1/pP1p3p/4p3/P3P3/5N2/1PPB1PPP/RN1QK2R w KQ - 0 10","r1b1kbr1/1p1npp1p/3P2pn/p7/3QP3/5N2/PPP2PPP/RNB1K2R w KQq - 0 9","2bqk2r/p3bp1p/1p2pn2/8/3PQ3/2N1B2R/PPP2PP1/1K1R1BN1 w k - 1 16","r2qkbr1/p1p1pp2/1p1p2p1/3BP2p/3P3P/2N5/PPP2PP1/R1BQK1NR w KQq - 0 10","rn2kbnr/1p3pp1/p1p5/7p/4B3/2P2N2/PP3PPP/R1BQK2R w KQkq - 0 11","3rk1r1/p1p2ppp/1pb5/2Ppq3/7P/2P1B3/PP2QPP1/RN2KBNR w KQ - 5 16","1n1q1b1r/p4kpp/1p1Pbp2/1B1Qp3/4P3/5N2/PPP2PPP/RNB1K2R w KQ - 1 12","r1bbk2r/ppp3p1/2nppp1n/1B6/3PP3/2N5/PPP2PPP/R2QK1NR w KQkq - 0 9","r2q2kr/1p3bp1/2p2n1p/2Q5/p1PN1N1P/8/PP3PP1/RBB1R1K1 w - - 1 21","r2q1rk1/1pp2p1p/2b2b2/6p1/p2BP3/2P2P1P/PP4P1/RN1QKBNR w KQ - 1 13","r1bk3r/p1pp2b1/1pn2p1p/3N4/3pP2P/P6R/1PP1BPP1/1R1QK1N1 w - - 4 13","r4r2/p2b1kb1/1pp2q1p/3p4/1P1P1N2/2N1B3/1PP2PP1/R2QKB1R w KQ - 1 16","r1b1k2r/1p2q2p/p1n3p1/1PPpp3/3B4/5N2/P1P2PPP/RN1QKB1R w KQkq - 0 13","r2q1rk1/3p1p2/Bpp1p1pn/p6p/3PPP1P/5N2/PPP1QP2/RNB1K2R w KQ - 0 12","r3kbnr/p2bpppp/np6/3pP1N1/8/2P5/PP1P1PPP/RNBQ1RK1 w kq - 0 10","r4k1r/1p2n1b1/pqn1P3/5B1p/2Q4N/P1N5/1PP2PPP/R1B1K2R w KQ - 1 18","rq3r1k/ppp3pp/5b2/3P4/2Q4P/P1P1B3/1P3PP1/RN2KB1R w KQ - 3 16","2r1kbnr/1pp2pp1/2npb3/pB1NP1Bp/4P3/5N2/PPP2PPP/R2QK2R w KQk - 3 9","r1bnr1k1/1ppp1p2/6pp/pBb5/4PP2/P1PQ1N2/2P3PP/R1B1KR2 w Q - 1 13","rnbq1b2/3kp2Q/2p5/pp6/3PN3/8/PPP2PPP/RNB1K2R w KQ - 0 12","r1bqk2r/1p1p1pp1/p1nP3p/2p5/4P1P1/3B1N2/PPPQ1PP1/RNB1K2R w KQkq - 1 10","rnb2b1r/3pk3/ppp3p1/7p/4P3/8/PPP2PPP/RN1QKBNR w KQ - 0 11","r1b1k1nr/2p2p2/1pPpp1p1/1B5p/7b/2N5/PPP1QPPP/R3K1NR w KQkq - 0 16","rn2kb1r/pp2p1p1/2pppn2/B7/3PP2p/3B3P/PPP2PP1/RN1QK2R w KQkq - 0 10","r2q3r/p2kpPbp/6p1/P7/1npp4/2N2B2/1PPP1PPP/R1BQK1NR w KQ - 1 14","r1q2knr/1pp1bp1p/2P3p1/pB2N3/3P2P1/6B1/PPP1QPP1/RN2K2R w KQ - 0 13","r3kb1r/pp1b1p1p/n2p2pn/3N4/4P3/8/PPP2PPP/R2QKBNR w KQkq - 2 9","r4knr/1p1nq1p1/3p4/pPp2P1p/8/5N2/1PP1BPPP/RNBQK2R w KQ - 0 12","r2q4/pp1nk3/3bp2B/5p1p/P1B5/5N2/1PP2PPP/R2QK2R w KQ - 0 18","r2q1b1r/4pkp1/pPpp1p1p/5P2/N1P5/8/PP1B1PPP/2RQKBNR w K - 0 12","r2qkb1r/2p1pp2/2P2np1/pN5p/Q2P4/8/PPP2PPP/R1B1KBNR w KQkq - 1 9","6n1/p2bN1k1/6pr/q1nP1p1p/2B5/Pp3N1P/1PP1QPP1/R4RK1 w - - 1 21","3q1r2/3p2kp/4pnp1/1PN5/1Q2p3/4P3/1P2B1PP/R2K3R w - - 0 26","rnbq1k1r/pp1p2p1/2p5/5P1p/8/4B2P/PPP1QPP1/RN2KBNR w KQ - 2 10","rn2k2r/1pp1pp2/3p1npp/8/p2QP3/P1N4P/1PP2PP1/R3KB1R w KQkq - 1 14","2bqkb1r/1p1p1pp1/4pn2/1BpP4/1P2PB1p/P1N5/2P2PPP/R2QK1NR w KQk c6 0 13","r2q3r/2pP1k2/b3pp1n/p5p1/B2QP2p/P1N1BN2/P1P2PPP/2KR3R w - - 0 16","rnbk1r2/1p4pp/p1p2q2/5p2/8/3P1B2/PPP2PPP/RNBQ1KNR w - - 2 12","rnb3n1/1p2kq2/p2pNpp1/3Pp2p/8/2NQ4/PPP1BPPP/R1B2RK1 w - - 3 16","q6r/p2pPpk1/1p3np1/2p4p/8/3Q1N2/PPP2PPP/R1B1K2R w KQ - 1 17","1q4r1/4kpp1/rp3n1p/p1p1p2P/P1P1P3/2N1B2R/RP3PP1/2Q1KBN1 w - - 0 20","r2q1knr/1Pp1p1b1/5pp1/p6p/8/5N1B/PPPP1PPP/RNBQK2R w KQ - 0 10","rnbq1k1r/5p2/pp1p3p/2p3N1/3P4/2P5/PP3PPP/RNBQKB1R w KQ - 0 10","rnb1r1k1/p4N2/1pP5/4p1pp/2Q4q/1BP3NP/PP3PP1/R1B1K2R w KQ - 1 18","rnb1kbnr/1p2pp1p/6p1/p7/2P1P3/5N2/PP1QBPPP/RNB1K2R w KQkq - 0 10","rnbq2nN/1p1pk1b1/2p1pp2/p2P3Q/4P3/2N5/PPP2PPP/R1B1KB1R w KQ - 1 10","r1bq2k1/2p2p2/2P2p2/p2p2p1/Pp1B4/2P3Pp/1P2QP1P/RN3RK1 w - - 0 17","r2k1bnr/ppp2p1p/6p1/1B1P4/3Pp2q/8/PPP1QPPP/RNB1K1NR w KQ - 0 9","q3kb1r/p3pp1p/2p3pn/5b2/3P4/1Q6/PPP2PPP/RNB1KBNR w KQk - 0 9","rnb1kq2/ppbp1p2/2p1p3/4P3/3P4/3B1N2/PPP2PQP/RNB1K2R w KQq - 1 12","q3kb1r/p4pp1/2ppp3/7p/4n2P/1P2B2R/1PP2PP1/RN1QKBN1 w Qk - 0 11","1rb1kbQ1/2p1pp2/p2q2p1/1p5p/4P3/2N5/PP3PPP/R1B1KBNR w KQ - 1 11","r2qk2r/1pn2nP1/p2B1p2/5P2/P3N2P/2PB4/1P3P2/R2Q1K1R w - - 1 24","r5k1/2p1q2p/2pp2pB/p3ppN1/2b1N3/P6P/1PPQ1PP1/1R1R2K1 w - - 3 23","r1b2k2/p4ppr/np1p3n/2p1N2Q/2P1P3/3B3P/PP1B1PP1/3RK2R w K - 1 15","r2qk2r/p3pp2/2pp2p1/7p/1n1PPB2/2NB1N2/PPP2PPR/R2QK3 w Qkq - 3 13","r1bqkn1r/pppp2p1/3P3p/1B2Pp2/8/2N5/PPP2PPP/R1BQK1NR w KQkq - 2 9","rn1k1b1N/pp2q2n/2pp4/4Pb2/3P3p/1B6/PPP2PPP/RNBQ1RK1 w - - 1 13","N1b2qn1/1p3kbr/p1nPppp1/7p/4P3/4BN2/PPPQBPPP/R4RK1 w - - 1 14","2q2rk1/p3p3/2P2np1/2R2p1p/2PP4/1PN1B3/5PPP/2Q1KR2 w - - 3 21","3qkb1r/1ppnpp1p/3p2p1/8/3PP1P1/2N2N2/R1PB1PP1/3QKB1R w Kk - 0 12","1r3k1r/5p1p/p1P3pn/1p6/P5b1/3B1N2/1PQ2PPP/RN4K1 w - - 1 18","Bnbqk1nr/2p5/pp1b1p2/4p2p/3PP2B/P7/1PP2PPP/RN1QK1NR w KQk - 1 9","rnb1kbn1/5pp1/2p1p2r/p5Bp/3P4/3B1N2/PPP2PPP/RN1QK2R w KQq - 0 10","4kb1r/p2qp2p/2B3p1/3P1n2/1r6/8/PPP1Q1PP/RNB1K1NR w KQk - 0 13","r3kbnr/1pp2p2/3q2pp/p7/3PP1P1/1PN2N2/P1Q1BPP1/R1B1K2R w KQkq - 1 14","r2qkr2/ppp1pp2/6bB/3p4/3P4/8/PPN2PPP/R2QKBNR w KQq - 1 10","r2k4/1bqp1r2/p1p1pPp1/2P4p/P6Q/8/1PP1NPPP/RNBK2R1 w - - 0 17","5b1r/p1q1nkp1/4pp2/1B5p/P2P3P/2PQBN2/2P2PP1/R3K2R w KQ - 3 16","1k1r1b1r/2pbq2p/Bp3pp1/3P4/3N3P/2N1B3/PPP2PP1/R2QK2R w KQ - 0 17","B1bqkb1r/p1p2pp1/3pp2p/2n5/4P3/2N5/PPP2PPP/R1BQK1NR w KQk - 1 9","r2q1bnr/p1p2kp1/3ppp1p/8/B3P3/2N2N2/PPPP1PPP/R1BQK2R w KQ - 0 10","3qkbnr/1Bpbp3/1p1p2p1/p2PPp1p/8/2P2N2/PP3PPP/RNBQK2R w KQk - 0 11","B2k1bnr/5pp1/4bq1p/p3p3/P3P3/2P1BN2/1PQN1PPP/R3K2R w KQ - 1 15","2rqk2r/2p2p2/p1nb2pp/Pp1N4/3P3P/5NPR/1PP1BP2/R1BQK3 w Qk - 1 16","2rqkb1r/1P1ppp1p/1p3Pp1/p1p5/8/2P2Q2/PP3PPP/RNB1KBNR w KQk - 1 10","r2q1b2/1pk3p1/3pnpr1/7p/BP2P3/P1N2N2/2P1Q1PP/R1B1KR2 w Q - 3 22","rn2kb1r/pp2p1pp/4qp2/2P5/8/4B3/PPP2PPP/RN1QKBNR w KQkq - 0 9","rn2kbnr/1bp5/pp3ppp/3Pp3/2PP3B/8/PP3PPP/RN1QKBNR w KQkq - 0 9","rn2k2r/p2bbpp1/1pp4p/8/3P4/8/PPP2PPP/R1BQKBNR w KQkq - 0 9","r1b1qrk1/pp1p1p1p/2pP2p1/8/4PB2/2N3P1/PPP1BP1P/R1Q1K1NR w KQ - 0 12"],"b":["r1q1kbnr/p1p2ppp/1pn1p3/3pP3/3P4/1P6/P2NNPPP/R1B1KB1R b KQkq - 0 9","r2qk2r/ppp1nppp/1bn5/4p3/8/4PPN1/P1PPN1PP/1RB1K2R b Kkq - 0 11","r1bqkb1r/pp2pppp/2n5/3p4/3pnP2/1P6/P1P1P1PP/R1Q1KBNR b KQkq - 2 9","rn5r/pp1qk1pp/2p2p2/3p4/3PnB2/1Pb2NPb/P3PPR1/R2Q1K2 b - - 1 20","r2qk2r/ppp2ppp/2p2n2/2b5/P5bP/N3P3/1PP2P2/R1B2KNR b kq - 1 12","r1bqk2r/ppp3pp/2n5/5p2/7P/1PPP1pP1/P3BK1n/RN1Q4 b kq - 0 17","rn2k1nr/pppbqppp/4p3/8/2P1P3/P4PPN/1P1B3P/R3KB1R b kq - 0 11","r3kb1r/ppp2pp1/2n4n/P3p2p/1P4b1/B2p1P2/3QPKPP/1q3BNR b kq - 1 12","r3kb1r/pp2qpp1/2n2n1p/2p5/2P5/P5Pb/1PQN1PR1/R1B2K2 b kq - 1 14","rn1qk2r/ppp2ppp/5n2/4p3/4P1b1/P2B4/1PPP1KPP/RNB4R b kq - 0 9","2b1nrk1/p1p2ppp/1r6/4b3/1PQn3q/P6N/4B1PP/2RK3R b - - 2 22","2bk4/2pq2pp/p1n4n/1r6/QbPp4/3Pr1PP/5K1R/R4B2 b - - 3 22","r2qb1k1/5rpp/p7/3p4/2p1pPPb/BP6/4B2P/3Q1R1K b - - 1 23","r1b1kbnr/1p3pp1/p6p/4p2P/PnBpP2q/1Pp3N1/2P2PP1/R1BQK3 b Qkq - 1 12","r1n1nrk1/3q1pp1/pp1b3p/3p1b2/3Pp2P/2P1P1P1/4NP1R/2BQKB2 b - - 1 22","rnq1k1nr/pppbbppp/8/8/P2P3P/6P1/1PPB1P1R/R2Q1K2 b kq - 0 12","r2qk2r/ppp3p1/2n1b2p/3npp2/2Pbp3/1P4PP/P2PNPB1/1R1QK2R b Kkq - 0 14","rn1qk1n1/pppb1pp1/3b3r/4p2p/4P3/1PpP3P/P1P1BPP1/RQ3RK1 b q - 0 11","rn2kb1r/pp2pppp/4bn2/2p3B1/1Ppq4/P1P5/4QPPP/RN2K2R b KQkq - 0 11","r1bqkbnr/1pp2ppp/8/pN6/2P5/5P2/PP1P1K1P/R1B2B1R b kq - 0 13","r2q1rk1/5ppp/ppn5/2bpp2P/P5b1/N1P1P3/1P3PP1/R1B1K1NR b KQ - 0 15","r1b1k2r/1ppq1pp1/5n2/p6p/Rb1nP2P/1PP2PP1/3P4/3QK1NR b Kkq - 0 15","r2qkbnr/pp1bpppp/n7/6Q1/8/2N1P3/P1p2PPP/R1B1K2R b KQkq - 1 10","r2qk1nr/1p3p1p/p3b1p1/1n6/4pP1b/PP5P/2PB1P2/R1K2QR1 b kq - 1 19","r1bqkbr1/2p2ppp/1p1n4/4p3/Pp1n2P1/1P1P3P/2PKPP2/2RQ1B1R b - - 0 15","rn1qk2r/1p2bpp1/pnb5/2p4p/5P2/2PP3P/PPQ1K1P1/R4B1R b kq - 3 17","r1bqkbnr/ppp3p1/2n5/4p1p1/2B1P3/5PPp/PPPpK2P/1RBQ1R2 b kq - 1 14","r1b1k2r/1pp2pp1/1qn2n1p/p2p3P/P7/5PP1/1P1NP2R/R1BNKB2 b kq - 0 15","rn2n1k1/pp1q2pp/3b4/2pP4/4P3/PPP5/4K1p1/RNBR4 b - - 1 19","rnb1k2r/ppp2ppp/8/4p3/2p4b/NP1qPPnP/PK1P4/R1BQ2N1 b kq - 1 13","r1bqk2r/pppp1ppp/2n5/3Np3/2P4n/3PP3/PP2PKP1/R2Q1B2 b kq - 1 10","r1b1k1nr/pppn1p1p/5q2/3Q2NP/8/1Pp1P3/P1P2PPR/4KB2 b kq - 0 14","r1bqk2r/ppp1nppp/2n5/4p3/3p4/2PP1P1N/PP1KP2b/RNBQ1B2 b kq - 1 10","rnbk1b1r/pppqpppp/5n2/P7/1P6/2N5/2PP1P1P/R1BQKB2 b Q - 0 9","r2qk1nr/p1pb1ppp/Ppnp4/8/2B1P3/2p5/5KPP/RQB4R b kq - 1 15","r1b1k2r/pp1p1ppp/2n1p3/2P5/1P2Q3/8/q2NKPPP/5B1R b kq - 0 15","r3k2r/pppq1ppp/2n2n2/8/P1Pp4/R5PN/1PbP1P1P/2B1KB1R b kq - 0 11","r1bqkb1r/1ppn1ppp/5n2/pN1p4/8/BP1BP2P/P1PP1K2/R2Q4 b kq - 0 12","4k2r/rppb1pp1/1pnb1n2/3p2qp/8/PP1BP1P1/1BQP3P/R4KR1 b k - 0 20","rn3br1/p3nk2/1pq2p2/5b1p/P1pP1P1p/4PR2/1B5K/RN1Q4 b - - 0 25","r2qkbnr/p4ppp/2p5/2p1pb2/P1P4P/3p4/RP1P1PP1/1NB1K1NR b Kkq - 0 9","rnb2knr/ppp2pp1/1q5p/8/Pb3BPP/2pPRP2/2P5/R2QKB2 b Q - 3 13","rnbqkbn1/ppp2pp1/8/P2pp3/6p1/2PP4/1PQNPPPr/R3KBN1 b Qq - 0 9","r1q1k2r/1b1n1p1p/p5p1/1pp1b3/4Pp1P/1PPP1Pn1/3Q1KP1/RNR5 b kq - 1 18","rnbqk1nr/ppp1bp1p/8/3pP3/5p2/PPp2P2/2P2KPP/R2Q1B1R b kq - 0 10","3qk2r/r4pp1/pp3n2/1p1p4/1P1B3p/P3P1b1/N1PPK1P1/R6R b k - 0 21","r1b1k1nr/ppp2pbp/n5p1/2q1p3/8/P4P2/1P2QPBP/R1B1K2R b KQkq - 1 13","rnbqk1nr/ppp2ppp/5b2/3p4/8/NP6/P2BPPPP/1Q2KB1R b Kkq - 4 11","r2qkbnr/p2b1ppp/p1p5/3p4/8/2P2P2/2P1P1PP/2BQKB1R b kq - 1 12","2bqkb1r/1p3ppp/2n4n/r2p4/8/P6P/1Q4P1/RN1K1BR1 b k - 0 14","rn3rk1/pbpq2pp/3b3n/1p6/P1p3P1/2Pp1p1P/RP1P4/2BQ1KNR b - - 1 17","r4k1r/pb1pqp1p/1p2np2/2p5/PP5P/4P3/2P2PP1/1R2KBNR b K - 0 17","rnb1kbn1/p2q1pp1/1p2r3/2p4p/2P1P3/P2P2P1/3Q1P1P/RNB3K1 b q - 1 15","rn1qk1nr/p4pp1/b1p5/1p1pN3/3P4/NP2P3/P2K1p1P/R1B2B1R b kq - 0 13","rn1qkb1r/1p3ppp/2p2n2/p2pp3/1P2b2P/N1PPP2N/P3KP2/R1B2BR1 b kq - 0 10","rnb1q1nr/3k1ppp/2p5/1p2p3/3pPP2/1P1P3P/P2KN1P1/R1B2B1R b - - 1 15","r2qk1nr/ppp2ppp/2n1b2b/3p4/P2p1P2/N1P3P1/1PQ1P1BP/R3K2R b KQkq - 2 12","r2qk1nr/ppp2ppp/2n5/3p1b2/1b6/1Pp1BP1P/P3PKP1/R3QB1R b kq - 0 11","r1bqk2r/ppp2pp1/2n4p/3pP2P/4nB2/2P3P1/PP2Kb2/2RQ1B1R b kq - 1 13","r1q1k3/ppp2pp1/4n2r/1Pb1P3/2Q1P1Pp/8/2P5/1K1R3R b q - 0 20","rnbqk1nr/pp3ppp/8/2ppp3/8/bP1PP1P1/P2B1P1P/3QKBNR b Kkq - 0 9","r3k2r/pppq1ppp/2n1bn2/4p3/1b4P1/4BP2/PP2PK1P/R2N1BNR b kq - 0 11","r2qk2r/ppp2p1p/3bbn2/6N1/P1P1p3/4P2P/1PpP1PP1/R1B1KB1R b Kkq - 1 14","rn1qk1nr/ppp2ppp/8/8/3pP3/1P4b1/P1NK4/R1B2BNR b kq - 0 11","rnbqr1k1/p4ppp/5n2/7P/3p4/PQ6/1B1bNKP1/2R4R b - - 1 21","rnbqkb1r/pppp1ppp/8/2P1p3/1P4Q1/N6P/P2P4/R1B1KBNn b kq - 0 10","r3k1nr/pppq1ppp/2nb4/3p4/1P1P4/P1P1p1Pb/2Q1P2P/RN2KB1R b KQkq - 1 10","1n2kbnr/1pp2ppp/3qb3/1p2p1B1/4P3/P4P2/1P2N1PP/RB2K2R b KQk - 1 13","r1bqkb1r/p3pppp/8/1p5Q/3nP2P/4N3/PPPP2P1/R1B1K2n b kq - 1 14","rnbr2k1/ppp2ppp/3q4/8/4P3/PPN4P/5KP1/RN3B1R b - - 4 16","r2qk2r/ppp2ppp/3b1n2/4p3/7P/1P2BpP1/P1PP4/RN2KB1R b KQkq - 1 12","rn1qk1nr/ppp1bp1p/4b3/4p1pQ/2p5/2P1P3/PP1PKPPP/R1B4R b kq - 1 9","rn2kb1r/p2qnp1p/2p1b2p/3p4/R2P1P2/2P5/1P1NP3/2B1KQR1 b kq - 0 18","r2qkbn1/p2b1pp1/7r/1pp1n3/1P2P2p/P1Pp3P/3B1RP1/RN1Q2K1 b q - 1 17","rn2kbnr/ppp1qppp/8/3pP3/4bP2/N1P3P1/PP1KP2P/R1BQ4 b kq - 0 9","rnb1kbnr/ppp2ppp/3q4/4p3/P7/1PN4P/3BPPP1/R3KBNR b KQkq - 0 9","2kr3r/pppqbp2/2n2n2/7p/4p1bP/PPPPP3/1R4P1/1NB1KBNR b - - 0 15","rn1qkb1r/pp3ppp/4pn2/P2p4/6b1/2P5/2P1PP1P/R1BQKB1R b kq - 1 10","rnb1k1r1/p2q1p1p/2p5/Q1bp3p/4n2N/PP2P1P1/2P2P2/R3K2R b Qq - 2 21","r2qk2r/ppp2ppp/2n1bn2/8/2ppP1PP/5P2/PP1BK3/RN3BNR b kq - 0 10","rn1q1rk1/pp2bppp/7n/2p5/2Pp1P2/P4NP1/4R2P/1bB1Q1KR b - - 0 18","r1b1kbnr/ppp2ppp/2nq4/8/2B5/5N2/PPPp1PPP/R2Q1K1R b kq - 1 9","r2qkb1r/pppn1pp1/2n5/4p1p1/2B1P1P1/P1Q5/1PP2P1P/2K3NR b kq - 1 12","r2nkb2/pq3p1r/p3b1pp/3p4/1P2nB1P/P1P2Q2/6P1/RN3K1R b q - 0 20","r2r2k1/pp3pp1/n1pq1n1p/7P/PbQ5/1P2PBP1/3P1P2/R1B2K2 b - - 0 19","r1bqk1nr/ppp2p1p/n7/8/5PPp/P1P1K2P/4P3/RNB2B1R b kq - 0 16","r1bqk1nr/ppp2pp1/2n5/3pp3/Pb6/3PPPP1/1PP2NB1/R1BQ1K2 b q - 0 12","r3k2r/pp1bnppp/3b4/1q1p1P2/8/P1Pp1Q2/R2N1N2/3K3R b kq - 1 20","r3k2r/pppb1ppp/4qn2/2bpp3/8/1PN1PPPN/PB1P2BP/2R2K1R b kq - 0 13","rn2k2r/p3bpp1/b1pp1n2/q7/1pP5/1B3pP1/PPQ2P1P/2KR3R b kq - 1 17","r3kb1r/pp3pp1/2n2n1p/2p1p3/P7/1P1QNNPb/1B2PP2/R3KB1q b Qkq - 1 13","r3kb1r/1p2qppp/p4n2/2ppp1R1/P7/NPP2P1b/4PP2/2RQK3 b kq - 0 17","3qk2r/1pp2pp1/2nb1n2/r2p3p/P3p1bP/2P1P3/3PBPP1/1N1QK1NR b k - 5 15","rnb1kbnr/pp3ppp/4p3/8/2pP2q1/8/PP1BNPPP/RN1K1B1R b kq - 4 9","2kr3r/1ppq2p1/p1n4p/P4p1P/1bPp1N2/1P1Pn3/3BQ3/R3KB2 b Q - 1 19","rnb1k2r/1p1q3p/p1p2ppb/3np3/8/PQP4P/1P3PB1/RN3RK1 b kq - 1 14","r1bq1rk1/p1bp2p1/2p2n1p/1p2p3/6P1/P4R1P/1PQP1PK1/1RB5 b - - 3 22","rnbqk2r/ppp2ppp/8/3pp3/P6b/N1P2P2/1PQPPnB1/R1B1K1N1 b kq - 3 10","r1b2rk1/1pp3pp/2n4q/p1b1pp2/P1P4P/1P1P2P1/1BN1KnB1/R5NR b - - 1 16","rn1qkb1r/ppp2ppp/6b1/1P6/P1P1np2/3Pp2P/2N1KPP1/2BQ1B1R b kq - 2 13","1n2kbnr/1ppq1ppp/8/pr2p3/QP4P1/P2p1P2/7P/R1B2K1R b k - 0 14","rn1qk2r/1p3ppp/p4n2/3p4/2Pp3P/bP3P2/P1KN1P2/R4BNR b kq - 1 12","r1bqk2r/ppp2ppp/8/3pn3/8/6P1/PPPK1PNP/R1B4R b kq - 0 14","2k1rbnr/ppp2ppp/2q1b3/4p3/6PP/P1P2P2/1P1P4/RNB1K1NR b KQ - 0 12","r1bqk2r/1p3pp1/p1n5/2p4p/P3P2P/NPp3P1/3bP1B1/R4KNR b kq - 0 15","1n2k1nr/p1pq1ppp/8/3p4/3P1bb1/P1P5/RP2PP1P/1N2KB1R b Kk - 1 13","2kr2nr/ppq3p1/n1p1p2p/4P3/8/5N1P/PP1B1PP1/R4K1R b - - 3 15","rnq1k1nr/pp3ppp/4b3/3p4/P2P1B2/b4P2/4P1PP/3QKBNR b Kkq - 1 11","r1bqkb1r/ppp2ppp/5n2/P7/2PnpP1P/6P1/1P1P3N/RNBBK2R b KQkq - 0 11","rn2k2r/1p1b1ppp/2p2n2/q7/3PP3/1P1P3P/2P2KP1/2Q2B1R b kq - 0 18","r1bqk3/ppp2pb1/6n1/1P2p3/Pr6/4P2p/2PP3P/RN1QK2B b Qq - 0 18","r1bqk1nr/pp3ppp/8/b7/P2p4/1PpP1P2/2N3PP/2R1KBNR b Kkq - 2 13","r3kb1r/1ppn1pp1/6q1/pP5p/4P3/N2Q4/P1P4n/R1B1K3 b kq - 1 21","r3k2r/1p2bppp/8/pP1p1q2/P1p3bn/2Pp4/R4P2/1NBBK1NR b Kkq - 1 22","r3kb1r/ppp2ppp/2n1b3/8/2p1P3/P7/2NpKPPP/2qQ1BNR b kq - 1 13","rnbqk2r/ppp2ppp/8/4p3/2P1p2P/6P1/PP1P4/R1B1KBNR b kq - 1 9","r2qk1nr/pp1b1ppp/2np1b2/5PB1/2Pp3P/PP1Q4/4P3/RN2KR2 b Qkq - 2 15","2kr1bnr/pp3pp1/2n1b2p/q3p3/8/2P2PPB/PQ1pP2P/R2K2NR b - - 1 14","r4rk1/1p3pp1/2q1b2p/p2p4/1b3P2/3PP3/Q4NBP/R5K1 b - - 0 24","rn1qkb1r/ppp2ppp/5n2/4p3/2P5/PQNp1bP1/1P3N1P/R1B1KB2 b Qkq - 1 10"]};
+let bg = null;   // {bot, game (chess.js) | pw (pawn wars state), me: 'w'|'b', sel, last, over, log, rp, gate, fen0 (a play stop's start)}
 // gate: the learning-path boss stage this game was started from (a win against the bot clears it)
 // log (chess games): every move as {fen before, from, to, me, piece, captured}; rp: the replay after the game {list, k}
 
@@ -3703,13 +3709,17 @@ function pwBot(s) {
 
 /* ---- playing a game ---- */
 // botColor: "w", "b" or "r" (a new coin toss every game; ↻ during a game keeps the colour it got)
-function botStart(id, gate = null, keepColor = null) {
+// a play stop starts from PLAY_STARTS (fen0: ↻ during the game keeps it, a new game or colour gets another)
+function botStart(id, gate = null, keepColor = null, fen0 = null) {
   const bot = BOTS.find(b => b.id === id), pl = pzPlayers(), c = pl.botColor || "w";
   const me = keepColor || (c === "r" ? (Math.random() < 0.5 ? "w" : "b") : c);
   clearTimeout(botReply.t);   // a restart while the bot was thinking: that reply belongs to the old game
   bg = { bot, me, sel: null, last: [], over: null, log: [], rp: null, gate, t0: Date.now() };
   if (bot.pawns) bg.pw = pwNew();
-  else {
+  else if (gate && gate.play && PLAY_STARTS[me].length) {
+    if (!fen0 || fen0.split(" ")[1] !== me) { const fs = PLAY_STARTS[me]; fen0 = fs[Math.floor(Math.random() * fs.length)]; }
+    bg.fen0 = fen0; bg.game = new Chess(fen0);     // no "bot without queen" here: he is ahead already
+  } else {
     bg.game = new Chess();
     if (pl.botNoQueen) bg.game.remove(me === "w" ? "d8" : "d1");
   }
@@ -3764,7 +3774,7 @@ function botAfterMove() {
   else if (bg.game.game_over()) {
     res = bg.game.in_checkmate() ? (bg.game.turn() === bg.me ? "loss" : "win") : "draw";
     bg.stale = bg.game.in_stalemate();
-  } else if (bg.game.turn() === bg.me && material(bg.game, bg.me) >= BOT_RESIGN) { res = "win"; bg.resigned = true; }   // only after the bot's move: not in the middle of a trade (the owner, 2026-10-06)
+  } else if (bg.game.turn() === bg.me && material(bg.game, bg.me) >= (bg.fen0 ? PLAY_RESIGN : BOT_RESIGN)) { res = "win"; bg.resigned = true; }   // only after the bot's move: not in the middle of a trade (the owner, 2026-10-06)
   if (!res) return false;
   bg.over = res;
   pl.bots = pl.bots || {}; const r = pl.bots[bg.bot.id] = pl.bots[bg.bot.id] || { w: 0, l: 0, d: 0 };
@@ -3818,7 +3828,7 @@ function botUserMove(from, to) {
 }
 // ↻ during a game: start over against the same bot (same gate, colour and no-queen setting); no take-backs in bot
 // games, and no question first (no pop-ups)
-function botRestart() { if (bg && !bg.rp && !bg.mo) botStart(bg.bot.id, bg.gate, bg.me); }
+function botRestart() { if (bg && !bg.rp && !bg.mo) botStart(bg.bot.id, bg.gate, bg.me, bg.fen0); }
 function botLog(m, me, fen = bg.game.fen()) {
   bg.log.push({ fen, from: m.from, to: m.to, me, piece: m.piece, captured: m.captured, ...(me && helpOn ? { hp: 1 } : {}) });
   if (me) { grMine(bg.log[bg.log.length - 1]); moKick(); }        // his move is analysed in idle time (moments.js)
@@ -4671,14 +4681,14 @@ function grPractice(g, ms) {
   return null;
 }
 
-/* ---- his bot games: pl.games = [{t, b bot, c his colour, r w/l/d, m moves (uci, space-separated), g gate, hp the
-   helped plies, ch the chances}], the last GAMES_MAX ---- */
+/* ---- his bot games: pl.games = [{t, b bot, c his colour, r w/l/d, m moves (uci, space-separated), f the start (a
+   play stop's, else the usual one), g gate, hp the helped plies, ch the chances}], the last GAMES_MAX ---- */
 const GAMES_MAX = 30;
 function grGameSave(pl, res) {
   if (!bg || !bg.game) return;
   const hp = bg.log.map((x, i) => x.hp ? i : -1).filter(i => i >= 0);
   const m = bg.log.map(x => x.from + x.to + (x.piece === "p" && /[18]$/.test(x.to) ? "q" : "")).join(" ");
-  pl.games = [...(pl.games || []), { t: bg.t0 || Date.now(), b: bg.bot.id, c: bg.me, r: res[0], m, ...(bg.gate ? { g: bg.gate.id } : {}), ...(hp.length ? { hp } : {}), ...(bg.ch ? { ch: bg.ch } : {}) }].slice(-GAMES_MAX);
+  pl.games = [...(pl.games || []), { t: bg.t0 || Date.now(), b: bg.bot.id, c: bg.me, r: res[0], m, ...(bg.fen0 ? { f: bg.fen0 } : {}), ...(bg.gate ? { g: bg.gate.id } : {}), ...(hp.length ? { hp } : {}), ...(bg.ch ? { ch: bg.ch } : {}) }].slice(-GAMES_MAX);
 }
 function grGamesMerge(a, b) {
   const seen = new Set();
